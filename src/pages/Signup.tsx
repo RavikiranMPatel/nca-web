@@ -25,7 +25,27 @@ function Signup() {
 
     try {
       const res = await signupApi({ name, email, password });
-      login(res.token);
+
+      // 🔐 Decode JWT to get role
+      const base64Payload = res.accessToken.split(".")[1];
+      const decodedPayload = JSON.parse(
+        decodeURIComponent(
+          atob(base64Payload)
+            .split("")
+            .map(
+              (c) =>
+                "%" +
+                ("00" + c.charCodeAt(0).toString(16)).slice(-2)
+            )
+            .join("")
+        )
+      );
+
+      const role = decodedPayload?.role || "ROLE_USER";
+
+      // ✅ AuthContext login (token + role)
+      login(res.accessToken, role);
+
       navigate("/home");
     } catch (err: any) {
       setError(
@@ -40,11 +60,7 @@ function Signup() {
 
         {/* Logo */}
         <div className="flex flex-col items-center mb-6">
-          <img
-            src={logo}
-            alt="NCA Logo"
-            className="h-20 mb-2"
-          />
+          <img src={logo} alt="NCA Logo" className="h-20 mb-2" />
           <h2 className="text-xl font-semibold">
             Create Account
           </h2>

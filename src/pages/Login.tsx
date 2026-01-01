@@ -12,9 +12,6 @@ function Login() {
   const { login } = useAuth();
   const navigate = useNavigate();
 
-  // --------------------
-  // HANDLE LOGIN
-  // --------------------
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
@@ -22,46 +19,38 @@ function Login() {
     try {
       const res = await loginApi({ email, password });
 
-      /**
-       * Backend response:
-       * {
-       *   accessToken: "...",
-       *   userId: "USR_4"
-       * }
-       */
-
-      // ✅ Store JWT via AuthContext (also saved in localStorage)
-      login(res.accessToken);
-
-      // ✅ Decode JWT payload safely
+      // 🔐 Decode JWT payload
       const base64Payload = res.accessToken.split(".")[1];
       const decodedPayload = JSON.parse(
         decodeURIComponent(
           atob(base64Payload)
             .split("")
-            .map((c) => "%" + ("00" + c.charCodeAt(0).toString(16)).slice(-2))
+            .map(
+              (c) =>
+                "%" +
+                ("00" + c.charCodeAt(0).toString(16)).slice(-2)
+            )
             .join("")
         )
       );
 
-      // ✅ Store role (ROLE_PLAYER / ROLE_PARENT)
-      if (decodedPayload?.role) {
-        localStorage.setItem("userRole", decodedPayload.role);
-      }
+      const role = decodedPayload?.role;
 
-      // ✅ Store userId
+      // ✅ AuthContext login
+      login(res.accessToken, role);
+
+      // Optional: store userId
       localStorage.setItem("userId", res.userId);
 
-      // ✅ Clear stale player context
+      // Clear stale player context
       localStorage.removeItem("playerId");
       localStorage.removeItem("playerName");
 
-      // 🚀 Go to Home (Home.tsx handles role logic)
       navigate("/home");
-
     } catch (err: any) {
       setError(
-        err?.response?.data?.message || "Invalid email or password"
+        err?.response?.data?.message ||
+          "Invalid email or password"
       );
     }
   };
@@ -85,7 +74,9 @@ function Login() {
         )}
 
         <form onSubmit={handleSubmit}>
-          <label className="block mb-2 text-sm font-medium">Email</label>
+          <label className="block mb-2 text-sm font-medium">
+            Email
+          </label>
           <input
             type="email"
             required
@@ -94,7 +85,9 @@ function Login() {
             onChange={(e) => setEmail(e.target.value)}
           />
 
-          <label className="block mb-2 text-sm font-medium">Password</label>
+          <label className="block mb-2 text-sm font-medium">
+            Password
+          </label>
           <input
             type="password"
             required
@@ -113,7 +106,10 @@ function Login() {
 
         <p className="text-sm mt-4 text-center">
           Don’t have an account?{" "}
-          <Link to="/signup" className="text-blue-600 font-medium hover:underline">
+          <Link
+            to="/signup"
+            className="text-blue-600 font-medium hover:underline"
+          >
             Sign up
           </Link>
         </p>

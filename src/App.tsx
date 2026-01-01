@@ -12,6 +12,9 @@ import SelectPlayer from "./pages/SelectPlayer";
 import CreatePlayer from "./pages/CreatePlayer";
 import Payment from "./pages/Payment";
 import BookingSuccess from "./pages/BookingSuccess";
+import AdminSliderManager from "./pages/AdminSliderManager";
+import AdminDashboard from "./pages/AdminDashboard";
+import AdminUsers from "./pages/AdminUsers";
 
 function App() {
   return (
@@ -109,6 +112,52 @@ function App() {
           </ProtectedRoute>
         }
       />
+
+      <Route
+  path="/admin"
+  element={
+    <ProtectedRoute roles={["ROLE_ADMIN"]}>
+      <AppLayout>
+        <AdminDashboard />
+      </AppLayout>
+    </ProtectedRoute>
+  }
+/>
+
+
+      <Route
+  path="/admin/slider"
+  element={
+    <ProtectedRoute roles={["ROLE_ADMIN"]}>
+      <AppLayout>
+        <AdminSliderManager />
+      </AppLayout>
+    </ProtectedRoute>
+  }
+/>
+
+<Route
+  path="/admin"
+  element={
+    <ProtectedRoute roles={["ROLE_ADMIN"]}>
+      <AppLayout>
+        <AdminDashboard />
+      </AppLayout>
+    </ProtectedRoute>
+  }
+/>
+
+<Route
+  path="/admin/users"
+  element={
+    <ProtectedRoute>
+      <AppLayout>
+        <AdminUsers />
+      </AppLayout>
+    </ProtectedRoute>
+  }
+/>
+
 
       {/* Catch-all */}
       <Route path="*" element={<Navigate to="/home" replace />} />
