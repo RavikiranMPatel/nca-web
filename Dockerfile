@@ -1,38 +1,39 @@
 # =========================
-# 1️⃣ BUILD STAGE
+# 1️⃣ Build stage
 # =========================
 FROM node:20-alpine AS build
 
 WORKDIR /app
 
-# Copy package files first (better caching)
-COPY package*.json ./
+# Copy dependency files first (better caching)
+COPY package.json package-lock.json ./
 
-# Install dependencies
-RUN npm install
+RUN npm ci
 
-# Copy rest of the source code
+# Copy application source
 COPY . .
 
-# Build Vite app (output goes to /app/dist)
+# Build Vite app
 RUN npm run build
 
+
 # =========================
-# 2️⃣ RUNTIME STAGE
+# 2️⃣ Runtime stage (Nginx)
 # =========================
 FROM nginx:alpine
 
-# Copy custom nginx config (REVERSE PROXY ENABLED)
+# Remove default nginx config
+RUN rm /etc/nginx/conf.d/default.conf
+
+# Copy our nginx config
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 
-# Remove default nginx website
+# Remove default html
 RUN rm -rf /usr/share/nginx/html/*
 
-# Copy built frontend from build stage
+# Copy built frontend
 COPY --from=build /app/dist /usr/share/nginx/html
 
-# Expose HTTP port
 EXPOSE 80
 
-# Start nginx
 CMD ["nginx", "-g", "daemon off;"]
