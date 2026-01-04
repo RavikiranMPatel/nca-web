@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import api from "../api/axios";
 
@@ -20,8 +20,6 @@ function BookingSuccess() {
   const [booking, setBooking] = useState<BookingStatusResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-
-  const pollingRef = useRef<number | null>(null);
 
   useEffect(() => {
   const bookingId = state?.bookingPublicId;

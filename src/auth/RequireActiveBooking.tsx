@@ -1,17 +1,18 @@
 import { Navigate } from "react-router-dom";
+import type { ReactNode } from "react";
 
-function RequireActiveBooking({
-  children,
-}: {
-  children: JSX.Element;
-}) {
+type Props = {
+  children: ReactNode;
+};
+
+function RequireActiveBooking({ children }: Props) {
   const bookingId = localStorage.getItem("activeBookingId");
 
   if (!bookingId) {
     return <Navigate to="/book-slot" replace />;
   }
 
-  return children;
+  return <>{children}</>;
 }
 
 export default RequireActiveBooking;

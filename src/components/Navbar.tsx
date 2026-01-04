@@ -1,7 +1,7 @@
 import { NavLink, useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/useAuth";
 import logo from "../assets/logos/nca-logo-app.png";
-import { Image, CalendarCheck, Users, LayoutDashboard } from "lucide-react";
+import { Image, Users, LayoutDashboard } from "lucide-react";
 
 function Navbar() {
   const { logout } = useAuth();

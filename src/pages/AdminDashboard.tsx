@@ -1,5 +1,5 @@
 import { useNavigate } from "react-router-dom";
-import { Image, CalendarCheck, Users } from "lucide-react";
+import { Image, Users } from "lucide-react";
 
 function AdminDashboard() {
   const navigate = useNavigate();

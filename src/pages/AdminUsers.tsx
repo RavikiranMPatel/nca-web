@@ -101,29 +101,51 @@ function AdminUsers() {
   // ACTIONS
   // =========================
   const toggleUser = async (u: User) => {
-    await api.patch(`/admin/users/${u.publicId}/toggle`);
-    refresh();
+    try {
+      await api.patch(
+        `/admin/users/${encodeURIComponent(u.publicId)}/toggle`
+      );
 
-    showMessage(
-      u.active
-        ? `User ${u.publicId} disabled`
-        : `User ${u.publicId} enabled`,
-      "warning"
-    );
+      refresh();
+
+      showMessage(
+        u.active
+          ? `User ${u.publicId} disabled`
+          : `User ${u.publicId} enabled`,
+        "warning"
+      );
+    } catch (e: any) {
+      showMessage(
+        e?.response?.data?.message ??
+          "Action could not be completed",
+        "error"
+      );
+    }
   };
 
   // ✅ FINAL DELETE (called from modal)
-  const confirmDelete = async () => {
+ const confirmDelete = async () => {
     if (!deleteTarget) return;
 
-    await api.delete(`/admin/users/${deleteTarget.publicId}`);
-    setDeleteTarget(null);
-    refresh();
+    try {
+      await api.delete(
+        `/admin/users/${encodeURIComponent(deleteTarget.publicId)}`
+      );
 
-    showMessage(
-      `User ${deleteTarget.publicId} permanently deleted`,
-      "error"
-    );
+      setDeleteTarget(null);
+      refresh();
+
+      showMessage(
+        `User ${deleteTarget.publicId} permanently deleted`,
+        "success"
+      );
+    } catch (e: any) {
+      showMessage(
+        e?.response?.data?.message ??
+          "Delete failed",
+        "error"
+      );
+    }
   };
 
   const saveEdit = async () => {
