@@ -32,27 +32,6 @@ function BookSlot() {
   }, []);
 
   // --------------------
-  // SLOT GENERATION (OPEN TILL 12 AM)
-  // --------------------
-  function generateSlots(): string[] {
-    const slots: string[] = [];
-
-    const addSlots = (start: number, end: number) => {
-      for (let hour = start; hour < end; hour++) {
-        const from = hour.toString().padStart(2, "0") + ":00";
-        const toHour = (hour + 1) % 24;
-        const to = toHour.toString().padStart(2, "0") + ":00";
-        slots.push(`${from} - ${to}`);
-      }
-    };
-
-    addSlots(8, 16);   // Morning
-    addSlots(19, 24);  // Evening till 12 AM
-
-    return slots;
-  }
-
-  // --------------------
   // FETCH AVAILABILITY
   // --------------------
   // --------------------
