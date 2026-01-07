@@ -10,9 +10,6 @@ type Slot = {
 };
 
 function BookSlot() {
-  // --------------------
-  // STATE
-  // --------------------
   const [date, setDate] = useState("");
   const [resource, setResource] = useState("");
   const [selectedSlot, setSelectedSlot] = useState("");
@@ -23,24 +20,19 @@ function BookSlot() {
   const location = useLocation();
 
   // --------------------
-  // RESTORE STATE (FROM CONFIRM BOOKING)
+  // RESTORE STATE
   // --------------------
   useEffect(() => {
     if (location.state) {
-      const { date, resource, slot } = location.state as {
-        date: string;
-        resource: string;
-        slot: string;
-      };
-
+      const { date, resource, slot } = location.state as any;
       setDate(date);
       setResource(resource);
       setSelectedSlot(slot);
     }
-  }, []); // run ONCE on mount
+  }, []);
 
   // --------------------
-  // SLOT GENERATION
+  // SLOT GENERATION (OPEN TILL 12 AM)
   // --------------------
   function generateSlots(): string[] {
     const slots: string[] = [];
@@ -48,13 +40,14 @@ function BookSlot() {
     const addSlots = (start: number, end: number) => {
       for (let hour = start; hour < end; hour++) {
         const from = hour.toString().padStart(2, "0") + ":00";
-        const to = (hour + 1).toString().padStart(2, "0") + ":00";
+        const toHour = (hour + 1) % 24;
+        const to = toHour.toString().padStart(2, "0") + ":00";
         slots.push(`${from} - ${to}`);
       }
     };
 
-    addSlots(8, 16);   // Morning 8 AM – 4 PM
-    addSlots(19, 24);  // Evening 7 PM – 12 AM
+    addSlots(8, 16);   // Morning
+    addSlots(19, 24);  // Evening till 12 AM
 
     return slots;
   }
@@ -62,65 +55,82 @@ function BookSlot() {
   // --------------------
   // FETCH AVAILABILITY
   // --------------------
-  useEffect(() => {
-    if (!date || !resource) {
+  // --------------------
+// FETCH AVAILABILITY (SINGLE API CALL)
+// --------------------
+useEffect(() => {
+  if (!date || !resource) {
+    setSlots([]);
+    return;
+  }
+
+  const fetchAvailability = async () => {
+    setLoading(true);
+
+    try {
+      const res = await api.get("/slot/availability", {
+        params: { date, resourceType: resource },
+      });
+
+      const results = res.data.map((s: any) => ({
+        time: `${s.startTime} - ${s.endTime}`,
+        available: s.available,
+      }));
+
+      setSlots(results);
+    } catch (e) {
+      console.error("Availability fetch failed", e);
       setSlots([]);
-      return;
+    } finally {
+      setLoading(false);
     }
+  };
 
-    const fetchAvailability = async () => {
-      setLoading(true);
+  fetchAvailability();
+}, [date, resource]);
 
-      const generatedSlots = generateSlots();
 
-      try {
-        const results: Slot[] = await Promise.all(
-          generatedSlots.map(async (slot) => {
-            const startTime = slot.split(" - ")[0];
-
-            try {
-              const res = await api.get("/slot/availability", {
-                params: {
-                  date,
-                  startTime,
-                  resourceType: resource,
-                },
-              });
-
-              return {
-                time: slot,
-                available: res.data.availableCount > 0,
-              };
-            } catch {
-              return {
-                time: slot,
-                available: false,
-              };
-            }
-          })
-        );
-
-        setSlots(results);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchAvailability();
-  }, [date, resource]);
 
   // --------------------
   // GROUPING
   // --------------------
-  const morningSlots = slots.filter(
-    (s) =>
-      parseInt(s.time.split(":")[0]) >= 8 &&
-      parseInt(s.time.split(":")[0]) < 16
-  );
+  const morningSlots = slots.filter(s => {
+    const h = parseInt(s.time.split(":")[0]);
+    return h >= 8 && h < 16;
+  });
 
-  const eveningSlots = slots.filter(
-    (s) => parseInt(s.time.split(":")[0]) >= 19
-  );
+  const eveningSlots = slots.filter(s => {
+    const h = parseInt(s.time.split(":")[0]);
+    return h >= 19 || h === 0;
+  });
+
+  // --------------------
+  // DATE / TIME HELPERS
+  // --------------------
+  const today = new Date().toLocaleDateString("en-CA");
+  const now = new Date();
+  const nowMinutes = now.getHours() * 60 + now.getMinutes();
+
+  const isSlotDisabled = (slot: Slot) => {
+    if (!slot.available) return true;
+
+    // ❌ Past date
+    if (date < today) return true;
+
+    // ⏱ Today – disable past time slots
+    if (date === today) {
+      const start = slot.time.split(" - ")[0];
+      let [hour, min] = start.split(":").map(Number);
+
+      // Handle 00:00 (midnight)
+      if (hour === 0) hour = 24;
+
+      const slotMinutes = hour * 60 + min;
+      if (slotMinutes <= nowMinutes) return true;
+    }
+
+    return false;
+  };
 
   // --------------------
   // UI
@@ -131,31 +141,28 @@ function BookSlot() {
 
       {/* DATE */}
       <section className="bg-white p-6 rounded shadow">
-        <label className="block text-sm font-medium mb-2">
-          Select Date
-        </label>
+        <label className="block text-sm font-medium mb-2">Select Date</label>
         <input
           type="date"
+          min={today} // ✅ BLOCK PAST DATES
           className="border rounded px-3 py-2"
           value={date}
-          onChange={(e) => setDate(e.target.value)}
+          onChange={e => setDate(e.target.value)}
         />
       </section>
 
       {/* RESOURCE */}
       <section className="bg-white p-6 rounded shadow">
-        <label className="block text-sm font-medium mb-4">
-          Select Resource
-        </label>
+        <label className="block text-sm font-medium mb-4">Select Resource</label>
         <div className="flex gap-4">
-          {resources.map((r) => (
+          {resources.map(r => (
             <button
               key={r}
               onClick={() => setResource(r)}
-              className={`px-6 py-2 rounded border font-medium transition ${
+              className={`px-6 py-2 rounded border ${
                 resource === r
                   ? "bg-blue-600 text-white"
-                  : "bg-white hover:bg-gray-100"
+                  : "hover:bg-gray-100"
               }`}
             >
               {r}
@@ -169,9 +176,7 @@ function BookSlot() {
         <h2 className="font-medium">Available Slots</h2>
 
         {!date || !resource ? (
-          <p className="text-gray-500">
-            Select date and resource to view slots
-          </p>
+          <p className="text-gray-500">Select date and resource</p>
         ) : loading ? (
           <p className="text-gray-500">Checking availability…</p>
         ) : (
@@ -181,6 +186,7 @@ function BookSlot() {
               slots={morningSlots}
               selectedSlot={selectedSlot}
               setSelectedSlot={setSelectedSlot}
+              isSlotDisabled={isSlotDisabled}
             />
 
             <SlotGroup
@@ -188,14 +194,14 @@ function BookSlot() {
               slots={eveningSlots}
               selectedSlot={selectedSlot}
               setSelectedSlot={setSelectedSlot}
+              isSlotDisabled={isSlotDisabled}
             />
           </>
         )}
       </section>
 
-      {/* CONTINUE */}
       {selectedSlot && (
-        <div className="bg-blue-50 border border-blue-200 p-6 rounded flex justify-between items-center">
+        <div className="bg-blue-50 border p-6 rounded flex justify-between">
           <div>
             <p className="text-sm text-gray-600">Selected Slot</p>
             <p className="font-semibold">
@@ -204,26 +210,17 @@ function BookSlot() {
           </div>
 
           <button
-  onClick={() => {
-    const bookingDraft = {
-      date,
-      resource,
-      slot: selectedSlot,
-    };
-
-    // 🔑 Persist draft for ConfirmBooking
-    localStorage.setItem(
-      "bookingDraft",
-      JSON.stringify(bookingDraft)
-    );
-
-    navigate("/confirm-booking");
-  }}
-  className="bg-blue-600 text-white px-6 py-3 rounded hover:bg-blue-700"
->
-  Continue
-</button>
-
+            onClick={() => {
+              localStorage.setItem(
+                "bookingDraft",
+                JSON.stringify({ date, resource, slot: selectedSlot })
+              );
+              navigate("/confirm-booking");
+            }}
+            className="bg-blue-600 text-white px-6 py-3 rounded"
+          >
+            Continue
+          </button>
         </div>
       )}
     </div>
@@ -238,24 +235,21 @@ function SlotGroup({
   slots,
   selectedSlot,
   setSelectedSlot,
-}: {
-  title: string;
-  slots: Slot[];
-  selectedSlot: string;
-  setSelectedSlot: (s: string) => void;
-}) {
+  isSlotDisabled,
+}: any) {
   if (slots.length === 0) return null;
 
   return (
     <div>
       <h3 className="font-semibold mb-3">{title}</h3>
       <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-        {slots.map((slot) => (
+        {slots.map((slot: Slot) => (
           <SlotButton
             key={slot.time}
             slot={slot}
             selectedSlot={selectedSlot}
             setSelectedSlot={setSelectedSlot}
+            disabled={isSlotDisabled(slot)}
           />
         ))}
       </div>
@@ -270,24 +264,21 @@ function SlotButton({
   slot,
   selectedSlot,
   setSelectedSlot,
-}: {
-  slot: Slot;
-  selectedSlot: string;
-  setSelectedSlot: (s: string) => void;
-}) {
+  disabled,
+}: any) {
   const isSelected = selectedSlot === slot.time;
 
   return (
     <button
-      disabled={!slot.available}
+      disabled={disabled}
       onClick={() => setSelectedSlot(slot.time)}
-      className={`py-2 rounded border text-sm font-medium transition
+      className={`py-2 rounded border text-sm font-medium
         ${
-          slot.available
-            ? isSelected
-              ? "bg-green-600 text-white ring-2 ring-green-300"
-              : "bg-green-50 text-green-700 hover:bg-green-100"
-            : "bg-gray-200 text-gray-400 cursor-not-allowed"
+          disabled
+            ? "bg-gray-200 text-gray-400 cursor-not-allowed"
+            : isSelected
+            ? "bg-green-600 text-white"
+            : "bg-green-50 hover:bg-green-100"
         }`}
     >
       {slot.time}

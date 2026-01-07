@@ -26,18 +26,17 @@ function App() {
       <Route path="/login" element={<Login />} />
       <Route path="/signup" element={<Signup />} />
 
-      {/* Protected */}
+      {/* ✅ HOME IS NOW PUBLIC */}
       <Route
         path="/home"
         element={
-          <ProtectedRoute>
-            <AppLayout>
-              <Home />
-            </AppLayout>
-          </ProtectedRoute>
+          <AppLayout>
+            <Home />
+          </AppLayout>
         }
       />
 
+      {/* Protected */}
       <Route
         path="/book-slot"
         element={
@@ -114,50 +113,37 @@ function App() {
       />
 
       <Route
-  path="/admin"
-  element={
-    <ProtectedRoute roles={["ROLE_ADMIN"]}>
-      <AppLayout>
-        <AdminDashboard />
-      </AppLayout>
-    </ProtectedRoute>
-  }
-/>
-
+        path="/admin"
+        element={
+          <ProtectedRoute roles={["ROLE_ADMIN"]}>
+            <AppLayout>
+              <AdminDashboard />
+            </AppLayout>
+          </ProtectedRoute>
+        }
+      />
 
       <Route
-  path="/admin/slider"
-  element={
-    <ProtectedRoute roles={["ROLE_ADMIN"]}>
-      <AppLayout>
-        <AdminSliderManager />
-      </AppLayout>
-    </ProtectedRoute>
-  }
-/>
+        path="/admin/slider"
+        element={
+          <ProtectedRoute roles={["ROLE_ADMIN"]}>
+            <AppLayout>
+              <AdminSliderManager />
+            </AppLayout>
+          </ProtectedRoute>
+        }
+      />
 
-<Route
-  path="/admin"
-  element={
-    <ProtectedRoute roles={["ROLE_ADMIN"]}>
-      <AppLayout>
-        <AdminDashboard />
-      </AppLayout>
-    </ProtectedRoute>
-  }
-/>
-
-<Route
-  path="/admin/users"
-  element={
-    <ProtectedRoute>
-      <AppLayout>
-        <AdminUsers />
-      </AppLayout>
-    </ProtectedRoute>
-  }
-/>
-
+      <Route
+        path="/admin/users"
+        element={
+          <ProtectedRoute>
+            <AppLayout>
+              <AdminUsers />
+            </AppLayout>
+          </ProtectedRoute>
+        }
+      />
 
       {/* Catch-all */}
       <Route path="*" element={<Navigate to="/home" replace />} />

@@ -16,15 +16,20 @@ api.interceptors.request.use(
   (error) => Promise.reject(error)
 );
 
-// 🚪 Auto logout on 401
+// 🚪 Auto logout on 401 (TOKEN-AWARE)
 api.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response?.status === 401) {
-      localStorage.removeItem("accessToken"); // ✅ FIXED
-      localStorage.removeItem("userId");
-      localStorage.removeItem("playerId");
-      window.location.href = "/login";
+      const token = localStorage.getItem("accessToken");
+
+      // ✅ Redirect ONLY if user was logged in
+      if (token) {
+        localStorage.removeItem("accessToken");
+        localStorage.removeItem("userId");
+        localStorage.removeItem("playerId");
+        window.location.href = "/login";
+      }
     }
     return Promise.reject(error);
   }

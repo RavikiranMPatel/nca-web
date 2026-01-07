@@ -2,13 +2,16 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import api from "../api/axios";
 import academyLogo from "../assets/logos/nca-logo-academy.png";
+import LoginPromptModal from "../components/LoginPromptModal";
+import publicApi from "../api/publicApi";
 
-/* ✅ ADD: Swiper imports */
+
+/* Swiper */
 import { Swiper, SwiperSlide } from "swiper/react";
 import { Autoplay } from "swiper/modules";
 import "swiper/css";
 
-/* ✅ ADD: Slider image type */
+/* Types */
 type SliderImage = {
   id: string;
   imageUrl: string;
@@ -23,17 +26,28 @@ function Home() {
   const navigate = useNavigate();
 
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
 
-  /* ✅ ADD: slider state */
+  /* ✅ NEW: login modal state (TOP LEVEL – correct) */
+  const [showLoginPrompt, setShowLoginPrompt] = useState(false);
+
+  /* Slider */
   const [sliderImages, setSliderImages] = useState<SliderImage[]>([]);
 
+  /* Auth info (safe to read directly) */
+  const token = localStorage.getItem("accessToken");
+
   // --------------------
-  // INITIALIZE PLAYER CONTEXT (ROLE-AWARE)
+  // INITIALIZE PLAYER CONTEXT (ONLY FOR LOGGED-IN USERS)
   // --------------------
   useEffect(() => {
     const init = async () => {
       try {
+        // ✅ PUBLIC USER → skip everything
+        if (!token) {
+          setLoading(false);
+          return;
+        }
+
         const role = localStorage.getItem("userRole");
         const existingPlayerId = localStorage.getItem("playerId");
 
@@ -74,27 +88,27 @@ function Home() {
         }
 
         setLoading(false);
-      } catch (err: any) {
-        setError(
-          err?.response?.data?.message ||
-            "Failed to initialize player session"
-        );
+      } catch {
+        // ✅ Silent for public users
         setLoading(false);
       }
     };
 
     init();
-  }, [navigate]);
+  }, [navigate, token]);
 
-  /* ✅ ADD: fetch slider images */
+  // --------------------
+  // LOAD HOME SLIDER (PUBLIC)
+  // --------------------
   useEffect(() => {
-    api.get("/home-slider")
-      .then(res => setSliderImages(res.data))
+    publicApi
+      .get("/home-slider")
+      .then((res) => setSliderImages(res.data))
       .catch(() => setSliderImages([]));
   }, []);
 
   // --------------------
-  // LOADING / ERROR STATES
+  // LOADING
   // --------------------
   if (loading) {
     return (
@@ -104,21 +118,12 @@ function Home() {
     );
   }
 
-  if (error) {
-    return (
-      <div className="min-h-screen flex items-center justify-center text-red-600">
-        {error}
-      </div>
-    );
-  }
-
   // --------------------
-  // HOME UI
+  // UI
   // --------------------
   return (
     <div className="space-y-12">
-
-      {/* ✅ ADD: HOME SLIDER */}
+      {/* SLIDER */}
       {sliderImages.length > 0 && (
         <section className="rounded-lg overflow-hidden shadow">
           <Swiper
@@ -126,7 +131,7 @@ function Home() {
             autoplay={{ delay: 3000, disableOnInteraction: false }}
             loop
           >
-            {sliderImages.map(img => (
+            {sliderImages.map((img) => (
               <SwiperSlide key={img.id}>
                 <img
                   src={img.imageUrl}
@@ -139,21 +144,12 @@ function Home() {
         </section>
       )}
 
-      {/* HERO (UNCHANGED) */}
+      {/* HERO */}
       <section className="bg-white rounded-lg shadow p-8 flex flex-col items-center text-center">
-        <img
-          src={academyLogo}
-          alt="NextGen Cricket Academy"
-          className="h-48 mb-6"
-        />
-
-        <h1 className="text-3xl font-bold mb-3">
-          NextGen Cricket Academy
-        </h1>
-
+        <img src={academyLogo} alt="NCA" className="h-48 mb-6" />
+        <h1 className="text-3xl font-bold mb-3">NextGen Cricket Academy</h1>
         <p className="text-gray-600 max-w-2xl">
-          High-quality turf and astro facilities designed for players of all
-          age groups. Train smart, play harder, and book slots effortlessly.
+          High-quality turf and astro facilities designed for players of all age groups.
         </p>
       </section>
 
@@ -162,7 +158,6 @@ function Home() {
         <h2 className="text-2xl font-semibold mb-6 text-center">
           Our Facilities
         </h2>
-
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           <FacilityCard title="Turf Wickets" />
           <FacilityCard title="Astro Turf" />
@@ -170,29 +165,25 @@ function Home() {
         </div>
       </section>
 
-      {/* WHY */}
-      <section className="bg-white rounded-lg shadow p-8">
-        <h2 className="text-2xl font-semibold mb-4 text-center">
-          Why Choose NCA?
-        </h2>
-
-        <ul className="space-y-3 text-gray-700 max-w-xl mx-auto">
-          <li>✔ Professional-grade playing surfaces</li>
-          <li>✔ Easy and transparent online booking</li>
-          <li>✔ Suitable for beginners to advanced players</li>
-          <li>✔ Safe and well-maintained facilities</li>
-        </ul>
-      </section>
-
       {/* CTA */}
       <section className="text-center">
         <button
-          onClick={() => navigate("/book-slot")}
+          onClick={() =>
+            token ? navigate("/book-slot") : setShowLoginPrompt(true)
+          }
           className="bg-blue-600 text-white px-8 py-3 rounded-lg text-lg hover:bg-blue-700"
         >
           Book a Slot
         </button>
       </section>
+
+      {/* LOGIN MODAL */}
+      <LoginPromptModal
+        open={showLoginPrompt}
+        message="Please login to book a slot."
+        onConfirm={() => navigate("/login")}
+        onCancel={() => setShowLoginPrompt(false)}
+      />
     </div>
   );
 }
