@@ -1,14 +1,40 @@
+/* ===================================
+   index.css - Global Styles
+   =================================== */
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
+/* Base body styles */
 body {
   @apply bg-gray-100 text-gray-800;
-  font-family: system-ui, -apple-system, BlinkMacSystemFont,
-    "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, "Open Sans",
-    "Helvetica Neue", sans-serif;
+  font-family:
+    system-ui,
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    Roboto,
+    Oxygen,
+    Ubuntu,
+    Cantarell,
+    "Open Sans",
+    "Helvetica Neue",
+    sans-serif;
+  margin: 0;
+  padding: 0;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
+/* Prevent horizontal scroll on mobile */
+html,
+body {
+  overflow-x: hidden;
+  width: 100%;
+}
+
+/* Modal animations */
 @keyframes modalIn {
   from {
     opacity: 0;
@@ -22,4 +48,274 @@ body {
 
 .animate-modal-in {
   animation: modalIn 0.2s ease-out forwards;
+}
+
+/* Success animation */
+@keyframes successPulse {
+  0% {
+    transform: scale(1);
+    background-color: #2563eb;
+  }
+  50% {
+    transform: scale(1.05);
+    background-color: #16a34a;
+  }
+  100% {
+    transform: scale(1);
+    background-color: #2563eb;
+  }
+}
+
+.animate-success {
+  animation: successPulse 0.4s ease-in-out;
+}
+
+/* Mobile-friendly input styles */
+input,
+textarea,
+select,
+button {
+  font-size: 16px; /* Prevents iOS zoom on focus */
+}
+
+@media (min-width: 768px) {
+  input,
+  textarea,
+  select {
+    font-size: 14px; /* Smaller on desktop */
+  }
+}
+
+/* Touch-friendly buttons on mobile */
+@media (max-width: 767px) {
+  button {
+    min-height: 44px; /* iOS recommended touch target */
+  }
+}
+
+/* Prevent text selection on buttons (better UX) */
+button {
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+}
+
+/* Safe area insets for notched devices */
+@supports (padding: max(0px)) {
+  body {
+    padding-left: max(0px, env(safe-area-inset-left));
+    padding-right: max(0px, env(safe-area-inset-right));
+  }
+}
+
+/* Custom scrollbar (desktop only) */
+@media (min-width: 768px) {
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: #f1f1f1;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: #888;
+    border-radius: 4px;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: #555;
+  }
+}
+
+/* ===================================
+   MOBILE TABLE SCROLLING
+   =================================== */
+
+/* Smooth scrolling for tables on mobile */
+.overflow-x-auto {
+  -webkit-overflow-scrolling: touch; /* iOS momentum scrolling */
+  scrollbar-width: thin; /* Firefox */
+  scrollbar-color: #cbd5e1 #f1f5f9; /* thumb track */
+}
+
+/* Webkit scrollbar for mobile tables */
+.overflow-x-auto::-webkit-scrollbar {
+  height: 6px;
+}
+
+.overflow-x-auto::-webkit-scrollbar-track {
+  background: #f1f5f9;
+  border-radius: 3px;
+}
+
+.overflow-x-auto::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 3px;
+}
+
+.overflow-x-auto::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+/* Tailwind scrollbar utilities (if using @tailwind utilities) */
+@layer utilities {
+  .scrollbar-thin::-webkit-scrollbar {
+    height: 6px;
+    width: 6px;
+  }
+
+  .scrollbar-thumb-gray-300::-webkit-scrollbar-thumb {
+    background-color: #d1d5db;
+    border-radius: 3px;
+  }
+
+  .scrollbar-track-gray-100::-webkit-scrollbar-track {
+    background-color: #f3f4f6;
+    border-radius: 3px;
+  }
+}
+
+/* ===================================
+   STICKY COLUMN SUPPORT
+   =================================== */
+
+/* Ensure sticky columns work properly */
+.sticky {
+  position: -webkit-sticky;
+  position: sticky;
+}
+
+/* Shadow effect for sticky columns on scroll */
+.sticky-shadow::after {
+  content: "";
+  position: absolute;
+  right: -4px;
+  top: 0;
+  bottom: 0;
+  width: 4px;
+  background: linear-gradient(to right, rgba(0, 0, 0, 0.1), transparent);
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+
+.overflow-x-auto:not(:hover) .sticky-shadow::after {
+  opacity: 1;
+}
+
+/* ===================================
+   COMPACT CALENDAR OVERRIDES
+   =================================== */
+
+/* Override button min-height for calendar navigation */
+.calendar-nav-btn {
+  min-height: unset !important;
+  min-width: unset !important;
+}
+
+/* Ensure calendar cells don't inherit button styles */
+@layer components {
+  .calendar-cell {
+    min-height: unset !important;
+    min-width: unset !important;
+    padding: 0 !important;
+  }
+}
+
+/* Force compact sizing on mobile too */
+@media (max-width: 767px) {
+  .calendar-nav-btn {
+    min-height: unset !important;
+  }
+
+  .calendar-cell {
+    min-height: unset !important;
+    width: 28px !important;
+    height: 28px !important;
+  }
+}
+
+/* ===================================
+   SLIDER ANIMATIONS & ENHANCEMENTS
+   =================================== */
+
+/* Ken Burns Zoom Effect for Slider Images */
+@keyframes kenBurnsZoom {
+  0% {
+    transform: scale(1);
+  }
+  100% {
+    transform: scale(1.1);
+  }
+}
+
+.ken-burns-zoom {
+  animation: kenBurnsZoom 12s ease-out infinite alternate;
+}
+
+/* Fade-in animation for slider text */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.8s ease-out forwards;
+}
+
+/* Enhanced Swiper Pagination */
+.home-slider .swiper-pagination {
+  bottom: 20px !important;
+}
+
+.home-slider .swiper-pagination-bullet {
+  width: 12px !important;
+  height: 12px !important;
+  background: rgba(255, 255, 255, 0.5) !important;
+  opacity: 1 !important;
+  transition: all 0.3s ease !important;
+}
+
+.home-slider .swiper-pagination-bullet-active-custom {
+  width: 36px !important;
+  height: 12px !important;
+  border-radius: 6px !important;
+  background: rgba(255, 255, 255, 0.95) !important;
+}
+
+/* ===================================
+   TOAST & GENERAL ANIMATIONS
+   =================================== */
+
+/* Toast slide-in animation */
+@keyframes slideIn {
+  from {
+    transform: translateX(400px);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+.animate-slide-in {
+  animation: slideIn 0.3s ease-out forwards;
+}
+
+/* Loading spinner animation */
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.animate-spin {
+  animation: spin 1s linear infinite;
 }

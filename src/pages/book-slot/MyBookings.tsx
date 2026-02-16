@@ -1,10 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import api from "../api/axios";
+import api from "../../api/axios";
 
 type Booking = {
   bookingPublicId: string;
-  playerName: string;
   date: string; // yyyy-mm-dd
   slot: string;
   resource: string;
@@ -27,7 +26,7 @@ function MyBookings() {
   useEffect(() => {
     api
       .get("/bookings/my")
-      .then(res => setBookings(res.data))
+      .then((res) => setBookings(res.data))
       .catch(() => setError("Unable to load bookings"))
       .finally(() => setLoading(false));
   }, []);
@@ -37,7 +36,7 @@ function MyBookings() {
   const today = new Date().toISOString().split("T")[0];
 
   const filteredBookings = useMemo(() => {
-    return bookings.filter(b => {
+    return bookings.filter((b) => {
       if (filter === "UPCOMING") {
         return (
           b.status === "PENDING_PAYMENT" ||
@@ -70,12 +69,10 @@ function MyBookings() {
 
     try {
       await api.delete(`/bookings/${bookingId}`);
-      setBookings(prev =>
-        prev.map(b =>
-          b.bookingPublicId === bookingId
-            ? { ...b, status: "CANCELLED" }
-            : b
-        )
+      setBookings((prev) =>
+        prev.map((b) =>
+          b.bookingPublicId === bookingId ? { ...b, status: "CANCELLED" } : b,
+        ),
       );
     } catch {
       alert("Unable to cancel booking");
@@ -104,9 +101,7 @@ function MyBookings() {
             setPage(1);
           }}
           className={`px-4 py-2 rounded ${
-            filter === "UPCOMING"
-              ? "bg-blue-600 text-white"
-              : "border"
+            filter === "UPCOMING" ? "bg-blue-600 text-white" : "border"
           }`}
         >
           Upcoming
@@ -118,9 +113,7 @@ function MyBookings() {
             setPage(1);
           }}
           className={`px-4 py-2 rounded ${
-            filter === "PAST"
-              ? "bg-blue-600 text-white"
-              : "border"
+            filter === "PAST" ? "bg-blue-600 text-white" : "border"
           }`}
         >
           Past
@@ -136,17 +129,24 @@ function MyBookings() {
 
       {/* LIST */}
       <div className="space-y-4">
-        {pagedBookings.map(b => (
+        {pagedBookings.map((b) => (
           <div
             key={b.bookingPublicId}
             className="border rounded p-4 flex justify-between items-center"
           >
             <div className="space-y-1 text-sm">
-              <p><strong>Player:</strong> {b.playerName}</p>
-              <p><strong>Date:</strong> {b.date}</p>
-              <p><strong>Time:</strong> {b.slot}</p>
-              <p><strong>Resource:</strong> {b.resource}</p>
-              <p><strong>Amount:</strong> ₹{b.amount}</p>
+              <p>
+                <strong>Date:</strong> {b.date}
+              </p>
+              <p>
+                <strong>Time:</strong> {b.slot}
+              </p>
+              <p>
+                <strong>Resource:</strong> {b.resource}
+              </p>
+              <p>
+                <strong>Amount:</strong> ₹{b.amount}
+              </p>
               <p>
                 <strong>Status:</strong>{" "}
                 <span
@@ -154,8 +154,8 @@ function MyBookings() {
                     b.status === "CONFIRMED"
                       ? "text-green-600"
                       : b.status === "PENDING_PAYMENT"
-                      ? "text-orange-600"
-                      : "text-red-600"
+                        ? "text-orange-600"
+                        : "text-red-600"
                   }
                 >
                   {b.status}
@@ -194,7 +194,7 @@ function MyBookings() {
         <div className="flex justify-center gap-2 mt-8">
           <button
             disabled={page === 1}
-            onClick={() => setPage(p => p - 1)}
+            onClick={() => setPage((p) => p - 1)}
             className="px-4 py-2 border rounded disabled:opacity-50"
           >
             Prev
@@ -206,7 +206,7 @@ function MyBookings() {
 
           <button
             disabled={page === totalPages}
-            onClick={() => setPage(p => p + 1)}
+            onClick={() => setPage((p) => p + 1)}
             className="px-4 py-2 border rounded disabled:opacity-50"
           >
             Next

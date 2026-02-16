@@ -13,7 +13,7 @@ api.interceptors.request.use(
     }
     return config;
   },
-  (error) => Promise.reject(error)
+  (error) => Promise.reject(error),
 );
 
 // 🚪 Auto logout on 401 (TOKEN-AWARE)
@@ -28,11 +28,20 @@ api.interceptors.response.use(
         localStorage.removeItem("accessToken");
         localStorage.removeItem("userId");
         localStorage.removeItem("playerId");
+        localStorage.removeItem("playerName");
+        localStorage.removeItem("userRole");
+
+        // ✅ Set session expired flag
+        sessionStorage.setItem("sessionExpired", "true");
+        sessionStorage.setItem(
+          "redirectAfterLogin",
+          window.location.pathname + window.location.search,
+        );
         window.location.href = "/login";
       }
     }
     return Promise.reject(error);
-  }
+  },
 );
 
 export default api;

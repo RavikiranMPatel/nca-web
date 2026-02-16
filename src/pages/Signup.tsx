@@ -2,7 +2,9 @@ import { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { signupApi } from "../api/auth.api";
 import { useAuth } from "../auth/useAuth";
-import logo from "../assets/logos/nca-logo-app.png";
+import { useEffect } from "react";
+import publicApi from "../api/publicApi";
+import { getImageUrl } from "../utils/imageUrl";
 
 function Signup() {
   const [name, setName] = useState("");
@@ -10,9 +12,25 @@ function Signup() {
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [error, setError] = useState("");
+  const [logoUrl, setLogoUrl] = useState<string | null>(null);
+  const [academyName, setAcademyName] = useState("NextGen Cricket Academy");
 
   const { login } = useAuth();
   const navigate = useNavigate();
+
+  useEffect(() => {
+    const loadSettings = async () => {
+      try {
+        const res = await publicApi.get("/settings/public");
+        setLogoUrl(res.data?.LOGO_URL || null);
+        setAcademyName(res.data?.ACADEMY_NAME || "NextGen Cricket Academy");
+      } catch (err) {
+        console.warn("Failed to load public settings", err);
+      }
+    };
+
+    loadSettings();
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -32,13 +50,9 @@ function Signup() {
         decodeURIComponent(
           atob(base64Payload)
             .split("")
-            .map(
-              (c) =>
-                "%" +
-                ("00" + c.charCodeAt(0).toString(16)).slice(-2)
-            )
-            .join("")
-        )
+            .map((c) => "%" + ("00" + c.charCodeAt(0).toString(16)).slice(-2))
+            .join(""),
+        ),
       );
 
       const role = decodedPayload?.role || "ROLE_USER";
@@ -48,22 +62,28 @@ function Signup() {
 
       navigate("/home");
     } catch (err: any) {
-      setError(
-        err?.response?.data?.message || "Signup failed"
-      );
+      setError(err?.response?.data?.message || "Signup failed");
     }
   };
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-100">
       <div className="bg-white p-8 rounded-lg shadow-md w-96">
-
         {/* Logo */}
         <div className="flex flex-col items-center mb-6">
-          <img src={logo} alt="NCA Logo" className="h-20 mb-2" />
-          <h2 className="text-xl font-semibold">
-            Create Account
-          </h2>
+          {logoUrl ? (
+            <img
+              src={getImageUrl(logoUrl) || ""}
+              alt={academyName}
+              className="h-20 mb-2 object-contain"
+            />
+          ) : (
+            <div className="h-20 mb-2 flex items-center justify-center text-gray-400 text-sm">
+              Logo
+            </div>
+          )}
+
+          <h2 className="text-xl font-semibold">Create Account</h2>
         </div>
 
         {error && (

@@ -32,10 +32,10 @@ publicApi.interceptors.response.use(
   (response) => response,
   (error) => {
     // Optional: console logging for debugging
-    // console.warn("Public API error:", error?.response?.status);
+    console.warn("Public API error:", error?.response?.status);
 
     return Promise.reject(error);
-  }
+  },
 );
 
 export default publicApi;

@@ -1,8 +1,19 @@
+/* ===================================
+   App.css - Mobile & Desktop Ready
+   =================================== */
+
 #root {
   max-width: 1280px;
   margin: 0 auto;
-  padding: 2rem;
-  text-align: center;
+  padding: 1rem; /* Reduced from 2rem for mobile */
+  text-align: left; /* Changed from center for better readability */
+}
+
+/* Mobile adjustments */
+@media (min-width: 768px) {
+  #root {
+    padding: 2rem;
+  }
 }
 
 .logo {
@@ -11,9 +22,11 @@
   will-change: filter;
   transition: filter 300ms;
 }
+
 .logo:hover {
   filter: drop-shadow(0 0 2em #646cffaa);
 }
+
 .logo.react:hover {
   filter: drop-shadow(0 0 2em #61dafbaa);
 }
@@ -34,9 +47,24 @@
 }
 
 .card {
-  padding: 2em;
+  padding: 1.5em;
+}
+
+/* Mobile card adjustment */
+@media (max-width: 767px) {
+  .card {
+    padding: 1em;
+  }
 }
 
 .read-the-docs {
   color: #888;
+}
+
+/* Ensure modals are mobile-friendly */
+@media (max-width: 640px) {
+  .fixed .w-\[360px\] {
+    width: 90vw !important;
+    max-width: 360px;
+  }
 }
