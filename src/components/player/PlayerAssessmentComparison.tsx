@@ -1,12 +1,13 @@
 import { useState, useEffect } from "react";
 import { toast } from "react-hot-toast";
+import { TrendingUp, TrendingDown, Minus, ArrowRight } from "lucide-react";
 import { playerAssessmentService } from "../../api/playerService/playerAssessmentService.ts";
 import type {
   PlayerAssessmentResponse,
   SkillEntry,
 } from "../../api/playerService/playerAssessmentService.ts";
 
-// ─── HELPERS ─────────────────────────────────────────────
+// ─── CONSTANTS ───────────────────────────────────────────
 
 const RATING_ORDER: Record<string, number> = {
   NEEDS_WORK: 1,
@@ -15,76 +16,268 @@ const RATING_ORDER: Record<string, number> = {
   EXCELLENT: 4,
 };
 
-const RATING_STYLES: Record<string, { bg: string; text: string }> = {
-  NEEDS_WORK: { bg: "bg-red-100", text: "text-red-700" },
-  DEVELOPING: { bg: "bg-yellow-100", text: "text-yellow-700" },
-  GOOD: { bg: "bg-green-100", text: "text-green-700" },
-  EXCELLENT: { bg: "bg-blue-100", text: "text-blue-700" },
+const RATING_CONFIG: Record<
+  string,
+  { bg: string; text: string; border: string; dot: string; label: string }
+> = {
+  NEEDS_WORK: {
+    bg: "bg-red-50",
+    text: "text-red-700",
+    border: "border-red-200",
+    dot: "bg-red-400",
+    label: "Needs Work",
+  },
+  DEVELOPING: {
+    bg: "bg-yellow-50",
+    text: "text-yellow-700",
+    border: "border-yellow-200",
+    dot: "bg-yellow-400",
+    label: "Developing",
+  },
+  GOOD: {
+    bg: "bg-green-50",
+    text: "text-green-700",
+    border: "border-green-200",
+    dot: "bg-green-500",
+    label: "Good",
+  },
+  EXCELLENT: {
+    bg: "bg-blue-50",
+    text: "text-blue-700",
+    border: "border-blue-200",
+    dot: "bg-blue-500",
+    label: "Excellent",
+  },
 };
 
-function formatDate(dateStr: string): string {
-  return new Date(dateStr).toLocaleDateString("en-IN", {
+const OVERALL_CONFIG: Record<string, { card: string; text: string }> = {
+  NEEDS_WORK: { card: "bg-red-50 border-red-200", text: "text-red-600" },
+  DEVELOPING: {
+    card: "bg-yellow-50 border-yellow-200",
+    text: "text-yellow-600",
+  },
+  GOOD: { card: "bg-green-50 border-green-200", text: "text-green-600" },
+  EXCELLENT: { card: "bg-blue-50 border-blue-200", text: "text-blue-600" },
+};
+
+const TABS = [
+  { key: "cricket", label: "Cricket", icon: "🏏" },
+  { key: "fitness", label: "Fitness", icon: "💪" },
+  { key: "diet", label: "Diet", icon: "🍎" },
+  { key: "mental", label: "Mental", icon: "🧠" },
+];
+
+const SKIP_KEYS = [
+  "balancePriority",
+  "bodyMetrics",
+  "goalTracking",
+  "supplements",
+  "coachNotes",
+  "complianceRating",
+];
+
+// ─── HELPERS ─────────────────────────────────────────────
+
+function formatDate(d: string) {
+  return new Date(d).toLocaleDateString("en-IN", {
     day: "2-digit",
     month: "short",
     year: "numeric",
   });
 }
 
-function formatRating(r?: string): string {
-  if (!r) return "—";
-  const words = r.replace(/_/g, " ").split(" ");
-  return words[0].charAt(0).toUpperCase() + words[0].slice(1).toLowerCase();
-}
-
-/**
- * Extract all skill entries from a JSONB tab object for comparison
- */
-function extractSkills(
-  data: Record<string, any> | undefined,
-  prefix: string,
-): { key: string; label: string; entry: SkillEntry }[] {
+function extractSkills(data: Record<string, any> | undefined, prefix: string) {
   if (!data) return [];
   const results: { key: string; label: string; entry: SkillEntry }[] = [];
 
   for (const [category, skills] of Object.entries(data)) {
-    if (typeof skills !== "object" || skills === null) continue;
     if (
-      category === "balancePriority" ||
-      category === "bodyMetrics" ||
-      category === "goalTracking" ||
-      category === "supplements" ||
-      category === "coachNotes" ||
-      category === "complianceRating"
+      typeof skills !== "object" ||
+      skills === null ||
+      SKIP_KEYS.includes(category)
     )
       continue;
-
-    for (const [skillName, entry] of Object.entries(
+    for (const [subKey, subVal] of Object.entries(
       skills as Record<string, any>,
     )) {
-      if (
-        typeof entry === "object" &&
-        entry !== null &&
-        (entry.rating || entry.comment)
-      ) {
+      if (typeof subVal !== "object" || subVal === null) continue;
+      if (subVal.rating || subVal.comment) {
+        // Fitness/diet/mental — 2 levels deep
         results.push({
-          key: `${prefix}.${category}.${skillName}`,
-          label: skillName,
-          entry: entry as SkillEntry,
+          key: `${prefix}.${category}.${subKey}`,
+          label: subKey,
+          entry: subVal as SkillEntry,
         });
+      } else {
+        // Cricket — 3 levels deep: batting → basics → Grip
+        for (const [skillName, entry] of Object.entries(
+          subVal as Record<string, any>,
+        )) {
+          if (
+            typeof entry === "object" &&
+            entry !== null &&
+            ((entry as any).rating || (entry as any).comment)
+          ) {
+            results.push({
+              key: `${prefix}.${category}.${subKey}.${skillName}`,
+              label: skillName,
+              entry: entry as SkillEntry,
+            });
+          }
+        }
       }
     }
   }
   return results;
 }
 
-// ─── COMPONENT ───────────────────────────────────────────
+function getRatingLabel(r?: string) {
+  return r ? (RATING_CONFIG[r]?.label ?? r.replace(/_/g, " ")) : null;
+}
+
+// ─── RATING PILL ─────────────────────────────────────────
+
+function RatingPill({ rating }: { rating?: string }) {
+  if (!rating)
+    return (
+      <span className="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-medium text-slate-300 bg-slate-50 border border-slate-100">
+        Not rated
+      </span>
+    );
+  const cfg = RATING_CONFIG[rating];
+  return (
+    <span
+      className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-bold border ${cfg.bg} ${cfg.text} ${cfg.border}`}
+    >
+      <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${cfg.dot}`} />
+      {cfg.label}
+    </span>
+  );
+}
+
+// ─── DIFF ICON ───────────────────────────────────────────
+
+function DiffIcon({ diff }: { diff: number }) {
+  if (diff > 0)
+    return (
+      <div className="w-6 h-6 rounded-full bg-green-100 flex items-center justify-center flex-shrink-0">
+        <TrendingUp size={12} className="text-green-600" />
+      </div>
+    );
+  if (diff < 0)
+    return (
+      <div className="w-6 h-6 rounded-full bg-red-100 flex items-center justify-center flex-shrink-0">
+        <TrendingDown size={12} className="text-red-500" />
+      </div>
+    );
+  return (
+    <div className="w-6 h-6 rounded-full bg-slate-100 flex items-center justify-center flex-shrink-0">
+      <Minus size={12} className="text-slate-300" />
+    </div>
+  );
+}
+
+// ─── SKILL ROW — true side by side ───────────────────────
+
+function SkillRow({
+  label,
+  left,
+  right,
+  diff,
+  isLast,
+}: {
+  label: string;
+  left?: SkillEntry;
+  right?: SkillEntry;
+  diff: number;
+  isLast: boolean;
+}) {
+  const rowBg = diff > 0 ? "bg-green-50/40" : diff < 0 ? "bg-red-50/30" : "";
+
+  return (
+    <div className={`${rowBg} ${!isLast ? "border-b border-slate-100" : ""}`}>
+      {/* Skill label + diff icon */}
+      <div className="flex items-center gap-2 px-4 pt-3 pb-2">
+        <DiffIcon diff={diff} />
+        <span className="text-sm font-semibold text-slate-700">{label}</span>
+      </div>
+
+      {/* Side-by-side: Before | After */}
+      <div className="grid grid-cols-2 divide-x divide-slate-100 pb-3">
+        <div className="px-4">
+          <RatingPill rating={left?.rating} />
+          {left?.comment?.trim() && (
+            <p className="text-xs text-slate-500 mt-1.5 leading-relaxed italic">
+              "{left.comment}"
+            </p>
+          )}
+        </div>
+        <div className="px-4">
+          <RatingPill rating={right?.rating} />
+          {right?.comment?.trim() && (
+            <p className="text-xs text-slate-500 mt-1.5 leading-relaxed italic">
+              "{right.comment}"
+            </p>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── SECTION HEADER ──────────────────────────────────────
+
+function SectionHeader({
+  type,
+  count,
+}: {
+  type: "improved" | "declined" | "nochange";
+  count: number;
+}) {
+  const configs = {
+    improved: {
+      bg: "bg-green-50 border-green-100",
+      icon: <TrendingUp size={11} className="text-green-600" />,
+      text: "text-green-700",
+      label: "Improved",
+    },
+    declined: {
+      bg: "bg-red-50 border-red-100",
+      icon: <TrendingDown size={11} className="text-red-500" />,
+      text: "text-red-600",
+      label: "Declined",
+    },
+    nochange: {
+      bg: "bg-slate-50 border-slate-100",
+      icon: <Minus size={11} className="text-slate-400" />,
+      text: "text-slate-500",
+      label: "No Change",
+    },
+  };
+  const cfg = configs[type];
+  return (
+    <div className={`flex items-center gap-2 px-4 py-2 border-y ${cfg.bg}`}>
+      {cfg.icon}
+      <span
+        className={`text-[10px] font-bold uppercase tracking-wider ${cfg.text}`}
+      >
+        {cfg.label} — {count} skill{count !== 1 ? "s" : ""}
+      </span>
+    </div>
+  );
+}
+
+// ─── MAIN COMPONENT ──────────────────────────────────────
 
 type Props = {
   playerPublicId: string;
-  assessments: PlayerAssessmentResponse[]; // lightweight list (no JSONB)
+  assessments: PlayerAssessmentResponse[];
 };
 
-function PlayerAssessmentComparison({ playerPublicId, assessments }: Props) {
+export default function PlayerAssessmentComparison({
+  playerPublicId,
+  assessments,
+}: Props) {
   const [leftId, setLeftId] = useState(assessments[1]?.publicId || "");
   const [rightId, setRightId] = useState(assessments[0]?.publicId || "");
   const [leftData, setLeftData] = useState<PlayerAssessmentResponse | null>(
@@ -94,7 +287,7 @@ function PlayerAssessmentComparison({ playerPublicId, assessments }: Props) {
     null,
   );
   const [loading, setLoading] = useState(false);
-  const [activeCompareTab, setActiveCompareTab] = useState("cricket");
+  const [activeTab, setActiveTab] = useState("cricket");
 
   useEffect(() => {
     if (leftId && rightId) loadBoth();
@@ -109,103 +302,99 @@ function PlayerAssessmentComparison({ playerPublicId, assessments }: Props) {
       ]);
       setLeftData(left);
       setRightData(right);
-    } catch (error) {
-      toast.error("Failed to load assessments for comparison");
+    } catch {
+      toast.error("Failed to load assessments");
     } finally {
       setLoading(false);
     }
   };
 
-  // Build comparison rows
-  const getCompareRows = (tab: string) => {
+  const getRows = (tab: string) => {
     if (!leftData || !rightData) return [];
-
-    const tabKeyMap: Record<string, string> = {
+    const keyMap: Record<string, string> = {
       cricket: "cricketSkills",
       fitness: "fitness",
       diet: "diet",
       mental: "mental",
     };
-    const key = tabKeyMap[tab];
-
-    const leftSkills = extractSkills((leftData as any)[key], tab);
-    const rightSkills = extractSkills((rightData as any)[key], tab);
-
-    // Merge all unique skill keys
+    const ls = extractSkills((leftData as any)[keyMap[tab]], tab);
+    const rs = extractSkills((rightData as any)[keyMap[tab]], tab);
     const allKeys = new Map<string, string>();
-    leftSkills.forEach((s) => allKeys.set(s.key, s.label));
-    rightSkills.forEach((s) => allKeys.set(s.key, s.label));
-
-    const leftMap = new Map(leftSkills.map((s) => [s.key, s.entry]));
-    const rightMap = new Map(rightSkills.map((s) => [s.key, s.entry]));
-
+    ls.forEach((s) => allKeys.set(s.key, s.label));
+    rs.forEach((s) => allKeys.set(s.key, s.label));
+    const lm = new Map(ls.map((s) => [s.key, s.entry]));
+    const rm = new Map(rs.map((s) => [s.key, s.entry]));
     return Array.from(allKeys.entries()).map(([key, label]) => {
-      const l = leftMap.get(key);
-      const r = rightMap.get(key);
-      const lNum = RATING_ORDER[l?.rating || ""] || 0;
-      const rNum = RATING_ORDER[r?.rating || ""] || 0;
-      const diff = rNum - lNum;
-
-      return { key, label, left: l, right: r, diff };
+      const l = lm.get(key);
+      const r = rm.get(key);
+      return {
+        key,
+        label,
+        left: l,
+        right: r,
+        diff:
+          (RATING_ORDER[r?.rating || ""] || 0) -
+          (RATING_ORDER[l?.rating || ""] || 0),
+      };
     });
   };
 
-  const rows = getCompareRows(activeCompareTab);
-  const improved = rows.filter((r) => r.diff > 0).length;
-  const declined = rows.filter((r) => r.diff < 0).length;
-  const unchanged = rows.filter((r) => r.diff === 0).length;
+  const rows = getRows(activeTab);
+  const improved = rows.filter((r) => r.diff > 0);
+  const declined = rows.filter((r) => r.diff < 0);
+  const noChange = rows.filter((r) => r.diff === 0);
+  const total = rows.length;
 
-  const compareTabs = [
-    { key: "cricket", label: "Cricket", icon: "🏏" },
-    { key: "fitness", label: "Fitness", icon: "💪" },
-    { key: "diet", label: "Diet", icon: "🍎" },
-    { key: "mental", label: "Mental", icon: "🧠" },
-  ];
+  const lCfg = leftData?.overallRating
+    ? OVERALL_CONFIG[leftData.overallRating]
+    : null;
+  const rCfg = rightData?.overallRating
+    ? OVERALL_CONFIG[rightData.overallRating]
+    : null;
 
   return (
-    <div className="space-y-4 sm:space-y-6">
-      {/* ─── HEADER ─────────────────────────────────── */}
-      <div className="bg-white rounded-lg shadow p-4 sm:p-6">
-        <h2 className="text-base sm:text-lg font-bold text-slate-900 mb-1">
+    <div className="space-y-4">
+      {/* ── SELECTOR ─────────────────────────────────── */}
+      <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-5">
+        <h2 className="text-base font-bold text-slate-800 mb-4">
           📊 Compare Assessments
         </h2>
-        <p className="text-xs sm:text-sm text-slate-500 mb-4">
-          Side-by-side comparison
-        </p>
-
-        {/* Date Selectors - stack on mobile */}
-        <div className="flex flex-col sm:flex-row sm:items-end gap-2 sm:gap-3">
-          <div className="flex-1">
-            <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider block mb-1">
+        <div className="grid grid-cols-[1fr_36px_1fr] items-end gap-2">
+          <div>
+            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">
               Earlier
-            </label>
+            </p>
             <select
               value={leftId}
               onChange={(e) => setLeftId(e.target.value)}
-              className="w-full px-3 py-2 border rounded-lg text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-slate-50"
             >
               {assessments.map((a) => (
                 <option key={a.publicId} value={a.publicId}>
-                  {formatDate(a.assessmentDate)} (
-                  {a.assessmentType.replace(/_/g, " ")})
+                  {formatDate(a.assessmentDate)} ·{" "}
+                  {a.assessmentType.replace(/_/g, " ")}
                 </option>
               ))}
             </select>
           </div>
-          <div className="hidden sm:block pb-2 text-slate-400 text-lg">→</div>
-          <div className="flex-1">
-            <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider block mb-1">
+          <div className="flex justify-center pb-1">
+            <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center">
+              <ArrowRight size={15} className="text-slate-400" />
+            </div>
+          </div>
+          <div>
+            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">
               Later
-            </label>
+            </p>
             <select
               value={rightId}
               onChange={(e) => setRightId(e.target.value)}
-              className="w-full px-3 py-2 border rounded-lg text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-slate-50"
             >
               {assessments.map((a) => (
                 <option key={a.publicId} value={a.publicId}>
-                  {formatDate(a.assessmentDate)} (
-                  {a.assessmentType.replace(/_/g, " ")})
+                  {formatDate(a.assessmentDate)} ·{" "}
+                  {a.assessmentType.replace(/_/g, " ")}
                 </option>
               ))}
             </select>
@@ -214,54 +403,111 @@ function PlayerAssessmentComparison({ playerPublicId, assessments }: Props) {
       </div>
 
       {loading && (
-        <div className="text-center py-8">
+        <div className="text-center py-12">
           <div className="inline-block w-8 h-8 border-4 border-slate-200 border-t-blue-600 rounded-full animate-spin" />
         </div>
       )}
 
       {!loading && leftData && rightData && (
         <>
-          {/* ─── OVERALL RATING CARDS ─────────────────── */}
-          <div className="grid grid-cols-2 gap-2 sm:gap-3">
-            {[leftData, rightData].map((a, i) => {
-              const rs = a.overallRating
-                ? RATING_STYLES[a.overallRating]
-                : null;
-              return (
-                <div
-                  key={i}
-                  className={`rounded-lg p-3 sm:p-4 text-center border ${
-                    rs
-                      ? `${rs.bg} border-transparent`
-                      : "bg-slate-50 border-slate-200"
-                  }`}
+          {/* ── OVERALL RATING CARDS ─────────────────── */}
+          <div className="grid grid-cols-2 gap-3">
+            {[
+              { data: leftData, label: "Earlier", cfg: lCfg },
+              { data: rightData, label: "Later", cfg: rCfg },
+            ].map(({ data, label, cfg }) => (
+              <div
+                key={label}
+                className={`rounded-xl border-2 p-4 text-center ${cfg ? cfg.card : "bg-slate-50 border-slate-200"}`}
+              >
+                <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-1">
+                  {label}
+                </p>
+                <p className="text-xs text-slate-500 mb-2">
+                  {formatDate(data.assessmentDate)}
+                </p>
+                <p
+                  className={`text-xl font-black ${cfg ? cfg.text : "text-slate-400"}`}
                 >
-                  <p className="text-[10px] font-semibold text-slate-500 uppercase mb-1">
-                    {formatDate(a.assessmentDate)}
-                  </p>
-                  <p
-                    className={`text-sm sm:text-lg font-bold ${
-                      rs ? rs.text : "text-slate-400"
-                    }`}
-                  >
-                    {a.overallRating
-                      ? a.overallRating.replace(/_/g, " ")
-                      : "Not Rated"}
-                  </p>
-                </div>
-              );
-            })}
+                  {data.overallRating
+                    ? getRatingLabel(data.overallRating)?.toUpperCase()
+                    : "NOT RATED"}
+                </p>
+                <p className="text-[10px] text-slate-400 mt-1">
+                  {data.assessmentType.replace(/_/g, " ")}
+                </p>
+              </div>
+            ))}
           </div>
 
-          {/* ─── COMPARE TABS ─────────────────────────── */}
-          <div className="flex gap-1 bg-white rounded-lg shadow p-1">
-            {compareTabs.map((tab) => (
+          {/* ── PROGRESS BAR ─────────────────────────── */}
+          {total > 0 && (
+            <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4">
+              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">
+                {total} skills compared
+              </p>
+              <div className="flex rounded-full overflow-hidden h-2 mb-3 bg-slate-100">
+                {improved.length > 0 && (
+                  <div
+                    className="bg-green-500 h-full"
+                    style={{ width: `${(improved.length / total) * 100}%` }}
+                  />
+                )}
+                {noChange.length > 0 && (
+                  <div
+                    className="bg-slate-300 h-full"
+                    style={{ width: `${(noChange.length / total) * 100}%` }}
+                  />
+                )}
+                {declined.length > 0 && (
+                  <div
+                    className="bg-red-400 h-full"
+                    style={{ width: `${(declined.length / total) * 100}%` }}
+                  />
+                )}
+              </div>
+              <div className="flex gap-4">
+                {[
+                  {
+                    color: "bg-green-500",
+                    textColor: "text-green-600",
+                    count: improved.length,
+                    label: "Improved",
+                  },
+                  {
+                    color: "bg-slate-300",
+                    textColor: "text-slate-500",
+                    count: noChange.length,
+                    label: "Same",
+                  },
+                  {
+                    color: "bg-red-400",
+                    textColor: "text-red-500",
+                    count: declined.length,
+                    label: "Declined",
+                  },
+                ].map(({ color, textColor, count, label }) => (
+                  <div key={label} className="flex items-center gap-1.5">
+                    <div className={`w-2 h-2 rounded-full ${color}`} />
+                    <span className={`text-sm font-bold ${textColor}`}>
+                      {count}
+                    </span>
+                    <span className="text-xs text-slate-400">{label}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* ── TABS ─────────────────────────────────── */}
+          <div className="flex gap-1 bg-white rounded-xl border border-slate-200 shadow-sm p-1">
+            {TABS.map((tab) => (
               <button
                 key={tab.key}
-                onClick={() => setActiveCompareTab(tab.key)}
-                className={`flex-1 flex items-center justify-center gap-1 px-2 py-2 rounded-md text-xs font-semibold transition-all ${
-                  activeCompareTab === tab.key
-                    ? "bg-blue-600 text-white"
+                onClick={() => setActiveTab(tab.key)}
+                className={`flex-1 flex items-center justify-center gap-1.5 px-2 py-2 rounded-lg text-xs font-semibold transition-all ${
+                  activeTab === tab.key
+                    ? "bg-blue-600 text-white shadow-sm"
                     : "text-slate-500 hover:bg-slate-50"
                 }`}
               >
@@ -271,254 +517,95 @@ function PlayerAssessmentComparison({ playerPublicId, assessments }: Props) {
             ))}
           </div>
 
-          {/* ─── SKILL-BY-SKILL COMPARISON ────────────── */}
-          {rows.length > 0 ? (
-            <div className="space-y-2 sm:space-y-0">
-              {/* Desktop Table Header - hidden on mobile */}
-              <div className="hidden sm:grid sm:grid-cols-[1fr_100px_28px_100px] gap-0 px-4 py-3 bg-white rounded-t-lg shadow border-b border-slate-200">
-                <span className="text-[10px] font-bold text-slate-500 uppercase">
-                  Skill
-                </span>
-                <span className="text-[10px] font-bold text-slate-500 uppercase text-center">
-                  Before
-                </span>
-                <span />
-                <span className="text-[10px] font-bold text-slate-500 uppercase text-center">
-                  After
-                </span>
-              </div>
-
-              {rows.map((row, i) => {
-                const lrs = row.left?.rating
-                  ? RATING_STYLES[row.left.rating]
-                  : null;
-                const rrs = row.right?.rating
-                  ? RATING_STYLES[row.right.rating]
-                  : null;
-                const diffColor =
-                  row.diff > 0
-                    ? "text-green-600"
-                    : row.diff < 0
-                      ? "text-red-500"
-                      : "text-slate-300";
-                const diffIcon = row.diff > 0 ? "↑" : row.diff < 0 ? "↓" : "=";
-
-                const hasLeftComment =
-                  row.left?.comment && row.left.comment.trim();
-                const hasRightComment =
-                  row.right?.comment && row.right.comment.trim();
-                const hasComments = hasLeftComment || hasRightComment;
-
-                return (
-                  <div key={row.key}>
-                    {/* ─── MOBILE CARD LAYOUT (< sm) ────── */}
-                    <div className="sm:hidden bg-white rounded-lg shadow-sm border border-slate-100 p-3 mb-2">
-                      {/* Skill Name + Trend */}
-                      <div className="flex items-center justify-between mb-2">
-                        <span className="text-sm font-semibold text-slate-800">
-                          {row.label}
-                        </span>
-                        <span className={`text-sm font-bold ${diffColor}`}>
-                          {diffIcon}
-                        </span>
-                      </div>
-
-                      {/* Before / After Row */}
-                      <div className="grid grid-cols-2 gap-2">
-                        {/* Before */}
-                        <div className="bg-slate-50 rounded-md p-2">
-                          <p className="text-[9px] font-semibold text-slate-400 uppercase mb-1">
-                            Before
-                          </p>
-                          {lrs ? (
-                            <span
-                              className={`text-[10px] font-semibold px-2 py-0.5 rounded-md inline-block ${lrs.bg} ${lrs.text}`}
-                            >
-                              {formatRating(row.left?.rating)}
-                            </span>
-                          ) : (
-                            <span className="text-[10px] text-slate-300">
-                              —
-                            </span>
-                          )}
-                          {hasLeftComment && (
-                            <p className="text-[11px] text-slate-600 mt-1.5 leading-tight break-words bg-white rounded px-1.5 py-1 border border-slate-100">
-                              {row.left!.comment}
-                            </p>
-                          )}
-                        </div>
-
-                        {/* After */}
-                        <div className="bg-slate-50 rounded-md p-2">
-                          <p className="text-[9px] font-semibold text-slate-400 uppercase mb-1">
-                            After
-                          </p>
-                          {rrs ? (
-                            <span
-                              className={`text-[10px] font-semibold px-2 py-0.5 rounded-md inline-block ${rrs.bg} ${rrs.text}`}
-                            >
-                              {formatRating(row.right?.rating)}
-                            </span>
-                          ) : (
-                            <span className="text-[10px] text-slate-300">
-                              —
-                            </span>
-                          )}
-                          {hasRightComment && (
-                            <p className="text-[11px] text-slate-600 mt-1.5 leading-tight break-words bg-white rounded px-1.5 py-1 border border-slate-100">
-                              {row.right!.comment}
-                            </p>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* ─── DESKTOP TABLE ROW (>= sm) ────── */}
-                    <div
-                      className={`hidden sm:block bg-white ${
-                        i === rows.length - 1
-                          ? "rounded-b-lg shadow"
-                          : "shadow-sm"
-                      }`}
-                    >
-                      {/* Rating row */}
-                      <div
-                        className={`grid grid-cols-[1fr_100px_28px_100px] gap-0 px-4 py-3 items-center ${
-                          !hasComments && i < rows.length - 1
-                            ? "border-b border-slate-100"
-                            : ""
-                        }`}
-                      >
-                        <span className="text-sm font-medium text-slate-700 truncate pr-2">
-                          {row.label}
-                        </span>
-                        <span className="text-center">
-                          {lrs ? (
-                            <span
-                              className={`text-[10px] font-semibold px-2 py-0.5 rounded-md ${lrs.bg} ${lrs.text}`}
-                            >
-                              {formatRating(row.left?.rating)}
-                            </span>
-                          ) : (
-                            <span className="text-[10px] text-slate-300">
-                              —
-                            </span>
-                          )}
-                        </span>
-                        <span
-                          className={`text-center text-sm font-bold ${diffColor}`}
-                        >
-                          {diffIcon}
-                        </span>
-                        <span className="text-center">
-                          {rrs ? (
-                            <span
-                              className={`text-[10px] font-semibold px-2 py-0.5 rounded-md ${rrs.bg} ${rrs.text}`}
-                            >
-                              {formatRating(row.right?.rating)}
-                            </span>
-                          ) : (
-                            <span className="text-[10px] text-slate-300">
-                              —
-                            </span>
-                          )}
-                        </span>
-                      </div>
-
-                      {/* Comment comparison row (desktop) */}
-                      {hasComments && (
-                        <div
-                          className={`grid grid-cols-2 gap-3 px-4 pb-3 ${
-                            i < rows.length - 1
-                              ? "border-b border-slate-100"
-                              : ""
-                          }`}
-                        >
-                          <div>
-                            {hasLeftComment ? (
-                              <p className="text-[11px] text-slate-600 bg-slate-50 rounded-md px-2.5 py-1.5 leading-snug">
-                                <span className="text-[9px] font-bold text-slate-400 uppercase block mb-0.5">
-                                  Coach Note
-                                </span>
-                                {row.left!.comment}
-                              </p>
-                            ) : (
-                              <div />
-                            )}
-                          </div>
-                          <div>
-                            {hasRightComment ? (
-                              <p className="text-[11px] text-slate-600 bg-slate-50 rounded-md px-2.5 py-1.5 leading-snug">
-                                <span className="text-[9px] font-bold text-slate-400 uppercase block mb-0.5">
-                                  Coach Note
-                                </span>
-                                {row.right!.comment}
-                              </p>
-                            ) : (
-                              <div />
-                            )}
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
+          {/* ── COMPARISON TABLE ─────────────────────── */}
+          {rows.length === 0 ? (
+            <div className="bg-white rounded-xl border border-slate-200 p-10 text-center">
+              <p className="text-slate-400 text-sm">
+                No rated skills in this category yet.
+              </p>
             </div>
           ) : (
-            <div className="bg-white rounded-lg shadow p-8 text-center">
-              <p className="text-sm text-slate-500">
-                No rated skills found in this tab to compare.
-              </p>
-            </div>
-          )}
-
-          {/* ─── IMPROVEMENT SUMMARY ─────────────────── */}
-          {rows.length > 0 && (
-            <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-              <p className="text-sm font-bold text-green-800 mb-3">
-                📈 Improvement Summary
-              </p>
-              <div className="flex gap-4 sm:gap-6 flex-wrap">
-                <div className="text-center">
-                  <p className="text-xl sm:text-2xl font-bold text-green-600">
-                    {improved}
+            <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+              {/* Sticky date columns header */}
+              <div className="grid grid-cols-2 divide-x divide-slate-200 bg-slate-50 border-b-2 border-slate-200">
+                <div className="px-4 py-3">
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                    Before
                   </p>
-                  <p className="text-[10px] text-slate-600">Improved</p>
+                  <p className="text-sm font-bold text-slate-700 mt-0.5">
+                    {formatDate(leftData.assessmentDate)}
+                  </p>
                 </div>
-                <div className="text-center">
-                  <p className="text-xl sm:text-2xl font-bold text-slate-400">
-                    {unchanged}
+                <div className="px-4 py-3">
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                    After
                   </p>
-                  <p className="text-[10px] text-slate-600">No Change</p>
-                </div>
-                <div className="text-center">
-                  <p className="text-xl sm:text-2xl font-bold text-red-500">
-                    {declined}
+                  <p className="text-sm font-bold text-slate-700 mt-0.5">
+                    {formatDate(rightData.assessmentDate)}
                   </p>
-                  <p className="text-[10px] text-slate-600">Declined</p>
                 </div>
               </div>
+
+              {improved.length > 0 && (
+                <>
+                  <SectionHeader type="improved" count={improved.length} />
+                  {improved.map((row, i) => (
+                    <SkillRow
+                      key={row.key}
+                      {...row}
+                      isLast={i === improved.length - 1}
+                    />
+                  ))}
+                </>
+              )}
+              {declined.length > 0 && (
+                <>
+                  <SectionHeader type="declined" count={declined.length} />
+                  {declined.map((row, i) => (
+                    <SkillRow
+                      key={row.key}
+                      {...row}
+                      isLast={i === declined.length - 1}
+                    />
+                  ))}
+                </>
+              )}
+              {noChange.length > 0 && (
+                <>
+                  <SectionHeader type="nochange" count={noChange.length} />
+                  {noChange.map((row, i) => (
+                    <SkillRow
+                      key={row.key}
+                      {...row}
+                      isLast={i === noChange.length - 1}
+                    />
+                  ))}
+                </>
+              )}
             </div>
           )}
 
-          {/* ─── COACH NOTES COMPARISON ──────────────── */}
+          {/* ── COACH NOTES SIDE BY SIDE ─────────────── */}
           {(leftData.overallSummary || rightData.overallSummary) && (
-            <div>
-              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">
-                Coach Notes Comparison
-              </p>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-3">
-                {[leftData, rightData].map((a, i) => (
-                  <div
-                    key={i}
-                    className="bg-white rounded-lg shadow-sm p-3 sm:p-4 border border-slate-100"
-                  >
-                    <p className="text-[10px] font-semibold text-slate-400 mb-2">
-                      {formatDate(a.assessmentDate)}
+            <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+              <div className="px-4 py-3 bg-slate-50 border-b border-slate-200">
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                  Coach Notes Comparison
+                </p>
+              </div>
+              <div className="grid grid-cols-2 divide-x divide-slate-100">
+                {[
+                  { data: leftData, label: "Before" },
+                  { data: rightData, label: "After" },
+                ].map(({ data, label }) => (
+                  <div key={label} className="p-4">
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">
+                      {label} · {formatDate(data.assessmentDate)}
                     </p>
-                    <p className="text-xs sm:text-sm text-slate-700 leading-relaxed">
-                      {a.overallSummary || "No notes"}
+                    <p className="text-sm text-slate-600 leading-relaxed">
+                      {data.overallSummary || (
+                        <span className="text-slate-300 italic">No notes</span>
+                      )}
                     </p>
                   </div>
                 ))}
@@ -530,5 +617,3 @@ function PlayerAssessmentComparison({ playerPublicId, assessments }: Props) {
     </div>
   );
 }
-
-export default PlayerAssessmentComparison;

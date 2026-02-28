@@ -16,13 +16,13 @@ import { toast } from "react-hot-toast";
 import FeeSettingsManager from "./FeeSettingsManager";
 import CampTypeSettings from "./CampTypeSettings";
 import MediaSettingsManager from "./MediaSettingsManager";
+import TeamMembersAdmin from "./TeamMembersAdmin";
 
 type SettingsMap = Record<string, string>;
 
 type TabType =
   | "general"
   | "branding"
-  | "homepage"
   | "content"
   | "contact"
   | "facilities"
@@ -32,7 +32,8 @@ type TabType =
   | "starperformer"
   | "batch"
   | "fees"
-  | "media";
+  | "media"
+  | "team";
 
 function AcademySettings() {
   const navigate = useNavigate();
@@ -45,11 +46,13 @@ function AcademySettings() {
   // Form state (controlled inputs)
   const [academyName, setAcademyName] = useState("");
   const [academyCode, setAcademyCode] = useState("");
+  const [adminPhone, setAdminPhone] = useState("");
   const [playerIdPrefix, setPlayerIdPrefix] = useState("");
   const [playerIdCounter, setPlayerIdCounter] = useState("");
   const [primaryColor, setPrimaryColor] = useState("");
   const [secondaryColor, setSecondaryColor] = useState("");
   const [logoUrl, setLogoUrl] = useState("");
+  const [contactEmail, setContactEmail] = useState("");
 
   // Theme settings
   const [buttonRadius, setButtonRadius] = useState("8");
@@ -68,11 +71,10 @@ function AcademySettings() {
   const [testimonialsEnabled, setTestimonialsEnabled] = useState(true);
   const [newsEnabled, setNewsEnabled] = useState(true);
   const [galleryEnabled, setGalleryEnabled] = useState(true);
-  const [starPerformerEnabled, setStarPerformerEnabled] = useState(false);
+  const [teamEnabled, setTeamEnabled] = useState(true);
+  const [facilitiesEnabled, setFacilitiesEnabled] = useState(true);
 
-  const [availableModules, setAvailableModules] = useState<string[]>([]);
   const [selectedModules, setSelectedModules] = useState<string[]>([]);
-  const [newModule, setNewModule] = useState("");
 
   useEffect(() => {
     loadSettings();
@@ -86,11 +88,13 @@ function AcademySettings() {
       // Populate form fields
       setAcademyName(response.data.ACADEMY_NAME || "");
       setAcademyCode(response.data.ACADEMY_CODE || "");
+      setAdminPhone(response.data.ADMIN_PHONE || "");
       setPlayerIdPrefix(response.data.PLAYER_ID_PREFIX || "");
       setPlayerIdCounter(response.data.PLAYER_ID_COUNTER || "0");
       setPrimaryColor(response.data.PRIMARY_COLOR || "#2563eb");
       setSecondaryColor(response.data.SECONDARY_COLOR || "#10b981");
       setLogoUrl(response.data.LOGO_URL || "");
+      setContactEmail(response.data.CONTACT_EMAIL || "");
 
       // Theme settings
       setButtonRadius(response.data.BUTTON_RADIUS || "8");
@@ -104,16 +108,18 @@ function AcademySettings() {
       setSliderImageFit(response.data.SLIDER_IMAGE_FIT || "cover");
 
       // Section toggles
-      setSliderEnabled(response.data.SECTION_SLIDER_ENABLED === "true");
-      setStatsEnabled(response.data.SECTION_STATS_ENABLED === "true");
+
+      setSliderEnabled(response.data.SECTION_SLIDER_ENABLED !== "false");
+      setStatsEnabled(response.data.SECTION_STATS_ENABLED !== "false");
+      setFacilitiesEnabled(
+        response.data.SECTION_FACILITIES_ENABLED !== "false",
+      );
       setTestimonialsEnabled(
-        response.data.SECTION_TESTIMONIALS_ENABLED === "true",
+        response.data.SECTION_TESTIMONIALS_ENABLED !== "false",
       );
-      setNewsEnabled(response.data.SECTION_NEWS_ENABLED === "true");
-      setGalleryEnabled(response.data.SECTION_GALLERY_ENABLED === "true");
-      setStarPerformerEnabled(
-        response.data.SECTION_STAR_PERFORMER_ENABLED === "true",
-      );
+      setNewsEnabled(response.data.SECTION_NEWS_ENABLED !== "false");
+      setGalleryEnabled(response.data.SECTION_GALLERY_ENABLED !== "false");
+      setTeamEnabled(response.data.SECTION_TEAM_ENABLED !== "false");
 
       const moduleTypes = response.data.BATCH_MODULE_TYPES || "";
 
@@ -122,7 +128,6 @@ function AcademySettings() {
         .map((m) => m.trim())
         .filter(Boolean);
 
-      setAvailableModules(modulesArray);
       setSelectedModules(modulesArray);
     } catch (error) {
       console.error("Failed to load settings:", error);
@@ -130,21 +135,6 @@ function AcademySettings() {
     } finally {
       setLoading(false);
     }
-  };
-
-  const addModule = () => {
-    if (!newModule.trim()) return;
-
-    const formatted = newModule.trim().toUpperCase().replace(/\s+/g, "_");
-
-    if (availableModules.includes(formatted)) {
-      alert("Module already exists");
-      return;
-    }
-
-    setAvailableModules([...availableModules, formatted]);
-    setSelectedModules([...selectedModules, formatted]);
-    setNewModule("");
   };
 
   const previewNextPlayerId = async () => {
@@ -156,6 +146,15 @@ function AcademySettings() {
     }
   };
 
+  const handleToggleSetting = async (key: string, value: boolean) => {
+    try {
+      await api.put("/admin/settings", { [key]: String(value) });
+      toast.success("Section visibility updated");
+    } catch {
+      toast.error("Failed to update");
+    }
+  };
+
   const handleSave = async () => {
     setSaving(true);
 
@@ -163,11 +162,13 @@ function AcademySettings() {
       const updates: SettingsMap = {
         ACADEMY_NAME: academyName,
         ACADEMY_CODE: academyCode,
+        ADMIN_PHONE: adminPhone,
         PLAYER_ID_PREFIX: playerIdPrefix,
         PLAYER_ID_COUNTER: playerIdCounter,
         PRIMARY_COLOR: primaryColor,
         SECONDARY_COLOR: secondaryColor,
         LOGO_URL: logoUrl,
+        CONTACT_EMAIL: contactEmail,
 
         // Theme settings
         BUTTON_RADIUS: buttonRadius,
@@ -180,14 +181,10 @@ function AcademySettings() {
         SLIDE_DURATION: slideDuration,
         SLIDER_IMAGE_FIT: sliderImageFit,
 
-        SECTION_SLIDER_ENABLED: String(sliderEnabled),
-        SECTION_STATS_ENABLED: String(statsEnabled),
-        SECTION_TESTIMONIALS_ENABLED: String(testimonialsEnabled),
-        SECTION_NEWS_ENABLED: String(newsEnabled),
-        SECTION_GALLERY_ENABLED: String(galleryEnabled),
-        SECTION_STAR_PERFORMER_ENABLED: String(starPerformerEnabled),
-
-        BATCH_MODULE_TYPES: selectedModules.join(","),
+        BATCH_MODULE_TYPES: [
+          "REGULAR",
+          ...selectedModules.filter((m) => m !== "REGULAR"),
+        ].join(","),
       };
 
       await api.put("/admin/settings", updates);
@@ -290,16 +287,6 @@ function AcademySettings() {
             </button>
 
             <button
-              onClick={() => setActiveTab("homepage")}
-              className={`py-3 px-4 text-sm font-medium border-b-2 transition whitespace-nowrap ${
-                activeTab === "homepage"
-                  ? "border-blue-600 text-blue-600"
-                  : "border-transparent text-gray-600 hover:text-blue-600"
-              }`}
-            >
-              Home Page
-            </button>
-            <button
               onClick={() => setActiveTab("content")}
               className={`py-3 px-4 text-sm font-medium border-b-2 transition whitespace-nowrap ${
                 activeTab === "content"
@@ -359,6 +346,18 @@ function AcademySettings() {
             >
               Gallery
             </button>
+
+            <button
+              onClick={() => setActiveTab("team")}
+              className={`py-3 px-4 text-sm font-medium border-b-2 transition whitespace-nowrap ${
+                activeTab === "team"
+                  ? "border-blue-600 text-blue-600"
+                  : "border-transparent text-gray-600 hover:text-blue-600"
+              }`}
+            >
+              Team Members
+            </button>
+
             <button
               onClick={() => setActiveTab("starperformer")}
               className={`py-3 px-4 text-sm font-medium border-b-2 transition whitespace-nowrap ${
@@ -377,6 +376,27 @@ function AcademySettings() {
           {activeTab === "general" && (
             <div className="space-y-6">
               <h2 className="text-lg font-semibold mb-4">General Settings</h2>
+
+              <label className="flex items-center justify-between p-4 border rounded-lg bg-gray-50 cursor-pointer">
+                <div>
+                  <span className="font-medium">Section Enabled</span>
+                  <p className="text-sm text-gray-500">
+                    Stats & Numbers section is visible on home page
+                  </p>
+                </div>
+                <input
+                  type="checkbox"
+                  checked={statsEnabled}
+                  onChange={(e) => {
+                    setStatsEnabled(e.target.checked);
+                    handleToggleSetting(
+                      "SECTION_STATS_ENABLED",
+                      e.target.checked,
+                    );
+                  }}
+                  className="w-5 h-5 text-blue-600 rounded"
+                />
+              </label>
 
               {/* Academy Name */}
               <div>
@@ -407,6 +427,39 @@ function AcademySettings() {
                 />
                 <p className="text-xs text-gray-500 mt-1">
                   Short code for your academy (max 10 characters)
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Academy Email
+                </label>
+                <input
+                  type="email"
+                  value={contactEmail}
+                  onChange={(e) => setContactEmail(e.target.value)}
+                  placeholder="academy@example.com"
+                  className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  Used as the sender address for all outgoing emails
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Admin Phone (WhatsApp)
+                </label>
+                <input
+                  type="tel"
+                  value={adminPhone}
+                  onChange={(e) => setAdminPhone(e.target.value)}
+                  placeholder="+919876543210"
+                  className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  Used to receive WhatsApp notifications (e.g. contact form
+                  submissions). Include country code.
                 </p>
               </div>
 
@@ -474,6 +527,27 @@ function AcademySettings() {
               <h2 className="text-lg font-semibold mb-4">
                 Branding & Theme Customization
               </h2>
+
+              <label className="flex items-center justify-between p-4 border rounded-lg bg-gray-50 cursor-pointer">
+                <div>
+                  <span className="font-medium">Section Enabled</span>
+                  <p className="text-sm text-gray-500">
+                    Image slider is visible on home page
+                  </p>
+                </div>
+                <input
+                  type="checkbox"
+                  checked={sliderEnabled}
+                  onChange={(e) => {
+                    setSliderEnabled(e.target.checked);
+                    handleToggleSetting(
+                      "SECTION_SLIDER_ENABLED",
+                      e.target.checked,
+                    );
+                  }}
+                  className="w-5 h-5 text-blue-600 rounded"
+                />
+              </label>
 
               {/* Logo Upload */}
               <ImageUpload
@@ -980,203 +1054,26 @@ function AcademySettings() {
 
           {activeTab === "batch" && (
             <div className="space-y-8">
-              {/* CAMP TYPES SECTION */}
               <CampTypeSettings />
 
-              {/* DIVIDER */}
-              <div className="border-t border-slate-300 my-8"></div>
-
-              {/* BATCH MODULE TYPES SECTION */}
-              <div className="space-y-6">
-                <div>
-                  <h3 className="text-lg font-semibold text-slate-900 mb-2">
-                    Batch Module Types
+              <div className="border-t border-slate-300 pt-8">
+                <div className="mb-4">
+                  <h3 className="text-lg font-semibold text-slate-900 mb-1">
+                    Regular Batch Types
                   </h3>
-                  <p className="text-sm text-slate-600">
-                    Configure batch types for regular training sessions
+                  <p className="text-sm text-slate-500">
+                    Default batch type for all regular training batches.
                   </p>
                 </div>
 
-                {/* Add New Module */}
                 <div className="bg-white rounded-xl border border-slate-200 p-4">
-                  <label className="block text-sm font-medium text-slate-700 mb-2">
-                    Add New Batch Type
-                  </label>
-                  <div className="flex gap-2">
-                    <input
-                      type="text"
-                      value={newModule}
-                      onChange={(e) => setNewModule(e.target.value)}
-                      placeholder="e.g., Batter Camp, Fielding"
-                      className="flex-1 px-4 py-2 rounded-lg border border-slate-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
-                    />
-                    <button
-                      onClick={addModule}
-                      className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
-                    >
-                      Add
-                    </button>
+                  <div className="flex items-center justify-between p-3 bg-slate-50 rounded-lg border border-slate-200">
+                    <span className="font-medium text-slate-900">REGULAR</span>
+                    <span className="text-xs text-slate-400 bg-slate-100 px-2 py-1 rounded-full">
+                      Default · Cannot be changed
+                    </span>
                   </div>
                 </div>
-
-                {/* List existing modules */}
-                <div className="bg-white rounded-xl border border-slate-200 p-4">
-                  <h4 className="font-medium text-slate-900 mb-3">
-                    Current Batch Types ({availableModules.length})
-                  </h4>
-
-                  <div className="space-y-2">
-                    {availableModules.map((module) => (
-                      <div
-                        key={module}
-                        className="flex items-center justify-between p-3 bg-slate-50 rounded-lg border border-slate-200 hover:border-slate-300 transition"
-                      >
-                        <div className="flex items-center gap-3">
-                          <span className="font-medium text-slate-900">
-                            {module.replace(/_/g, " ")}
-                          </span>
-                        </div>
-
-                        <div className="flex items-center gap-3">
-                          <button
-                            onClick={() => {
-                              setAvailableModules((prev) =>
-                                prev.filter((m) => m !== module),
-                              );
-                              setSelectedModules((prev) =>
-                                prev.filter((m) => m !== module),
-                              );
-                            }}
-                            className="text-red-600 hover:bg-red-100 px-3 py-1.5 rounded-lg text-sm font-medium transition"
-                          >
-                            Remove
-                          </button>
-
-                          <input
-                            type="checkbox"
-                            checked={selectedModules.includes(module)}
-                            onChange={() => {
-                              setSelectedModules((prev) =>
-                                prev.includes(module)
-                                  ? prev.filter((m) => m !== module)
-                                  : [...prev, module],
-                              );
-                            }}
-                            className="w-5 h-5 text-blue-600 rounded"
-                          />
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* HOME PAGE TAB */}
-          {activeTab === "homepage" && (
-            <div className="space-y-6">
-              <h2 className="text-lg font-semibold mb-4">Home Page Sections</h2>
-              <p className="text-sm text-gray-600 mb-4">
-                Enable or disable sections on your home page
-              </p>
-
-              <div className="space-y-3">
-                {/* Slider Toggle */}
-                <label className="flex items-center justify-between p-4 border rounded-lg hover:bg-gray-50 cursor-pointer">
-                  <div>
-                    <span className="font-medium">Image Slider</span>
-                    <p className="text-sm text-gray-500">
-                      Auto-rotating banner images
-                    </p>
-                  </div>
-                  <input
-                    type="checkbox"
-                    checked={sliderEnabled}
-                    onChange={(e) => setSliderEnabled(e.target.checked)}
-                    className="w-5 h-5 text-blue-600 rounded focus:ring-2 focus:ring-blue-500"
-                  />
-                </label>
-
-                {/* Stats Toggle */}
-                <label className="flex items-center justify-between p-4 border rounded-lg hover:bg-gray-50 cursor-pointer">
-                  <div>
-                    <span className="font-medium">Stats & Numbers</span>
-                    <p className="text-sm text-gray-500">
-                      Display student count, years, achievements
-                    </p>
-                  </div>
-                  <input
-                    type="checkbox"
-                    checked={statsEnabled}
-                    onChange={(e) => setStatsEnabled(e.target.checked)}
-                    className="w-5 h-5 text-blue-600 rounded focus:ring-2 focus:ring-blue-500"
-                  />
-                </label>
-
-                {/* Testimonials Toggle */}
-                <label className="flex items-center justify-between p-4 border rounded-lg hover:bg-gray-50 cursor-pointer">
-                  <div>
-                    <span className="font-medium">Testimonials</span>
-                    <p className="text-sm text-gray-500">
-                      Customer reviews and feedback
-                    </p>
-                  </div>
-                  <input
-                    type="checkbox"
-                    checked={testimonialsEnabled}
-                    onChange={(e) => setTestimonialsEnabled(e.target.checked)}
-                    className="w-5 h-5 text-blue-600 rounded focus:ring-2 focus:ring-blue-500"
-                  />
-                </label>
-
-                {/* News Toggle */}
-                <label className="flex items-center justify-between p-4 border rounded-lg hover:bg-gray-50 cursor-pointer">
-                  <div>
-                    <span className="font-medium">News & Announcements</span>
-                    <p className="text-sm text-gray-500">
-                      Latest blog posts and updates
-                    </p>
-                  </div>
-                  <input
-                    type="checkbox"
-                    checked={newsEnabled}
-                    onChange={(e) => setNewsEnabled(e.target.checked)}
-                    className="w-5 h-5 text-blue-600 rounded focus:ring-2 focus:ring-blue-500"
-                  />
-                </label>
-
-                {/* Gallery Toggle */}
-                <label className="flex items-center justify-between p-4 border rounded-lg hover:bg-gray-50 cursor-pointer">
-                  <div>
-                    <span className="font-medium">Gallery Preview</span>
-                    <p className="text-sm text-gray-500">
-                      Recent photos from your academy
-                    </p>
-                  </div>
-                  <input
-                    type="checkbox"
-                    checked={galleryEnabled}
-                    onChange={(e) => setGalleryEnabled(e.target.checked)}
-                    className="w-5 h-5 text-blue-600 rounded focus:ring-2 focus:ring-blue-500"
-                  />
-                </label>
-
-                {/* Star Performer Toggle */}
-                <label className="flex items-center justify-between p-4 border rounded-lg hover:bg-gray-50 cursor-pointer">
-                  <div>
-                    <span className="font-medium">Star Performer</span>
-                    <p className="text-sm text-gray-500">
-                      Showcase outstanding performer of the week
-                    </p>
-                  </div>
-                  <input
-                    type="checkbox"
-                    checked={starPerformerEnabled}
-                    onChange={(e) => setStarPerformerEnabled(e.target.checked)}
-                    className="w-5 h-5 text-blue-600 rounded focus:ring-2 focus:ring-blue-500"
-                  />
-                </label>
               </div>
             </div>
           )}
@@ -1188,16 +1085,138 @@ function AcademySettings() {
           {activeTab === "contact" && <ContactInfoSettings />}
 
           {/* FACILITIES TAB */}
-          {activeTab === "facilities" && <FacilitiesManager />}
+          {activeTab === "facilities" && (
+            <div>
+              <label className="flex items-center justify-between p-4 border rounded-lg bg-gray-50 mb-6 cursor-pointer">
+                <div>
+                  <span className="font-medium">Section Enabled</span>
+                  <p className="text-sm text-gray-500">
+                    Facilities section is visible on home page
+                  </p>
+                </div>
+                <input
+                  type="checkbox"
+                  checked={facilitiesEnabled}
+                  onChange={(e) => {
+                    setFacilitiesEnabled(e.target.checked);
+                    handleToggleSetting(
+                      "SECTION_FACILITIES_ENABLED",
+                      e.target.checked,
+                    );
+                  }}
+                  className="w-5 h-5 text-blue-600 rounded"
+                />
+              </label>
+              <FacilitiesManager />
+            </div>
+          )}
 
           {/* TESTIMONIALS TAB */}
-          {activeTab === "testimonials" && <TestimonialsManager />}
+          {activeTab === "testimonials" && (
+            <div>
+              <label className="flex items-center justify-between p-4 border rounded-lg bg-gray-50 mb-6 cursor-pointer">
+                <div>
+                  <span className="font-medium">Section Enabled</span>
+                  <p className="text-sm text-gray-500">
+                    Testimonials section is visible on home page
+                  </p>
+                </div>
+                <input
+                  type="checkbox"
+                  checked={testimonialsEnabled}
+                  onChange={(e) => {
+                    setTestimonialsEnabled(e.target.checked);
+                    handleToggleSetting(
+                      "SECTION_TESTIMONIALS_ENABLED",
+                      e.target.checked,
+                    );
+                  }}
+                  className="w-5 h-5 text-blue-600 rounded"
+                />
+              </label>
+              <TestimonialsManager />
+            </div>
+          )}
 
           {/* NEWS TAB */}
-          {activeTab === "news" && <NewsManager />}
+          {activeTab === "news" && (
+            <div>
+              <label className="flex items-center justify-between p-4 border rounded-lg bg-gray-50 mb-6 cursor-pointer">
+                <div>
+                  <span className="font-medium">Section Enabled</span>
+                  <p className="text-sm text-gray-500">
+                    News section is visible on home page
+                  </p>
+                </div>
+                <input
+                  type="checkbox"
+                  checked={newsEnabled}
+                  onChange={(e) => {
+                    setNewsEnabled(e.target.checked);
+                    handleToggleSetting(
+                      "SECTION_NEWS_ENABLED",
+                      e.target.checked,
+                    );
+                  }}
+                  className="w-5 h-5 text-blue-600 rounded"
+                />
+              </label>
+              <NewsManager />
+            </div>
+          )}
 
           {/* GALLERY TAB */}
-          {activeTab === "gallery" && <GalleryManager />}
+          {activeTab === "gallery" && (
+            <div>
+              <label className="flex items-center justify-between p-4 border rounded-lg bg-gray-50 mb-6 cursor-pointer">
+                <div>
+                  <span className="font-medium">Section Enabled</span>
+                  <p className="text-sm text-gray-500">
+                    Gallery section is visible on home page
+                  </p>
+                </div>
+                <input
+                  type="checkbox"
+                  checked={galleryEnabled}
+                  onChange={(e) => {
+                    setGalleryEnabled(e.target.checked);
+                    handleToggleSetting(
+                      "SECTION_GALLERY_ENABLED",
+                      e.target.checked,
+                    );
+                  }}
+                  className="w-5 h-5 text-blue-600 rounded"
+                />
+              </label>
+              <GalleryManager />
+            </div>
+          )}
+
+          {activeTab === "team" && (
+            <div>
+              <label className="flex items-center justify-between p-4 border rounded-lg bg-gray-50 mb-6 cursor-pointer">
+                <div>
+                  <span className="font-medium">Section Enabled</span>
+                  <p className="text-sm text-gray-500">
+                    Team Members section is visible on home page
+                  </p>
+                </div>
+                <input
+                  type="checkbox"
+                  checked={teamEnabled}
+                  onChange={(e) => {
+                    setTeamEnabled(e.target.checked);
+                    handleToggleSetting(
+                      "SECTION_TEAM_ENABLED",
+                      e.target.checked,
+                    );
+                  }}
+                  className="w-5 h-5 text-blue-600 rounded"
+                />
+              </label>
+              <TeamMembersAdmin />
+            </div>
+          )}
 
           {/* STAR PERFORMER TAB */}
           {activeTab === "starperformer" && <StarPerformerSettings />}
@@ -1210,11 +1229,8 @@ function AcademySettings() {
         </div>
       </div>
 
-      {/* SAVE BUTTON - Only show for general/branding/homepage tabs */}
-      {(activeTab === "general" ||
-        activeTab === "branding" ||
-        activeTab === "homepage" ||
-        activeTab === "batch") && (
+      {/* SAVE BUTTON - Only show for general/branding tabs */}
+      {(activeTab === "general" || activeTab === "branding") && (
         <div className="flex gap-3 justify-end">
           <Button variant="secondary" onClick={() => navigate("/admin")}>
             Cancel

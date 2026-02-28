@@ -1,30 +1,58 @@
-import api from "./axios";
+import publicApi from "./publicApi";
 
-export type LoginRequest = {
-  email: string;
-  password: string;
-};
+// ── Types ─────────────────────────────────────────────────────────────────────
 
-export type LoginResponse = {
+export type AuthResponse = {
   accessToken: string;
+  userPublicId: string;
+  userName: string;
+  userEmail: string;
+  role: string;
+  academyId: string;
+  academyName: string;
+  branchId: string;
+  branchName: string;
 };
 
-export type SignupRequest = {
+export type OnboardingRequest = {
+  academyName: string;
+  academyCode: string;
+  city?: string;
+  branchName: string;
+  branchAddress?: string;
+  branchPhone?: string;
+  adminName: string;
+  adminEmail: string;
+  adminPassword: string;
+};
+
+// ── Auth APIs ─────────────────────────────────────────────────────────────────
+
+export async function signupApi(data: {
+  name: string;
   email: string;
   password: string;
-  name: string;
-};
-
-export async function loginApi(
-  data: LoginRequest
-): Promise<LoginResponse> {
-  const response = await api.post("/auth/login", data);
-  return response.data;
+}): Promise<{ accessToken: string }> {
+  const res = await publicApi.post("/auth/signup", data);
+  return { accessToken: res.data.accessToken };
 }
 
-export async function signupApi(
-  data: SignupRequest
-): Promise<LoginResponse> {
-  const response = await api.post("/auth/signup", data);
-  return response.data;
+export async function loginApi(data: {
+  email: string;
+  password: string;
+}): Promise<AuthResponse> {
+  const res = await publicApi.post("/auth/login", data);
+  return res.data as AuthResponse;
+}
+
+export async function onboardingSetupApi(
+  data: OnboardingRequest,
+): Promise<AuthResponse> {
+  const res = await publicApi.post("/onboarding/setup", data);
+  return res.data as AuthResponse;
+}
+
+export async function checkOnboardingStatus(): Promise<boolean> {
+  const res = await publicApi.get("/onboarding/status");
+  return res.data.onboarded as boolean;
 }

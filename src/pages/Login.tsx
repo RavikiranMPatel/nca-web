@@ -1,13 +1,11 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { loginApi } from "../api/auth.api";
 import { useAuth } from "../auth/useAuth";
-import { useEffect } from "react";
 import publicApi from "../api/publicApi";
 import { getImageUrl } from "../utils/imageUrl";
 
 function Login() {
-  // ✅ Initialize error state with session expired message if present
   const [error, setError] = useState(() => {
     const sessionExpired = sessionStorage.getItem("sessionExpired");
     if (sessionExpired === "true") {
@@ -19,26 +17,22 @@ function Login() {
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
-  const [academyName, setAcademyName] = useState("NextGen Cricket Academy");
-
-  useEffect(() => {
-    const loadSettings = async () => {
-      try {
-        const res = await publicApi.get("/settings/public");
-        setLogoUrl(res.data?.LOGO_URL || null);
-        setAcademyName(res.data?.ACADEMY_NAME || "NextGen Cricket Academy");
-      } catch (err) {
-        console.warn("Failed to load public settings", err);
-      }
-    };
-
-    loadSettings();
-  }, []);
+  const [academyNameDisplay, setAcademyNameDisplay] =
+    useState("Cricket Academy");
 
   const { login } = useAuth();
   const navigate = useNavigate();
+
+  useEffect(() => {
+    publicApi
+      .get("/settings/public")
+      .then((res) => {
+        setLogoUrl(res.data?.LOGO_URL || null);
+        setAcademyNameDisplay(res.data?.ACADEMY_NAME || "Cricket Academy");
+      })
+      .catch(() => {});
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -47,23 +41,19 @@ function Login() {
     try {
       const res = await loginApi({ email, password });
 
-      // 🔐 Decode JWT payload
-      const base64Payload = res.accessToken.split(".")[1];
-      const decodedPayload = JSON.parse(
-        decodeURIComponent(
-          atob(base64Payload)
-            .split("")
-            .map((c) => "%" + ("00" + c.charCodeAt(0).toString(16)).slice(-2))
-            .join(""),
-        ),
-      );
+      // ✅ Fat response — no JWT decode needed
+      login({
+        token: res.accessToken,
+        role: res.role,
+        userName: res.userName,
+        userEmail: res.userEmail,
+        userPublicId: res.userPublicId,
+        academyId: res.academyId,
+        academyName: res.academyName,
+        branchId: res.branchId,
+        branchName: res.branchName,
+      });
 
-      const role = decodedPayload?.role;
-
-      // ✅ AuthContext login
-      login(res.accessToken, role);
-
-      // Clear stale player context
       localStorage.removeItem("playerId");
       localStorage.removeItem("playerName");
 
@@ -82,12 +72,11 @@ function Login() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-100">
       <div className="bg-white p-8 rounded-lg shadow-md w-96">
-        {/* Logo */}
         <div className="flex flex-col items-center mb-6">
           {logoUrl ? (
             <img
               src={getImageUrl(logoUrl) || ""}
-              alt={academyName}
+              alt={academyNameDisplay}
               className="h-20 mb-2 object-contain"
             />
           ) : (
@@ -95,11 +84,9 @@ function Login() {
               Logo
             </div>
           )}
-
-          <h2 className="text-xl font-semibold">{academyName}</h2>
+          <h2 className="text-xl font-semibold">{academyNameDisplay}</h2>
         </div>
 
-        {/* Error display with different styling for session expired */}
         {error && (
           <div
             className={`border px-4 py-2 rounded mb-4 text-sm ${

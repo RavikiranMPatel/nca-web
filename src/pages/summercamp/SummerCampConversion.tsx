@@ -10,7 +10,7 @@ import {
 } from "lucide-react";
 import { toast } from "react-hot-toast";
 import { summerCampService, formatCampDate } from "../../api/summerCampService";
-import { getAllBatches } from "../../api/summerCampBatchService";
+import { getRegularBatches } from "../../api/summerCampBatchService";
 import type {
   SummerCamp,
   SummerCampEnrollment,
@@ -51,7 +51,7 @@ function SummerCampConversion() {
       const [campData, enrollmentsData, batchesData] = await Promise.all([
         summerCampService.getCampById(campId!),
         summerCampService.getEnrollments(campId!),
-        getAllBatches("REGULAR"),
+        getRegularBatches(),
       ]);
 
       setCamp(campData);

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
+import { useAuth } from "../../auth/useAuth";
 import {
   Plus,
   Search,
@@ -25,6 +26,9 @@ function SummerCampList() {
   const [statusFilter, setStatusFilter] = useState<
     "all" | "active" | "inactive"
   >("all");
+
+  const { userRole } = useAuth();
+  const isSuperAdmin = userRole === "ROLE_SUPER_ADMIN";
 
   useEffect(() => {
     loadCamps();
@@ -268,8 +272,18 @@ function SummerCampList() {
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: index * 0.05 }}
-                onClick={() => navigate(`/admin/summer-camps/${camp.publicId}`)}
-                className={`bg-white rounded-xl border-2 shadow-sm hover:shadow-md transition-all cursor-pointer ${
+                onClick={() => {
+                  if (!camp.isActive && !isSuperAdmin) {
+                    toast.error("Only Super Admin can access inactive camps");
+                    return;
+                  }
+                  navigate(`/admin/summer-camps/${camp.publicId}`);
+                }}
+                className={`bg-white rounded-xl border-2 shadow-sm hover:shadow-md transition-all ${
+                  !camp.isActive && !isSuperAdmin
+                    ? "cursor-not-allowed opacity-75"
+                    : "cursor-pointer"
+                } ${
                   camp.isActive
                     ? "border-slate-200 hover:border-blue-300"
                     : "border-red-200 bg-red-50/30"
@@ -371,6 +385,21 @@ function SummerCampList() {
                       </div>
                     )}
                   </div>
+
+                  {!camp.isActive && !isSuperAdmin && (
+                    <div className="mt-2 p-2 bg-red-50 border border-red-200 rounded-lg">
+                      <p className="text-xs text-red-600 font-medium">
+                        🔒 Only Super Admin can activate this camp
+                      </p>
+                    </div>
+                  )}
+                  {!camp.isActive && isSuperAdmin && (
+                    <div className="mt-2 p-2 bg-amber-50 border border-amber-200 rounded-lg">
+                      <p className="text-xs text-amber-700 font-medium">
+                        ⚠️ Inactive — you can reactivate this camp
+                      </p>
+                    </div>
+                  )}
                 </div>
               </motion.div>
             ))}

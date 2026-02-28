@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { X, Save, Users } from "lucide-react";
 import { toast } from "react-hot-toast";
 import { summerCampService } from "../../api/summerCampService";
-import { getAllBatches } from "../../api/summerCampBatchService";
+import { getCampBatches } from "../../api/summerCampBatchService";
 import type { EnrollmentCreateRequest } from "../../types/summercamp";
 import type { Batch } from "../../types/batch.types";
 
@@ -21,6 +21,8 @@ function EnrollmentFormModal({
   const [batches, setBatches] = useState<Batch[]>([]);
   const [loadingBatches, setLoadingBatches] = useState(true);
 
+  const [formErrors, setFormErrors] = useState<string[]>([]);
+
   const [formData, setFormData] = useState<EnrollmentCreateRequest>({
     playerName: "",
     playerPhone: "",
@@ -38,10 +40,9 @@ function EnrollmentFormModal({
   const loadBatches = async () => {
     try {
       setLoadingBatches(true);
-      const data = await getAllBatches("SUMMER_CAMP");
-
-      // Filter only active batches
-      setBatches(data);
+      // ✅ CHANGED: fetch batches specific to this camp, not by moduleType
+      const data = await getCampBatches(campId);
+      setBatches(data.filter((b) => b.active));
     } catch (error) {
       console.error("Error loading batches:", error);
       toast.error("Failed to load batches");
@@ -55,6 +56,7 @@ function EnrollmentFormModal({
   ) => {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
+    if (formErrors.length > 0) setFormErrors([]);
   };
 
   const toggleBatch = (batchId: string) => {
@@ -64,22 +66,45 @@ function EnrollmentFormModal({
         ? prev.batchIds.filter((id) => id !== batchId)
         : [...prev.batchIds, batchId],
     }));
+    if (formErrors.length > 0) setFormErrors([]);
+  };
+
+  const validateIndianPhone = (phone: string) => {
+    const cleaned = phone.replace(/\s+/g, "");
+    // Accepts: 9876543210 or +919876543210 or 919876543210
+    return /^(\+91|91)?[6-9]\d{9}$/.test(cleaned);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    // Validation
+    const errors: string[] = [];
+
     if (!formData.playerName.trim()) {
-      toast.error("Player name is required");
-      return;
+      errors.push("Player name is required");
     }
 
     if (formData.batchIds.length === 0) {
-      toast.error("Please select at least one batch");
-      return;
+      errors.push("Please select at least one batch");
     }
 
+    if (!formData.guardianName?.trim()) {
+      errors.push("Parent/Guardian name is required");
+    }
+
+    if (!formData.guardianPhone?.trim()) {
+      errors.push("Guardian phone number is required");
+    } else if (!validateIndianPhone(formData.guardianPhone)) {
+      errors.push(
+        "Enter a valid Indian mobile number (e.g. 9876543210 or +919876543210)",
+      );
+    }
+
+    if (errors.length > 0) {
+      setFormErrors(errors);
+      return;
+    }
+    setFormErrors([]);
     setLoading(true);
 
     try {
@@ -125,12 +150,11 @@ function EnrollmentFormModal({
         <form onSubmit={handleSubmit} className="p-6 space-y-6">
           {/* STUDENT INFORMATION */}
           <div className="space-y-4">
-            <h3 className="font-semibold text-slate-900 flex items-center gap-2">
+            <h3 className="font-semibold text-slate-900">
               Student Information
             </h3>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {/* Player Name */}
               <div className="md:col-span-2">
                 <label className="block text-sm font-medium text-slate-700 mb-2">
                   Full Name <span className="text-red-500">*</span>
@@ -140,16 +164,14 @@ function EnrollmentFormModal({
                   name="playerName"
                   value={formData.playerName}
                   onChange={handleChange}
-                  required
                   className="w-full px-4 py-2.5 rounded-lg border border-slate-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all"
                   placeholder="Enter student's full name"
                 />
               </div>
 
-              {/* Player Phone */}
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-2">
-                  Phone (Optional)
+                  Phone
                 </label>
                 <input
                   type="tel"
@@ -161,10 +183,9 @@ function EnrollmentFormModal({
                 />
               </div>
 
-              {/* Player Email */}
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-2">
-                  Email (Optional)
+                  Email
                 </label>
                 <input
                   type="email"
@@ -185,10 +206,9 @@ function EnrollmentFormModal({
             </h3>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {/* Parent Name */}
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-2">
-                  Name (Optional)
+                  Name <span className="text-red-500">*</span>
                 </label>
                 <input
                   type="text"
@@ -200,10 +220,9 @@ function EnrollmentFormModal({
                 />
               </div>
 
-              {/* Parent Phone */}
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-2">
-                  Phone (Optional)
+                  Phone <span className="text-red-500">*</span>
                 </label>
                 <input
                   type="tel"
@@ -231,9 +250,13 @@ function EnrollmentFormModal({
                 </p>
               </div>
             ) : batches.length === 0 ? (
-              <div className="text-center py-8 bg-slate-50 rounded-lg border-2 border-dashed border-slate-200">
-                <p className="text-slate-600 text-sm">
-                  No active batches available
+              <div className="text-center py-8 bg-amber-50 rounded-lg border-2 border-dashed border-amber-200">
+                <p className="text-amber-700 text-sm font-medium">
+                  No batches found for this camp
+                </p>
+                <p className="text-xs text-amber-600 mt-1">
+                  Please add batches to this camp first before enrolling
+                  students
                 </p>
               </div>
             ) : (
@@ -289,6 +312,25 @@ function EnrollmentFormModal({
             />
           </div>
 
+          {formErrors.length > 0 && (
+            <div className="bg-red-50 border border-red-200 rounded-lg p-4 space-y-1">
+              <p className="text-sm font-semibold text-red-700 mb-2">
+                Please fix the following:
+              </p>
+              <ul className="space-y-1">
+                {formErrors.map((err, i) => (
+                  <li
+                    key={i}
+                    className="flex items-start gap-2 text-sm text-red-600"
+                  >
+                    <span className="mt-0.5 shrink-0">•</span>
+                    {err}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
           {/* ACTIONS */}
           <div className="flex gap-3 justify-end pt-4 border-t border-slate-200">
             <button
@@ -300,7 +342,7 @@ function EnrollmentFormModal({
             </button>
             <button
               type="submit"
-              disabled={loading || loadingBatches}
+              disabled={loading || loadingBatches || batches.length === 0}
               className="flex items-center gap-2 px-6 py-2.5 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-lg font-semibold hover:from-blue-700 hover:to-blue-800 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-md hover:shadow-lg"
             >
               {loading ? (

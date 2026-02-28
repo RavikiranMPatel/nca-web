@@ -58,7 +58,7 @@ function Signup() {
       const role = decodedPayload?.role || "ROLE_USER";
 
       // ✅ AuthContext login (token + role)
-      login(res.accessToken, role);
+      login({ token: res.accessToken, role });
 
       navigate("/home");
     } catch (err: any) {

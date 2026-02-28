@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { motion } from "framer-motion";
+import { useAuth } from "../../auth/useAuth";
 import {
   ArrowLeft,
   Calendar,
@@ -12,7 +13,7 @@ import {
 } from "lucide-react";
 import { toast } from "react-hot-toast";
 import { summerCampService } from "../../api/summerCampService";
-import { getAllBatches } from "../../api/summerCampBatchService";
+import { getCampBatches } from "../../api/summerCampBatchService";
 import type {
   SummerCamp,
   SummerCampEnrollment,
@@ -23,6 +24,7 @@ import type { Batch } from "../../types/batch.types";
 
 type AttendanceRow = {
   enrollmentId: string;
+  publicId: string;
   playerName: string;
   status: "PRESENT" | "ABSENT" | "NOT_MARKED";
 };
@@ -36,6 +38,7 @@ function SummerCampAttendance() {
   const [batches, setBatches] = useState<Batch[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  // Add this near your state declarations
 
   // Filters
   const [selectedDate, setSelectedDate] = useState(
@@ -45,7 +48,12 @@ function SummerCampAttendance() {
 
   // Attendance data
   const [attendanceRows, setAttendanceRows] = useState<AttendanceRow[]>([]);
-  const [existingAttendance, setExistingAttendance] = useState<string[]>([]); // IDs with existing attendance
+  const [existingAttendance, setExistingAttendance] = useState<string[]>([]);
+  const today = new Date().toISOString().split("T")[0];
+  const isPastDate = selectedDate < today;
+  const { userRole } = useAuth();
+  const isSuperAdmin = userRole === "ROLE_SUPER_ADMIN";
+  const canEdit = isSuperAdmin || !isPastDate;
 
   useEffect(() => {
     if (campId) {
@@ -65,7 +73,7 @@ function SummerCampAttendance() {
       const [campData, enrollmentsData, batchesData] = await Promise.all([
         summerCampService.getCampById(campId!),
         summerCampService.getEnrollments(campId!),
-        getAllBatches("SUMMER_CAMP"),
+        getCampBatches(campId!), // ✅ CHANGED: fetch batches by campId
       ]);
 
       setCamp(campData);
@@ -77,7 +85,7 @@ function SummerCampAttendance() {
         setSelectedBatch(batchesData[0].id);
       }
     } catch (error) {
-      console.error("Error loading enrollments:", error);
+      console.error("Error loading data:", error);
       toast.error("Failed to load data");
     } finally {
       setLoading(false);
@@ -86,12 +94,10 @@ function SummerCampAttendance() {
 
   const loadAttendanceData = async () => {
     try {
-      // Get enrollments for selected batch
       const batchEnrollments = enrollments.filter((e) =>
         e.batchIds?.includes(selectedBatch),
       );
 
-      // Try to load existing attendance
       try {
         const existingRecords = await summerCampService.getAttendanceRecords(
           campId!,
@@ -99,29 +105,25 @@ function SummerCampAttendance() {
           selectedBatch,
         );
 
-        // Create attendance rows from existing records
         const rows: AttendanceRow[] = batchEnrollments.map((enrollment) => {
-          const existingRecord = existingRecords.find(
-            (r) => r.enrollmentId === enrollment.publicId, // ✅ FIXED: Use publicId
-          );
+          const existingRecord = existingRecords.find((r) => {
+            return r.enrollmentId === enrollment.id;
+          });
 
           return {
-            enrollmentId: enrollment.publicId, // ✅ FIXED: Use publicId
+            enrollmentId: enrollment.id,
+            publicId: enrollment.publicId,
             playerName: enrollment.playerName,
-            status: existingRecord ? existingRecord.status : "PRESENT",
+            status: existingRecord ? existingRecord.status : "NOT_MARKED",
           };
         });
 
         setAttendanceRows(rows);
         setExistingAttendance(existingRecords.map((r) => r.enrollmentId));
-      } catch (error) {
-        console.error(
-          "Error loading existing attendance, defaulting to all present:",
-          error,
-        );
-        // No existing attendance, create fresh rows
+      } catch {
         const rows: AttendanceRow[] = batchEnrollments.map((enrollment) => ({
-          enrollmentId: enrollment.publicId, // ✅ FIXED: Use publicId
+          enrollmentId: enrollment.id,
+          publicId: enrollment.publicId,
           playerName: enrollment.playerName,
           status: "NOT_MARKED" as const,
         }));
@@ -177,9 +179,15 @@ function SummerCampAttendance() {
       const records: BulkAttendanceItem[] = attendanceRows
         .filter((row) => row.status !== "NOT_MARKED")
         .map((row) => ({
-          enrollmentId: row.enrollmentId,
+          enrollmentId: row.publicId,
           status: row.status as "PRESENT" | "ABSENT",
         }));
+
+      if (records.length === 0) {
+        toast.error("Please mark at least one student before saving");
+        setSaving(false);
+        return;
+      }
 
       const request: SummerCampAttendanceBulkRequest = {
         date: selectedDate,
@@ -190,7 +198,7 @@ function SummerCampAttendance() {
       await summerCampService.submitBulkAttendance(campId!, request);
 
       toast.success("Attendance saved successfully!");
-      loadAttendanceData(); // Reload to show as existing
+      loadAttendanceData();
     } catch (error: any) {
       toast.error(
         error?.response?.data?.message || "Failed to save attendance",
@@ -245,7 +253,7 @@ function SummerCampAttendance() {
             {attendanceRows.length > 0 && (
               <button
                 onClick={handleSubmit}
-                disabled={saving}
+                disabled={saving || !canEdit}
                 className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-emerald-600 to-emerald-700 text-white rounded-lg hover:from-emerald-700 hover:to-emerald-800 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-md hover:shadow-lg"
               >
                 {saving ? (
@@ -270,7 +278,6 @@ function SummerCampAttendance() {
         {/* FILTERS */}
         <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {/* Date Selection */}
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-2">
                 Date <span className="text-red-500">*</span>
@@ -285,7 +292,6 @@ function SummerCampAttendance() {
               />
             </div>
 
-            {/* Batch Selection */}
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-2">
                 Batch <span className="text-red-500">*</span>
@@ -305,11 +311,36 @@ function SummerCampAttendance() {
             </div>
           </div>
 
+          {/* No batches warning */}
+          {!loading && batches.length === 0 && (
+            <div className="mt-3 p-3 bg-amber-50 border border-amber-200 rounded-lg">
+              <p className="text-sm text-amber-700 font-medium">
+                ⚠️ No batches found for this camp. Please add batches first.
+              </p>
+            </div>
+          )}
+
           {hasExistingAttendance && (
             <div className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded-lg">
               <p className="text-sm text-blue-700 font-medium">
                 ℹ️ Attendance already marked for this date and batch. You can
                 update it below.
+              </p>
+            </div>
+          )}
+
+          {!canEdit && (
+            <div className="mt-3 p-3 bg-gray-50 border border-gray-200 rounded-lg">
+              <p className="text-sm text-gray-600 font-medium">
+                📅 Viewing past attendance — editing is disabled.
+              </p>
+            </div>
+          )}
+
+          {isSuperAdmin && isPastDate && (
+            <div className="mt-3 p-3 bg-amber-50 border border-amber-200 rounded-lg">
+              <p className="text-sm text-amber-700 font-medium">
+                ⚠️ You are editing past attendance as Super Admin.
               </p>
             </div>
           )}
@@ -319,7 +350,6 @@ function SummerCampAttendance() {
         {attendanceRows.length > 0 && (
           <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-4">
             <div className="flex flex-wrap items-center justify-between gap-4">
-              {/* Summary */}
               <div className="flex items-center gap-6">
                 <div>
                   <p className="text-xs text-slate-600 uppercase tracking-wide">
@@ -347,15 +377,16 @@ function SummerCampAttendance() {
                 </div>
               </div>
 
-              {/* Quick Actions */}
               <div className="flex gap-2">
                 <button
+                  disabled={!canEdit}
                   onClick={markAllPresent}
                   className="px-4 py-2 bg-emerald-100 text-emerald-700 rounded-lg hover:bg-emerald-200 transition text-sm font-medium"
                 >
                   Mark All Present
                 </button>
                 <button
+                  disabled={!canEdit}
                   onClick={markAllAbsent}
                   className="px-4 py-2 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 transition text-sm font-medium"
                 >
@@ -416,19 +447,14 @@ function SummerCampAttendance() {
                       transition={{ delay: index * 0.03 }}
                       className="hover:bg-slate-50 transition"
                     >
-                      {/* Index */}
                       <td className="px-4 py-3 text-slate-600 font-medium">
                         {index + 1}
                       </td>
-
-                      {/* Student Name */}
                       <td className="px-4 py-3">
                         <p className="font-semibold text-slate-900">
                           {row.playerName}
                         </p>
                       </td>
-
-                      {/* Status Badge */}
                       <td className="px-4 py-3 text-center">
                         <span
                           className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-semibold ${
@@ -452,16 +478,15 @@ function SummerCampAttendance() {
                           )}
                         </span>
                       </td>
-
-                      {/* Toggle Button */}
                       <td className="px-4 py-3 text-center">
                         <button
                           onClick={() => toggleAttendance(row.enrollmentId)}
+                          disabled={!canEdit}
                           className={`px-4 py-2 rounded-lg font-medium text-sm transition-all ${
                             row.status === "PRESENT"
                               ? "bg-red-100 text-red-700 hover:bg-red-200"
                               : "bg-emerald-100 text-emerald-700 hover:bg-emerald-200"
-                          }`}
+                          } ${!canEdit ? "opacity-50 cursor-not-allowed" : ""}`}
                         >
                           Mark {row.status === "PRESENT" ? "Absent" : "Present"}
                         </button>
@@ -474,7 +499,7 @@ function SummerCampAttendance() {
           </div>
         )}
 
-        {/* MOBILE VIEW - Cards */}
+        {/* MOBILE VIEW */}
         {selectedBatch && attendanceRows.length > 0 && (
           <div className="md:hidden space-y-3">
             {attendanceRows.map((row, index) => (
@@ -509,14 +534,14 @@ function SummerCampAttendance() {
                     )}
                   </span>
                 </div>
-
                 <button
                   onClick={() => toggleAttendance(row.enrollmentId)}
-                  className={`w-full px-4 py-2 rounded-lg font-medium text-sm transition-all ${
+                  disabled={!canEdit}
+                  className={`px-4 py-2 rounded-lg font-medium text-sm transition-all ${
                     row.status === "PRESENT"
                       ? "bg-red-100 text-red-700 hover:bg-red-200"
                       : "bg-emerald-100 text-emerald-700 hover:bg-emerald-200"
-                  }`}
+                  } ${!canEdit ? "opacity-50 cursor-not-allowed" : ""}`}
                 >
                   Mark {row.status === "PRESENT" ? "Absent" : "Present"}
                 </button>

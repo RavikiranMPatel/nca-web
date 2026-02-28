@@ -15,6 +15,8 @@ export type EnquirySource =
   | "PHONE_CALL"
   | "WEBSITE"
   | "REFERRAL"
+  | "INSTAGRAM"
+  | "FACEBOOK"
   | "OTHER";
 
 export type EnquiryStatus =
@@ -40,6 +42,12 @@ export interface Batch {
   startTime: string;
   endTime: string;
   color: string;
+}
+
+export interface BatchOptionGroup {
+  type: string;
+  label: string;
+  batches: Batch[];
 }
 
 export interface EnquiryListItem {
@@ -244,6 +252,11 @@ export const enquiryService = {
     const response = await api.get("/admin/enquiries/search", {
       params: { q: query },
     });
+    return response.data;
+  },
+
+  getBatchOptions: async (): Promise<BatchOptionGroup[]> => {
+    const response = await api.get("/admin/enquiries/batch-options");
     return response.data;
   },
 };

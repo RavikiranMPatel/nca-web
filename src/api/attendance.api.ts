@@ -10,7 +10,7 @@ export type BulkAttendanceItem = {
 
 export type BulkAttendanceRequest = {
   attendanceDate: string; // YYYY-MM-DD
-  batch: "MORNING" | "EVENING" | "BOTH";
+  batch: string;
   records: BulkAttendanceItem[];
 };
 

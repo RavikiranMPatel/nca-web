@@ -430,16 +430,27 @@ function PlayerFeesTab() {
           </div>
 
           <div className="flex flex-row sm:flex-col gap-2 sm:items-end flex-shrink-0">
-            <button
-              onClick={() => {
-                resetPayForm();
-                setShowPayModal(true);
-              }}
-              className="flex-1 sm:flex-none inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition text-sm"
-            >
-              <CheckCircle2 size={16} />
-              Mark as Paid
-            </button>
+            {account.status !== "PAID" ? (
+              <button
+                onClick={() => {
+                  resetPayForm();
+                  setShowPayModal(true);
+                }}
+                className="flex-1 sm:flex-none inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition text-sm"
+              >
+                <CheckCircle2 size={16} />
+                Mark as Paid
+              </button>
+            ) : (
+              <div className="text-right bg-emerald-50 border border-emerald-200 rounded-lg px-4 py-2.5">
+                <p className="text-xs text-emerald-600 font-medium">
+                  Next payment cycle opens
+                </p>
+                <p className="text-sm font-bold text-emerald-800">
+                  {formatDate(account.nextDueOn)}
+                </p>
+              </div>
+            )}
             <button
               onClick={() => {
                 setSelectedPlanId("");
@@ -481,7 +492,7 @@ function PlayerFeesTab() {
                     <th className="text-left px-5 py-3">Amount</th>
                     <th className="text-left px-5 py-3">Mode</th>
                     <th className="text-left px-5 py-3">Ref / Receipt</th>
-                    <th className="text-left px-5 py-3">Type</th>
+                    <th className="text-left px-5 py-3">Status</th>
                     {isSuperAdmin && (
                       <th className="text-right px-5 py-3">Action</th>
                     )}
@@ -532,13 +543,13 @@ function PlayerFeesTab() {
                       </td>
                       <td className="px-5 py-3">
                         <span
-                          className={`text-xs font-medium px-2 py-0.5 rounded-full ${
+                          className={`text-xs font-semibold px-2.5 py-1 rounded-full ${
                             p.type === "REVERSAL"
                               ? "bg-red-100 text-red-600"
                               : "bg-emerald-100 text-emerald-700"
                           }`}
                         >
-                          {p.type === "REVERSAL" ? "Reversed" : "Payment"}
+                          {p.type === "REVERSAL" ? "Reversed" : "Paid"}
                         </span>
                       </td>
                       {isSuperAdmin && (
@@ -577,7 +588,7 @@ function PlayerFeesTab() {
                           : "bg-emerald-100 text-emerald-700"
                       }`}
                     >
-                      {p.type === "REVERSAL" ? "Reversed" : "Payment"}
+                      {p.type === "REVERSAL" ? "Reversed" : "Paid"}
                     </span>
                   </div>
                   <div className="flex items-center justify-between mb-1">

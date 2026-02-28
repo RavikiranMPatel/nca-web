@@ -1,4 +1,5 @@
-import { Routes, Route, Navigate } from "react-router-dom";
+import { Routes, Route, Navigate, useNavigate } from "react-router-dom";
+import { useEffect, useState } from "react";
 import Login from "./pages/Login";
 import Signup from "./pages/Signup";
 import Home from "./pages/Home";
@@ -47,12 +48,47 @@ import PlayerAnalysisPage from "./pages/player/PlayerAnalysisPage";
 import PlayerAssessmentDashboardPage from "./pages/player/PlayerAssessmentDashboardPage";
 import PlayerFeesTab from "./pages/player/PlayerFeesTab";
 import PlayerMediaPage from "./pages/player/PlayerMediaPage";
+import OnboardingPage from "./pages/OnboardingPage";
+import { checkOnboardingStatus } from "./api/auth.api";
+import TeamMembersAdmin from "./pages/admin/TeamMembersAdmin";
+import GenerateSlots from "./pages/slot-templates/GenerateSlots";
 
 function App() {
+  const [onboarded, setOnboarded] = useState<boolean | null>(null);
+  const navigate = useNavigate();
+
+  // ── Check onboarding status once on app load ─────────────────────────────
+  useEffect(() => {
+    checkOnboardingStatus()
+      .then((status) => {
+        setOnboarded(status);
+        if (!status) {
+          navigate("/onboarding", { replace: true });
+        }
+      })
+      .catch(() => {
+        // If check fails (network error etc), allow normal flow
+        setOnboarded(true);
+      });
+  }, []);
+
+  // Show nothing while checking — avoids flash of login page
+  if (onboarded === null) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
+      </div>
+    );
+  }
+
   return (
     <Routes>
       {/* DEFAULT */}
       <Route path="/" element={<Navigate to="/home" replace />} />
+
+      {/* ONBOARDING — public, redirected to if not onboarded */}
+      <Route path="/onboarding" element={<OnboardingPage />} />
+
       {/* PUBLIC */}
       <Route path="/login" element={<Login />} />
       <Route path="/signup" element={<Signup />} />
@@ -72,6 +108,18 @@ function App() {
           </AppLayout>
         }
       />
+
+      <Route
+        path="/admin/cms/team"
+        element={
+          <ProtectedRoute roles={["ROLE_ADMIN", "ROLE_SUPER_ADMIN"]}>
+            <AppLayout>
+              <TeamMembersAdmin />
+            </AppLayout>
+          </ProtectedRoute>
+        }
+      />
+
       {/* PROTECTED */}
       <Route
         path="/book-slot"
@@ -110,6 +158,7 @@ function App() {
           </ProtectedRoute>
         }
       />
+
       {/* ================= ADMIN ================= */}
       <Route
         path="/admin"
@@ -199,6 +248,7 @@ function App() {
           </ProtectedRoute>
         }
       />
+
       {/* ================= PLAYERS ================= */}
       <Route
         path="/admin/players"
@@ -240,7 +290,8 @@ function App() {
           </ProtectedRoute>
         }
       />
-      {/* 🔥 PLAYER OVERVIEW WITH NESTED TABS */}
+
+      {/* PLAYER OVERVIEW WITH NESTED TABS */}
       <Route
         path="/admin/players/:playerPublicId"
         element={
@@ -251,16 +302,14 @@ function App() {
           </ProtectedRoute>
         }
       >
-        {/* DEFAULT TAB */}
         <Route index element={<Navigate to="info" replace />} />
-
-        {/* TABS */}
         <Route path="info" element={<PlayerInfoPage />} />
         <Route path="stats" element={<PlayerStatsPage />} />
         <Route path="analysis" element={<PlayerAnalysisPage />} />
         <Route path="fees" element={<PlayerFeesTab />} />
         <Route path="media" element={<PlayerMediaPage />} />
       </Route>
+
       <Route
         path="/admin/players/:playerPublicId/edit"
         element={
@@ -271,6 +320,7 @@ function App() {
           </ProtectedRoute>
         }
       />
+
       {/* ================= CRICKET STATS ================= */}
       <Route
         path="/admin/cricket-stats/add"
@@ -317,6 +367,16 @@ function App() {
         }
       />
       <Route
+        path="/admin/slot-templates/generate"
+        element={
+          <ProtectedRoute roles={["ROLE_ADMIN", "ROLE_SUPER_ADMIN"]}>
+            <AppLayout>
+              <GenerateSlots />
+            </AppLayout>
+          </ProtectedRoute>
+        }
+      />
+      <Route
         path="/admin/slot-templates/:id/edit"
         element={
           <ProtectedRoute roles={["ROLE_ADMIN", "ROLE_SUPER_ADMIN"]}>
@@ -326,6 +386,7 @@ function App() {
           </ProtectedRoute>
         }
       />
+
       {/* ================= ENQUIRIES ================= */}
       <Route
         path="/admin/enquiries"
@@ -367,7 +428,8 @@ function App() {
           </ProtectedRoute>
         }
       />
-      // Inside your Routes component, add:
+
+      {/* ================= SUMMER CAMPS ================= */}
       <Route
         path="/admin/summer-camps"
         element={
@@ -378,7 +440,6 @@ function App() {
           </ProtectedRoute>
         }
       />
-      {/* SUMMER CAMP - Create */}
       <Route
         path="/admin/summer-camps/create"
         element={
@@ -389,7 +450,6 @@ function App() {
           </ProtectedRoute>
         }
       />
-      {/* SUMMER CAMP - Edit */}
       <Route
         path="/admin/summer-camps/:campId/edit"
         element={
@@ -400,7 +460,6 @@ function App() {
           </ProtectedRoute>
         }
       />
-      {/* SUMMER CAMP - Details */}
       <Route
         path="/admin/summer-camps/:campId"
         element={
@@ -411,7 +470,6 @@ function App() {
           </ProtectedRoute>
         }
       />
-      {/* SUMMER CAMP - Enrollments */}
       <Route
         path="/admin/summer-camps/:campId/enrollments"
         element={
@@ -422,7 +480,6 @@ function App() {
           </ProtectedRoute>
         }
       />
-      {/* SUMMER CAMP - Quick Enroll */}
       <Route
         path="/admin/summer-camps/:campId/enroll"
         element={
@@ -433,7 +490,6 @@ function App() {
           </ProtectedRoute>
         }
       />
-      {/* SUMMER CAMP - Attendance */}
       <Route
         path="/admin/summer-camps/:campId/attendance"
         element={
@@ -444,7 +500,6 @@ function App() {
           </ProtectedRoute>
         }
       />
-      {/* SUMMER CAMP - Conversion */}
       <Route
         path="/admin/summer-camps/:campId/convert"
         element={
@@ -455,6 +510,7 @@ function App() {
           </ProtectedRoute>
         }
       />
+
       {/* CATCH-ALL */}
       <Route path="*" element={<Navigate to="/home" replace />} />
     </Routes>

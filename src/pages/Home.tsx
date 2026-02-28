@@ -6,9 +6,6 @@ import {
   Target,
   Award,
   Calendar,
-  Mail,
-  Phone,
-  MapPin,
   ArrowRight,
   Star,
   Facebook,
@@ -20,6 +17,7 @@ import {
 import LoginPromptModal from "../components/LoginPromptModal";
 import publicApi from "../api/publicApi";
 import { getImageUrl } from "../utils/imageUrl";
+import ContactForm from "../components/ContactForm";
 
 /* Swiper */
 import { Swiper, SwiperSlide } from "swiper/react";
@@ -78,6 +76,20 @@ type AcademySettings = {
   SOCIAL_INSTAGRAM?: string;
   SOCIAL_YOUTUBE?: string;
   SOCIAL_LINKEDIN?: string;
+  SECTION_FACILITIES_ENABLED?: string;
+  SECTION_TEAM_ENABLED?: string;
+};
+
+// ADD after the GalleryImage type block:
+type TeamMember = {
+  id: string;
+  publicId: string;
+  name: string;
+  role: string;
+  bio: string;
+  photoUrl: string;
+  displayOrder: number;
+  active: boolean;
 };
 
 type Facility = {
@@ -126,6 +138,8 @@ function Home() {
 
   /* Settings & Data */
   const [settings, setSettings] = useState<AcademySettings>({});
+  const [loading, setLoading] = useState(true);
+  const [team, setTeam] = useState<TeamMember[]>([]);
   const [sliderImages, setSliderImages] = useState<SliderImage[]>([]);
   const [facilities, setFacilities] = useState<Facility[]>([]);
   const [testimonials, setTestimonials] = useState<Testimonial[]>([]);
@@ -134,10 +148,7 @@ function Home() {
   const [gallery, setGallery] = useState<GalleryImage[]>([]);
   const [selectedGalleryImage, setSelectedGalleryImage] =
     useState<GalleryImage | null>(null);
-  const [loading, setLoading] = useState(true);
 
-  const starPerformerEnabled =
-    settings.SECTION_STAR_PERFORMER_ENABLED === "true";
   const starPerformerHeading =
     settings.STAR_PERFORMER_HEADING || "Star Performer of the Week";
   const starPerformerSubheading =
@@ -167,11 +178,14 @@ function Home() {
   const slideDuration = parseInt(settings.SLIDE_DURATION || "5000");
   const sliderImageFit = settings.SLIDER_IMAGE_FIT || "cover";
 
-  const sliderEnabled = settings.SECTION_SLIDER_ENABLED === "true";
-  const statsEnabled = settings.SECTION_STATS_ENABLED === "true";
-  const testimonialsEnabled = settings.SECTION_TESTIMONIALS_ENABLED === "true";
-  const newsEnabled = settings.SECTION_NEWS_ENABLED === "true";
-  const galleryEnabled = settings.SECTION_GALLERY_ENABLED === "true";
+  const sliderEnabled = settings.SECTION_SLIDER_ENABLED !== "false";
+  const statsEnabled = settings.SECTION_STATS_ENABLED !== "false";
+  const facilitiesEnabled = settings.SECTION_FACILITIES_ENABLED !== "false";
+  const testimonialsEnabled = settings.SECTION_TESTIMONIALS_ENABLED !== "false";
+  const newsEnabled = settings.SECTION_NEWS_ENABLED !== "false";
+  const galleryEnabled = settings.SECTION_GALLERY_ENABLED !== "false";
+  const starPerformerEnabled =
+    settings.SECTION_STAR_PERFORMER_ENABLED !== "false";
 
   // Content headings
   const testimonialsHeading =
@@ -232,37 +246,42 @@ function Home() {
 
   useEffect(() => {
     const loadAllData = async () => {
-      try {
-        // Load settings
-        const settingsRes = await publicApi.get("/settings/public");
-        setSettings(settingsRes.data);
+      const [
+        settingsRes,
+        galleryRes,
+        sliderRes,
+        facilitiesRes,
+        testimonialsRes,
+        teamRes,
+        newsRes,
+      ] = await Promise.allSettled([
+        publicApi.get("/settings/public"),
+        publicApi.get("/cms/gallery"),
+        publicApi.get("/home-slider"),
+        publicApi.get("/cms/facilities"),
+        publicApi.get("/cms/testimonials"),
+        publicApi.get("/team"),
+        publicApi.get("/cms/news?status=PUBLISHED"),
+      ]);
 
-        //Load Gallery
-        const galleryRes = await publicApi.get("/cms/gallery");
-        setGallery(galleryRes.data);
-
-        // Load slider
-        const sliderRes = await publicApi.get("/home-slider");
-        setSliderImages(sliderRes.data.filter((img: SliderImage) => img));
-
-        // Load facilities
-        const facilitiesRes = await publicApi.get("/cms/facilities");
-        setFacilities(facilitiesRes.data.filter((f: Facility) => f.active));
-
-        // Load testimonials
-        const testimonialsRes = await publicApi.get("/cms/testimonials");
-        setTestimonials(
-          testimonialsRes.data.filter((t: Testimonial) => t.active),
+      if (settingsRes.status === "fulfilled")
+        setSettings(settingsRes.value.data);
+      if (galleryRes.status === "fulfilled") setGallery(galleryRes.value.data);
+      if (sliderRes.status === "fulfilled")
+        setSliderImages(sliderRes.value.data.filter((img: SliderImage) => img));
+      if (facilitiesRes.status === "fulfilled")
+        setFacilities(
+          facilitiesRes.value.data.filter((f: Facility) => f.active),
         );
+      if (testimonialsRes.status === "fulfilled")
+        setTestimonials(
+          testimonialsRes.value.data.filter((t: Testimonial) => t.active),
+        );
+      if (teamRes.status === "fulfilled") setTeam(teamRes.value.data);
+      if (newsRes.status === "fulfilled")
+        setNews(newsRes.value.data.slice(0, 3));
 
-        // Load news
-        const newsRes = await publicApi.get("/cms/news?status=PUBLISHED");
-        setNews(newsRes.data.slice(0, 3));
-      } catch (error) {
-        console.error("Error loading data:", error);
-      } finally {
-        setLoading(false);
-      }
+      setLoading(false);
     };
 
     loadAllData();
@@ -516,7 +535,7 @@ function Home() {
                         {starPerformerPhotoUrl ? (
                           <div className="relative">
                             <img
-                              src={getImageUrl(starPerformerPhotoUrl)}
+                              src={getImageUrl(starPerformerPhotoUrl) || ""}
                               alt={starPerformerName}
                               className="w-56 h-56 md:w-64 md:h-64 object-cover shadow-lg"
                               style={getCardStyle()}
@@ -544,7 +563,7 @@ function Home() {
                       {/* Details */}
                       <div>
                         <div className="mb-6">
-                          <h3 className="text-2xl md:text-3xl font-bold text-gray-800 mb-3">
+                          <h3 className="text-2xl md:text-3xl font-bold text-gray-800 mb-3 break-words">
                             {starPerformerName}
                           </h3>
                           <div className="flex items-center gap-2 mb-4">
@@ -567,7 +586,8 @@ function Home() {
                             <Trophy size={20} />
                             Achievement
                           </h4>
-                          <p className="text-gray-700 leading-relaxed whitespace-pre-line">
+
+                          <p className="text-gray-700 leading-relaxed whitespace-pre-line line-clamp-6 break-words">
                             {starPerformerAchievement ||
                               "Outstanding performance!"}
                           </p>
@@ -621,55 +641,115 @@ function Home() {
         </section>
       )}
       {/* FACILITIES - FROM DATABASE OR FALLBACK */}
-      <section id="facilities" className="py-16 px-4 bg-white">
-        <div className="max-w-6xl mx-auto">
-          <h2 className="text-3xl font-bold text-center mb-4">
-            World-Class Facilities
-          </h2>
-          <p className="text-gray-600 text-center mb-12 max-w-2xl mx-auto">
-            State-of-the-art infrastructure designed to bring out the best in
-            every player
-          </p>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-            {facilities.length > 0 ? (
-              facilities.map((facility) => (
-                <FacilityCard
-                  key={facility.id}
-                  title={facility.title}
-                  description={facility.description}
-                  primaryColor={primaryColor}
-                  cardStyle={getCardStyle()}
-                  shadowClass={getShadowClass()}
-                />
-              ))
-            ) : (
-              <>
-                <FacilityCard
-                  title="Professional Turf Wickets"
-                  description="International-standard cricket pitches for match-like practice"
-                  primaryColor={primaryColor}
-                  cardStyle={getCardStyle()}
-                  shadowClass={getShadowClass()}
-                />
-                <FacilityCard
-                  title="Premium Astro Turf"
-                  description="All-weather synthetic surface for consistent training"
-                  primaryColor={primaryColor}
-                  cardStyle={getCardStyle()}
-                  shadowClass={getShadowClass()}
-                />
-                <FacilityCard
-                  title="Flexible Timing"
-                  description="Morning, evening, and weekend slots to fit your schedule"
-                  primaryColor={primaryColor}
-                  cardStyle={getCardStyle()}
-                  shadowClass={getShadowClass()}
-                />
-              </>
-            )}
+      {facilitiesEnabled && (
+        <section id="facilities" className="py-16 px-4 bg-white">
+          <div className="max-w-6xl mx-auto">
+            <h2 className="text-3xl font-bold text-center mb-4">
+              World-Class Facilities
+            </h2>
+            <p className="text-gray-600 text-center mb-12 max-w-2xl mx-auto">
+              State-of-the-art infrastructure designed to bring out the best in
+              every player
+            </p>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+              {facilities.length > 0 ? (
+                facilities.map((facility) => (
+                  <FacilityCard
+                    key={facility.id}
+                    title={facility.title}
+                    description={facility.description}
+                    primaryColor={primaryColor}
+                    cardStyle={getCardStyle()}
+                    shadowClass={getShadowClass()}
+                  />
+                ))
+              ) : (
+                <>
+                  <FacilityCard
+                    title="Professional Turf Wickets"
+                    description="International-standard cricket pitches for match-like practice"
+                    primaryColor={primaryColor}
+                    cardStyle={getCardStyle()}
+                    shadowClass={getShadowClass()}
+                  />
+                  <FacilityCard
+                    title="Premium Astro Turf"
+                    description="All-weather synthetic surface for consistent training"
+                    primaryColor={primaryColor}
+                    cardStyle={getCardStyle()}
+                    shadowClass={getShadowClass()}
+                  />
+                  <FacilityCard
+                    title="Flexible Timing"
+                    description="Morning, evening, and weekend slots to fit your schedule"
+                    primaryColor={primaryColor}
+                    cardStyle={getCardStyle()}
+                    shadowClass={getShadowClass()}
+                  />
+                </>
+              )}
+            </div>
           </div>
-        </div>
-      </section>
+        </section>
+      )}
+
+      {/* ── TEAM MEMBERS SECTION ── */}
+      {settings.SECTION_TEAM_ENABLED !== "false" && team.length > 0 && (
+        <section id="team" className="py-16 px-4 bg-white">
+          <div className="max-w-6xl mx-auto">
+            <h2 className="text-3xl font-bold text-center mb-4">
+              Meet Our Coaches
+            </h2>
+            <p className="text-gray-600 text-center mb-12">
+              Expert coaches dedicated to your cricket development
+            </p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-8">
+              {team.map((member) => (
+                <div
+                  key={member.id}
+                  className={`bg-white text-center p-6 ${getShadowClass()}`}
+                  style={getCardStyle()}
+                >
+                  <div
+                    className="w-24 h-24 rounded-full overflow-hidden mx-auto mb-4 border-4"
+                    style={{ borderColor: `${primaryColor}30` }}
+                  >
+                    {member.photoUrl ? (
+                      <img
+                        src={getImageUrl(member.photoUrl) || ""}
+                        alt={member.name}
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      <div
+                        className="w-full h-full flex items-center justify-center text-white text-2xl font-bold"
+                        style={{ backgroundColor: primaryColor }}
+                      >
+                        {member.name.charAt(0)}
+                      </div>
+                    )}
+                  </div>
+                  <h3 className="font-bold text-lg text-gray-800 truncate">
+                    {member.name}
+                  </h3>
+                  <p
+                    className="text-sm font-medium mb-2"
+                    style={{ color: primaryColor }}
+                  >
+                    {member.role}
+                  </p>
+                  {member.bio && (
+                    <p className="text-xs text-gray-500 leading-relaxed line-clamp-3 break-words">
+                      {member.bio}
+                    </p>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+      )}
+
       {/* TESTIMONIALS - FROM DATABASE OR FALLBACK */}
       {testimonialsEnabled && (
         <section
@@ -818,7 +898,6 @@ function Home() {
                   <GalleryImageItem
                     key={image.id}
                     image={image}
-                    caption={image.caption}
                     primaryColor={primaryColor}
                     isWide={!!wideImages[image.id]}
                     cardRadius={cardRadius}
@@ -848,45 +927,12 @@ function Home() {
         </section>
       )}
       {/* CONTACT - FROM DATABASE OR FALLBACK */}
-      <section id="contact" className="py-12 px-4 bg-white">
-        <div className="max-w-6xl mx-auto">
-          <h2 className="text-3xl font-bold text-center mb-4">Get in Touch</h2>
-          <p className="text-gray-600 text-center mb-12">
-            Have questions? We're here to help you get started
-          </p>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-            <ContactCard
-              icon={<MapPin size={32} />}
-              title="Visit Us"
-              line1={settings.CONTACT_ADDRESS_LINE1 || "123 Cricket Lane"}
-              line2={
-                settings.CONTACT_ADDRESS_LINE2 || "Bangalore, Karnataka 560001"
-              }
-              primaryColor={primaryColor}
-              cardStyle={getCardStyle()}
-              shadowClass={getShadowClass()}
-            />
-            <ContactCard
-              icon={<Phone size={32} />}
-              title="Call Us"
-              line1={settings.CONTACT_PHONE || "+91 98765 43210"}
-              line2={settings.CONTACT_HOURS || "Mon-Sun: 6 AM - 9 PM"}
-              primaryColor={primaryColor}
-              cardStyle={getCardStyle()}
-              shadowClass={getShadowClass()}
-            />
-            <ContactCard
-              icon={<Mail size={32} />}
-              title="Email Us"
-              line1={settings.CONTACT_EMAIL || "info@nca-academy.com"}
-              line2="We reply within 24 hours"
-              primaryColor={primaryColor}
-              cardStyle={getCardStyle()}
-              shadowClass={getShadowClass()}
-            />
-          </div>
-        </div>
-      </section>
+      <ContactForm
+        primaryColor={primaryColor}
+        cardStyle={getCardStyle()}
+        getShadowClass={getShadowClass}
+        settings={settings}
+      />
       {/* FOOTER WITH SOCIAL MEDIA */}
       <footer className="py-8 px-4 text-center border-t bg-white">
         {/* Social Media Icons */}
@@ -1002,7 +1048,7 @@ function Home() {
 
             {/* Caption */}
             {selectedGalleryImage.caption && (
-              <div className="p-4 text-center text-gray-700">
+              <div className="p-4 text-center text-gray-700 break-words">
                 {selectedGalleryImage.caption}
               </div>
             )}
@@ -1073,7 +1119,10 @@ function FacilityCard({
         <Award size={32} style={{ color: primaryColor }} />
       </div>
       <h3 className="text-xl font-bold mb-3 text-center">{title}</h3>
-      <p className="text-gray-600 text-center text-sm">{description}</p>
+
+      <p className="text-gray-600 text-center text-sm line-clamp-3 break-words">
+        {description}
+      </p>
     </div>
   );
 }
@@ -1112,11 +1161,13 @@ function TestimonialCard({
           />
         ))}
       </div>
-      <p className="text-gray-700 mb-6 italic">"{text}"</p>
+      <p className="text-gray-700 mb-6 italic line-clamp-4 break-words">
+        "{text}"
+      </p>
       <div className="flex items-center gap-4">
         {photoUrl ? (
           <img
-            src={getImageUrl(photoUrl)}
+            src={getImageUrl(photoUrl) || ""}
             alt={name}
             className="w-12 h-12 rounded-full object-cover"
           />
@@ -1166,7 +1217,7 @@ function NewsCard({
       {imageUrl && (
         <div className="h-48 overflow-hidden">
           <img
-            src={getImageUrl(imageUrl)}
+            src={getImageUrl(imageUrl) || ""}
             alt={title}
             className="w-full h-full object-cover"
           />
@@ -1185,8 +1236,12 @@ function NewsCard({
           </span>
           <span className="text-xs text-gray-500">{date}</span>
         </div>
-        <h3 className="text-xl font-bold mb-3">{title}</h3>
-        <p className="text-gray-600 text-sm leading-relaxed">{excerpt}</p>
+
+        <h3 className="text-xl font-bold mb-3 line-clamp-2">{title}</h3>
+
+        <p className="text-gray-600 text-sm leading-relaxed line-clamp-3 break-words">
+          {excerpt}
+        </p>
       </div>
     </div>
   );
@@ -1266,38 +1321,6 @@ function GalleryItem({
       >
         <span className="text-white font-semibold">View</span>
       </div>
-    </div>
-  );
-}
-
-function ContactCard({
-  icon,
-  title,
-  line1,
-  line2,
-  primaryColor,
-  cardStyle,
-  shadowClass,
-}: {
-  icon: React.ReactNode;
-  title: string;
-  line1: string;
-  line2: string;
-  primaryColor: string;
-  cardStyle: React.CSSProperties;
-  shadowClass: string;
-}) {
-  return (
-    <div
-      className={`bg-white p-8 text-center hover:shadow-xl transition ${shadowClass}`}
-      style={cardStyle}
-    >
-      <div className="flex justify-center mb-4" style={{ color: primaryColor }}>
-        {icon}
-      </div>
-      <h3 className="text-xl font-bold mb-4">{title}</h3>
-      <p className="text-gray-700 font-medium">{line1}</p>
-      <p className="text-gray-500 text-sm mt-1">{line2}</p>
     </div>
   );
 }

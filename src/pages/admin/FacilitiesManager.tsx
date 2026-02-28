@@ -154,22 +154,6 @@ const FacilitiesManager = () => {
         </div>
       </div>
 
-      {/* ✅ SECTION STATUS INDICATOR */}
-      <div className="mb-6">
-        <div className="flex items-center justify-between p-4 border rounded-lg bg-gray-50">
-          <div className="flex items-center gap-3">
-            <Eye className="w-5 h-5 text-green-600" />
-            <div>
-              <span className="font-medium block">Section Always Visible</span>
-              <span className="text-sm text-gray-500">
-                Facilities section is always shown on home page
-              </span>
-            </div>
-          </div>
-          <div className="text-sm text-gray-500">No toggle available</div>
-        </div>
-      </div>
-
       {/* Add/Edit Form */}
       {(isAdding || editingId) && (
         <div className="bg-white rounded-lg shadow-md p-6 mb-6 border-2 border-blue-200">

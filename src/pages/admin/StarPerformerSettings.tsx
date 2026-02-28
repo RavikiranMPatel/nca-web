@@ -1,13 +1,5 @@
 import React, { useState, useEffect } from "react";
-import {
-  Star,
-  Upload,
-  Save,
-  AlertCircle,
-  CheckCircle,
-  Eye,
-  EyeOff,
-} from "lucide-react";
+import { Star, Upload, Save, AlertCircle, CheckCircle } from "lucide-react";
 import publicApi from "../../api/publicApi";
 import axiosInstance from "../../api/axiosInstance";
 import { getImageUrl } from "../../utils/imageUrl";
@@ -174,39 +166,23 @@ const StarPerformerSettings = () => {
 
         <div className="space-y-6">
           {/* Enable/Disable Toggle */}
-          <div className="flex items-center justify-between p-4 border rounded-lg bg-gray-50">
-            <div className="flex items-center gap-3">
-              {isEnabled ? (
-                <Eye className="w-5 h-5 text-green-600" />
-              ) : (
-                <EyeOff className="w-5 h-5 text-gray-400" />
-              )}
-              <div>
-                <span className="font-medium block">
-                  {isEnabled ? "Section Enabled" : "Section Disabled"}
-                </span>
-                <span className="text-sm text-gray-500">
-                  {isEnabled
-                    ? "Star Performer section is visible on home page"
-                    : "Star Performer section is hidden"}
-                </span>
-              </div>
+
+          <label className="flex items-center justify-between p-4 border rounded-lg bg-gray-50 cursor-pointer">
+            <div>
+              <span className="font-medium">Section Enabled</span>
+              <p className="text-sm text-gray-500">
+                Star Performer section is visible on home page
+              </p>
             </div>
-            <label className="relative inline-flex items-center cursor-pointer">
-              <input
-                type="checkbox"
-                checked={isEnabled}
-                onChange={(e) =>
-                  handleChange(
-                    "SECTION_STAR_PERFORMER_ENABLED",
-                    e.target.checked,
-                  )
-                }
-                className="sr-only peer"
-              />
-              <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
-            </label>
-          </div>
+            <input
+              type="checkbox"
+              checked={isEnabled}
+              onChange={(e) =>
+                handleChange("SECTION_STAR_PERFORMER_ENABLED", e.target.checked)
+              }
+              className="w-5 h-5 text-blue-600 rounded"
+            />
+          </label>
 
           {/* Heading */}
           <div>
@@ -289,7 +265,7 @@ const StarPerformerSettings = () => {
                 <div className="flex justify-center">
                   <div className="relative">
                     <img
-                      src={getImageUrl(settings.STAR_PERFORMER_PHOTO_URL)}
+                      src={getImageUrl(settings.STAR_PERFORMER_PHOTO_URL) || ""}
                       alt="Star Performer"
                       className="w-48 h-48 object-cover rounded-lg shadow-lg"
                     />
@@ -332,7 +308,7 @@ const StarPerformerSettings = () => {
         {/* Save Button */}
         <div className="mt-8 flex justify-end gap-3">
           <button
-            onClick={() => window.location.reload()}
+            onClick={loadSettings}
             disabled={saving}
             className="px-6 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition"
           >

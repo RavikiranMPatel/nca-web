@@ -31,9 +31,10 @@ const publicApi = axios.create({
 publicApi.interceptors.response.use(
   (response) => response,
   (error) => {
-    // Optional: console logging for debugging
-    console.warn("Public API error:", error?.response?.status);
-
+    // Only log if there's actually something to log
+    if (error?.response?.status) {
+      console.warn("Public API error:", error.response.status);
+    }
     return Promise.reject(error);
   },
 );
