@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { Plus, Edit2, Trash2, Save, X, Award, Eye, EyeOff } from "lucide-react";
-import axiosInstance from "../../api/axiosInstance";
+import api from "../../api/axios";
 import publicApi from "../../api/publicApi";
 
 type Facility = {
@@ -88,14 +88,11 @@ const FacilitiesManager = () => {
   const handleSave = async () => {
     try {
       if (isAdding) {
-        const response = await axiosInstance.post(
-          "/api/admin/cms/facilities",
-          formData,
-        );
+        const response = await api.post("/admin/cms/facilities", formData);
         setFacilities([...facilities, response.data]);
       } else {
-        const response = await axiosInstance.put(
-          `/api/admin/cms/facilities/${editingId}`,
+        const response = await api.put(
+          `/admin/cms/facilities/${editingId}`,
           formData,
         );
         setFacilities(
@@ -113,7 +110,7 @@ const FacilitiesManager = () => {
     if (!confirm("Are you sure you want to delete this facility?")) return;
 
     try {
-      await axiosInstance.delete(`/api/admin/cms/facilities/${id}`);
+      await api.delete(`/admin/cms/facilities/${id}`);
       setFacilities(facilities.filter((f) => f.id !== id));
     } catch (error) {
       console.error("Error deleting facility:", error);

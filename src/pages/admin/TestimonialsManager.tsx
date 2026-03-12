@@ -10,7 +10,7 @@ import {
   Eye,
   EyeOff,
 } from "lucide-react";
-import axiosInstance from "../../api/axiosInstance";
+import api from "../../api/axios";
 import { getImageUrl } from "../../utils/imageUrl";
 
 type Testimonial = {
@@ -48,7 +48,7 @@ const TestimonialsManager = () => {
 
   const loadTestimonials = async () => {
     try {
-      const response = await axiosInstance.get("/api/admin/cms/testimonials");
+      const response = await api.get("/admin/cms/testimonials");
       setTestimonials(response.data);
       setLoading(false);
     } catch (error) {
@@ -66,11 +66,9 @@ const TestimonialsManager = () => {
     fd.append("file", file); // ✅ Correct parameter name
 
     try {
-      // ✅ Remove the headers configuration - let browser handle it
-      const response = await axiosInstance.post(
-        "/api/admin/cms/testimonials/upload-image",
+      const response = await api.post(
+        "/admin/cms/testimonials/upload-image",
         fd,
-        // DO NOT ADD: { headers: { "Content-Type": "multipart/form-data" } }
       );
 
       // Response.data should be the image URL string
@@ -119,14 +117,11 @@ const TestimonialsManager = () => {
   const handleSave = async () => {
     try {
       if (isAdding) {
-        const response = await axiosInstance.post(
-          "/api/admin/cms/testimonials",
-          formData,
-        );
+        const response = await api.post("/admin/cms/testimonials", formData);
         setTestimonials([...testimonials, response.data]);
       } else {
-        const response = await axiosInstance.put(
-          `/api/admin/cms/testimonials/${editingId}`,
+        const response = await api.put(
+          `/admin/cms/testimonials/${editingId}`,
           formData,
         );
         setTestimonials(
@@ -143,7 +138,7 @@ const TestimonialsManager = () => {
   const handleDelete = async (id: string) => {
     if (!confirm("Are you sure?")) return;
     try {
-      await axiosInstance.delete(`/api/admin/cms/testimonials/${id}`);
+      await api.delete(`/admin/cms/testimonials/${id}`);
       setTestimonials(testimonials.filter((t) => t.id !== id));
     } catch (error) {
       console.error("Error deleting:", error);

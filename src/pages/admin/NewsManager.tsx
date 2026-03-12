@@ -9,7 +9,7 @@ import {
   Upload,
   Calendar,
 } from "lucide-react";
-import axiosInstance from "../../api/axiosInstance";
+import api from "../../api/axios";
 import { getImageUrl } from "../../utils/imageUrl";
 
 type NewsPost = {
@@ -56,7 +56,7 @@ const NewsManager = () => {
 
   const loadNews = async () => {
     try {
-      const response = await axiosInstance.get("/api/admin/cms/news");
+      const response = await api.get("/admin/cms/news");
       setNews(response.data);
       setLoading(false);
     } catch (error) {
@@ -82,10 +82,7 @@ const NewsManager = () => {
 
     try {
       // ✅ FIXED: Removed Content-Type header - let browser set it automatically
-      const response = await axiosInstance.post(
-        "/api/admin/cms/news/upload-image",
-        fd,
-      );
+      const response = await api.post("/admin/cms/news/upload-image", fd);
       setFormData((prev) => ({ ...prev, featuredImageUrl: response.data }));
     } catch (error) {
       console.error("Error uploading:", error);
@@ -139,16 +136,10 @@ const NewsManager = () => {
 
     try {
       if (isAdding) {
-        const response = await axiosInstance.post(
-          "/api/admin/cms/news",
-          payload,
-        );
+        const response = await api.post("/admin/cms/news", payload);
         setNews([response.data, ...news]);
       } else {
-        const response = await axiosInstance.put(
-          `/api/admin/cms/news/${editingId}`,
-          payload,
-        );
+        const response = await api.put(`/admin/cms/news/${editingId}`, payload);
         setNews(news.map((n) => (n.id === editingId ? response.data : n)));
       }
       handleCancel();
@@ -161,7 +152,7 @@ const NewsManager = () => {
   const handleDelete = async (id: string) => {
     if (!confirm("Are you sure?")) return;
     try {
-      await axiosInstance.delete(`/api/admin/cms/news/${id}`);
+      await api.delete(`/admin/cms/news/${id}`);
       setNews(news.filter((n) => n.id !== id));
     } catch (error) {
       console.error("Error deleting:", error);

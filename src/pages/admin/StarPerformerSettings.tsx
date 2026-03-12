@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { Star, Upload, Save, AlertCircle, CheckCircle } from "lucide-react";
 import publicApi from "../../api/publicApi";
-import axiosInstance from "../../api/axiosInstance";
+import api from "../../api/axios";
 import { getImageUrl } from "../../utils/imageUrl";
 
 const StarPerformerSettings = () => {
@@ -64,8 +64,8 @@ const StarPerformerSettings = () => {
     fd.append("file", file);
 
     try {
-      const response = await axiosInstance.post(
-        "/api/admin/settings/star-performer/upload-photo",
+      const response = await api.post(
+        "/admin/settings/star-performer/upload-photo",
         fd,
       );
       setSettings((prev) => ({
@@ -100,7 +100,7 @@ const StarPerformerSettings = () => {
         STAR_PERFORMER_PHOTO_URL: settings.STAR_PERFORMER_PHOTO_URL,
       };
 
-      await axiosInstance.put("/api/admin/settings", updates);
+      await api.put("/admin/settings", updates);
 
       setMessage({
         type: "success",
