@@ -29,9 +29,12 @@ export async function fetchAllBatches(): Promise<Batch[]> {
 /**
  * Fetch only active batches
  */
-export async function fetchActiveBatches(moduleType: string): Promise<Batch[]> {
+export async function fetchActiveBatches(
+  moduleType: string,
+  branchId?: string,
+): Promise<Batch[]> {
   const response = await api.get("/admin/batches/active", {
-    params: { moduleType },
+    params: { moduleType, ...(branchId && { branchId }) },
   });
   return response.data;
 }

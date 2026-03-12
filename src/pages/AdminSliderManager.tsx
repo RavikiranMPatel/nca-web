@@ -3,7 +3,6 @@ import { useNavigate } from "react-router-dom";
 import ImageUpload from "../components/ImageUpload";
 
 import {
-  Upload,
   Trash2,
   Eye,
   EyeOff,
@@ -27,28 +26,20 @@ type SliderImage = {
 function AdminSliderManager() {
   const navigate = useNavigate();
 
-  // Upload state
-
   const [showUploadForm, setShowUploadForm] = useState(false);
   const [redirectUrl, setRedirectUrl] = useState("");
 
-  // List state
   const [images, setImages] = useState<SliderImage[]>([]);
   const [loading, setLoading] = useState(false);
 
-  // Pagination
   const [page, setPage] = useState(0);
   const [size] = useState(6);
   const [totalPages, setTotalPages] = useState(0);
   const [totalElements, setTotalElements] = useState(0);
 
-  // Search
   const [search, setSearch] = useState("");
   const [query, setQuery] = useState("");
 
-  // --------------------
-  // LOAD SLIDERS
-  // --------------------
   const fetchImages = useCallback(async () => {
     setLoading(true);
     try {

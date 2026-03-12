@@ -16,6 +16,8 @@ type Booking = {
   amount: number;
   paymentStatus: string | null;
   paymentMode: string | null;
+  notifyPhone: string | null;
+  isGuest: boolean;
 };
 
 function ViewAllBookings() {
@@ -25,6 +27,28 @@ function ViewAllBookings() {
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("ALL");
   const [dateFilter, setDateFilter] = useState<string>("");
+  const [marking, setMarking] = useState<string | null>(null);
+
+  const markAsPaid = async (publicId: string) => {
+    if (!window.confirm("Mark this booking as paid and confirm the slot?"))
+      return;
+    setMarking(publicId);
+    try {
+      await api.post(`/bookings/${publicId}/mark-paid`);
+      // Update local state — no need to refetch all
+      setBookings((prev) =>
+        prev.map((b) =>
+          b.bookingPublicId === publicId
+            ? { ...b, status: "CONFIRMED", paymentStatus: "PAID" }
+            : b,
+        ),
+      );
+    } catch (e: any) {
+      alert(e?.response?.data?.message || "Failed to mark as paid");
+    } finally {
+      setMarking(null);
+    }
+  };
 
   useEffect(() => {
     loadBookings();
@@ -54,7 +78,7 @@ function ViewAllBookings() {
       case "PENDING_PAYMENT":
         return (
           <span className="px-2 py-1 bg-yellow-100 text-yellow-800 text-xs rounded-full font-medium">
-            ⏳ Pending
+            ⏳ Awaiting Payment
           </span>
         );
       case "CANCELLED":
@@ -194,13 +218,33 @@ function ViewAllBookings() {
         </div>
 
         {/* Export Button */}
-        <button
-          onClick={exportToCSV}
-          className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition"
-        >
-          <Download size={18} />
-          <span>Export CSV</span>
-        </button>
+        {/* Action Buttons */}
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => setStatusFilter("PENDING_PAYMENT")}
+            className="flex items-center gap-2 px-4 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition"
+          >
+            <span>⏳</span>
+            <span>
+              Pending (
+              {bookings.filter((b) => b.status === "PENDING_PAYMENT").length})
+            </span>
+          </button>
+          <button
+            onClick={() => navigate("/admin/bookings/manual")}
+            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
+          >
+            <span>📞</span>
+            <span>Manual Booking</span>
+          </button>
+          <button
+            onClick={exportToCSV}
+            className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition"
+          >
+            <Download size={18} />
+            <span>Export CSV</span>
+          </button>
+        </div>
       </div>
 
       {/* STATS CARDS */}
@@ -226,7 +270,7 @@ function ViewAllBookings() {
           <p className="text-2xl font-bold text-blue-600">
             ₹
             {bookings
-              .filter((b) => b.paymentStatus === "COMPLETED")
+              .filter((b) => b.paymentStatus === "PAID")
               .reduce((sum, b) => sum + (b.amount || 0), 0)
               .toLocaleString()}
           </p>
@@ -334,6 +378,9 @@ function ViewAllBookings() {
                   <th className="text-left p-4 text-sm font-semibold text-gray-700">
                     Payment
                   </th>
+                  <th className="text-left p-4 text-sm font-semibold text-gray-700">
+                    Actions
+                  </th>
                 </tr>
               </thead>
               <tbody className="divide-y">
@@ -380,6 +427,28 @@ function ViewAllBookings() {
                     <td className="p-4">{getStatusBadge(booking.status)}</td>
                     <td className="p-4">
                       {getPaymentBadge(booking.paymentStatus)}
+                    </td>
+
+                    {/* ✅ ADD THIS RIGHT HERE */}
+                    <td className="p-4">
+                      {booking.status === "PENDING_PAYMENT" && (
+                        <div className="flex flex-col gap-1">
+                          <button
+                            onClick={() => markAsPaid(booking.bookingPublicId)}
+                            disabled={marking === booking.bookingPublicId}
+                            className="flex items-center gap-1 bg-green-600 text-white px-3 py-1.5 rounded-lg text-xs font-semibold hover:bg-green-700 transition disabled:opacity-50"
+                          >
+                            {marking === booking.bookingPublicId
+                              ? "..."
+                              : "✓ Mark as Paid"}
+                          </button>
+                          {booking.notifyPhone && (
+                            <span className="text-xs text-gray-500">
+                              📱 {booking.notifyPhone}
+                            </span>
+                          )}
+                        </div>
+                      )}
                     </td>
                   </tr>
                 ))}

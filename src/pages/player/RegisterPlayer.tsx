@@ -9,6 +9,8 @@ import type { PlayerFormData } from "../../api/playerService/playerService";
 import Button from "../../components/Button";
 import { playerService } from "../../api/playerService/playerService";
 import api from "../../api/axios";
+import { useAuth } from "../../auth/useAuth";
+import { getAdminBranches, type Branch } from "../../api/branch.api";
 
 type FeePlanOption = {
   publicId: string;
@@ -20,6 +22,9 @@ type FeePlanOption = {
 
 function RegisterPlayer() {
   const navigate = useNavigate();
+  const { userRole } = useAuth();
+  const isSuperAdmin = userRole === "ROLE_SUPER_ADMIN";
+
   const [loading, setLoading] = useState(false);
   const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [photoPreview, setPhotoPreview] = useState<string>("");
@@ -35,6 +40,10 @@ function RegisterPlayer() {
   // Fee plan states
   const [feePlans, setFeePlans] = useState<FeePlanOption[]>([]);
   const [selectedFeePlan, setSelectedFeePlan] = useState("");
+
+  // Branch states — only used for super admin
+  const [branches, setBranches] = useState<Branch[]>([]);
+  const [selectedBranchId, setSelectedBranchId] = useState("");
 
   // Cropper states
   const [showCropper, setShowCropper] = useState(false);
@@ -68,13 +77,11 @@ function RegisterPlayer() {
 
   useEffect(() => {
     return () => {
-      if (photoPreview) {
-        URL.revokeObjectURL(photoPreview);
-      }
+      if (photoPreview) URL.revokeObjectURL(photoPreview);
     };
   }, [photoPreview]);
 
-  // Load active fee plans on mount
+  // Load fee plans
   useEffect(() => {
     api
       .get("/admin/fees/plans/active")
@@ -82,7 +89,14 @@ function RegisterPlayer() {
       .catch(() => setFeePlans([]));
   }, []);
 
-  // Helper function to crop image
+  // Load branches — only for super admin
+  useEffect(() => {
+    if (!isSuperAdmin) return;
+    getAdminBranches()
+      .then((data) => setBranches(data))
+      .catch(() => setBranches([]));
+  }, [isSuperAdmin]);
+
   const getCroppedImg = async (
     imageSrc: string,
     pixelCrop: Area,
@@ -114,23 +128,13 @@ function RegisterPlayer() {
     );
 
     return new Promise((resolve) => {
-      canvas.toBlob(
-        (blob) => {
-          resolve(blob!);
-        },
-        "image/jpeg",
-        0.95,
-      );
+      canvas.toBlob((blob) => resolve(blob!), "image/jpeg", 0.95);
     });
   };
 
-  // Callback when crop is complete
-  const onCropComplete = useCallback(
-    (croppedArea: Area, croppedAreaPixels: Area) => {
-      setCroppedAreaPixels(croppedAreaPixels);
-    },
-    [],
-  );
+  const onCropComplete = useCallback((_: Area, croppedAreaPixels: Area) => {
+    setCroppedAreaPixels(croppedAreaPixels);
+  }, []);
 
   const handleChange = (
     e: React.ChangeEvent<
@@ -138,10 +142,7 @@ function RegisterPlayer() {
     >,
   ) => {
     const { name, value } = e.target;
-
     setFormData((prev) => ({ ...prev, [name]: value }));
-
-    // Remove red border when user edits
     if (invalidFields[name]) {
       setInvalidFields((prev) => {
         const updated = { ...prev };
@@ -159,13 +160,11 @@ function RegisterPlayer() {
       return;
     }
 
-    // Validate file size (5MB)
     if (file.size > 5 * 1024 * 1024) {
       toast.error("Image size must be less than 5MB");
       return;
     }
 
-    // Validate file type
     if (!file.type.match(/^image\/(jpeg|jpg|png|webp)$/)) {
       toast.error("Only JPG, PNG, and WebP images are supported");
       return;
@@ -191,16 +190,12 @@ function RegisterPlayer() {
       });
 
       setPhotoFile(croppedFile);
-
-      // Create preview from blob
       const previewUrl = URL.createObjectURL(croppedBlob);
       setPhotoPreview(previewUrl);
-
       setShowCropper(false);
       setTempPhotoUrl("");
       toast.success("Photo cropped successfully!");
     } catch (error) {
-      console.error("Error cropping image:", error);
       toast.error("Failed to crop image");
     }
   };
@@ -212,25 +207,18 @@ function RegisterPlayer() {
     const errors: string[] = [];
     const fieldErrors: Record<string, boolean> = {};
 
-    // Full Name
     if (!formData.displayName?.trim()) {
       errors.push("Full Name is required");
       fieldErrors.displayName = true;
     }
-
-    // Gender
     if (!formData.gender) {
       errors.push("Gender is required");
       fieldErrors.gender = true;
     }
-
-    // Profession
     if (!formData.profession) {
       errors.push("Profession is required");
       fieldErrors.profession = true;
     }
-
-    // Date of Birth
     if (!formData.dob) {
       errors.push("Date of Birth is required");
       fieldErrors.dob = true;
@@ -238,49 +226,37 @@ function RegisterPlayer() {
       errors.push("Date of Birth cannot be in the future");
       fieldErrors.dob = true;
     }
-
-    // Address
     if (!formData.address?.trim()) {
       errors.push("Address is required");
       fieldErrors.address = true;
     }
-
-    // Email
     if (!formData.email?.trim()) {
       errors.push("Email is required");
       fieldErrors.email = true;
-    } else {
-      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-      if (!emailRegex.test(formData.email)) {
-        errors.push("Invalid email format");
-        fieldErrors.email = true;
-      }
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
+      errors.push("Invalid email format");
+      fieldErrors.email = true;
     }
-
-    // Parent Phone
     if (!formData.parentsPhone?.trim()) {
       errors.push("Parent Phone is required");
       fieldErrors.parentsPhone = true;
-    } else {
-      const phoneRegex = /^[6-9]\d{9}$/;
-      if (!phoneRegex.test(formData.parentsPhone)) {
-        errors.push("Invalid Parent Phone number");
-        fieldErrors.parentsPhone = true;
-      }
+    } else if (!/^[6-9]\d{9}$/.test(formData.parentsPhone)) {
+      errors.push("Invalid Parent Phone number");
+      fieldErrors.parentsPhone = true;
     }
-
-    // Batch
     if (batchIds.length === 0) {
       errors.push("At least one batch must be selected");
       fieldErrors.batchIds = true;
     }
 
-    // Check email uniqueness
-    if (
-      formData.email &&
-      !errors.includes("Invalid email format") &&
-      !errors.includes("Email is required")
-    ) {
+    // Branch required for super admin
+    if (isSuperAdmin && !selectedBranchId) {
+      errors.push("Branch is required");
+      fieldErrors.branchId = true;
+    }
+
+    // Email uniqueness check
+    if (formData.email && !fieldErrors.email) {
       try {
         const emailExists = await playerService.checkEmailExists(
           formData.email,
@@ -299,23 +275,17 @@ function RegisterPlayer() {
       setErrorMessage(errors.join("|"));
       setShowErrorDialog(true);
 
-      // Scroll to first invalid field
       const firstField = Object.keys(fieldErrors)[0];
-      let element: HTMLElement | null = null;
-
-      if (firstField === "batchIds") {
-        element = document.getElementById("batch-section");
-      } else {
-        element = document.querySelector(
-          `[name="${firstField}"]`,
-        ) as HTMLElement | null;
-      }
+      const element =
+        firstField === "batchIds"
+          ? document.getElementById("batch-section")
+          : (document.querySelector(
+              `[name="${firstField}"]`,
+            ) as HTMLElement | null);
 
       if (element) {
         element.scrollIntoView({ behavior: "smooth", block: "center" });
-        if (firstField !== "batchIds") {
-          element.focus();
-        }
+        if (firstField !== "batchIds") element.focus();
       }
 
       return;
@@ -326,24 +296,26 @@ function RegisterPlayer() {
     try {
       const { batchIds: _, ...restFormData } = formData;
 
-      const playerData = {
+      const playerData: any = {
         ...restFormData,
-        batchIds: batchIds,
+        batchIds,
         active: true,
         status: "ACTIVE",
       };
 
+      // Only send branchId if super admin explicitly selected one
+      if (isSuperAdmin && selectedBranchId) {
+        playerData.branchId = selectedBranchId;
+      }
+
       const result = await playerService.registerPlayer(playerData, photoFile);
 
-      // Assign fee plan if selected
       if (selectedFeePlan && result?.player?.publicId) {
         try {
           await api.post(
             `/admin/fees/accounts/assign?playerPublicId=${result.player.publicId}&feePlanPublicId=${selectedFeePlan}`,
           );
         } catch (feeErr) {
-          console.error("Fee plan assignment failed:", feeErr);
-          // Don't fail registration - fee can be assigned later from Fees tab
           toast.error(
             "Player registered but fee plan assignment failed. You can assign it from the Fees tab.",
           );
@@ -388,6 +360,7 @@ function RegisterPlayer() {
     });
     setBatchIds([]);
     setSelectedFeePlan("");
+    setSelectedBranchId("");
     setPhotoFile(null);
     setPhotoPreview("");
     setTempPhotoUrl("");
@@ -428,13 +401,19 @@ function RegisterPlayer() {
           feePlans={feePlans}
           selectedFeePlan={selectedFeePlan}
           onFeePlanChange={setSelectedFeePlan}
+          // Branch — only passed for super admin
+          {...(isSuperAdmin && {
+            branches,
+            selectedBranchId,
+            onBranchChange: setSelectedBranchId,
+          })}
         />
       </form>
 
       {/* SUCCESS DIALOG */}
       {showSuccessDialog && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg p-6 w-full max-w-md shadow-xl animate-modal-in">
+          <div className="bg-white rounded-lg p-6 w-full max-w-md shadow-xl">
             <div className="text-center">
               <div className="text-6xl mb-4">✅</div>
               <h2 className="text-2xl font-bold text-green-600 mb-2">
@@ -469,7 +448,7 @@ function RegisterPlayer() {
       {/* ERROR DIALOG */}
       {showErrorDialog && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg p-6 w-full max-w-md shadow-xl animate-modal-in">
+          <div className="bg-white rounded-lg p-6 w-full max-w-md shadow-xl">
             <div className="text-center">
               <div className="text-6xl mb-4">❌</div>
               <h2 className="text-2xl font-bold text-red-600 mb-2">
@@ -483,7 +462,6 @@ function RegisterPlayer() {
                   </li>
                 ))}
               </ul>
-
               <Button
                 variant="primary"
                 onClick={() => setShowErrorDialog(false)}
@@ -499,20 +477,13 @@ function RegisterPlayer() {
       {showCropper && (
         <div className="fixed inset-0 bg-black/90 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-lg w-full max-w-3xl max-h-[90vh] overflow-hidden shadow-xl flex flex-col">
-            {/* Header */}
             <div className="p-4 md:p-6 border-b flex-shrink-0">
               <h3 className="text-lg md:text-xl font-semibold">Adjust Photo</h3>
               <p className="text-xs md:text-sm text-gray-500 mt-1">
-                <span className="hidden sm:inline">
-                  Drag to reposition, use slider to zoom
-                </span>
-                <span className="sm:hidden">
-                  Drag to move, pinch or use slider to zoom
-                </span>
+                Drag to reposition, use slider to zoom
               </p>
             </div>
 
-            {/* Cropper Area */}
             <div className="relative h-64 sm:h-80 md:h-96 bg-gray-900 flex-shrink-0">
               <Cropper
                 image={tempPhotoUrl}
@@ -524,17 +495,11 @@ function RegisterPlayer() {
                 onCropChange={setCrop}
                 onZoomChange={setZoom}
                 onCropComplete={onCropComplete}
-                style={{
-                  containerStyle: {
-                    width: "100%",
-                    height: "100%",
-                  },
-                }}
+                style={{ containerStyle: { width: "100%", height: "100%" } }}
               />
             </div>
 
-            {/* Controls */}
-            <div className="p-4 md:p-6 space-y-4 flex-shrink-0 overflow-y-auto">
+            <div className="p-4 md:p-6 space-y-4 flex-shrink-0">
               <div>
                 <div className="flex items-center justify-between mb-2">
                   <label className="text-sm font-medium text-gray-700">

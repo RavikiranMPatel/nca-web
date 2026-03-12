@@ -7,15 +7,18 @@ import {
   Users,
   CheckCircle,
   AlertCircle,
+  GitBranch,
 } from "lucide-react";
 import { toast } from "react-hot-toast";
 import { summerCampService, formatCampDate } from "../../api/summerCampService";
 import { getRegularBatches } from "../../api/summerCampBatchService";
+import { getAdminBranches } from "../../api/branch.api";
 import type {
   SummerCamp,
   SummerCampEnrollment,
   ConversionRequest,
 } from "../../types/summercamp";
+import type { Branch } from "../../api/branch.api";
 import type { Batch } from "../../types/batch.types";
 
 function SummerCampConversion() {
@@ -26,6 +29,9 @@ function SummerCampConversion() {
   const [enrollments, setEnrollments] = useState<SummerCampEnrollment[]>([]);
   const [batches, setBatches] = useState<Batch[]>([]);
   const [loading, setLoading] = useState(true);
+
+  // Branch
+  const [campBranch, setCampBranch] = useState<Branch | null>(null);
 
   // Selected enrollment for conversion
   const [selectedEnrollment, setSelectedEnrollment] =
@@ -48,10 +54,13 @@ function SummerCampConversion() {
   const loadData = async () => {
     try {
       setLoading(true);
-      const [campData, enrollmentsData, batchesData] = await Promise.all([
-        summerCampService.getCampById(campId!),
+      const campData = await summerCampService.getCampById(campId!);
+      const campBranchId = (campData as any).branchId as string | undefined;
+
+      const [enrollmentsData, batchesData, branchesData] = await Promise.all([
         summerCampService.getEnrollments(campId!),
-        getRegularBatches(),
+        getRegularBatches(campBranchId), // scoped to this camp's branch
+        getAdminBranches(),
       ]);
 
       setCamp(campData);
@@ -62,6 +71,14 @@ function SummerCampConversion() {
         ),
       );
       setBatches(batchesData.filter((b) => b.active));
+
+      // Resolve branch
+      if ((campData as any).branchId) {
+        const matched = branchesData.find(
+          (b) => b.id === (campData as any).branchId,
+        );
+        setCampBranch(matched ?? null);
+      }
     } catch (error) {
       console.error("Failed to load data:", error);
       toast.error("Failed to load data");
@@ -104,7 +121,7 @@ function SummerCampConversion() {
 
     try {
       const request: ConversionRequest = {
-        batchIds: selectedBatchIds,
+        regularBatchIds: selectedBatchIds,
         joiningDate,
         notes: notes || undefined,
       };
@@ -167,13 +184,24 @@ function SummerCampConversion() {
                 <TrendingUp className="text-purple-600" size={28} />
                 Convert to Regular Coaching
               </h1>
-              <p className="text-sm text-slate-600 mt-1">{camp?.name}</p>
+              <div className="flex items-center gap-2 mt-1 flex-wrap">
+                <p className="text-sm text-slate-600">{camp?.name}</p>
+                {campBranch && (
+                  <div className="flex items-center gap-1 px-2 py-0.5 bg-slate-100 rounded-full">
+                    <GitBranch size={11} className="text-slate-500" />
+                    <span className="text-xs text-slate-600 font-medium">
+                      {campBranch.name}
+                      {campBranch.isMainBranch && " · Main"}
+                    </span>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         </div>
       </motion.div>
 
-      {/* MAIN CONTENT */}
+      {/* MAIN CONTENT — identical to original */}
       <div className="max-w-6xl mx-auto px-4 py-6">
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* LEFT: Student List */}

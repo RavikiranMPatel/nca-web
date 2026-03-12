@@ -8,6 +8,7 @@ import type {
   EnquiryFormData,
   EnquirySource,
   BatchOptionGroup,
+  Branch,
 } from "../../api/enquiryService";
 import { formatBatchTimeRange } from "../../api/batchService";
 
@@ -17,9 +18,13 @@ function UpdateEnquiryPage() {
   const [loading, setLoading] = useState(false);
   const [loadingData, setLoadingData] = useState(true);
 
+  // Branch support
+  const [branches, setBranches] = useState<Branch[]>([]);
+  const [selectedBranchId, setSelectedBranchId] = useState<string>("");
+  const [loadingBranches, setLoadingBranches] = useState(true);
+
   const [batchOptions, setBatchOptions] = useState<BatchOptionGroup[]>([]);
   const [loadingBatches, setLoadingBatches] = useState(true);
-  const [selectedGroupType, setSelectedGroupType] = useState<string>("");
   const [preferredBatchIds, setPreferredBatchIds] = useState<string[]>([]);
 
   const [formData, setFormData] = useState<EnquiryFormData>({
@@ -40,14 +45,43 @@ function UpdateEnquiryPage() {
     loadData();
   }, [enquiryId]);
 
+  // Load branches when component mounts
+  useEffect(() => {
+    const loadBranches = async () => {
+      try {
+        setLoadingBranches(true);
+        const branchData = await enquiryService.getAllBranches();
+        setBranches(branchData);
+      } catch (error) {
+        console.error("Failed to load branches:", error);
+        toast.error("Failed to load branches");
+      } finally {
+        setLoadingBranches(false);
+      }
+    };
+    loadBranches();
+  }, []);
+
+  // Load batches
+  useEffect(() => {
+    const loadBatches = async () => {
+      try {
+        setLoadingBatches(true);
+        const options = await enquiryService.getBatchOptions();
+        setBatchOptions(options);
+      } catch (error) {
+        console.error("Failed to load batches:", error);
+        toast.error("Failed to load batch options");
+      } finally {
+        setLoadingBatches(false);
+      }
+    };
+    loadBatches();
+  }, []);
+
   const loadData = async () => {
     try {
-      const [options, enquiry] = await Promise.all([
-        enquiryService.getBatchOptions(),
-        enquiryService.getEnquiryById(enquiryId!),
-      ]);
-
-      setBatchOptions(options);
+      const enquiry = await enquiryService.getEnquiryById(enquiryId!);
 
       setFormData({
         childName: enquiry.childName,
@@ -66,40 +100,35 @@ function UpdateEnquiryPage() {
       const existingBatchIds = enquiry.preferredBatches.map((b) => b.id);
       setPreferredBatchIds(existingBatchIds);
 
-      // Pre-select the group based on existing batch
+      // Pre-select branch from first batch's branch
+      if (
+        enquiry.preferredBatches.length > 0 &&
+        enquiry.preferredBatches[0].branchId
+      ) {
+        setSelectedBranchId(enquiry.preferredBatches[0].branchId);
+      }
+
+      // Pre-select the batch based on existing batch
+      const options = await enquiryService.getBatchOptions();
+      setBatchOptions(options);
+      // Pre-select the first batch if available
       if (existingBatchIds.length > 0) {
-        for (const group of options) {
-          const found = group.batches.some((b) =>
-            existingBatchIds.includes(b.id),
-          );
-          if (found) {
-            setSelectedGroupType(group.type);
-            break;
-          }
-        }
+        setPreferredBatchIds([existingBatchIds[0]]);
       }
     } catch (error) {
       toast.error("Failed to load enquiry data");
       navigate("/admin/enquiries");
     } finally {
       setLoadingData(false);
-      setLoadingBatches(false);
     }
   };
+
   const handleChange = (
     e: React.ChangeEvent<
       HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement
     >,
   ) => {
     setFormData((prev) => ({ ...prev, [e.target.name]: e.target.value }));
-  };
-
-  const toggleBatch = (batchId: string) => {
-    setPreferredBatchIds((prev) =>
-      prev.includes(batchId)
-        ? prev.filter((id) => id !== batchId)
-        : [...prev, batchId],
-    );
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -136,6 +165,20 @@ function UpdateEnquiryPage() {
     } finally {
       setLoading(false);
     }
+  };
+
+  // Get count of filtered batches for selected branch
+  const getFiltBatchCount = (): number => {
+    if (!selectedBranchId) return 0;
+    let count = 0;
+    batchOptions.forEach((group) => {
+      group.batches.forEach((batch) => {
+        if (!batch.branchId || batch.branchId === selectedBranchId) {
+          count++;
+        }
+      });
+    });
+    return count;
   };
 
   if (loadingData) {
@@ -310,125 +353,113 @@ function UpdateEnquiryPage() {
               </select>
             </div>
 
+            {/* BRANCH SELECTION */}
+            <div className="md:col-span-2">
+              <label className="block text-sm font-medium mb-2">
+                Select Branch <span className="text-red-500">*</span>
+              </label>
+
+              {loadingBranches ? (
+                <div className="text-sm text-gray-500 py-4 text-center">
+                  Loading branches...
+                </div>
+              ) : branches.length === 0 ? (
+                <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 text-center">
+                  <p className="text-sm text-yellow-800">
+                    No branches available.
+                  </p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {branches.map((branch) => (
+                    <button
+                      key={branch.id}
+                      type="button"
+                      onClick={() => {
+                        setSelectedBranchId(branch.id);
+                        setPreferredBatchIds([]);
+                      }}
+                      className={`p-3 rounded-lg border-2 transition-all text-left ${
+                        selectedBranchId === branch.id
+                          ? "border-blue-500 bg-blue-50"
+                          : "border-gray-200 hover:border-gray-300 bg-white"
+                      }`}
+                    >
+                      <p className="font-medium text-sm">{branch.name}</p>
+                      {branch.city && (
+                        <p className="text-xs text-gray-500">{branch.city}</p>
+                      )}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
             {/* BATCH SELECTION */}
             <div className="md:col-span-2">
               <label className="block text-sm font-medium mb-2">
-                Training Interest <span className="text-red-500">*</span>
+                Training Interest (Batch){" "}
+                <span className="text-red-500">*</span>
+                {!loadingBatches && (
+                  <span className="text-gray-500 text-xs ml-2">
+                    {getFiltBatchCount()} batch
+                    {getFiltBatchCount() !== 1 ? "es" : ""} available
+                  </span>
+                )}
               </label>
 
               {loadingBatches ? (
                 <div className="text-sm text-gray-500 py-4 text-center">
                   Loading options...
                 </div>
-              ) : batchOptions.length === 0 ? (
+              ) : getFiltBatchCount() === 0 ? (
                 <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 text-center">
                   <p className="text-sm text-yellow-800">
-                    No batches available. Please create batches first.
+                    No batches available for{" "}
+                    {selectedBranchId
+                      ? branches.find((b) => b.id === selectedBranchId)?.name ||
+                        "this branch"
+                      : "selected branch"}
+                    . Please create batches first.
                   </p>
                 </div>
               ) : (
-                <div className="space-y-4">
-                  {/* STEP 1 - Pick group */}
-                  <div className="space-y-2">
-                    {batchOptions.map((group) => (
-                      <label
-                        key={group.type}
-                        className={`flex items-center gap-3 p-3 rounded-lg border-2 cursor-pointer transition-all ${
-                          selectedGroupType === group.type
-                            ? "border-blue-500 bg-blue-50"
-                            : "border-gray-200 hover:border-gray-300 bg-white"
-                        }`}
-                      >
-                        <input
-                          type="radio"
-                          name="groupType"
-                          value={group.type}
-                          checked={selectedGroupType === group.type}
-                          onChange={() => {
-                            setSelectedGroupType(group.type);
-                            setPreferredBatchIds([]);
-                          }}
-                          className="w-4 h-4 text-blue-600"
-                        />
-                        <div className="flex-1">
-                          <span className="font-medium text-sm">
-                            {group.label}
-                          </span>
-                          <span className="text-xs text-gray-500 ml-2">
-                            ({group.batches.length} batch
-                            {group.batches.length !== 1 ? "es" : ""})
-                          </span>
-                        </div>
-                      </label>
-                    ))}
-                  </div>
-
-                  {/* STEP 2 - Pick batch within group */}
-                  {selectedGroupType && (
-                    <div className="border-t pt-4">
-                      <p className="text-sm font-medium text-gray-700 mb-2">
-                        Select Batch
-                      </p>
-                      <div className="space-y-2">
-                        {batchOptions
-                          .find((g) => g.type === selectedGroupType)
-                          ?.batches.map((batch) => {
-                            const isSelected = preferredBatchIds.includes(
-                              batch.id,
-                            );
-                            return (
-                              <button
-                                key={batch.id}
-                                type="button"
-                                onClick={() => toggleBatch(batch.id)}
-                                className={`w-full p-3 rounded-lg border-2 transition-all text-left ${
-                                  isSelected
-                                    ? "border-blue-500 bg-blue-50"
-                                    : "border-gray-200 hover:border-gray-300 bg-white"
-                                }`}
-                              >
-                                <div className="flex items-center justify-between">
-                                  <div className="flex items-center gap-3">
-                                    <div
-                                      className="w-3 h-3 rounded-full flex-shrink-0"
-                                      style={{
-                                        backgroundColor:
-                                          batch.color || "#3B82F6",
-                                      }}
-                                    />
-                                    <div>
-                                      <div className="font-medium text-sm">
-                                        {batch.name}
-                                      </div>
-                                      <div className="text-xs text-gray-600">
-                                        {formatBatchTimeRange(batch)}
-                                      </div>
-                                    </div>
-                                  </div>
-                                  <div
-                                    className={`w-5 h-5 rounded flex items-center justify-center text-xs font-bold ${
-                                      isSelected
-                                        ? "bg-blue-600 text-white"
-                                        : "bg-gray-200 text-gray-400"
-                                    }`}
-                                  >
-                                    {isSelected && "✓"}
-                                  </div>
-                                </div>
-                              </button>
-                            );
-                          })}
-                      </div>
-                    </div>
-                  )}
-                </div>
+                <select
+                  value={preferredBatchIds[0] || ""}
+                  onChange={(e) => {
+                    if (e.target.value) {
+                      setPreferredBatchIds([e.target.value]);
+                    }
+                  }}
+                  className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                >
+                  <option value="">-- Select a batch --</option>
+                  {batchOptions.map((group) => (
+                    <optgroup key={group.type} label={group.label}>
+                      {group.batches
+                        .filter(
+                          (b) =>
+                            !selectedBranchId ||
+                            !b.branchId ||
+                            b.branchId === selectedBranchId,
+                        )
+                        .map((batch) => (
+                          <option key={batch.id} value={batch.id}>
+                            {batch.name} ({formatBatchTimeRange(batch)})
+                          </option>
+                        ))}
+                    </optgroup>
+                  ))}
+                </select>
               )}
 
-              {preferredBatchIds.length === 0 && (
-                <p className="text-sm text-red-500 mt-2">
-                  ⚠️ Please select at least one batch
-                </p>
-              )}
+              {preferredBatchIds.length === 0 &&
+                !loadingBatches &&
+                getFiltBatchCount() > 0 && (
+                  <p className="text-sm text-red-500 mt-2">
+                    ⚠️ Please select a batch
+                  </p>
+                )}
             </div>
 
             <div className="md:col-span-2">

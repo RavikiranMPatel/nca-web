@@ -13,6 +13,10 @@ import {
   Instagram,
   Youtube,
   Linkedin,
+  X,
+  Megaphone,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 import LoginPromptModal from "../components/LoginPromptModal";
 import publicApi from "../api/publicApi";
@@ -21,14 +25,16 @@ import ContactForm from "../components/ContactForm";
 
 /* Swiper */
 import { Swiper, SwiperSlide } from "swiper/react";
-import { Autoplay, Pagination } from "swiper/modules";
+import { Autoplay, Pagination, Navigation } from "swiper/modules";
 import "swiper/css";
 import "swiper/css/pagination";
+import "swiper/css/navigation";
 
-/* Types */
+/* ─── Types ─────────────────────────────────────────────── */
 type SliderImage = {
   id: string;
   imageUrl: string;
+  mobileImageUrl?: string;
   redirectUrl?: string;
   title?: string;
   description?: string;
@@ -57,20 +63,17 @@ type AcademySettings = {
   CONTACT_PHONE?: string;
   CONTACT_EMAIL?: string;
   CONTACT_HOURS?: string;
-  // Content headings
   TESTIMONIALS_HEADING?: string;
   TESTIMONIALS_SUBHEADING?: string;
   NEWS_HEADING?: string;
   NEWS_SUBHEADING?: string;
   GALLERY_HEADING?: string;
   GALLERY_SUBHEADING?: string;
-  // Star Performer
   STAR_PERFORMER_HEADING?: string;
   STAR_PERFORMER_SUBHEADING?: string;
   STAR_PERFORMER_NAME?: string;
   STAR_PERFORMER_ACHIEVEMENT?: string;
   STAR_PERFORMER_PHOTO_URL?: string;
-  // Social media
   SOCIAL_FACEBOOK?: string;
   SOCIAL_TWITTER?: string;
   SOCIAL_INSTAGRAM?: string;
@@ -78,9 +81,11 @@ type AcademySettings = {
   SOCIAL_LINKEDIN?: string;
   SECTION_FACILITIES_ENABLED?: string;
   SECTION_TEAM_ENABLED?: string;
+  ANNOUNCEMENT_ENABLED?: string;
+  ANNOUNCEMENT_TEXT?: string;
+  ANNOUNCEMENT_EXPIRY?: string;
 };
 
-// ADD after the GalleryImage type block:
 type TeamMember = {
   id: string;
   publicId: string;
@@ -130,13 +135,40 @@ type GalleryImage = {
   active: boolean;
 };
 
+/* ─── Section Heading ───────────────────────────────────── */
+function SectionHeading({
+  title,
+  subtitle,
+  primaryColor,
+}: {
+  title: string;
+  subtitle?: string;
+  primaryColor: string;
+}) {
+  return (
+    <div className="text-center mb-12">
+      <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mb-3">
+        {title}
+      </h2>
+      {subtitle && (
+        <p className="text-gray-500 text-base md:text-lg max-w-2xl mx-auto">
+          {subtitle}
+        </p>
+      )}
+      <div
+        className="h-1 w-16 mx-auto mt-4 rounded-full"
+        style={{ backgroundColor: primaryColor }}
+      />
+    </div>
+  );
+}
+
+/* ─── Home ──────────────────────────────────────────────── */
 function Home() {
   const navigate = useNavigate();
 
-  /* Login modal */
   const [showLoginPrompt, setShowLoginPrompt] = useState(false);
-
-  /* Settings & Data */
+  const [announcementVisible, setAnnouncementVisible] = useState(true);
   const [settings, setSettings] = useState<AcademySettings>({});
   const [loading, setLoading] = useState(true);
   const [team, setTeam] = useState<TeamMember[]>([]);
@@ -149,34 +181,15 @@ function Home() {
   const [selectedGalleryImage, setSelectedGalleryImage] =
     useState<GalleryImage | null>(null);
 
-  const starPerformerHeading =
-    settings.STAR_PERFORMER_HEADING || "Star Performer of the Week";
-  const starPerformerSubheading =
-    settings.STAR_PERFORMER_SUBHEADING ||
-    "Celebrating excellence and dedication";
-  const starPerformerName = settings.STAR_PERFORMER_NAME || "";
-  const starPerformerAchievement = settings.STAR_PERFORMER_ACHIEVEMENT || "";
-  const starPerformerPhotoUrl = settings.STAR_PERFORMER_PHOTO_URL || "";
-
-  /* Auth */
-  const token = localStorage.getItem("accessToken");
-
-  // Parse settings
+  /* ── Derived settings ── */
   const academyName = settings.ACADEMY_NAME || "NextGen Cricket Academy";
   const logoUrl = settings.LOGO_URL;
   const primaryColor = settings.PRIMARY_COLOR || "#2563eb";
   const secondaryColor = settings.SECONDARY_COLOR || "#10b981";
-
-  // Theme settings
   const buttonRadius = settings.BUTTON_RADIUS || "8";
-  const cardRadius = settings.CARD_RADIUS || "8";
+  const cardRadius = settings.CARD_RADIUS || "12";
   const shadowIntensity = settings.SHADOW_INTENSITY || "md";
-
-  // Slider settings
-  const sliderHeight = settings.SLIDER_HEIGHT || "standard";
-  const kenBurnsEnabled = settings.KEN_BURNS_ENABLED !== "false";
   const slideDuration = parseInt(settings.SLIDE_DURATION || "5000");
-  const sliderImageFit = settings.SLIDER_IMAGE_FIT || "cover";
 
   const sliderEnabled = settings.SECTION_SLIDER_ENABLED !== "false";
   const statsEnabled = settings.SECTION_STATS_ENABLED !== "false";
@@ -187,7 +200,15 @@ function Home() {
   const starPerformerEnabled =
     settings.SECTION_STAR_PERFORMER_ENABLED !== "false";
 
-  // Content headings
+  const starPerformerHeading =
+    settings.STAR_PERFORMER_HEADING || "Star Performer of the Week";
+  const starPerformerSubheading =
+    settings.STAR_PERFORMER_SUBHEADING ||
+    "Celebrating excellence and dedication";
+  const starPerformerName = settings.STAR_PERFORMER_NAME || "";
+  const starPerformerAchievement = settings.STAR_PERFORMER_ACHIEVEMENT || "";
+  const starPerformerPhotoUrl = settings.STAR_PERFORMER_PHOTO_URL || "";
+
   const testimonialsHeading =
     settings.TESTIMONIALS_HEADING || "What Our Students Say";
   const testimonialsSubheading =
@@ -195,14 +216,12 @@ function Home() {
     "Real success stories from our cricket family";
   const newsHeading = settings.NEWS_HEADING || "Latest News & Updates";
   const newsSubheading =
-    settings.NEWS_SUBHEADING ||
-    "Stay updated with our latest achievements and announcements";
+    settings.NEWS_SUBHEADING || "Stay updated with our latest achievements";
   const galleryHeading = settings.GALLERY_HEADING || "Gallery";
   const gallerySubheading =
     settings.GALLERY_SUBHEADING ||
     "Glimpses from our training sessions and tournaments";
 
-  // Social media
   const socialLinks = {
     facebook: settings.SOCIAL_FACEBOOK,
     twitter: settings.SOCIAL_TWITTER,
@@ -211,39 +230,14 @@ function Home() {
     linkedin: settings.SOCIAL_LINKEDIN,
   };
 
-  // Helper functions for dynamic styles
-  const getSliderHeightClass = () => {
-    switch (sliderHeight) {
-      case "compact":
-        return "min-h-[300px] md:min-h-[350px] max-h-[400px]";
-      case "standard":
-        return "min-h-[350px] md:min-h-[450px] lg:min-h-[500px] max-h-[550px]";
-      case "large":
-        return "min-h-[450px] md:min-h-[550px] lg:min-h-[650px] max-h-[700px]";
-      case "fullscreen":
-        return "min-h-[400px] md:min-h-[500px] max-h-[75vh]";
-      default:
-        return "min-h-[350px] md:min-h-[450px] max-h-[500px]";
-    }
-  };
+  const getButtonStyle = () => ({ borderRadius: `${buttonRadius}px` });
+  const getCardStyle = () => ({ borderRadius: `${cardRadius}px` });
+  const getShadowClass = () =>
+    shadowIntensity === "none"
+      ? "border border-gray-200"
+      : `shadow-${shadowIntensity}`;
 
-  const getShadowClass = () => {
-    if (shadowIntensity === "none") return "border border-gray-200";
-    return `shadow-${shadowIntensity}`;
-  };
-
-  const getButtonStyle = () => ({
-    borderRadius: `${buttonRadius}px`,
-  });
-
-  const getCardStyle = () => ({
-    borderRadius: `${cardRadius}px`,
-  });
-
-  // --------------------
-  // LOAD DATA
-  // --------------------
-
+  /* ── Load data ── */
   useEffect(() => {
     const loadAllData = async () => {
       const [
@@ -283,7 +277,6 @@ function Home() {
 
       setLoading(false);
     };
-
     loadAllData();
   }, []);
 
@@ -291,64 +284,117 @@ function Home() {
     const handler = (e: KeyboardEvent) => {
       if (e.key === "Escape") setSelectedGalleryImage(null);
     };
-
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
   }, []);
 
-  // --------------------
-  // UI
-  // --------------------
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-screen">
-        <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-blue-600"></div>
+      <div className="flex items-center justify-center h-screen bg-white">
+        <div
+          className="animate-spin rounded-full h-14 w-14 border-4 border-t-transparent"
+          style={{
+            borderColor: `${primaryColor}40`,
+            borderTopColor: primaryColor,
+          }}
+        />
       </div>
     );
   }
 
+  const hasSlider = sliderEnabled && sliderImages.length > 0;
+
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* SLIDER */}
-      {sliderEnabled && sliderImages.length > 0 && (
-        <section className="relative">
+    <div className="min-h-screen bg-gray-50 pb-20 sm:pb-0">
+      {/* ── ANNOUNCEMENT BAR ── */}
+      {/* ── ANNOUNCEMENT BAR ── */}
+      {(() => {
+        const enabled = settings.ANNOUNCEMENT_ENABLED !== "false";
+        const text = settings.ANNOUNCEMENT_TEXT || "";
+        const expiry = settings.ANNOUNCEMENT_EXPIRY;
+        const expired = expiry ? new Date() > new Date(expiry) : false;
+        if (!enabled || !text || expired) return null;
+        return (
+          announcementVisible && (
+            <div
+              className="relative z-40 py-2.5 px-4"
+              style={{
+                background: `linear-gradient(90deg, ${primaryColor}, ${secondaryColor})`,
+              }}
+            >
+              <div className="max-w-6xl mx-auto flex items-center justify-between gap-3">
+                <div className="flex items-center gap-2 flex-1 min-w-0">
+                  <Megaphone
+                    size={15}
+                    className="text-white shrink-0 opacity-90"
+                  />
+                  <p className="text-white text-xs sm:text-sm font-medium truncate">
+                    {text}
+                    <button
+                      onClick={() =>
+                        document
+                          .getElementById("contact")
+                          ?.scrollIntoView({ behavior: "smooth" })
+                      }
+                      className="underline underline-offset-2 ml-2 opacity-90 hover:opacity-100 whitespace-nowrap"
+                    >
+                      Register now →
+                    </button>
+                  </p>
+                </div>
+                <button
+                  onClick={() => setAnnouncementVisible(false)}
+                  className="text-white opacity-70 hover:opacity-100 transition shrink-0 w-8 h-8 flex items-center justify-center rounded-full hover:bg-white/20"
+                >
+                  <X size={16} />
+                </button>
+              </div>
+            </div>
+          )
+        );
+      })()}
+
+      {/* ── SLIDER ── */}
+      {hasSlider && (
+        <section className="w-full bg-gray-100 relative">
           <Swiper
-            modules={[Autoplay, Pagination]}
+            modules={[Autoplay, Pagination, Navigation]}
             autoplay={{ delay: slideDuration, disableOnInteraction: false }}
             pagination={{
               clickable: true,
-              bulletActiveClass: "swiper-pagination-bullet-active-custom",
+              el: ".slider-pagination",
+            }}
+            navigation={{
+              prevEl: ".slider-prev",
+              nextEl: ".slider-next",
             }}
             loop
-            speed={800}
-            className="w-full home-slider"
+            speed={700}
+            className="w-full"
           >
             {sliderImages.map((img) => {
-              const slideContent = (
-                <div
-                  className={`relative w-full ${getSliderHeightClass()} overflow-hidden`}
-                >
+              const imgContent = (
+                <div className="relative w-full bg-gray-100 flex items-center justify-center">
                   <img
                     src={getImageUrl(img.imageUrl) || ""}
-                    alt={img.title || "Slider"}
-                    className={`w-full h-full ${kenBurnsEnabled ? "ken-burns-zoom" : ""}`}
-                    style={{ objectFit: sliderImageFit as any }}
+                    alt={img.title || academyName}
+                    className="w-full object-contain max-h-[50vw] min-h-[200px] md:max-h-[60vh]"
+                    style={{ display: "block" }}
                   />
-
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/30 to-transparent flex items-center justify-center">
-                    {img.title && (
-                      <div className="text-center text-white px-4 animate-fade-in">
-                        <h2 className="text-4xl sm:text-5xl md:text-6xl font-bold mb-4 drop-shadow-lg">
+                  {img.title && (
+                    <div className="absolute inset-0 flex items-end justify-center pb-8 bg-gradient-to-t from-black/50 to-transparent pointer-events-none">
+                      <div className="text-center text-white px-4">
+                        <h2 className="text-xl sm:text-3xl md:text-5xl font-bold mb-1 drop-shadow-lg">
                           {img.title}
                         </h2>
                         {img.description && (
-                          <p className="text-lg sm:text-xl md:text-2xl drop-shadow-md">
+                          <p className="text-xs sm:text-base drop-shadow-md">
                             {img.description}
                           </p>
                         )}
                       </div>
-                    )}
-                  </div>
+                    </div>
+                  )}
                 </div>
               );
 
@@ -360,64 +406,51 @@ function Home() {
                       target="_blank"
                       rel="noopener noreferrer"
                     >
-                      {slideContent}
+                      {imgContent}
                     </a>
                   ) : (
-                    slideContent
+                    imgContent
                   )}
                 </SwiperSlide>
               );
             })}
           </Swiper>
+
+          {/* Pagination dots — below image, always visible */}
+          <div className="slider-pagination flex justify-center py-2" />
+
+          {/* Nav arrows — desktop only */}
+          <button
+            className="slider-prev hidden sm:flex absolute left-3 top-1/2 -translate-y-1/2 z-10 w-10 h-10 rounded-full bg-white/90 hover:bg-white shadow-md items-center justify-center transition"
+            style={{ color: primaryColor }}
+          >
+            <ChevronLeft size={20} />
+          </button>
+          <button
+            className="slider-next hidden sm:flex absolute right-3 top-1/2 -translate-y-1/2 z-10 w-10 h-10 rounded-full bg-white/90 hover:bg-white shadow-md items-center justify-center transition"
+            style={{ color: primaryColor }}
+          >
+            <ChevronRight size={20} />
+          </button>
         </section>
       )}
-      {/* HERO SECTION */}
-      <section className="py-12 md:py-16 bg-gradient-to-b from-white to-gray-50">
-        <div className="max-w-6xl mx-auto px-4 text-center">
-          {/* Logo */}
-          {logoUrl ? (
-            <div className="flex justify-center mb-6">
-              <img
-                src={getImageUrl(logoUrl) || ""}
-                alt={academyName}
-                className="h-32 sm:h-40 object-contain"
-                onError={(e) => {
-                  console.error("Logo failed to load:", logoUrl);
-                  e.currentTarget.style.display = "none";
-                }}
-              />
-            </div>
-          ) : (
-            <div className="flex justify-center mb-6">
-              <div
-                className="w-32 h-32 sm:w-40 sm:h-40 rounded-full flex items-center justify-center text-white text-5xl font-bold"
-                style={{ backgroundColor: primaryColor }}
-              >
-                {academyName.substring(0, 3).toUpperCase()}
-              </div>
-            </div>
-          )}
 
-          {/* Title */}
-          <h1 className="text-4xl sm:text-5xl font-bold mb-4">{academyName}</h1>
-
-          <p className="text-gray-600 text-lg max-w-3xl mx-auto mb-8">
-            Transform your cricket skills with professional coaching,
-            world-class facilities, and a winning environment. Join the
-            champions today!
-          </p>
-
-          {/* CTA Buttons */}
-          <div className="flex flex-col sm:flex-row gap-4 justify-center">
+      {/* ── CTA STRIP — shown below slider ── */}
+      {hasSlider && (
+        <section
+          className="py-5 px-4 border-b"
+          style={{
+            background: `linear-gradient(135deg, ${primaryColor}08 0%, #ffffff 60%, ${secondaryColor}08 100%)`,
+          }}
+        >
+          <div className="flex justify-center gap-3">
             <button
-              onClick={() =>
-                token ? navigate("/book-slot") : setShowLoginPrompt(true)
-              }
+              onClick={() => navigate("/book-slot")}
               style={{ backgroundColor: primaryColor, ...getButtonStyle() }}
-              className="px-8 py-4 text-white text-lg font-semibold hover:opacity-90 transition shadow-lg flex items-center justify-center gap-2"
+              className="px-8 py-3 text-white font-bold text-sm hover:opacity-90 transition shadow-md flex items-center gap-2"
             >
-              Book a Slot
-              <ArrowRight size={20} />
+              🏏 Book a Training Slot
+              <ArrowRight size={16} />
             </button>
             <button
               onClick={() =>
@@ -425,7 +458,7 @@ function Home() {
                   .getElementById("contact")
                   ?.scrollIntoView({ behavior: "smooth" })
               }
-              className="px-8 py-4 border-2 text-lg font-semibold hover:bg-gray-50 transition"
+              className="px-8 py-3 border-2 font-semibold text-sm hover:bg-gray-50 transition flex items-center gap-2"
               style={{
                 borderColor: primaryColor,
                 color: primaryColor,
@@ -435,204 +468,228 @@ function Home() {
               Contact Us
             </button>
           </div>
-        </div>
-      </section>
-      {/* STATS */}
-      {statsEnabled && (
+        </section>
+      )}
+
+      {/* ── HERO (no slider) ── */}
+      {!hasSlider && (
         <section
-          className="py-16 px-4"
-          style={{ backgroundColor: `${primaryColor}05` }}
+          className="py-16 md:py-24 px-4 text-center"
+          style={{
+            background: `linear-gradient(135deg, ${primaryColor}12 0%, #ffffff 50%, ${secondaryColor}10 100%)`,
+          }}
         >
-          <div className="max-w-6xl mx-auto">
-            <h2 className="text-3xl font-bold text-center mb-12">
-              Our Achievements
-            </h2>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
-              <StatCard
-                icon={<Users size={40} />}
-                number="500+"
-                label="Students Trained"
-                primaryColor={primaryColor}
-                cardStyle={getCardStyle()}
-                shadowClass={getShadowClass()}
-              />
-              <StatCard
-                icon={<Calendar size={40} />}
-                number="10+"
-                label="Years Experience"
-                primaryColor={primaryColor}
-                cardStyle={getCardStyle()}
-                shadowClass={getShadowClass()}
-              />
-              <StatCard
-                icon={<Trophy size={40} />}
-                number="50+"
-                label="Tournaments Won"
-                primaryColor={primaryColor}
-                cardStyle={getCardStyle()}
-                shadowClass={getShadowClass()}
-              />
-              <StatCard
-                icon={<Target size={40} />}
-                number="98%"
-                label="Success Rate"
-                primaryColor={primaryColor}
-                cardStyle={getCardStyle()}
-                shadowClass={getShadowClass()}
-              />
+          <div className="max-w-4xl mx-auto">
+            {logoUrl ? (
+              <div className="flex justify-center mb-6">
+                <img
+                  src={getImageUrl(logoUrl) || ""}
+                  alt={academyName}
+                  className="h-28 sm:h-36 object-contain"
+                />
+              </div>
+            ) : (
+              <div className="flex justify-center mb-6">
+                <div
+                  className="w-28 h-28 rounded-full flex items-center justify-center text-white text-4xl font-bold shadow-xl"
+                  style={{ backgroundColor: primaryColor }}
+                >
+                  {academyName.substring(0, 3).toUpperCase()}
+                </div>
+              </div>
+            )}
+            <h1 className="text-4xl sm:text-5xl md:text-6xl font-extrabold text-gray-900 mb-5 leading-tight">
+              {academyName}
+            </h1>
+            <p className="text-gray-500 text-lg md:text-xl max-w-2xl mx-auto mb-10">
+              Transform your cricket skills with professional coaching,
+              world-class facilities, and a winning environment.
+            </p>
+            <div className="flex flex-col sm:flex-row gap-3 justify-center">
+              <button
+                onClick={() => navigate("/book-slot")}
+                style={{ backgroundColor: primaryColor, ...getButtonStyle() }}
+                className="w-full sm:w-auto px-8 py-4 text-white text-base font-semibold hover:opacity-90 transition shadow-lg flex items-center justify-center gap-2"
+              >
+                Book a Slot <ArrowRight size={18} />
+              </button>
+              <button
+                onClick={() =>
+                  document
+                    .getElementById("contact")
+                    ?.scrollIntoView({ behavior: "smooth" })
+                }
+                className="w-full sm:w-auto px-8 py-4 border-2 text-base font-semibold hover:bg-gray-50 transition flex items-center justify-center gap-2"
+                style={{
+                  borderColor: primaryColor,
+                  color: primaryColor,
+                  ...getButtonStyle(),
+                }}
+              >
+                Contact Us
+              </button>
             </div>
           </div>
         </section>
       )}
 
-      {/* STAR PERFORMER SECTION */}
+      {/* ── STATS ── */}
+      {statsEnabled && (
+        <section className="py-10 md:py-14 px-4 bg-white border-y border-gray-100">
+          <div className="max-w-5xl mx-auto">
+            <SectionHeading
+              title="Our Achievements"
+              subtitle="Numbers that speak for themselves"
+              primaryColor={primaryColor}
+            />
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+              {[
+                {
+                  icon: <Users size={36} />,
+                  number: "500+",
+                  label: "Students Trained",
+                },
+                {
+                  icon: <Calendar size={36} />,
+                  number: "10+",
+                  label: "Years Experience",
+                },
+                {
+                  icon: <Trophy size={36} />,
+                  number: "50+",
+                  label: "Tournaments Won",
+                },
+                {
+                  icon: <Target size={36} />,
+                  number: "98%",
+                  label: "Success Rate",
+                },
+              ].map((stat) => (
+                <div
+                  key={stat.label}
+                  className={`bg-white p-6 text-center hover:shadow-xl transition-shadow ${getShadowClass()}`}
+                  style={getCardStyle()}
+                >
+                  <div
+                    className="flex justify-center mb-3"
+                    style={{ color: primaryColor }}
+                  >
+                    {stat.icon}
+                  </div>
+                  <div
+                    className="text-3xl md:text-4xl font-extrabold mb-1"
+                    style={{ color: primaryColor }}
+                  >
+                    {stat.number}
+                  </div>
+                  <div className="text-gray-500 text-sm">{stat.label}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+      )}
+
+      {/* ── STAR PERFORMER ── */}
       {starPerformerEnabled && (
         <section
-          className="py-16 px-4"
-          style={{ backgroundColor: `${primaryColor}05` }}
+          className="py-10 md:py-14 px-4"
+          style={{ backgroundColor: `${primaryColor}06` }}
         >
           <div className="max-w-4xl mx-auto">
-            {/* Header */}
-            <div className="text-center mb-12">
-              <div className="flex justify-center mb-4">
-                <div
-                  className="w-16 h-16 rounded-full flex items-center justify-center"
-                  style={{ backgroundColor: `${primaryColor}15` }}
-                >
-                  <Star
-                    size={32}
-                    className="fill-current"
-                    style={{ color: primaryColor }}
-                  />
-                </div>
-              </div>
-              <h2
-                className="text-3xl md:text-4xl font-bold mb-4"
-                style={{ color: primaryColor }}
-              >
-                {starPerformerHeading}
-              </h2>
-              <p className="text-gray-600 text-lg">{starPerformerSubheading}</p>
-            </div>
-
-            {/* Show content if name exists, otherwise show placeholder */}
+            <SectionHeading
+              title={starPerformerHeading}
+              subtitle={starPerformerSubheading}
+              primaryColor={primaryColor}
+            />
             {starPerformerName ? (
-              <>
-                {/* Star Performer Card */}
+              <div
+                className={`bg-white overflow-hidden border-2 ${getShadowClass()}`}
+                style={{ borderColor: `${primaryColor}40`, ...getCardStyle() }}
+              >
                 <div
-                  className={`bg-white overflow-hidden border-2 ${getShadowClass()}`}
-                  style={{ borderColor: primaryColor, ...getCardStyle() }}
-                >
-                  <div
-                    className="h-2"
-                    style={{ backgroundColor: primaryColor }}
-                  ></div>
-
-                  <div className="p-8 md:p-12">
-                    <div className="grid md:grid-cols-2 gap-8 items-center">
-                      {/* Photo */}
-                      <div className="flex justify-center">
-                        {starPerformerPhotoUrl ? (
-                          <div className="relative">
-                            <img
-                              src={getImageUrl(starPerformerPhotoUrl) || ""}
-                              alt={starPerformerName}
-                              className="w-56 h-56 md:w-64 md:h-64 object-cover shadow-lg"
-                              style={getCardStyle()}
-                            />
-                            <div
-                              className="absolute -top-4 -right-4 w-16 h-16 rounded-full flex items-center justify-center shadow-lg"
-                              style={{ backgroundColor: primaryColor }}
-                            >
-                              <Trophy size={32} className="text-white" />
-                            </div>
-                          </div>
-                        ) : (
+                  className="h-1.5"
+                  style={{
+                    background: `linear-gradient(90deg, ${primaryColor}, ${secondaryColor})`,
+                  }}
+                />
+                <div className="p-8 md:p-10">
+                  <div className="grid md:grid-cols-2 gap-8 items-center">
+                    <div className="flex justify-center">
+                      {starPerformerPhotoUrl ? (
+                        <div className="relative">
+                          <img
+                            src={getImageUrl(starPerformerPhotoUrl) || ""}
+                            alt={starPerformerName}
+                            className="w-52 h-52 md:w-60 md:h-60 object-cover shadow-lg"
+                            style={getCardStyle()}
+                          />
                           <div
-                            className="w-56 h-56 md:w-64 md:h-64 flex items-center justify-center"
-                            style={{
-                              backgroundColor: `${primaryColor}15`,
-                              ...getCardStyle(),
-                            }}
+                            className="absolute -top-3 -right-3 w-12 h-12 rounded-full flex items-center justify-center shadow-lg"
+                            style={{ backgroundColor: primaryColor }}
                           >
-                            <Star size={64} className="text-gray-300" />
-                          </div>
-                        )}
-                      </div>
-
-                      {/* Details */}
-                      <div>
-                        <div className="mb-6">
-                          <h3 className="text-2xl md:text-3xl font-bold text-gray-800 mb-3 break-words">
-                            {starPerformerName}
-                          </h3>
-                          <div className="flex items-center gap-2 mb-4">
-                            {[1, 2, 3, 4, 5].map((star) => (
-                              <Star
-                                key={star}
-                                size={20}
-                                className="fill-current"
-                                style={{ color: primaryColor }}
-                              />
-                            ))}
+                            <Trophy size={22} className="text-white" />
                           </div>
                         </div>
-
-                        <div className="bg-gray-50 p-6" style={getCardStyle()}>
-                          <h4
-                            className="font-semibold mb-3 flex items-center gap-2 text-lg"
-                            style={{ color: primaryColor }}
-                          >
-                            <Trophy size={20} />
-                            Achievement
-                          </h4>
-
-                          <p className="text-gray-700 leading-relaxed whitespace-pre-line line-clamp-6 break-words">
-                            {starPerformerAchievement ||
-                              "Outstanding performance!"}
-                          </p>
-                        </div>
-
-                        {/* View More Button */}
-                        <button
-                          onClick={() => navigate("/star-performer")}
-                          className="mt-6 px-6 py-3 text-white font-semibold hover:opacity-90 transition shadow-md flex items-center gap-2"
+                      ) : (
+                        <div
+                          className="w-52 h-52 flex items-center justify-center"
                           style={{
-                            backgroundColor: primaryColor,
-                            ...getButtonStyle(),
+                            backgroundColor: `${primaryColor}12`,
+                            ...getCardStyle(),
                           }}
                         >
-                          View Full Profile
-                          <ArrowRight size={18} />
-                        </button>
+                          <Star size={56} className="text-gray-300" />
+                        </div>
+                      )}
+                    </div>
+                    <div>
+                      <h3 className="text-2xl md:text-3xl font-bold text-gray-800 mb-2">
+                        {starPerformerName}
+                      </h3>
+                      <div className="flex items-center gap-1 mb-5">
+                        {[1, 2, 3, 4, 5].map((s) => (
+                          <Star
+                            key={s}
+                            size={18}
+                            className="fill-current"
+                            style={{ color: primaryColor }}
+                          />
+                        ))}
                       </div>
+                      <div className="bg-gray-50 p-5 rounded-xl mb-5">
+                        <h4
+                          className="font-semibold mb-2 flex items-center gap-2"
+                          style={{ color: primaryColor }}
+                        >
+                          <Trophy size={16} /> Achievement
+                        </h4>
+                        <p className="text-gray-600 text-sm leading-relaxed line-clamp-5">
+                          {starPerformerAchievement ||
+                            "Outstanding performance!"}
+                        </p>
+                      </div>
+                      <button
+                        onClick={() => navigate("/star-performer")}
+                        className="px-5 py-2.5 text-white text-sm font-semibold hover:opacity-90 transition shadow flex items-center gap-2"
+                        style={{
+                          backgroundColor: primaryColor,
+                          ...getButtonStyle(),
+                        }}
+                      >
+                        View Full Profile <ArrowRight size={16} />
+                      </button>
                     </div>
                   </div>
-
-                  <div
-                    className="h-2"
-                    style={{
-                      background: `linear-gradient(90deg, ${primaryColor} 0%, ${primaryColor}80 100%)`,
-                    }}
-                  ></div>
                 </div>
-              </>
+              </div>
             ) : (
-              /* Placeholder when no performer is set */
               <div
-                className={`bg-white p-12 text-center ${getShadowClass()}`}
+                className={`bg-white p-10 text-center ${getShadowClass()}`}
                 style={getCardStyle()}
               >
-                <div
-                  className="w-24 h-24 rounded-full mx-auto mb-6 flex items-center justify-center"
-                  style={{ backgroundColor: `${primaryColor}15` }}
-                >
-                  <Star size={48} style={{ color: primaryColor }} />
-                </div>
-                <h3 className="text-xl font-semibold text-gray-800 mb-2">
-                  No Star Performer Set
-                </h3>
-                <p className="text-gray-600">
+                <Star size={40} className="mx-auto mb-3 text-gray-300" />
+                <p className="text-gray-500">
                   The academy admin will announce the star performer soon!
                 </p>
               </div>
@@ -640,79 +697,93 @@ function Home() {
           </div>
         </section>
       )}
-      {/* FACILITIES - FROM DATABASE OR FALLBACK */}
+
+      {/* ── FACILITIES ── */}
       {facilitiesEnabled && (
-        <section id="facilities" className="py-16 px-4 bg-white">
+        <section id="facilities" className="py-10 md:py-14 px-4 bg-white">
           <div className="max-w-6xl mx-auto">
-            <h2 className="text-3xl font-bold text-center mb-4">
-              World-Class Facilities
-            </h2>
-            <p className="text-gray-600 text-center mb-12 max-w-2xl mx-auto">
-              State-of-the-art infrastructure designed to bring out the best in
-              every player
-            </p>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-              {facilities.length > 0 ? (
-                facilities.map((facility) => (
-                  <FacilityCard
-                    key={facility.id}
-                    title={facility.title}
-                    description={facility.description}
-                    primaryColor={primaryColor}
-                    cardStyle={getCardStyle()}
-                    shadowClass={getShadowClass()}
-                  />
-                ))
-              ) : (
-                <>
-                  <FacilityCard
-                    title="Professional Turf Wickets"
-                    description="International-standard cricket pitches for match-like practice"
-                    primaryColor={primaryColor}
-                    cardStyle={getCardStyle()}
-                    shadowClass={getShadowClass()}
-                  />
-                  <FacilityCard
-                    title="Premium Astro Turf"
-                    description="All-weather synthetic surface for consistent training"
-                    primaryColor={primaryColor}
-                    cardStyle={getCardStyle()}
-                    shadowClass={getShadowClass()}
-                  />
-                  <FacilityCard
-                    title="Flexible Timing"
-                    description="Morning, evening, and weekend slots to fit your schedule"
-                    primaryColor={primaryColor}
-                    cardStyle={getCardStyle()}
-                    shadowClass={getShadowClass()}
-                  />
-                </>
-              )}
+            <SectionHeading
+              title="World-Class Facilities"
+              subtitle="State-of-the-art infrastructure designed to bring out the best in every player"
+              primaryColor={primaryColor}
+            />
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              {(facilities.length > 0
+                ? facilities
+                : [
+                    {
+                      id: "1",
+                      title: "Professional Turf Wickets",
+                      description:
+                        "International-standard cricket pitches for match-like practice",
+                      displayOrder: 1,
+                      active: true,
+                    },
+                    {
+                      id: "2",
+                      title: "Premium Astro Turf",
+                      description:
+                        "All-weather synthetic surface for consistent training",
+                      displayOrder: 2,
+                      active: true,
+                    },
+                    {
+                      id: "3",
+                      title: "Flexible Timing",
+                      description:
+                        "Morning, evening, and weekend slots to fit your schedule",
+                      displayOrder: 3,
+                      active: true,
+                    },
+                  ]
+              ).map((facility) => (
+                <div
+                  key={facility.id}
+                  className={`bg-white p-7 hover:shadow-xl transition-shadow border-t-4 ${getShadowClass()}`}
+                  style={{ borderColor: primaryColor, ...getCardStyle() }}
+                >
+                  <div
+                    className="w-14 h-14 rounded-xl mb-5 flex items-center justify-center"
+                    style={{ backgroundColor: `${primaryColor}12` }}
+                  >
+                    <Award size={28} style={{ color: primaryColor }} />
+                  </div>
+                  <h3 className="text-lg font-bold mb-2 text-gray-800">
+                    {facility.title}
+                  </h3>
+                  <p className="text-gray-500 text-sm leading-relaxed">
+                    {facility.description}
+                  </p>
+                </div>
+              ))}
             </div>
           </div>
         </section>
       )}
 
-      {/* ── TEAM MEMBERS SECTION ── */}
+      {/* ── TEAM ── */}
       {settings.SECTION_TEAM_ENABLED !== "false" && team.length > 0 && (
-        <section id="team" className="py-16 px-4 bg-white">
+        <section
+          id="team"
+          className="py-10 md:py-14 px-4"
+          style={{ backgroundColor: `${primaryColor}06` }}
+        >
           <div className="max-w-6xl mx-auto">
-            <h2 className="text-3xl font-bold text-center mb-4">
-              Meet Our Coaches
-            </h2>
-            <p className="text-gray-600 text-center mb-12">
-              Expert coaches dedicated to your cricket development
-            </p>
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-8">
+            <SectionHeading
+              title="Meet Our Coaches"
+              subtitle="Expert coaches dedicated to your cricket development"
+              primaryColor={primaryColor}
+            />
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
               {team.map((member) => (
                 <div
                   key={member.id}
-                  className={`bg-white text-center p-6 ${getShadowClass()}`}
+                  className={`bg-white text-center p-6 hover:shadow-xl transition-shadow ${getShadowClass()}`}
                   style={getCardStyle()}
                 >
                   <div
-                    className="w-24 h-24 rounded-full overflow-hidden mx-auto mb-4 border-4"
-                    style={{ borderColor: `${primaryColor}30` }}
+                    className="w-20 h-20 rounded-full overflow-hidden mx-auto mb-4 ring-4"
+                    style={{ ringColor: `${primaryColor}30` }}
                   >
                     {member.photoUrl ? (
                       <img
@@ -729,17 +800,15 @@ function Home() {
                       </div>
                     )}
                   </div>
-                  <h3 className="font-bold text-lg text-gray-800 truncate">
-                    {member.name}
-                  </h3>
+                  <h3 className="font-bold text-gray-800">{member.name}</h3>
                   <p
-                    className="text-sm font-medium mb-2"
+                    className="text-sm font-medium mt-0.5"
                     style={{ color: primaryColor }}
                   >
                     {member.role}
                   </p>
                   {member.bio && (
-                    <p className="text-xs text-gray-500 leading-relaxed line-clamp-3 break-words">
+                    <p className="text-xs text-gray-400 mt-2 leading-relaxed line-clamp-3">
                       {member.bio}
                     </p>
                   )}
@@ -750,208 +819,288 @@ function Home() {
         </section>
       )}
 
-      {/* TESTIMONIALS - FROM DATABASE OR FALLBACK */}
+      {/* ── TESTIMONIALS ── */}
       {testimonialsEnabled && (
-        <section
-          id="testimonials"
-          className="py-16 px-4"
-          style={{ backgroundColor: `${primaryColor}05` }}
-        >
+        <section id="testimonials" className="py-10 md:py-14 px-4 bg-white">
           <div className="max-w-6xl mx-auto">
-            <h2 className="text-3xl font-bold text-center mb-4">
-              {testimonialsHeading}
-            </h2>
-            <p className="text-gray-600 text-center mb-12">
-              {testimonialsSubheading}
-            </p>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-              {testimonials.length > 0 ? (
-                testimonials
-                  .slice(0, 3)
-                  .map((testimonial) => (
-                    <TestimonialCard
-                      key={testimonial.id}
-                      name={testimonial.name}
-                      role={testimonial.role}
-                      text={testimonial.text}
-                      rating={testimonial.rating || 5}
-                      photoUrl={testimonial.photoUrl}
-                      primaryColor={primaryColor}
-                      cardStyle={getCardStyle()}
-                      shadowClass={getShadowClass()}
-                    />
-                  ))
-              ) : (
-                <>
-                  <TestimonialCard
-                    name="Rahul Sharma"
-                    role="U-16 Player"
-                    text="The coaching here is exceptional! I improved my batting average by 40% in just 6 months. The facilities are top-notch!"
-                    rating={5}
-                    primaryColor={primaryColor}
-                    cardStyle={getCardStyle()}
-                    shadowClass={getShadowClass()}
-                  />
-                  <TestimonialCard
-                    name="Priya Patel"
-                    role="Parent"
-                    text="My daughter absolutely loves training here. The coaches are professional, patient, and genuinely care about every child's development."
-                    rating={5}
-                    primaryColor={primaryColor}
-                    cardStyle={getCardStyle()}
-                    shadowClass={getShadowClass()}
-                  />
-                  <TestimonialCard
-                    name="Amit Kumar"
-                    role="U-19 Player"
-                    text="Best academy in the city! The training methods are scientific and effective. Got selected for state trials thanks to the coaching here."
-                    rating={5}
-                    primaryColor={primaryColor}
-                    cardStyle={getCardStyle()}
-                    shadowClass={getShadowClass()}
-                  />
-                </>
-              )}
+            <SectionHeading
+              title={testimonialsHeading}
+              subtitle={testimonialsSubheading}
+              primaryColor={primaryColor}
+            />
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              {(testimonials.length > 0
+                ? testimonials.slice(0, 3)
+                : [
+                    {
+                      id: "1",
+                      name: "Rahul Sharma",
+                      role: "U-16 Player",
+                      text: "The coaching here is exceptional! I improved my batting average by 40% in just 6 months.",
+                      rating: 5,
+                      active: true,
+                    },
+                    {
+                      id: "2",
+                      name: "Priya Patel",
+                      role: "Parent",
+                      text: "My daughter absolutely loves training here. The coaches are professional and genuinely care.",
+                      rating: 5,
+                      active: true,
+                    },
+                    {
+                      id: "3",
+                      name: "Amit Kumar",
+                      role: "U-19 Player",
+                      text: "Best academy in the city! Got selected for state trials thanks to the coaching here.",
+                      rating: 5,
+                      active: true,
+                    },
+                  ]
+              ).map((t) => (
+                <div
+                  key={t.id}
+                  className={`bg-white p-7 hover:shadow-xl transition-shadow flex flex-col ${getShadowClass()}`}
+                  style={getCardStyle()}
+                >
+                  <div className="flex gap-1 mb-4">
+                    {[...Array(t.rating || 5)].map((_, i) => (
+                      <Star
+                        key={i}
+                        size={15}
+                        fill={primaryColor}
+                        style={{ color: primaryColor }}
+                      />
+                    ))}
+                  </div>
+                  <p className="text-gray-600 text-sm leading-relaxed italic flex-1 mb-5 line-clamp-4">
+                    "{t.text}"
+                  </p>
+                  <div className="flex items-center gap-3">
+                    {"photoUrl" in t && t.photoUrl ? (
+                      <img
+                        src={getImageUrl(t.photoUrl as string) || ""}
+                        alt={t.name}
+                        className="w-10 h-10 rounded-full object-cover"
+                      />
+                    ) : (
+                      <div
+                        className="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold text-sm shrink-0"
+                        style={{ backgroundColor: primaryColor }}
+                      >
+                        {t.name.charAt(0)}
+                      </div>
+                    )}
+                    <div>
+                      <div className="font-semibold text-sm text-gray-800">
+                        {t.name}
+                      </div>
+                      <div className="text-xs text-gray-400">{t.role}</div>
+                    </div>
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
         </section>
       )}
-      {/* NEWS & ANNOUNCEMENTS - FROM DATABASE OR FALLBACK */}
+
+      {/* ── NEWS ── */}
       {newsEnabled && (
-        <section id="news" className="py-16 px-4 bg-white">
-          <div className="max-w-6xl mx-auto">
-            <h2 className="text-3xl font-bold text-center mb-4">
-              {newsHeading}
-            </h2>
-            <p className="text-gray-600 text-center mb-12">{newsSubheading}</p>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-              {news.length > 0 ? (
-                news.map((article) => (
-                  <NewsCard
-                    key={article.id}
-                    title={article.title}
-                    date={new Date(article.publishedAt).toLocaleDateString()}
-                    category={article.category || "News"}
-                    excerpt={article.shortDescription || ""}
-                    imageUrl={article.featuredImageUrl}
-                    primaryColor={primaryColor}
-                    secondaryColor={secondaryColor}
-                    cardStyle={getCardStyle()}
-                    shadowClass={getShadowClass()}
-                  />
-                ))
-              ) : (
-                <>
-                  <NewsCard
-                    title="Summer Camp 2026 Registration Open"
-                    date="Jan 25, 2026"
-                    category="Announcement"
-                    excerpt="Join our intensive 6-week summer training program. Expert coaching, match practice, and fitness sessions included. Limited seats!"
-                    primaryColor={primaryColor}
-                    secondaryColor={secondaryColor}
-                    cardStyle={getCardStyle()}
-                    shadowClass={getShadowClass()}
-                  />
-                  <NewsCard
-                    title="Students Win District Championship"
-                    date="Jan 20, 2026"
-                    category="Achievement"
-                    excerpt="Proud moment! Our U-16 team clinched the district championship. Three players selected for state-level trials."
-                    primaryColor={primaryColor}
-                    secondaryColor={secondaryColor}
-                    cardStyle={getCardStyle()}
-                    shadowClass={getShadowClass()}
-                  />
-                  <NewsCard
-                    title="New Indoor Practice Facility"
-                    date="Jan 15, 2026"
-                    category="Facility Update"
-                    excerpt="We're launching a new climate-controlled indoor practice center with bowling machines and video analysis."
-                    primaryColor={primaryColor}
-                    secondaryColor={secondaryColor}
-                    cardStyle={getCardStyle()}
-                    shadowClass={getShadowClass()}
-                  />
-                </>
-              )}
-            </div>
-          </div>
-        </section>
-      )}
-      {/* GALLERY - FROM DATABASE OR FALLBACK */}
-      {galleryEnabled && (
         <section
-          id="gallery"
-          className="py-12 px-4"
-          style={{ backgroundColor: `${primaryColor}05` }}
+          id="news"
+          className="py-10 md:py-14 px-4"
+          style={{ backgroundColor: `${primaryColor}06` }}
         >
           <div className="max-w-6xl mx-auto">
-            <h2 className="text-3xl font-bold text-center mb-4">
-              {galleryHeading}
-            </h2>
-            <p className="text-gray-600 text-center mb-12">
-              {gallerySubheading}
-            </p>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              {gallery.length > 0 ? (
-                gallery.map((image) => (
-                  <GalleryImageItem
-                    key={image.id}
-                    image={image}
-                    primaryColor={primaryColor}
-                    isWide={!!wideImages[image.id]}
-                    cardRadius={cardRadius}
-                    onDetectedWide={(isWide) =>
-                      setWideImages((prev) => {
-                        if (prev[image.id] === isWide) return prev;
-                        return { ...prev, [image.id]: isWide };
-                      })
-                    }
-                    onClick={() => setSelectedGalleryImage(image)}
-                  />
-                ))
-              ) : (
-                <>
-                  {[1, 2, 3, 4, 5, 6, 7, 8].map((i) => (
-                    <GalleryItem
-                      key={i}
-                      primaryColor={primaryColor}
-                      cardRadius={cardRadius}
-                      index={i}
+            <SectionHeading
+              title={newsHeading}
+              subtitle={newsSubheading}
+              primaryColor={primaryColor}
+            />
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              {(news.length > 0
+                ? news
+                : [
+                    {
+                      id: "1",
+                      title: "Summer Camp 2026 Registration Open",
+                      publishedAt: "2026-01-25",
+                      category: "Announcement",
+                      shortDescription:
+                        "Join our intensive 6-week summer training program. Expert coaching, match practice, and fitness sessions included.",
+                      slug: "",
+                      status: "PUBLISHED",
+                    },
+                    {
+                      id: "2",
+                      title: "Students Win District Championship",
+                      publishedAt: "2026-01-20",
+                      category: "Achievement",
+                      shortDescription:
+                        "Our U-16 team clinched the district championship. Three players selected for state-level trials.",
+                      slug: "",
+                      status: "PUBLISHED",
+                    },
+                    {
+                      id: "3",
+                      title: "New Indoor Practice Facility",
+                      publishedAt: "2026-01-15",
+                      category: "Facility Update",
+                      shortDescription:
+                        "We're launching a new climate-controlled indoor practice center with bowling machines and video analysis.",
+                      slug: "",
+                      status: "PUBLISHED",
+                    },
+                  ]
+              ).map((article) => (
+                <div
+                  key={article.id}
+                  className={`bg-white overflow-hidden hover:shadow-xl transition-shadow ${getShadowClass()}`}
+                  style={getCardStyle()}
+                >
+                  {"featuredImageUrl" in article && article.featuredImageUrl ? (
+                    <div className="h-44 overflow-hidden">
+                      <img
+                        src={
+                          getImageUrl(article.featuredImageUrl as string) || ""
+                        }
+                        alt={article.title}
+                        className="w-full h-full object-cover hover:scale-105 transition-transform duration-500"
+                      />
+                    </div>
+                  ) : (
+                    <div
+                      className="h-1.5"
+                      style={{
+                        background: `linear-gradient(90deg, ${primaryColor}, ${secondaryColor})`,
+                      }}
                     />
-                  ))}
-                </>
-              )}
+                  )}
+                  <div className="p-5">
+                    <div className="flex items-center gap-2 mb-3">
+                      <span
+                        className="text-xs px-2.5 py-0.5 rounded-full font-semibold text-white"
+                        style={{ backgroundColor: secondaryColor }}
+                      >
+                        {article.category || "News"}
+                      </span>
+                      <span className="text-xs text-gray-400">
+                        {new Date(article.publishedAt).toLocaleDateString()}
+                      </span>
+                    </div>
+                    <h3 className="font-bold text-gray-800 mb-2 line-clamp-2 leading-snug">
+                      {article.title}
+                    </h3>
+                    <p className="text-gray-500 text-sm leading-relaxed line-clamp-3">
+                      {article.shortDescription}
+                    </p>
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
         </section>
       )}
-      {/* CONTACT - FROM DATABASE OR FALLBACK */}
+
+      {/* ── GALLERY ── */}
+      {galleryEnabled && (
+        <section id="gallery" className="py-10 md:py-14 px-4 bg-white">
+          <div className="max-w-6xl mx-auto">
+            <SectionHeading
+              title={galleryHeading}
+              subtitle={gallerySubheading}
+              primaryColor={primaryColor}
+            />
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              {gallery.length > 0
+                ? gallery.map((image) => (
+                    <div
+                      key={image.id}
+                      onClick={() => setSelectedGalleryImage(image)}
+                      className={`overflow-hidden shadow-sm hover:shadow-xl transition cursor-pointer relative group
+                        ${wideImages[image.id] ? "col-span-2 aspect-[16/9]" : "col-span-1 aspect-square"}
+                      `}
+                      style={{ borderRadius: `${cardRadius}px` }}
+                    >
+                      <img
+                        src={getImageUrl(image.imageUrl) || ""}
+                        alt={image.caption || "Gallery"}
+                        className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
+                        onLoad={(e) => {
+                          const imgEl = e.currentTarget;
+                          const wide =
+                            imgEl.naturalWidth / imgEl.naturalHeight > 1.25;
+                          setWideImages((prev) => {
+                            if (prev[image.id] === wide) return prev;
+                            return { ...prev, [image.id]: wide };
+                          });
+                        }}
+                      />
+                      {image.caption && (
+                        <div
+                          className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center p-4"
+                          style={{ backgroundColor: `${primaryColor}90` }}
+                        >
+                          <span className="text-white font-semibold text-center text-sm">
+                            {image.caption}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  ))
+                : [1, 2, 3, 4, 5, 6, 7, 8].map((i) => (
+                    <div
+                      key={i}
+                      className="aspect-square overflow-hidden shadow-sm hover:shadow-xl transition cursor-pointer relative group"
+                      style={{
+                        backgroundColor: `${primaryColor}10`,
+                        borderRadius: `${cardRadius}px`,
+                      }}
+                    >
+                      <div className="absolute inset-0 flex items-center justify-center text-gray-300">
+                        <span className="text-sm">Photo {i}</span>
+                      </div>
+                      <div
+                        className="absolute inset-0 opacity-0 group-hover:opacity-100 transition flex items-center justify-center"
+                        style={{ backgroundColor: `${primaryColor}90` }}
+                      >
+                        <span className="text-white font-semibold text-sm">
+                          View
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+            </div>
+          </div>
+        </section>
+      )}
+
+      {/* ── CONTACT ── */}
       <ContactForm
         primaryColor={primaryColor}
         cardStyle={getCardStyle()}
         getShadowClass={getShadowClass}
         settings={settings}
       />
-      {/* FOOTER WITH SOCIAL MEDIA */}
+
+      {/* ── FOOTER ── */}
       <footer className="py-8 px-4 text-center border-t bg-white">
-        {/* Social Media Icons */}
         {(socialLinks.facebook ||
           socialLinks.instagram ||
           socialLinks.twitter ||
           socialLinks.youtube ||
           socialLinks.linkedin) && (
-          <div className="flex justify-center gap-4 mb-6">
+          <div className="flex justify-center gap-3 mb-5">
             {socialLinks.facebook && (
               <a
                 href={socialLinks.facebook}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="p-3 rounded-full hover:bg-gray-100 transition"
+                className="p-2.5 rounded-full hover:bg-gray-100 transition"
                 style={{ color: primaryColor }}
-                title="Facebook"
               >
-                <Facebook size={24} />
+                <Facebook size={20} />
               </a>
             )}
             {socialLinks.instagram && (
@@ -959,11 +1108,10 @@ function Home() {
                 href={socialLinks.instagram}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="p-3 rounded-full hover:bg-gray-100 transition"
+                className="p-2.5 rounded-full hover:bg-gray-100 transition"
                 style={{ color: primaryColor }}
-                title="Instagram"
               >
-                <Instagram size={24} />
+                <Instagram size={20} />
               </a>
             )}
             {socialLinks.twitter && (
@@ -971,11 +1119,10 @@ function Home() {
                 href={socialLinks.twitter}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="p-3 rounded-full hover:bg-gray-100 transition"
+                className="p-2.5 rounded-full hover:bg-gray-100 transition"
                 style={{ color: primaryColor }}
-                title="Twitter"
               >
-                <Twitter size={24} />
+                <Twitter size={20} />
               </a>
             )}
             {socialLinks.youtube && (
@@ -983,11 +1130,10 @@ function Home() {
                 href={socialLinks.youtube}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="p-3 rounded-full hover:bg-gray-100 transition"
+                className="p-2.5 rounded-full hover:bg-gray-100 transition"
                 style={{ color: primaryColor }}
-                title="YouTube"
               >
-                <Youtube size={24} />
+                <Youtube size={20} />
               </a>
             )}
             {socialLinks.linkedin && (
@@ -995,21 +1141,41 @@ function Home() {
                 href={socialLinks.linkedin}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="p-3 rounded-full hover:bg-gray-100 transition"
+                className="p-2.5 rounded-full hover:bg-gray-100 transition"
                 style={{ color: primaryColor }}
-                title="LinkedIn"
               >
-                <Linkedin size={24} />
+                <Linkedin size={20} />
               </a>
             )}
           </div>
         )}
-
-        <p className="text-gray-600">
+        <p className="text-gray-400 text-sm">
           © 2026 {academyName}. All rights reserved.
         </p>
       </footer>
-      {/* LOGIN MODAL */}
+
+      {/* ── FLOATING MOBILE CTA ── */}
+      <div
+        className="fixed bottom-0 left-0 right-0 z-40 sm:hidden px-4 pb-4 pt-2"
+        style={{
+          background:
+            "linear-gradient(to top, rgba(255,255,255,0.98) 70%, transparent)",
+        }}
+      >
+        <button
+          onClick={() => navigate("/book-slot")}
+          style={{
+            backgroundColor: primaryColor,
+            borderRadius: `${buttonRadius}px`,
+          }}
+          className="w-full py-4 text-white font-bold text-base shadow-xl flex items-center justify-center gap-2 active:opacity-90"
+        >
+          🏏 Book a Training Slot
+          <ArrowRight size={18} />
+        </button>
+      </div>
+
+      {/* ── LOGIN MODAL ── */}
       <LoginPromptModal
         open={showLoginPrompt}
         message="Please login to book a slot."
@@ -1017,10 +1183,10 @@ function Home() {
         onCancel={() => setShowLoginPrompt(false)}
       />
 
-      {/* GALLERY LIGHTBOX MODAL */}
+      {/* ── GALLERY LIGHTBOX ── */}
       {selectedGalleryImage && (
         <div
-          className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4"
+          className="fixed inset-0 z-50 bg-black/85 flex items-center justify-center p-4"
           onClick={() => setSelectedGalleryImage(null)}
         >
           <div
@@ -1028,299 +1194,27 @@ function Home() {
             style={getCardStyle()}
             onClick={(e) => e.stopPropagation()}
           >
-            {/* Close button */}
             <button
-              className="absolute top-3 right-3 z-10 bg-black/70 text-white px-3 py-1 hover:bg-black"
-              style={getButtonStyle()}
+              className="absolute top-3 right-3 z-10 bg-black/70 text-white w-8 h-8 flex items-center justify-center rounded-full hover:bg-black transition"
               onClick={() => setSelectedGalleryImage(null)}
             >
-              ✕
+              <X size={16} />
             </button>
-
-            {/* Image */}
-            <div className="w-full h-[80vh] bg-black flex items-center justify-center">
+            <div className="w-full max-h-[80vh] bg-black flex items-center justify-center">
               <img
                 src={getImageUrl(selectedGalleryImage.imageUrl) || ""}
                 alt={selectedGalleryImage.caption || "Gallery"}
-                className="max-w-full max-h-full object-contain"
+                className="max-w-full max-h-[80vh] object-contain"
               />
             </div>
-
-            {/* Caption */}
             {selectedGalleryImage.caption && (
-              <div className="p-4 text-center text-gray-700 break-words">
+              <div className="p-4 text-center text-gray-600 text-sm">
                 {selectedGalleryImage.caption}
               </div>
             )}
           </div>
         </div>
       )}
-    </div>
-  );
-}
-
-// --------------------
-// COMPONENTS
-// --------------------
-
-function StatCard({
-  icon,
-  number,
-  label,
-  primaryColor,
-  cardStyle,
-  shadowClass,
-}: {
-  icon: React.ReactNode;
-  number: string;
-  label: string;
-  primaryColor: string;
-  cardStyle: React.CSSProperties;
-  shadowClass: string;
-}) {
-  return (
-    <div
-      className={`bg-white p-8 text-center hover:shadow-xl transition ${shadowClass}`}
-      style={cardStyle}
-    >
-      <div className="flex justify-center mb-4" style={{ color: primaryColor }}>
-        {icon}
-      </div>
-      <div className="text-4xl font-bold mb-2" style={{ color: primaryColor }}>
-        {number}
-      </div>
-      <div className="text-gray-600">{label}</div>
-    </div>
-  );
-}
-
-function FacilityCard({
-  title,
-  description,
-  primaryColor,
-  cardStyle,
-  shadowClass,
-}: {
-  title: string;
-  description: string;
-  primaryColor: string;
-  cardStyle: React.CSSProperties;
-  shadowClass: string;
-}) {
-  return (
-    <div
-      className={`bg-white p-8 hover:shadow-xl transition border-t-4 ${shadowClass}`}
-      style={{ borderColor: primaryColor, ...cardStyle }}
-    >
-      <div
-        className="w-16 h-16 rounded-full mx-auto mb-6 flex items-center justify-center"
-        style={{ backgroundColor: `${primaryColor}15` }}
-      >
-        <Award size={32} style={{ color: primaryColor }} />
-      </div>
-      <h3 className="text-xl font-bold mb-3 text-center">{title}</h3>
-
-      <p className="text-gray-600 text-center text-sm line-clamp-3 break-words">
-        {description}
-      </p>
-    </div>
-  );
-}
-
-function TestimonialCard({
-  name,
-  role,
-  text,
-  rating,
-  photoUrl,
-  primaryColor,
-  cardStyle,
-  shadowClass,
-}: {
-  name: string;
-  role: string;
-  text: string;
-  rating: number;
-  photoUrl?: string;
-  primaryColor: string;
-  cardStyle: React.CSSProperties;
-  shadowClass: string;
-}) {
-  return (
-    <div
-      className={`bg-white p-8 hover:shadow-xl transition ${shadowClass}`}
-      style={cardStyle}
-    >
-      <div className="flex justify-center mb-4">
-        {[...Array(rating)].map((_, i) => (
-          <Star
-            key={i}
-            className="w-5 h-5"
-            fill={primaryColor}
-            style={{ color: primaryColor }}
-          />
-        ))}
-      </div>
-      <p className="text-gray-700 mb-6 italic line-clamp-4 break-words">
-        "{text}"
-      </p>
-      <div className="flex items-center gap-4">
-        {photoUrl ? (
-          <img
-            src={getImageUrl(photoUrl) || ""}
-            alt={name}
-            className="w-12 h-12 rounded-full object-cover"
-          />
-        ) : (
-          <div
-            className="w-12 h-12 rounded-full flex items-center justify-center text-white font-bold text-lg"
-            style={{ backgroundColor: primaryColor }}
-          >
-            {name.charAt(0)}
-          </div>
-        )}
-        <div>
-          <div className="font-bold">{name}</div>
-          <div className="text-sm text-gray-500">{role}</div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function NewsCard({
-  title,
-  date,
-  category,
-  excerpt,
-  imageUrl,
-  primaryColor,
-  secondaryColor,
-  cardStyle,
-  shadowClass,
-}: {
-  title: string;
-  date: string;
-  category: string;
-  excerpt: string;
-  imageUrl?: string;
-  primaryColor: string;
-  secondaryColor: string;
-  cardStyle: React.CSSProperties;
-  shadowClass: string;
-}) {
-  return (
-    <div
-      className={`bg-white hover:shadow-xl transition overflow-hidden ${shadowClass}`}
-      style={cardStyle}
-    >
-      {imageUrl && (
-        <div className="h-48 overflow-hidden">
-          <img
-            src={getImageUrl(imageUrl) || ""}
-            alt={title}
-            className="w-full h-full object-cover"
-          />
-        </div>
-      )}
-      {!imageUrl && (
-        <div className="h-3" style={{ backgroundColor: primaryColor }} />
-      )}
-      <div className="p-6">
-        <div className="flex items-center gap-2 mb-3">
-          <span
-            className="text-xs px-3 py-1 rounded-full font-semibold text-white"
-            style={{ backgroundColor: secondaryColor }}
-          >
-            {category}
-          </span>
-          <span className="text-xs text-gray-500">{date}</span>
-        </div>
-
-        <h3 className="text-xl font-bold mb-3 line-clamp-2">{title}</h3>
-
-        <p className="text-gray-600 text-sm leading-relaxed line-clamp-3 break-words">
-          {excerpt}
-        </p>
-      </div>
-    </div>
-  );
-}
-
-function GalleryImageItem({
-  image,
-  primaryColor,
-  isWide,
-  cardRadius,
-  onDetectedWide,
-  onClick,
-}: {
-  image: GalleryImage;
-  primaryColor: string;
-  isWide: boolean;
-  cardRadius: string;
-  onDetectedWide: (isWide: boolean) => void;
-  onClick: () => void;
-}) {
-  return (
-    <div
-      onClick={onClick}
-      className={`overflow-hidden shadow-md hover:shadow-xl transition cursor-pointer relative group
-        ${isWide ? "col-span-2 aspect-[16/9]" : "col-span-1 aspect-square"}
-      `}
-      style={{ borderRadius: `${cardRadius}px` }}
-    >
-      <img
-        src={getImageUrl(image.imageUrl) || ""}
-        alt={image.caption || "Gallery"}
-        className="w-full h-full object-cover transition-transform group-hover:scale-110"
-        onLoad={(e) => {
-          const imgEl = e.currentTarget;
-          const wide = imgEl.naturalWidth / imgEl.naturalHeight > 1.25;
-          onDetectedWide(wide);
-        }}
-      />
-
-      {image.caption && (
-        <div
-          className="absolute inset-0 opacity-0 group-hover:opacity-100 transition flex items-center justify-center p-4"
-          style={{ backgroundColor: `${primaryColor}90` }}
-        >
-          <span className="text-white font-semibold text-center text-sm">
-            {image.caption}
-          </span>
-        </div>
-      )}
-    </div>
-  );
-}
-
-function GalleryItem({
-  primaryColor,
-  cardRadius,
-  index,
-}: {
-  primaryColor: string;
-  cardRadius: string;
-  index: number;
-}) {
-  return (
-    <div
-      className="aspect-square overflow-hidden shadow-md hover:shadow-xl transition cursor-pointer relative group"
-      style={{
-        backgroundColor: `${primaryColor}10`,
-        borderRadius: `${cardRadius}px`,
-      }}
-    >
-      <div className="absolute inset-0 flex items-center justify-center text-gray-400">
-        <span className="text-sm">Photo {index}</span>
-      </div>
-      <div
-        className="absolute inset-0 opacity-0 group-hover:opacity-100 transition flex items-center justify-center"
-        style={{ backgroundColor: `${primaryColor}90` }}
-      >
-        <span className="text-white font-semibold">View</span>
-      </div>
     </div>
   );
 }

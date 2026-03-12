@@ -37,6 +37,49 @@ function ManageResources() {
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState<NewResource>(INITIAL_FORM);
   const [error, setError] = useState<string | null>(null);
+  const [editingResource, setEditingResource] = useState<Resource | null>(null);
+  const [editForm, setEditForm] = useState({
+    name: "",
+    description: "",
+    displayOrder: 1,
+  });
+  const [editSaving, setEditSaving] = useState(false);
+  const [editError, setEditError] = useState<string | null>(null);
+
+  const handleOpenEdit = (resource: Resource) => {
+    setEditingResource(resource);
+    setEditForm({
+      name: resource.name,
+      description: resource.description || "",
+      displayOrder: resource.displayOrder,
+    });
+    setEditError(null);
+  };
+
+  const handleCloseEdit = () => {
+    setEditingResource(null);
+    setEditError(null);
+  };
+
+  const handleSaveEdit = async () => {
+    if (!editingResource) return;
+    if (!editForm.name.trim()) return setEditError("Name is required.");
+
+    setEditSaving(true);
+    try {
+      await api.put(`/admin/resources/${editingResource.id}`, editForm);
+      handleCloseEdit();
+      loadResources();
+    } catch (err: any) {
+      const message =
+        err?.response?.data?.message || "Failed to update resource.";
+      setEditError(
+        typeof message === "string" ? message : JSON.stringify(message),
+      );
+    } finally {
+      setEditSaving(false);
+    }
+  };
 
   useEffect(() => {
     loadResources();
@@ -153,6 +196,7 @@ function ManageResources() {
                 key={resource.id}
                 resource={resource}
                 onToggle={toggleActive}
+                onEdit={handleOpenEdit}
               />
             ))
           )}
@@ -177,6 +221,7 @@ function ManageResources() {
                 key={resource.id}
                 resource={resource}
                 onToggle={toggleActive}
+                onEdit={handleOpenEdit}
               />
             ))
           )}
@@ -322,6 +367,99 @@ function ManageResources() {
           </div>
         </div>
       )}
+
+      {/* EDIT RESOURCE MODAL — ✅ sibling to add modal, not nested inside it */}
+      {editingResource && (
+        <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-md mx-4">
+            <div className="flex items-center justify-between p-6 border-b">
+              <h2 className="text-lg font-bold">
+                Edit Resource — {editingResource.code}
+              </h2>
+              <button
+                onClick={handleCloseEdit}
+                className="p-1 hover:bg-gray-100 rounded transition"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-4">
+              {editError && (
+                <div className="bg-red-50 border border-red-200 text-red-700 text-sm px-4 py-3 rounded-lg">
+                  {editError}
+                </div>
+              )}
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Name <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={editForm.name}
+                  onChange={(e) =>
+                    setEditForm({ ...editForm, name: e.target.value })
+                  }
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Description{" "}
+                  <span className="text-gray-400 text-xs">(optional)</span>
+                </label>
+                <input
+                  type="text"
+                  value={editForm.description}
+                  onChange={(e) =>
+                    setEditForm({
+                      ...editForm,
+                      description: e.target.value,
+                    })
+                  }
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Display Order
+                </label>
+                <input
+                  type="number"
+                  min={1}
+                  value={editForm.displayOrder}
+                  onChange={(e) =>
+                    setEditForm({
+                      ...editForm,
+                      displayOrder: Number(e.target.value),
+                    })
+                  }
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-3 p-6 border-t">
+              <button
+                onClick={handleCloseEdit}
+                className="px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-lg transition"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSaveEdit}
+                disabled={editSaving}
+                className="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-medium disabled:opacity-50"
+              >
+                {editSaving ? "Saving..." : "Save Changes"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -329,9 +467,11 @@ function ManageResources() {
 type ResourceCardProps = {
   resource: Resource;
   onToggle: (id: string, currentActive: boolean) => void;
+  onEdit: (resource: Resource) => void;
 };
 
-function ResourceCard({ resource, onToggle }: ResourceCardProps) {
+// ✅ Fixed: onEdit now destructured from props
+function ResourceCard({ resource, onToggle, onEdit }: ResourceCardProps) {
   return (
     <div
       className={`border rounded-lg p-4 flex items-center justify-between transition-all ${
@@ -386,7 +526,10 @@ function ResourceCard({ resource, onToggle }: ResourceCardProps) {
           )}
         </button>
 
-        <button className="p-2 text-gray-600 hover:bg-gray-100 rounded">
+        <button
+          onClick={() => onEdit(resource)}
+          className="p-2 text-gray-600 hover:bg-gray-100 rounded"
+        >
           <Edit size={18} />
         </button>
       </div>

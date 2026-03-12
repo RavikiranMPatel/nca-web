@@ -36,8 +36,8 @@ const AttendanceStatsPage = () => {
   =============================== */
   useEffect(() => {
     const loadBatches = async () => {
-      const res = await api.get("/admin/batches", {
-        params: { activeOnly: true },
+      const res = await api.get("/admin/batches/active", {
+        params: { moduleType: "REGULAR" },
       });
 
       setBatches(res.data);

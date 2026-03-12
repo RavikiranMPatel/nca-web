@@ -13,6 +13,7 @@ export type Batch = {
   moduleType: string;
   createdAt: string;
   updatedAt: string;
+  branchId?: string;
 };
 
 export type BatchCreateRequest = {
@@ -22,6 +23,7 @@ export type BatchCreateRequest = {
   description?: string;
   color?: string;
   moduleType: string;
+  branchId?: string;
 };
 
 export type BatchUpdateRequest = {
@@ -32,6 +34,7 @@ export type BatchUpdateRequest = {
   color?: string;
   moduleType: string;
   active?: boolean;
+  branchId?: string;
 };
 
 export type PlayerBatchAssignment = {

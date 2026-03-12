@@ -10,39 +10,51 @@ import {
   ChevronLeft,
   CheckCircle,
   Loader2,
+  Plus,
+  Trash2,
 } from "lucide-react";
+
+type BranchInput = {
+  name: string;
+  address: string;
+  phone: string;
+};
 
 type FormData = {
   academyName: string;
   academyCode: string;
   city: string;
-  branchName: string;
-  branchAddress: string;
-  branchPhone: string;
   adminName: string;
   adminEmail: string;
   adminPassword: string;
   confirmPassword: string;
 };
 
+type BranchErrors = {
+  name?: string;
+};
+
 const INITIAL: FormData = {
   academyName: "",
   academyCode: "",
   city: "",
-  branchName: "",
-  branchAddress: "",
-  branchPhone: "",
   adminName: "",
   adminEmail: "",
   adminPassword: "",
   confirmPassword: "",
 };
 
+const EMPTY_BRANCH: BranchInput = { name: "", address: "", phone: "" };
+
 export default function OnboardingPage() {
   const [step, setStep] = useState(1);
   const [form, setForm] = useState<FormData>(INITIAL);
+  const [branches, setBranches] = useState<BranchInput[]>([
+    { ...EMPTY_BRANCH },
+  ]);
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState<Partial<FormData>>({});
+  const [branchErrors, setBranchErrors] = useState<BranchErrors[]>([{}]);
 
   const { login } = useAuth();
   const navigate = useNavigate();
@@ -66,7 +78,6 @@ export default function OnboardingPage() {
     setForm((f) => ({
       ...f,
       academyName: name,
-      // Only auto-fill code if user hasn't typed their own
       academyCode:
         f.academyCode === "" || f.academyCode === generateCode(f.academyName)
           ? autoCode
@@ -84,15 +95,54 @@ export default function OnboardingPage() {
       .toUpperCase()
       .slice(0, 6);
 
+  // ── Branch helpers ────────────────────────────────────
+
+  const updateBranch = (
+    index: number,
+    field: keyof BranchInput,
+    value: string,
+  ) => {
+    setBranches((prev) =>
+      prev.map((b, i) => (i === index ? { ...b, [field]: value } : b)),
+    );
+    if (field === "name") {
+      setBranchErrors((prev) =>
+        prev.map((e, i) => (i === index ? { ...e, name: undefined } : e)),
+      );
+    }
+  };
+
+  const addBranch = () => {
+    setBranches((prev) => [...prev, { ...EMPTY_BRANCH }]);
+    setBranchErrors((prev) => [...prev, {}]);
+  };
+
+  const removeBranch = (index: number) => {
+    // index 0 = main branch, cannot be removed
+    if (index === 0) return;
+    setBranches((prev) => prev.filter((_, i) => i !== index));
+    setBranchErrors((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  // ── Validation ────────────────────────────────────────
+
   const validateStep1 = () => {
     const e: Partial<FormData> = {};
     if (!form.academyName.trim()) e.academyName = "Required";
     if (!form.academyCode.trim()) e.academyCode = "Required";
     if (form.academyCode.trim().length > 10)
       e.academyCode = "Max 10 characters";
-    if (!form.branchName.trim()) e.branchName = "Required";
+
+    // Validate all branch names
+    const be: BranchErrors[] = branches.map((b) => ({
+      name: !b.name.trim() ? "Branch name is required" : undefined,
+    }));
+    const hasBranchError = be.some((b) => b.name);
+
     setErrors(e);
-    return Object.keys(e).length === 0;
+    setBranchErrors(be);
+
+    return Object.keys(e).length === 0 && !hasBranchError;
   };
 
   const validateStep2 = () => {
@@ -124,9 +174,11 @@ export default function OnboardingPage() {
         academyName: form.academyName.trim(),
         academyCode: form.academyCode.trim().toUpperCase(),
         city: form.city.trim(),
-        branchName: form.branchName.trim(),
-        branchAddress: form.branchAddress.trim(),
-        branchPhone: form.branchPhone.trim(),
+        branches: branches.map((b) => ({
+          name: b.name.trim(),
+          address: b.address.trim(),
+          phone: b.phone.trim(),
+        })),
         adminName: form.adminName.trim(),
         adminEmail: form.adminEmail.trim().toLowerCase(),
         adminPassword: form.adminPassword,
@@ -145,7 +197,7 @@ export default function OnboardingPage() {
       });
 
       toast.success(`Welcome to ${res.academyName}! Setup complete.`);
-      navigate("/login");
+      navigate("/admin");
     } catch (err: any) {
       const msg =
         err?.response?.data?.message || "Setup failed. Please try again.";
@@ -206,7 +258,7 @@ export default function OnboardingPage() {
         {/* Step indicator */}
         <div className="flex items-center justify-center gap-3 mb-8">
           {[
-            { n: 1, label: "Academy & Branch" },
+            { n: 1, label: "Academy & Branches" },
             { n: 2, label: "Admin Account" },
           ].map(({ n, label }, i) => (
             <div key={n} className="flex items-center gap-2">
@@ -266,26 +318,112 @@ export default function OnboardingPage() {
                   {field("City", "city", { placeholder: "e.g. Mysuru" })}
                 </div>
 
-                {/* Branch section */}
+                {/* ── BRANCHES ── */}
                 <div className="pt-4 border-t border-gray-100">
-                  <div className="flex items-center gap-2 mb-3">
-                    <Building2 size={14} className="text-gray-500" />
-                    <span className="text-sm font-semibold text-gray-700">
-                      Main Branch
-                    </span>
-                  </div>
-                  <div className="space-y-3">
-                    {field("Branch Name *", "branchName", {
-                      placeholder: "e.g. Bogadi Branch",
-                    })}
-                    <div className="grid grid-cols-2 gap-4">
-                      {field("Address", "branchAddress", {
-                        placeholder: "Branch address",
-                      })}
-                      {field("Phone", "branchPhone", {
-                        placeholder: "Branch phone",
-                      })}
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-2">
+                      <Building2 size={14} className="text-gray-500" />
+                      <span className="text-sm font-semibold text-gray-700">
+                        Branches
+                      </span>
+                      <span className="text-xs text-gray-400">
+                        ({branches.length})
+                      </span>
                     </div>
+                    <button
+                      type="button"
+                      onClick={addBranch}
+                      className="flex items-center gap-1 text-xs font-medium text-blue-600 hover:text-blue-700 hover:bg-blue-50 px-2 py-1 rounded-lg transition"
+                    >
+                      <Plus size={13} />
+                      Add Branch
+                    </button>
+                  </div>
+
+                  <div className="space-y-3">
+                    {branches.map((branch, index) => (
+                      <div
+                        key={index}
+                        className={`rounded-xl border p-4 transition ${
+                          index === 0
+                            ? "border-blue-200 bg-blue-50/40"
+                            : "border-gray-200 bg-gray-50/40"
+                        }`}
+                      >
+                        {/* Branch header */}
+                        <div className="flex items-center justify-between mb-3">
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs font-semibold text-gray-600">
+                              {index === 0
+                                ? "Main Branch"
+                                : `Branch ${index + 1}`}
+                            </span>
+                            {index === 0 && (
+                              <span className="text-[10px] bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full font-medium">
+                                Primary
+                              </span>
+                            )}
+                          </div>
+                          {index !== 0 && (
+                            <button
+                              type="button"
+                              onClick={() => removeBranch(index)}
+                              className="text-gray-400 hover:text-red-500 transition p-1 rounded"
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          )}
+                        </div>
+
+                        {/* Branch name */}
+                        <div className="mb-3">
+                          <input
+                            type="text"
+                            value={branch.name}
+                            onChange={(e) =>
+                              updateBranch(index, "name", e.target.value)
+                            }
+                            placeholder={
+                              index === 0
+                                ? "e.g. Bogadi Branch"
+                                : "e.g. Vijayanagar Branch"
+                            }
+                            className={`w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 transition ${
+                              branchErrors[index]?.name
+                                ? "border-red-400 bg-red-50"
+                                : "border-gray-300 bg-white"
+                            }`}
+                          />
+                          {branchErrors[index]?.name && (
+                            <p className="text-red-500 text-xs mt-1">
+                              {branchErrors[index].name}
+                            </p>
+                          )}
+                        </div>
+
+                        {/* Address & Phone */}
+                        <div className="grid grid-cols-2 gap-3">
+                          <input
+                            type="text"
+                            value={branch.address}
+                            onChange={(e) =>
+                              updateBranch(index, "address", e.target.value)
+                            }
+                            placeholder="Address"
+                            className="w-full border border-gray-300 bg-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 transition"
+                          />
+                          <input
+                            type="text"
+                            value={branch.phone}
+                            onChange={(e) =>
+                              updateBranch(index, "phone", e.target.value)
+                            }
+                            placeholder="Phone"
+                            className="w-full border border-gray-300 bg-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 transition"
+                          />
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 </div>
               </div>
@@ -331,7 +469,7 @@ export default function OnboardingPage() {
               </div>
 
               {/* Setup summary */}
-              <div className="mt-5 bg-blue-50 border border-blue-100 rounded-xl p-4 text-sm space-y-1">
+              <div className="mt-5 bg-blue-50 border border-blue-100 rounded-xl p-4 text-sm space-y-2">
                 <p className="font-semibold text-blue-800 text-xs uppercase tracking-wide mb-2">
                   Setting up
                 </p>
@@ -344,13 +482,27 @@ export default function OnboardingPage() {
                     </span>
                   </span>
                 </div>
-                <div className="flex items-center gap-2 text-blue-700">
-                  <User size={13} />
-                  <span>
-                    {form.branchName}
-                    {form.city ? `, ${form.city}` : ""}
-                  </span>
-                </div>
+                {branches.map((b, i) => (
+                  <div
+                    key={i}
+                    className="flex items-center gap-2 text-blue-700"
+                  >
+                    <User size={13} className={i === 0 ? "" : "opacity-50"} />
+                    <span>
+                      {b.name || (
+                        <span className="text-blue-300 italic">
+                          Unnamed branch
+                        </span>
+                      )}
+                      {i === 0 && (
+                        <span className="text-blue-400 text-xs ml-1">
+                          (main)
+                        </span>
+                      )}
+                      {form.city && i === 0 ? `, ${form.city}` : ""}
+                    </span>
+                  </div>
+                ))}
               </div>
 
               <div className="flex gap-3 mt-6">

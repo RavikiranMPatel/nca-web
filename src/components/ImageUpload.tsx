@@ -12,7 +12,9 @@ type ImageUploadProps = {
     | "team"
     | "testimonial"
     | "gallery"
-    | "news";
+    | "news"
+    | "qr";
+  uploadUrl?: string;
   onUploadSuccess: (url: string) => void;
   label?: string;
   helpText?: string;
@@ -23,6 +25,7 @@ function ImageUpload({
   currentUrl,
   uploadType,
   onUploadSuccess,
+  uploadUrl,
   label = "Upload Image",
   helpText,
   maxSizeMB = 5,
@@ -132,12 +135,11 @@ function ImageUpload({
       const formData = new FormData();
       formData.append("file", file);
 
-      const response = await api.post(
-        `/admin/images/upload/${uploadType}`,
-        formData,
-      );
+      const url = uploadUrl ?? `/admin/images/upload/${uploadType}`;
+      const response = await api.post(url, formData);
 
-      const imageUrl = response.data.url;
+      const imageUrl =
+        typeof response.data === "string" ? response.data : response.data.url;
       setPreviewUrl(imageUrl);
       onUploadSuccess(imageUrl);
     } catch (err: any) {

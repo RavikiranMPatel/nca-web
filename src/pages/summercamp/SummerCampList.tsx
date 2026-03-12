@@ -2,6 +2,8 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { useAuth } from "../../auth/useAuth";
+import { getAdminBranches } from "../../api/branch.api";
+import type { Branch } from "../../api/branch.api";
 import {
   Plus,
   Search,
@@ -10,12 +12,14 @@ import {
   ArrowLeft,
   CheckCircle,
   XCircle,
+  GitBranch,
 } from "lucide-react";
 import { toast } from "react-hot-toast";
 import {
   summerCampService,
   formatCampDateRange,
 } from "../../api/summerCampService";
+
 import type { SummerCamp } from "../../types/summercamp";
 
 function SummerCampList() {
@@ -27,12 +31,20 @@ function SummerCampList() {
     "all" | "active" | "inactive"
   >("all");
 
+  // Branch filter (Super Admin only)
+  const [branches, setBranches] = useState<Branch[]>([]);
+  const [selectedBranchId, setSelectedBranchId] = useState<string>("all");
+  const [loadingBranches, setLoadingBranches] = useState(false);
+
   const { userRole } = useAuth();
   const isSuperAdmin = userRole === "ROLE_SUPER_ADMIN";
 
   useEffect(() => {
     loadCamps();
-  }, []);
+    if (isSuperAdmin) {
+      loadBranches();
+    }
+  }, [isSuperAdmin]);
 
   const loadCamps = async () => {
     try {
@@ -44,6 +56,18 @@ function SummerCampList() {
       toast.error("Failed to load summer camps");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadBranches = async () => {
+    try {
+      setLoadingBranches(true);
+      const data = await getAdminBranches();
+      setBranches(data.filter((b) => b.active));
+    } catch (error) {
+      console.error("Failed to load branches:", error);
+    } finally {
+      setLoadingBranches(false);
     }
   };
 
@@ -71,18 +95,30 @@ function SummerCampList() {
     return colors[type] || "#6B7280";
   };
 
-  // Filter camps
+  // Filter camps — branch filter only applies for Super Admin
   const filteredCamps = camps.filter((camp) => {
     const matchesSearch =
       camp.name.toLowerCase().includes(search.toLowerCase()) ||
       camp.year.toString().includes(search);
+
     const matchesStatus =
       statusFilter === "all" ||
       (statusFilter === "active" && camp.isActive) ||
       (statusFilter === "inactive" && !camp.isActive);
 
-    return matchesSearch && matchesStatus;
+    const matchesBranch =
+      !isSuperAdmin ||
+      selectedBranchId === "all" ||
+      (camp as any).branchId === selectedBranchId;
+
+    return matchesSearch && matchesStatus && matchesBranch;
   });
+
+  // Stats computed from filtered camps
+  const hasActiveFilters =
+    search ||
+    statusFilter !== "all" ||
+    (isSuperAdmin && selectedBranchId !== "all");
 
   if (loading) {
     return (
@@ -154,7 +190,7 @@ function SummerCampList() {
           {/* Filters Row */}
           <div className="flex flex-wrap gap-3">
             {/* Status Filter */}
-            <div className="flex-1 min-w-[200px]">
+            <div className="flex-1 min-w-[180px]">
               <label className="text-xs font-medium text-slate-600 mb-1.5 block">
                 Status
               </label>
@@ -169,12 +205,42 @@ function SummerCampList() {
               </select>
             </div>
 
+            {/* Branch Filter — Super Admin only */}
+            {isSuperAdmin && (
+              <div className="flex-1 min-w-[180px]">
+                <label className="text-xs font-medium text-slate-600 mb-1.5 block flex items-center gap-1">
+                  <GitBranch size={12} />
+                  Branch
+                </label>
+                {loadingBranches ? (
+                  <div className="px-3 py-2 rounded-lg border border-slate-200 bg-slate-50 text-sm text-slate-400">
+                    Loading branches...
+                  </div>
+                ) : (
+                  <select
+                    value={selectedBranchId}
+                    onChange={(e) => setSelectedBranchId(e.target.value)}
+                    className="w-full px-3 py-2 rounded-lg border border-slate-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all text-sm"
+                  >
+                    <option value="all">All Branches</option>
+                    {branches.map((branch) => (
+                      <option key={branch.id} value={branch.id}>
+                        {branch.name}
+                        {branch.isMainBranch ? " (Main)" : ""}
+                      </option>
+                    ))}
+                  </select>
+                )}
+              </div>
+            )}
+
             {/* Reset Filters */}
-            {(search || statusFilter !== "all") && (
+            {hasActiveFilters && (
               <button
                 onClick={() => {
                   setSearch("");
                   setStatusFilter("all");
+                  setSelectedBranchId("all");
                 }}
                 className="self-end px-4 py-2 text-sm text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-lg transition-all"
               >
@@ -182,6 +248,19 @@ function SummerCampList() {
               </button>
             )}
           </div>
+
+          {/* Active Branch Indicator — Super Admin */}
+          {isSuperAdmin && selectedBranchId !== "all" && (
+            <div className="flex items-center gap-2 px-3 py-2 bg-blue-50 border border-blue-200 rounded-lg text-sm text-blue-700">
+              <GitBranch size={14} />
+              <span>
+                Showing camps for:{" "}
+                <span className="font-semibold">
+                  {branches.find((b) => b.id === selectedBranchId)?.name}
+                </span>
+              </span>
+            </div>
+          )}
         </div>
 
         {/* SUMMARY STATS */}
@@ -195,7 +274,9 @@ function SummerCampList() {
             <p className="text-xs text-slate-600 uppercase tracking-wide mb-1">
               Total Camps
             </p>
-            <p className="text-3xl font-bold text-slate-900">{camps.length}</p>
+            <p className="text-3xl font-bold text-slate-900">
+              {filteredCamps.length}
+            </p>
           </motion.div>
 
           <motion.div
@@ -208,7 +289,7 @@ function SummerCampList() {
               Active Camps
             </p>
             <p className="text-3xl font-bold text-emerald-700">
-              {camps.filter((c) => c.isActive).length}
+              {filteredCamps.filter((c) => c.isActive).length}
             </p>
           </motion.div>
 
@@ -222,7 +303,7 @@ function SummerCampList() {
               Total Enrollments
             </p>
             <p className="text-3xl font-bold text-blue-700">
-              {camps.reduce((sum, c) => sum + c.currentEnrollments, 0)}
+              {filteredCamps.reduce((sum, c) => sum + c.currentEnrollments, 0)}
             </p>
           </motion.div>
 
@@ -236,7 +317,10 @@ function SummerCampList() {
               This Year
             </p>
             <p className="text-3xl font-bold text-purple-700">
-              {camps.filter((c) => c.year === new Date().getFullYear()).length}
+              {
+                filteredCamps.filter((c) => c.year === new Date().getFullYear())
+                  .length
+              }
             </p>
           </motion.div>
         </div>
@@ -251,11 +335,11 @@ function SummerCampList() {
               No camps found
             </h3>
             <p className="text-slate-500 text-sm mb-4">
-              {search || statusFilter !== "all"
+              {hasActiveFilters
                 ? "Try adjusting your search or filters"
                 : "Get started by creating your first camp"}
             </p>
-            {!search && statusFilter === "all" && (
+            {!hasActiveFilters && (
               <button
                 onClick={() => navigate("/admin/summer-camps/create")}
                 className="text-blue-600 font-medium hover:underline"
@@ -320,6 +404,18 @@ function SummerCampList() {
                         )}
                       </div>
                       <p className="text-sm text-slate-600">Year {camp.year}</p>
+
+                      {/* Branch label — Super Admin sees all branches */}
+                      {isSuperAdmin && (camp as any).branchId && (
+                        <div className="flex items-center gap-1 mt-1">
+                          <GitBranch size={11} className="text-slate-400" />
+                          <span className="text-xs text-slate-400">
+                            {branches.find(
+                              (b) => b.id === (camp as any).branchId,
+                            )?.name ?? "Unknown Branch"}
+                          </span>
+                        </div>
+                      )}
                     </div>
 
                     <div

@@ -1,10 +1,13 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, Save, Plus, Trash2, Clock } from "lucide-react";
+import { ArrowLeft, Save, Plus, Trash2, Clock, GitBranch } from "lucide-react";
 import { toast } from "react-hot-toast";
 import api from "../../api/axios";
 import { summerCampService } from "../../api/summerCampService";
 import { createCampBatch } from "../../api/summerCampBatchService";
+import { getAdminBranches } from "../../api/branch.api";
+import type { Branch } from "../../api/branch.api";
+
 import type {
   SummerCampCreateRequest,
   FeeRuleCreateRequest,
@@ -29,6 +32,11 @@ function SummerCampCreate() {
   const [campTypes, setCampTypes] = useState<string[]>([]);
   const [loadingTypes, setLoadingTypes] = useState(true);
 
+  // Branch selection
+  const [branches, setBranches] = useState<Branch[]>([]);
+  const [selectedBranchId, setSelectedBranchId] = useState<string>("");
+  const [loadingBranch, setLoadingBranch] = useState(true);
+
   const [formData, setFormData] = useState<SummerCampCreateRequest>({
     name: "",
     year: new Date().getFullYear(),
@@ -44,7 +52,24 @@ function SummerCampCreate() {
 
   useEffect(() => {
     loadCampTypes();
+    loadCurrentBranch();
   }, []);
+
+  const loadCurrentBranch = async () => {
+    try {
+      setLoadingBranch(true);
+      const data = await getAdminBranches();
+      setBranches(data);
+      // Auto-select first branch (covers single-branch admins)
+      if (data.length === 1) {
+        setSelectedBranchId(data[0].id);
+      }
+    } catch (error) {
+      console.error("Failed to load branch info:", error);
+    } finally {
+      setLoadingBranch(false);
+    }
+  };
 
   const loadCampTypes = async () => {
     try {
@@ -170,10 +195,19 @@ function SummerCampCreate() {
       return;
     }
 
+    if (branches.length > 1 && !selectedBranchId) {
+      toast.error("Please select a branch");
+      return;
+    }
+
     setLoading(true);
     try {
-      // 1. Create camp
-      const camp = await summerCampService.createCamp(formData);
+      // 1. Create camp — pass branchId if Super Admin chose one, else backend auto-sets via JWT
+      const campPayload =
+        branches.length > 1 && selectedBranchId
+          ? { ...formData, branchId: selectedBranchId }
+          : formData;
+      const camp = await summerCampService.createCamp(campPayload);
 
       // 2. Create fee rules
       if (feeRules.length > 0) {
@@ -232,6 +266,59 @@ function SummerCampCreate() {
         onSubmit={handleSubmit}
         className="max-w-4xl mx-auto px-4 py-6 space-y-6"
       >
+        {/* BRANCH — dropdown if multiple, info banner if single */}
+        {loadingBranch ? (
+          <div className="flex items-center gap-3 px-4 py-3 bg-blue-50 border border-blue-200 rounded-xl">
+            <GitBranch size={18} className="text-blue-600 flex-shrink-0" />
+            <span className="text-sm text-slate-500">
+              Loading branch info...
+            </span>
+          </div>
+        ) : branches.length > 1 ? (
+          <div className="flex items-start gap-3 px-4 py-3 bg-blue-50 border border-blue-200 rounded-xl">
+            <GitBranch size={18} className="text-blue-600 flex-shrink-0 mt-2" />
+            <div className="flex-1">
+              <label className="block text-sm font-medium text-blue-700 mb-1.5">
+                Select Branch <span className="text-red-500">*</span>
+              </label>
+              <select
+                value={selectedBranchId}
+                onChange={(e) => setSelectedBranchId(e.target.value)}
+                className="w-full px-3 py-2 rounded-lg border border-blue-300 bg-white text-slate-900 focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all text-sm"
+              >
+                <option value="">Choose a branch...</option>
+                {branches.map((b) => (
+                  <option key={b.id} value={b.id}>
+                    {b.name}
+                    {b.isMainBranch ? " (Main)" : ""}
+                  </option>
+                ))}
+              </select>
+              <p className="text-xs text-blue-600 mt-1">
+                This camp will be created under the selected branch
+              </p>
+            </div>
+          </div>
+        ) : branches.length === 1 ? (
+          <div className="flex items-center gap-3 px-4 py-3 bg-blue-50 border border-blue-200 rounded-xl">
+            <GitBranch size={18} className="text-blue-600 flex-shrink-0" />
+            <div className="text-sm">
+              <span className="text-blue-700 font-medium">Branch: </span>
+              <span className="text-blue-900 font-semibold">
+                {branches[0].name}
+              </span>
+              {branches[0].isMainBranch && (
+                <span className="ml-2 text-xs px-2 py-0.5 bg-blue-200 text-blue-800 rounded-full font-medium">
+                  Main
+                </span>
+              )}
+              <span className="text-blue-600 ml-2 text-xs">
+                · This camp will be created under your branch
+              </span>
+            </div>
+          </div>
+        ) : null}
+
         {/* BASIC INFO */}
         <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200 space-y-4">
           <h2 className="text-lg font-semibold text-slate-900">

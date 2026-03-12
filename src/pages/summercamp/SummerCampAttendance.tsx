@@ -10,16 +10,19 @@ import {
   XCircle,
   Users,
   Filter,
+  GitBranch,
 } from "lucide-react";
 import { toast } from "react-hot-toast";
 import { summerCampService } from "../../api/summerCampService";
 import { getCampBatches } from "../../api/summerCampBatchService";
+import { getAdminBranches } from "../../api/branch.api";
 import type {
   SummerCamp,
   SummerCampEnrollment,
   SummerCampAttendanceBulkRequest,
   BulkAttendanceItem,
 } from "../../types/summercamp";
+import type { Branch } from "../../api/branch.api";
 import type { Batch } from "../../types/batch.types";
 
 type AttendanceRow = {
@@ -38,7 +41,9 @@ function SummerCampAttendance() {
   const [batches, setBatches] = useState<Batch[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  // Add this near your state declarations
+
+  // Branch
+  const [campBranch, setCampBranch] = useState<Branch | null>(null);
 
   // Filters
   const [selectedDate, setSelectedDate] = useState(
@@ -70,17 +75,26 @@ function SummerCampAttendance() {
   const loadInitialData = async () => {
     try {
       setLoading(true);
-      const [campData, enrollmentsData, batchesData] = await Promise.all([
-        summerCampService.getCampById(campId!),
-        summerCampService.getEnrollments(campId!),
-        getCampBatches(campId!), // ✅ CHANGED: fetch batches by campId
-      ]);
+      const [campData, enrollmentsData, batchesData, branchesData] =
+        await Promise.all([
+          summerCampService.getCampById(campId!),
+          summerCampService.getEnrollments(campId!),
+          getCampBatches(campId!),
+          getAdminBranches(),
+        ]);
 
       setCamp(campData);
       setEnrollments(enrollmentsData.filter((e) => e.status === "ACTIVE"));
       setBatches(batchesData.filter((b) => b.active));
 
-      // Auto-select first batch if available
+      // Resolve branch
+      if ((campData as any).branchId) {
+        const matched = branchesData.find(
+          (b) => b.id === (campData as any).branchId,
+        );
+        setCampBranch(matched ?? null);
+      }
+
       if (batchesData.length > 0) {
         setSelectedBatch(batchesData[0].id);
       }
@@ -246,7 +260,18 @@ function SummerCampAttendance() {
                   <Calendar className="text-emerald-600" size={28} />
                   Attendance
                 </h1>
-                <p className="text-sm text-slate-600 mt-1">{camp?.name}</p>
+                <div className="flex items-center gap-2 mt-1 flex-wrap">
+                  <p className="text-sm text-slate-600">{camp?.name}</p>
+                  {campBranch && (
+                    <div className="flex items-center gap-1 px-2 py-0.5 bg-slate-100 rounded-full">
+                      <GitBranch size={11} className="text-slate-500" />
+                      <span className="text-xs text-slate-600 font-medium">
+                        {campBranch.name}
+                        {campBranch.isMainBranch && " · Main"}
+                      </span>
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
 
@@ -419,7 +444,7 @@ function SummerCampAttendance() {
             </p>
           </div>
         ) : (
-          <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+          <div className="hidden md:block bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full">
                 <thead className="bg-slate-50 border-b border-slate-200">

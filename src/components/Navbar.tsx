@@ -1,7 +1,16 @@
 import { NavLink, useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "../auth/useAuth";
-import { LayoutDashboard, Menu, X } from "lucide-react";
-import { useState, useEffect } from "react";
+import {
+  LayoutDashboard,
+  Menu,
+  X,
+  User,
+  LogOut,
+  LogIn,
+  UserPlus,
+  ChevronDown,
+} from "lucide-react";
+import { useState, useEffect, useRef } from "react";
 import LoginPromptModal from "../components/LoginPromptModal";
 import { getImageUrl } from "../utils/imageUrl";
 import publicApi from "../api/publicApi";
@@ -9,44 +18,97 @@ import publicApi from "../api/publicApi";
 const ADMIN_ROLES = ["ROLE_ADMIN", "ROLE_SUPER_ADMIN"];
 
 function Navbar() {
-  const { logout, isAuthenticated } = useAuth();
+  const { logout, isAuthenticated, userName, userRole, branchName } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
 
-  const userRole = localStorage.getItem("userRole");
   const isAdmin = !!userRole && ADMIN_ROLES.includes(userRole);
 
-  // ✅ DECLARE ALL STATE FIRST
   const [loginPromptMessage, setLoginPromptMessage] = useState<string | null>(
     null,
   );
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const [moreMenuOpen, setMoreMenuOpen] = useState(false);
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
   const [academyName, setAcademyName] = useState("NCA");
   const [starPerformerEnabled, setStarPerformerEnabled] = useState(false);
 
-  // ✅ THEN USE THEM IN EFFECTS
+  // Dynamic sections from settings — these are the home scroll links
+  const [enabledSections, setEnabledSections] = useState<
+    { id: string; label: string }[]
+  >([]);
+
+  const userMenuRef = useRef<HTMLDivElement>(null);
+  const moreMenuRef = useRef<HTMLDivElement>(null);
+
   useEffect(() => {
     publicApi
       .get("/settings/public")
       .then((res) => {
-        setLogoUrl(res.data.LOGO_URL || null);
-        setAcademyName(res.data.ACADEMY_NAME || "NCA");
-        setStarPerformerEnabled(
-          res.data.SECTION_STAR_PERFORMER_ENABLED === "true",
-        );
+        const d = res.data;
+        setLogoUrl(d.LOGO_URL || null);
+        setAcademyName(d.ACADEMY_NAME || "NCA");
+        setStarPerformerEnabled(d.SECTION_STAR_PERFORMER_ENABLED === "true");
+
+        // Build dynamic section list based on what's enabled in settings
+        const sections: { id: string; label: string }[] = [];
+        if (d.SECTION_FACILITIES_ENABLED !== "false")
+          sections.push({ id: "facilities", label: "Facilities" });
+        if (d.SECTION_TESTIMONIALS_ENABLED !== "false")
+          sections.push({ id: "testimonials", label: "Testimonials" });
+        if (d.SECTION_NEWS_ENABLED !== "false")
+          sections.push({ id: "news", label: "News" });
+        if (d.SECTION_GALLERY_ENABLED !== "false")
+          sections.push({ id: "gallery", label: "Gallery" });
+        sections.push({ id: "contact", label: "Contact" }); // always show contact
+        setEnabledSections(sections);
       })
       .catch(() => {});
   }, []);
+
+  // Close all menus on route change
+  useEffect(() => {
+    setMobileOpen(false);
+    setUserMenuOpen(false);
+    setMoreMenuOpen(false);
+  }, [location.pathname]);
+
+  // Close dropdowns when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (
+        userMenuRef.current &&
+        !userMenuRef.current.contains(e.target as Node)
+      ) {
+        setUserMenuOpen(false);
+      }
+      if (
+        moreMenuRef.current &&
+        !moreMenuRef.current.contains(e.target as Node)
+      ) {
+        setMoreMenuOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  // Prevent body scroll when mobile menu open
+  useEffect(() => {
+    document.body.style.overflow = mobileOpen ? "hidden" : "";
+    return () => {
+      document.body.style.overflow = "";
+    };
+  }, [mobileOpen]);
 
   const handleLogout = () => {
     logout();
     navigate("/home");
     setMobileOpen(false);
+    setUserMenuOpen(false);
   };
 
-  // ✅ CHANGED: This function now only guards "My Bookings"
-  // Book Slot is now public and doesn't need a guard
   const guardedNavigate = (path: string, message: string) => {
     if (!isAuthenticated) {
       setLoginPromptMessage(message);
@@ -57,6 +119,8 @@ function Navbar() {
   };
 
   const scrollToSection = (sectionId: string) => {
+    setMoreMenuOpen(false);
+    setMobileOpen(false);
     if (location.pathname !== "/home") {
       navigate("/home");
       setTimeout(() => {
@@ -69,7 +133,6 @@ function Navbar() {
         .getElementById(sectionId)
         ?.scrollIntoView({ behavior: "smooth" });
     }
-    setMobileOpen(false);
   };
 
   const linkClass = ({ isActive }: { isActive: boolean }) =>
@@ -79,70 +142,74 @@ function Navbar() {
         : "text-gray-700 hover:text-blue-600 hover:bg-gray-50"
     }`;
 
+  const isHomePage = location.pathname === "/home";
+  const avatarLetter = userName ? userName.charAt(0).toUpperCase() : "?";
+
   return (
     <>
       <nav className="bg-white shadow-md fixed top-0 left-0 right-0 z-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6">
-          <div className="flex items-center justify-between h-16">
-            {/* LEFT - Logo */}
-            <div className="flex items-center gap-3">
-              <NavLink to="/home" className="flex items-center gap-2">
-                {logoUrl ? (
-                  <img
-                    src={getImageUrl(logoUrl) || ""}
-                    alt={academyName}
-                    className="h-10 object-contain"
-                  />
-                ) : (
-                  <div className="w-10 h-10 bg-blue-600 rounded-full flex items-center justify-center text-white font-bold text-sm">
-                    {academyName.substring(0, 3).toUpperCase()}
-                  </div>
-                )}
-                <span className="text-lg font-bold hidden sm:block">
-                  {academyName}
-                </span>
-              </NavLink>
-            </div>
+          <div className="flex items-center justify-between h-16 gap-4">
+            {/* LEFT — Logo + Full Name (no truncation) */}
+            <NavLink
+              to="/home"
+              className="flex items-center gap-2 flex-shrink-0"
+            >
+              {logoUrl ? (
+                <img
+                  src={getImageUrl(logoUrl) || ""}
+                  alt={academyName}
+                  className="h-10 object-contain flex-shrink-0"
+                />
+              ) : (
+                <div className="w-10 h-10 bg-blue-600 rounded-full flex items-center justify-center text-white font-bold text-sm flex-shrink-0">
+                  {academyName.substring(0, 3).toUpperCase()}
+                </div>
+              )}
+              {/* Show full name — no max-w truncation */}
+              <span className="text-base font-bold hidden sm:block whitespace-nowrap">
+                {academyName}
+              </span>
+            </NavLink>
 
-            {/* DESKTOP MENU */}
-            <div className="hidden md:flex items-center gap-1">
+            {/* DESKTOP NAV — right side, compact */}
+            <div className="hidden md:flex items-center gap-0.5 flex-shrink-0">
               <NavLink to="/home" className={linkClass}>
                 Home
               </NavLink>
 
-              {location.pathname === "/home" && (
-                <>
+              {/* "Explore" dropdown — contains all dynamic scroll sections */}
+              {enabledSections.length > 0 && (
+                <div className="relative" ref={moreMenuRef}>
                   <button
-                    onClick={() => scrollToSection("facilities")}
-                    className="px-3 py-2 text-sm text-gray-700 hover:text-blue-600 hover:bg-gray-50 rounded transition"
+                    onClick={() => setMoreMenuOpen((o) => !o)}
+                    className={`flex items-center gap-1 px-3 py-2 rounded text-sm font-medium transition ${
+                      moreMenuOpen
+                        ? "text-blue-600 bg-blue-50"
+                        : "text-gray-700 hover:text-blue-600 hover:bg-gray-50"
+                    }`}
                   >
-                    Facilities
+                    Explore
+                    <ChevronDown
+                      size={14}
+                      className={`transition-transform ${moreMenuOpen ? "rotate-180" : ""}`}
+                    />
                   </button>
-                  <button
-                    onClick={() => scrollToSection("testimonials")}
-                    className="px-3 py-2 text-sm text-gray-700 hover:text-blue-600 hover:bg-gray-50 rounded transition"
-                  >
-                    Testimonials
-                  </button>
-                  <button
-                    onClick={() => scrollToSection("news")}
-                    className="px-3 py-2 text-sm text-gray-700 hover:text-blue-600 hover:bg-gray-50 rounded transition"
-                  >
-                    News
-                  </button>
-                  <button
-                    onClick={() => scrollToSection("gallery")}
-                    className="px-3 py-2 text-sm text-gray-700 hover:text-blue-600 hover:bg-gray-50 rounded transition"
-                  >
-                    Gallery
-                  </button>
-                  <button
-                    onClick={() => scrollToSection("contact")}
-                    className="px-3 py-2 text-sm text-gray-700 hover:text-blue-600 hover:bg-gray-50 rounded transition"
-                  >
-                    Contact
-                  </button>
-                </>
+
+                  {moreMenuOpen && (
+                    <div className="absolute left-0 top-11 w-44 bg-white rounded-lg shadow-lg border border-gray-100 py-1 z-50">
+                      {enabledSections.map((section) => (
+                        <button
+                          key={section.id}
+                          onClick={() => scrollToSection(section.id)}
+                          className="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 hover:text-blue-600 transition"
+                        >
+                          {section.label}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
               )}
 
               {!isAdmin && starPerformerEnabled && (
@@ -153,12 +220,10 @@ function Navbar() {
 
               {!isAdmin && (
                 <>
-                  {/* ✅ CHANGED: Book Slot is now PUBLIC - direct navigation */}
                   <NavLink to="/book-slot" className={linkClass}>
                     Book Slot
                   </NavLink>
 
-                  {/* ✅ My Bookings still requires login */}
                   {isAuthenticated ? (
                     <NavLink to="/my-bookings" className={linkClass}>
                       My Bookings
@@ -189,30 +254,112 @@ function Navbar() {
                 </NavLink>
               )}
 
-              {isAuthenticated && (
+              {/* USER AVATAR DROPDOWN */}
+              <div className="relative ml-1" ref={userMenuRef}>
                 <button
-                  onClick={handleLogout}
-                  className="ml-2 text-sm bg-red-500 text-white px-4 py-2 rounded hover:bg-red-600 transition"
+                  onClick={() => setUserMenuOpen((o) => !o)}
+                  className={`w-9 h-9 rounded-full flex items-center justify-center text-sm font-semibold transition border-2 ${
+                    isAuthenticated
+                      ? "bg-blue-600 text-white border-blue-600 hover:bg-blue-700"
+                      : "bg-gray-100 text-gray-500 border-gray-200 hover:bg-gray-200"
+                  }`}
+                  title={isAuthenticated ? userName || "Account" : "Login"}
                 >
-                  Logout
+                  {isAuthenticated ? avatarLetter : <User size={16} />}
                 </button>
-              )}
+
+                {userMenuOpen && (
+                  <div className="absolute right-0 top-11 w-48 bg-white rounded-lg shadow-lg border border-gray-100 py-1 z-50">
+                    {isAuthenticated ? (
+                      <>
+                        {userName && (
+                          <div className="px-4 py-2.5 border-b border-gray-100">
+                            <p className="text-xs text-gray-400">
+                              Signed in as
+                            </p>
+                            <p className="text-sm font-semibold text-gray-800 truncate">
+                              {userName}
+                            </p>
+                          </div>
+                        )}
+                        {isAdmin && branchName && (
+                          <div className="px-4 py-2 border-b border-gray-100">
+                            <p className="text-xs text-gray-400">Branch</p>
+                            <p className="text-sm font-semibold text-gray-800 truncate">
+                              {branchName}
+                            </p>
+                          </div>
+                        )}
+                        <button
+                          onClick={handleLogout}
+                          className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 transition"
+                        >
+                          <LogOut size={15} />
+                          Logout
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        <button
+                          onClick={() => {
+                            navigate("/login");
+                            setUserMenuOpen(false);
+                          }}
+                          className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition"
+                        >
+                          <LogIn size={15} />
+                          Login
+                        </button>
+                        <button
+                          onClick={() => {
+                            navigate("/signup");
+                            setUserMenuOpen(false);
+                          }}
+                          className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition"
+                        >
+                          <UserPlus size={15} />
+                          Sign Up
+                        </button>
+                      </>
+                    )}
+                  </div>
+                )}
+              </div>
             </div>
 
-            {/* MOBILE TOGGLE */}
+            {/* MOBILE — Hamburger */}
             <button
               onClick={() => setMobileOpen((o) => !o)}
-              className="md:hidden p-2 rounded hover:bg-gray-100 transition"
+              className="md:hidden p-2 rounded hover:bg-gray-100 transition flex-shrink-0"
+              aria-label="Toggle menu"
             >
-              {mobileOpen ? <X size={24} /> : <Menu size={24} />}
+              {mobileOpen ? <X size={22} /> : <Menu size={22} />}
             </button>
           </div>
         </div>
+      </nav>
 
-        {/* MOBILE MENU */}
-        {mobileOpen && (
-          <div className="md:hidden border-t bg-white">
+      {/* MOBILE MENU */}
+      {mobileOpen && (
+        <>
+          <div
+            className="fixed inset-0 bg-black/30 z-40 md:hidden"
+            onClick={() => setMobileOpen(false)}
+          />
+          <div className="fixed top-16 left-0 right-0 z-50 md:hidden bg-white border-t shadow-lg max-h-[calc(100vh-64px)] overflow-y-auto">
             <div className="px-4 py-3 space-y-1">
+              {/* User info strip */}
+              {isAuthenticated && userName && (
+                <div className="flex items-center gap-3 px-3 py-2 mb-1 bg-blue-50 rounded-lg">
+                  <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center text-white text-sm font-bold flex-shrink-0">
+                    {avatarLetter}
+                  </div>
+                  <span className="text-sm font-medium text-gray-800 truncate">
+                    {userName}
+                  </span>
+                </div>
+              )}
+
               <NavLink
                 to="/home"
                 className={linkClass}
@@ -221,40 +368,16 @@ function Navbar() {
                 Home
               </NavLink>
 
-              {location.pathname === "/home" && (
-                <>
-                  <button
-                    onClick={() => scrollToSection("facilities")}
-                    className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:text-blue-600 hover:bg-gray-50 rounded"
-                  >
-                    Facilities
-                  </button>
-                  <button
-                    onClick={() => scrollToSection("testimonials")}
-                    className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:text-blue-600 hover:bg-gray-50 rounded"
-                  >
-                    Testimonials
-                  </button>
-                  <button
-                    onClick={() => scrollToSection("news")}
-                    className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:text-blue-600 hover:bg-gray-50 rounded"
-                  >
-                    News
-                  </button>
-                  <button
-                    onClick={() => scrollToSection("gallery")}
-                    className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:text-blue-600 hover:bg-gray-50 rounded"
-                  >
-                    Gallery
-                  </button>
-                  <button
-                    onClick={() => scrollToSection("contact")}
-                    className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:text-blue-600 hover:bg-gray-50 rounded"
-                  >
-                    Contact
-                  </button>
-                </>
-              )}
+              {/* Dynamic scroll sections — all shown individually on mobile */}
+              {enabledSections.map((section) => (
+                <button
+                  key={section.id}
+                  onClick={() => scrollToSection(section.id)}
+                  className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:text-blue-600 hover:bg-gray-50 rounded transition"
+                >
+                  {section.label}
+                </button>
+              ))}
 
               {!isAdmin && starPerformerEnabled && (
                 <NavLink
@@ -268,7 +391,6 @@ function Navbar() {
 
               {!isAdmin && (
                 <>
-                  {/* ✅ CHANGED: Book Slot is now PUBLIC - direct navigation */}
                   <NavLink
                     to="/book-slot"
                     className={linkClass}
@@ -277,7 +399,6 @@ function Navbar() {
                     Book Slot
                   </NavLink>
 
-                  {/* ✅ My Bookings still requires login */}
                   {isAuthenticated ? (
                     <NavLink
                       to="/my-bookings"
@@ -305,25 +426,48 @@ function Navbar() {
               {isAdmin && (
                 <NavLink
                   to="/admin"
-                  className="block px-3 py-2 text-sm text-red-600 hover:bg-red-50 rounded"
+                  className="flex items-center gap-2 px-3 py-2 text-sm text-red-600 hover:bg-red-50 rounded"
                   onClick={() => setMobileOpen(false)}
                 >
+                  <LayoutDashboard size={16} />
                   Admin Dashboard
                 </NavLink>
               )}
 
-              {isAuthenticated && (
+              <div className="h-px bg-gray-100 my-2" />
+
+              {isAuthenticated ? (
                 <button
                   onClick={handleLogout}
-                  className="w-full bg-red-500 text-white py-2 rounded mt-2 hover:bg-red-600 transition"
+                  className="w-full flex items-center justify-center gap-2 bg-red-500 text-white py-2.5 rounded hover:bg-red-600 transition text-sm font-medium"
                 >
+                  <LogOut size={15} />
                   Logout
                 </button>
+              ) : (
+                <div className="space-y-2">
+                  <NavLink
+                    to="/login"
+                    onClick={() => setMobileOpen(false)}
+                    className="flex items-center justify-center gap-2 w-full bg-blue-600 text-white py-2.5 rounded hover:bg-blue-700 transition text-sm font-medium"
+                  >
+                    <LogIn size={15} />
+                    Login
+                  </NavLink>
+                  <NavLink
+                    to="/signup"
+                    onClick={() => setMobileOpen(false)}
+                    className="flex items-center justify-center gap-2 w-full border border-blue-600 text-blue-600 py-2.5 rounded hover:bg-blue-50 transition text-sm font-medium"
+                  >
+                    <UserPlus size={15} />
+                    Sign Up
+                  </NavLink>
+                </div>
               )}
             </div>
           </div>
-        )}
-      </nav>
+        </>
+      )}
 
       {/* LOGIN PROMPT */}
       <LoginPromptModal

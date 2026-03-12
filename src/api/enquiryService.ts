@@ -1,11 +1,3 @@
-/**
- * Enquiry Service - Centralized API calls for enquiry management
- *
- * Usage:
- * import { enquiryService } from '../api/enquiryService';
- * const enquiries = await enquiryService.getAllEnquiries();
- */
-
 import api from "./axios";
 
 // ==================== TYPES ====================
@@ -36,12 +28,20 @@ export type FollowUpMethod =
   | "IN_PERSON"
   | "BOTH";
 
+export interface Branch {
+  id: string;
+  name: string;
+  city?: string;
+}
+
 export interface Batch {
   id: string;
   name: string;
   startTime: string;
   endTime: string;
   color: string;
+  branchId?: string; // UUID of branch if batch is branch-specific
+  branchName?: string; // Display name of branch
 }
 
 export interface BatchOptionGroup {
@@ -108,6 +108,7 @@ export interface EnquiryFormData {
   parentEmail?: string;
   address?: string;
   preferredBatchIds: string[];
+  branchId?: string; // Optional: branch filter for batch selection
   enquiryDate: string;
   enquirySource: EnquirySource;
   notes?: string;
@@ -255,9 +256,60 @@ export const enquiryService = {
     return response.data;
   },
 
+  /**
+   * Get batch options grouped by type (REGULAR, CAMP types, etc.)
+   * All batches grouped by module type
+   */
   getBatchOptions: async (): Promise<BatchOptionGroup[]> => {
     const response = await api.get("/admin/enquiries/batch-options");
     return response.data;
+  },
+
+  /**
+   * Get all active branches for branch selector
+   * GET /api/admin/enquiries/branches
+   */
+  getAllBranches: async (): Promise<Branch[]> => {
+    try {
+      const response = await api.get("/admin/enquiries/branches");
+      return response.data;
+    } catch (error) {
+      console.error("Failed to fetch branches:", error);
+      return []; // Return empty array on error for graceful degradation
+    }
+  },
+
+  /**
+   * Get batches filtered by branch
+   * Filters the batch options to only show batches for the selected branch
+   * Batches with null branchId are shown to all branches
+   *
+   * @param branchId UUID of the branch to filter by, or null for all branches
+   */
+  getBatchesByBranch: async (
+    branchId: string | null,
+  ): Promise<BatchOptionGroup[]> => {
+    try {
+      const allBatches = await enquiryService.getBatchOptions();
+
+      if (!branchId) {
+        // Return all batches when no branch is selected
+        return allBatches;
+      }
+
+      // Filter each group's batches by branchId
+      return allBatches
+        .map((group) => ({
+          ...group,
+          batches: group.batches.filter(
+            (batch) => batch.branchId === branchId || !batch.branchId, // Include branch-specific or global batches
+          ),
+        }))
+        .filter((group) => group.batches.length > 0); // Remove groups with no batches
+    } catch (error) {
+      console.error("Failed to filter batches by branch:", error);
+      return [];
+    }
   },
 };
 
@@ -306,6 +358,8 @@ export function getSourceText(source: EnquirySource): string {
     PHONE_CALL: "Phone Call",
     WEBSITE: "Website",
     REFERRAL: "Referral",
+    INSTAGRAM: "Instagram",
+    FACEBOOK: "Facebook",
     OTHER: "Other",
   };
   return texts[source] || source;
@@ -331,6 +385,26 @@ export function getMethodText(method: FollowUpMethod): string {
 export function isFollowUpOverdue(nextFollowUpDate?: string): boolean {
   if (!nextFollowUpDate) return false;
   return new Date(nextFollowUpDate) < new Date();
+}
+
+/**
+ * Get branch display text with city if available
+ */
+export function getBranchDisplayText(branch: Branch): string {
+  if (branch.city) {
+    return `${branch.name} (${branch.city})`;
+  }
+  return branch.name;
+}
+
+/**
+ * Format batch display with branch info
+ */
+export function getBatchDisplayText(batch: Batch): string {
+  if (batch.branchName) {
+    return `${batch.name} - ${batch.branchName}`;
+  }
+  return batch.name;
 }
 
 // Export as default

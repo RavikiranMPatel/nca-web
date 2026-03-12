@@ -2,10 +2,6 @@ import axios from "axios";
 
 const axiosInstance = axios.create({
   baseURL: "http://localhost:8080",
-  // ❌ REMOVE THIS - it breaks multipart uploads:
-  // headers: {
-  //   "Content-Type": "application/json",
-  // },
 });
 
 // Add request interceptor to include JWT token

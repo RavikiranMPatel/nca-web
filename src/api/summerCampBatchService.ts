@@ -75,9 +75,12 @@ export async function deleteCampBatch(
  * Get active regular batches (campId IS NULL)
  * Used in: SummerCampConversion when assigning a converted student to a regular batch
  */
-export async function getRegularBatches(): Promise<Batch[]> {
+export async function getRegularBatches(branchId?: string): Promise<Batch[]> {
   const response = await api.get("/admin/batches/active", {
-    params: { moduleType: "REGULAR" },
+    params: {
+      moduleType: "REGULAR",
+      ...(branchId ? { branchId } : {}),
+    },
   });
   return response.data;
 }

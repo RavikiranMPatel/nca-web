@@ -42,8 +42,13 @@ export default function ContactForm({ primaryColor, settings }: Props) {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
-    if (!form.name.trim() || !form.email.trim() || !form.message.trim()) {
-      setError("Please fill in Name, Email, and Message.");
+    if (
+      !form.name.trim() ||
+      !form.email.trim() ||
+      !form.message.trim() ||
+      !form.phone.trim()
+    ) {
+      setError("Please fill in Name, Phone, Email, and Message.");
       return;
     }
     setSubmitting(true);
@@ -210,6 +215,7 @@ export default function ContactForm({ primaryColor, settings }: Props) {
                   <Field
                     label="Phone"
                     type="tel"
+                    required
                     optional
                     placeholder="+91 98765 43210"
                     value={form.phone}

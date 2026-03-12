@@ -9,6 +9,7 @@ import {
   TrendingUp,
   ClipboardList,
   UserPlus,
+  GitBranch,
 } from "lucide-react";
 import { toast } from "react-hot-toast";
 import {
@@ -16,6 +17,9 @@ import {
   formatCampDateRange,
   calculateCampDuration,
 } from "../../api/summerCampService";
+import { getAdminBranches } from "../../api/branch.api";
+import type { Branch } from "../../api/branch.api";
+
 import type {
   SummerCamp,
   SummerCampFeeRule,
@@ -30,6 +34,9 @@ function SummerCampDetails() {
   const [stats, setStats] = useState<SummerCampStats | null>(null);
   const [loading, setLoading] = useState(true);
 
+  // Branch info
+  const [campBranch, setCampBranch] = useState<Branch | null>(null);
+
   useEffect(() => {
     if (campId) {
       loadCampData();
@@ -40,22 +47,29 @@ function SummerCampDetails() {
     try {
       setLoading(true);
 
-      // Load camp and fee rules (required)
-      const [campData, feeRulesData] = await Promise.all([
+      const [campData, feeRulesData, branchesData] = await Promise.all([
         summerCampService.getCampById(campId!),
         summerCampService.getFeeRules(campId!),
+        getAdminBranches(),
       ]);
 
       setCamp(campData);
       setFeeRules(feeRulesData);
 
-      // Load stats (optional - don't fail if endpoint doesn't exist)
+      // Find branch matching the camp's branchId
+      if ((campData as any).branchId) {
+        const matched = branchesData.find(
+          (b) => b.id === (campData as any).branchId,
+        );
+        setCampBranch(matched ?? null);
+      }
+
+      // Load stats (optional)
       try {
         const statsData = await summerCampService.getCampStats(campId!);
         setStats(statsData);
       } catch (statsError) {
         console.warn("Stats endpoint not available:", statsError);
-        // Stats are optional, so we don't show error to user
       }
     } catch (error) {
       console.error("Error loading camp details:", error);
@@ -90,10 +104,8 @@ function SummerCampDetails() {
     }
   };
 
-  // Helper functions
-  const formatBatchCount = (count: number) => {
-    return `${count} ${count === 1 ? "Session" : "Sessions"} per day`;
-  };
+  const formatBatchCount = (count: number) =>
+    `${count} ${count === 1 ? "Session" : "Sessions"} per day`;
 
   const formatDisplayName = (type: string): string => {
     if (!type) return "Summer";
@@ -126,9 +138,7 @@ function SummerCampDetails() {
     );
   }
 
-  if (!camp) {
-    return null;
-  }
+  if (!camp) return null;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-50 pb-20">
@@ -151,7 +161,6 @@ function SummerCampDetails() {
                 <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-2 flex-wrap">
                   {camp.name}
 
-                  {/* Camp Type Badge */}
                   {camp.campType && (
                     <span
                       className="text-sm px-3 py-1 rounded-full font-medium"
@@ -171,10 +180,24 @@ function SummerCampDetails() {
                     </span>
                   )}
                 </h1>
-                <p className="text-sm text-slate-600 mt-1">
-                  Year {camp.year} •{" "}
-                  {formatCampDateRange(camp.startDate, camp.endDate)}
-                </p>
+
+                <div className="flex items-center gap-3 mt-1 flex-wrap">
+                  <p className="text-sm text-slate-600">
+                    Year {camp.year} •{" "}
+                    {formatCampDateRange(camp.startDate, camp.endDate)}
+                  </p>
+
+                  {/* Branch pill */}
+                  {campBranch && (
+                    <div className="flex items-center gap-1 px-2 py-0.5 bg-slate-100 rounded-full">
+                      <GitBranch size={11} className="text-slate-500" />
+                      <span className="text-xs text-slate-600 font-medium">
+                        {campBranch.name}
+                        {campBranch.isMainBranch && " · Main"}
+                      </span>
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
 
@@ -333,6 +356,20 @@ function SummerCampDetails() {
           </h2>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <p className="text-xs text-slate-600 uppercase tracking-wide mb-1">
+                Branch
+              </p>
+              <div className="flex items-center gap-2">
+                <GitBranch size={14} className="text-slate-400" />
+                <p className="text-slate-900 font-medium">
+                  {campBranch
+                    ? `${campBranch.name}${campBranch.isMainBranch ? " (Main)" : ""}`
+                    : "—"}
+                </p>
+              </div>
+            </div>
+
             <div>
               <p className="text-xs text-slate-600 uppercase tracking-wide mb-1">
                 Duration

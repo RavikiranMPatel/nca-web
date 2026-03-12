@@ -1,9 +1,3 @@
-// ==========================================
-// SUMMER CAMP TYPES
-// ==========================================
-
-import type { Batch } from "./batch.types";
-
 export type SummerCamp = {
   id: string; // UUID (internal)
   publicId: string; // Public ID (CAMP_1, CAMP_2, etc.) - Use this for URLs
@@ -19,6 +13,7 @@ export type SummerCamp = {
   createdAt: string;
   updatedAt: string;
   campType?: string;
+  branchId?: string;
 };
 
 export type SummerCampCreateRequest = {
@@ -155,7 +150,7 @@ export type SummerCampAttendanceBulkRequest = {
 
 // Conversion
 export type ConversionRequest = {
-  batchIds: string[]; // Batches to assign when converting to regular player
+  regularBatchIds: string[]; // Batches to assign when converting to regular player
   joiningDate: string; // YYYY-MM-DD
   notes?: string;
 };

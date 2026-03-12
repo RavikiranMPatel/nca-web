@@ -14,10 +14,13 @@ import {
   Mail,
   X,
   Info,
+  Building2,
 } from "lucide-react";
 import { getImageUrl } from "../../utils/imageUrl";
 import { toast } from "react-hot-toast";
 import api from "../../api/axios";
+import { useAuth } from "../../auth/useAuth";
+import { getAdminBranches, type Branch } from "../../api/branch.api";
 
 type Player = {
   id: string;
@@ -31,6 +34,7 @@ type Player = {
   dob?: string;
   active: boolean;
   photoUrl?: string;
+  branchId?: string; // ✅ NEW
 };
 
 const ITEMS_PER_PAGE = 10;
@@ -232,6 +236,13 @@ function ShareModal({
 
 function PlayersListPage() {
   const navigate = useNavigate();
+
+  // ✅ NEW — role & branch data
+  const { userRole } = useAuth();
+  const isSuperAdmin = userRole === "ROLE_SUPER_ADMIN";
+  const [branches, setBranches] = useState<Branch[]>([]);
+  const [branchFilter, setBranchFilter] = useState<string>("all");
+
   const [players, setPlayers] = useState<Player[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -252,7 +263,13 @@ function PlayersListPage() {
 
   useEffect(() => {
     loadPlayers();
-  }, []);
+    // ✅ NEW — load branches for super admin filter
+    if (isSuperAdmin) {
+      getAdminBranches()
+        .then(setBranches)
+        .catch(() => setBranches([]));
+    }
+  }, [isSuperAdmin]);
 
   const loadPlayers = async () => {
     try {
@@ -264,6 +281,10 @@ function PlayersListPage() {
       setLoading(false);
     }
   };
+
+  // ✅ NEW — helper to resolve branch name from id
+  const getBranchName = (branchId?: string) =>
+    branches.find((b) => b.id === branchId)?.name ?? "—";
 
   const professions = Array.from(new Set(players.map((p) => p.profession)));
 
@@ -280,9 +301,16 @@ function PlayersListPage() {
       professionFilter === "all" || p.profession === professionFilter;
     const matchesAgeGroup =
       ageGroupFilter === "all" || isEligibleForGroup(p.dob, ageGroupFilter);
+    // ✅ NEW — branch filter only applies to super admin
+    const matchesBranch =
+      !isSuperAdmin || branchFilter === "all" || p.branchId === branchFilter;
 
     return (
-      matchesSearch && matchesStatus && matchesProfession && matchesAgeGroup
+      matchesSearch &&
+      matchesStatus &&
+      matchesProfession &&
+      matchesAgeGroup &&
+      matchesBranch
     );
   });
 
@@ -296,7 +324,7 @@ function PlayersListPage() {
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [search, statusFilter, professionFilter, ageGroupFilter]);
+  }, [search, statusFilter, professionFilter, ageGroupFilter, branchFilter]);
 
   const ageGroupCounts = AGE_GROUPS.map((g) => ({
     ...g,
@@ -306,6 +334,11 @@ function PlayersListPage() {
   // Build filter label for exports
   const getFilterLabel = (): string => {
     const parts: string[] = [];
+    // ✅ NEW
+    if (isSuperAdmin && branchFilter !== "all") {
+      const b = branches.find((b) => b.id === branchFilter);
+      if (b) parts.push(b.name);
+    }
     if (ageGroupFilter !== "all") {
       const g = AGE_GROUPS.find((g) => g.value === ageGroupFilter);
       if (g) parts.push(g.label);
@@ -490,6 +523,27 @@ function PlayersListPage() {
 
           {/* Filters Row */}
           <div className="flex flex-wrap gap-3">
+            {/* ✅ NEW — Branch Filter (super admin only) */}
+            {isSuperAdmin && branches.length > 0 && (
+              <div className="flex-1 min-w-[140px]">
+                <label className="text-xs font-medium text-slate-600 mb-1.5 block">
+                  Branch
+                </label>
+                <select
+                  value={branchFilter}
+                  onChange={(e) => setBranchFilter(e.target.value)}
+                  className="w-full px-3 py-2 rounded-lg border border-slate-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all text-sm"
+                >
+                  <option value="all">All Branches</option>
+                  {branches.map((b) => (
+                    <option key={b.id} value={b.id}>
+                      {b.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+
             {/* Status Filter */}
             <div className="flex-1 min-w-[140px]">
               <label className="text-xs font-medium text-slate-600 mb-1.5 block">
@@ -602,13 +656,15 @@ function PlayersListPage() {
             {(search ||
               statusFilter !== "all" ||
               professionFilter !== "all" ||
-              ageGroupFilter !== "all") && (
+              ageGroupFilter !== "all" ||
+              (isSuperAdmin && branchFilter !== "all")) && (
               <button
                 onClick={() => {
                   setSearch("");
                   setStatusFilter("all");
                   setProfessionFilter("all");
                   setAgeGroupFilter("all");
+                  setBranchFilter("all"); // ✅ NEW
                 }}
                 className="self-end px-4 py-2 text-sm text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-lg transition-all"
               >
@@ -682,6 +738,16 @@ function PlayersListPage() {
                   </div>
                 </div>
                 <div className="space-y-2 mb-4">
+                  {/* ✅ NEW — branch row for super admin */}
+                  {isSuperAdmin && p.branchId && (
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-slate-600">Branch:</span>
+                      <span className="font-medium text-slate-900 flex items-center gap-1">
+                        <Building2 size={12} className="text-slate-400" />
+                        {getBranchName(p.branchId)}
+                      </span>
+                    </div>
+                  )}
                   <div className="flex items-center justify-between text-sm">
                     <span className="text-slate-600">Type:</span>
                     <span className="font-medium text-slate-900">
@@ -731,6 +797,12 @@ function PlayersListPage() {
                   <th className="px-6 py-4 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">
                     Name
                   </th>
+                  {/* ✅ NEW — branch column for super admin */}
+                  {isSuperAdmin && (
+                    <th className="px-6 py-4 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">
+                      Branch
+                    </th>
+                  )}
                   <th className="px-6 py-4 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">
                     Age Group
                   </th>
@@ -793,6 +865,15 @@ function PlayersListPage() {
                           {p.displayName}
                         </span>
                       </td>
+                      {/* ✅ NEW — branch cell for super admin */}
+                      {isSuperAdmin && (
+                        <td className="px-6 py-4">
+                          <div className="flex items-center gap-1.5 text-sm text-slate-600">
+                            <Building2 size={13} className="text-slate-400" />
+                            {getBranchName(p.branchId)}
+                          </div>
+                        </td>
+                      )}
                       <td className="px-6 py-4">
                         {ageGroup && ageGroup !== "Senior" ? (
                           <span className="inline-flex px-2.5 py-1 rounded-md text-xs font-semibold bg-blue-50 text-blue-700 border border-blue-100">

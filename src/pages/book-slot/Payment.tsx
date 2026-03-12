@@ -22,227 +22,113 @@ function Payment() {
 
   const [booking, setBooking] = useState<BookingDetails | null>(null);
   const [timeLeft, setTimeLeft] = useState(0);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
   const [fetchError, setFetchError] = useState(false);
+  const [upiQrUrl, setUpiQrUrl] = useState("");
+  const [upiId, setUpiId] = useState("");
+  const [bookingPhone, setBookingPhone] = useState("");
 
-  // ============================================
-  // FETCH BOOKING DETAILS
-  // ============================================
+  useEffect(() => {
+    publicApi
+      .get("/settings/public")
+      .then((res) => {
+        setUpiQrUrl(res.data.UPI_QR_URL || "");
+        setUpiId(res.data.UPI_ID || "");
+        setBookingPhone(res.data.BOOKING_PHONE || "");
+      })
+      .catch(() => {
+        // silently fail — fallbacks are already in JSX
+      });
+  }, []);
+
   useEffect(() => {
     if (!bookingId) {
       navigate("/book-slot", { replace: true });
       return;
     }
 
-    const fetchBooking = async () => {
+    const fetch = async () => {
       try {
-        let res;
-
-        // ✅ CHANGED: Use correct endpoint based on booking type
-        if (isGuestBooking) {
-          // Guest booking - use public API
-          res = await publicApi.get(`/bookings/guest/${bookingId}`);
-          console.log("📦 Guest booking loaded:", res.data);
-        } else {
-          // User booking - use authenticated API
-          res = await api.get(`/bookings/details/${bookingId}`);
-          console.log("📦 User booking loaded:", res.data);
-        }
-
+        const res = isGuestBooking
+          ? await publicApi.get(`/bookings/guest/${bookingId}`)
+          : await api.get(`/bookings/details/${bookingId}`);
         setBooking(res.data);
-        setFetchError(false);
-      } catch (err: any) {
-        console.error("❌ Failed to load booking:", err);
+      } catch {
         setFetchError(true);
-        setError("Unable to load booking details. Please try again.");
       }
     };
-
-    fetchBooking();
+    fetch();
   }, [bookingId, isGuestBooking, navigate]);
 
-  // ============================================
-  // CLIENT-SIDE COUNTDOWN
-  // ============================================
   useEffect(() => {
     if (!booking?.expiresAt) return;
-
     const expiry = new Date(booking.expiresAt).getTime();
-
-    const updateTimer = () => {
-      const now = Date.now();
-      const diff = Math.max(0, Math.floor((expiry - now) / 1000));
-      setTimeLeft(diff);
-
-      if (diff <= 0) {
-        setError("Booking expired. Please try again.");
-      }
-    };
-
-    // Update immediately
-    updateTimer();
-
-    // Then update every second
-    const interval = setInterval(updateTimer, 1000);
-
-    return () => clearInterval(interval);
+    const tick = () =>
+      setTimeLeft(Math.max(0, Math.floor((expiry - Date.now()) / 1000)));
+    tick();
+    const id = setInterval(tick, 1000);
+    return () => clearInterval(id);
   }, [booking?.expiresAt]);
 
-  // ============================================
-  // PAYMENT HANDLER
-  // ============================================
-  const handlePay = async () => {
-    if (!booking || loading || timeLeft <= 0) return;
+  // Poll for confirmation — same as before
+  useEffect(() => {
+    if (!bookingId) return;
+    let cancelled = false;
 
-    setLoading(true);
-    setError("");
+    const poll = async () => {
+      if (cancelled) return;
+      try {
+        const res = isGuestBooking
+          ? await publicApi.get(`/bookings/guest/${bookingId}`)
+          : await api.get(`/bookings/${bookingId}/status`);
 
-    try {
-      console.log("💳 Creating Razorpay order for:", booking.bookingPublicId);
-
-      // ✅ Use publicApi for payment creation (works for both guest and user)
-      const res = await publicApi.post(
-        `/payments/razorpay/order/${booking.bookingPublicId}`,
-      );
-
-      console.log("✅ Razorpay order created:", res.data);
-
-      openRazorpay(res.data);
-    } catch (err: any) {
-      console.error("❌ Payment creation failed:", err);
-      setError(err.response?.data?.message || "Unable to initiate payment.");
-      setLoading(false);
-    }
-  };
-
-  // ============================================
-  // RAZORPAY
-  // ============================================
-  const openRazorpay = (payment: any) => {
-    if (!(window as any).Razorpay) {
-      setError("Razorpay SDK not loaded. Please refresh the page.");
-      setLoading(false);
-      return;
-    }
-
-    const options = {
-      key: import.meta.env.VITE_RAZORPAY_KEY,
-      amount: payment.amount * 100,
-      currency: "INR",
-      name: "NCA Cricket Academy",
-      description: "Slot Booking",
-      order_id: payment.razorpayOrderId,
-
-      prefill: {
-        name: booking!.playerName || "",
-        email: booking!.isGuest
-          ? booking!.guestPhone
-            ? `${booking!.guestPhone}@guest.com`
-            : ""
-          : "",
-        contact: booking!.guestPhone || "",
-      },
-
-      handler: async (response: any) => {
-        try {
-          console.log("✅ Payment successful, verifying...", response);
-
-          // ✅ Use publicApi for verification (works for both guest and user)
-          await publicApi.post("/payments/razorpay/verify", {
-            razorpayOrderId: payment.razorpayOrderId,
-            razorpayPaymentId: response.razorpay_payment_id,
-            razorpaySignature: response.razorpay_signature,
-          });
-
-          console.log("✅ Payment verified!");
-
-          // Clean up
+        if (res.data.status === "CONFIRMED") {
           localStorage.removeItem("bookingDraft");
           localStorage.removeItem("activeBookingId");
           localStorage.removeItem("isGuestBooking");
-
-          // Navigate to success
           navigate("/booking-success", {
             replace: true,
-            state: {
-              bookingPublicId: booking!.bookingPublicId,
-              isGuest: booking!.isGuest,
-            },
+            state: { bookingPublicId: bookingId, isGuest: isGuestBooking },
           });
-        } catch (err: any) {
-          console.error("❌ Payment verification failed:", err);
-          setError("Payment verification failed. Please contact support.");
-          setLoading(false);
+          return;
         }
-      },
-
-      modal: {
-        ondismiss: () => {
-          console.log("⚠️ Payment cancelled by user");
-          setLoading(false);
-          setError("Payment was cancelled.");
-        },
-      },
-
-      theme: {
-        color: "#2563eb",
-      },
+      } catch {
+        /* ignore */
+      }
+      setTimeout(poll, 5000);
     };
 
-    console.log("🚀 Opening Razorpay with options:", options);
+    // Start polling after 10 seconds
+    const timer = setTimeout(poll, 10000);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [bookingId, isGuestBooking, navigate]);
 
-    // @ts-expect-error Razorpay injected globally
-    const rzp = new window.Razorpay(options);
-
-    rzp.on("payment.failed", function (response: any) {
-      console.error("❌ Payment failed:", response.error);
-      setError(`Payment failed: ${response.error.description}`);
-      setLoading(false);
-    });
-
-    rzp.open();
-  };
-
-  // ============================================
-  // RENDER - FETCH ERROR
-  // ============================================
-  if (fetchError) {
+  if (fetchError)
     return (
-      <div className="max-w-xl mx-auto mt-16 bg-red-50 border border-red-300 p-6 rounded text-center">
-        <p className="text-red-700 mb-4">{error}</p>
+      <div className="max-w-xl mx-auto mt-16 text-center">
+        <p className="text-red-600 mb-4">
+          Unable to load booking. Please try again.
+        </p>
         <button
           onClick={() => navigate("/book-slot")}
-          className="bg-blue-600 text-white px-6 py-2 rounded"
+          className="bg-blue-600 text-white px-6 py-2 rounded-xl"
         >
           Back to Booking
         </button>
       </div>
     );
-  }
 
-  // ============================================
-  // RENDER - LOADING
-  // ============================================
-  if (!booking) {
-    return (
-      <div className="max-w-xl mx-auto mt-16 text-center">
-        <p className="text-gray-500">Loading booking details…</p>
-      </div>
-    );
-  }
+  if (!booking)
+    return <div className="text-center mt-16 text-gray-500">Loading…</div>;
 
-  // ============================================
-  // RENDER - EXPIRED
-  // ============================================
-  if (timeLeft <= 0) {
+  if (timeLeft <= 0)
     return (
-      <div className="max-w-xl mx-auto mt-16 bg-yellow-50 border border-yellow-300 p-6 rounded text-center">
-        <p className="text-yellow-800 text-lg font-semibold mb-4">
-          Booking Expired
-        </p>
-        <p className="text-gray-700 mb-6">
-          Your booking has expired. Please create a new booking.
+      <div className="max-w-xl mx-auto mt-16 bg-yellow-50 border border-yellow-300 p-8 rounded-2xl text-center space-y-4">
+        <p className="text-xl font-semibold text-yellow-800">Booking Expired</p>
+        <p className="text-gray-600">
+          Your slot hold has expired. Please book again.
         </p>
         <button
           onClick={() => {
@@ -251,107 +137,88 @@ function Payment() {
             localStorage.removeItem("isGuestBooking");
             navigate("/book-slot");
           }}
-          className="bg-blue-600 text-white px-6 py-2 rounded"
+          className="bg-blue-600 text-white px-6 py-3 rounded-xl font-semibold"
         >
           Book Again
         </button>
       </div>
     );
-  }
 
-  // ============================================
-  // RENDER - PAYMENT PAGE
-  // ============================================
   return (
-    <div className="max-w-xl mx-auto mt-16 bg-white p-8 rounded shadow space-y-6">
-      <h1 className="text-2xl font-semibold text-center">Complete Payment</h1>
+    <div className="max-w-xl mx-auto mt-12 space-y-6">
+      <div className="bg-white rounded-2xl shadow p-8 space-y-6">
+        <h1 className="text-2xl font-semibold text-center">Complete Payment</h1>
 
-      {/* Guest Notice */}
-      {booking.isGuest && (
-        <div className="bg-blue-50 border border-blue-200 rounded p-4">
-          <p className="text-sm text-blue-900 mb-2">
-            <strong>📱 Guest Booking</strong>
-          </p>
-          <p className="text-sm text-blue-700">
-            Booking as guest with phone: {booking.guestPhone}
-          </p>
-        </div>
-      )}
-
-      {/* Booking Details */}
-      <div className="bg-gray-50 p-4 rounded text-sm space-y-2">
-        {booking.playerName && (
+        {/* Booking Summary */}
+        <div className="bg-gray-50 rounded-xl p-4 text-sm space-y-1">
           <p>
-            <strong>Name:</strong> {booking.playerName}
+            <strong>Date:</strong> {booking.date}
           </p>
-        )}
-        <p>
-          <strong>Date:</strong> {booking.date}
-        </p>
-        <p>
-          <strong>Time:</strong> {booking.slot}
-        </p>
-        <p>
-          <strong>Resource:</strong> {booking.resource}
-        </p>
-        <p className="font-semibold text-lg pt-2 border-t">
-          Amount: ₹{booking.amount}
-        </p>
-      </div>
-
-      {/* Timer */}
-      <div className="bg-orange-50 border border-orange-200 rounded p-4 text-center">
-        <p className="text-sm text-orange-700 mb-2">Time Remaining</p>
-        <p className="text-3xl font-bold text-orange-600">
-          {Math.floor(timeLeft / 60)}:
-          {(timeLeft % 60).toString().padStart(2, "0")}
-        </p>
-      </div>
-
-      {/* Error Message */}
-      {error && (
-        <div className="bg-red-50 border border-red-300 text-red-700 px-4 py-3 rounded text-center">
-          {error}
+          <p>
+            <strong>Time:</strong> {booking.slot}
+          </p>
+          <p>
+            <strong>Resource:</strong> {booking.resource}
+          </p>
+          <p className="text-lg font-bold pt-2 border-t mt-2">
+            Amount: ₹{booking.amount}
+          </p>
         </div>
-      )}
 
-      {/* Pay Button */}
-      <button
-        onClick={handlePay}
-        disabled={loading || timeLeft <= 0}
-        className="w-full bg-green-600 text-white py-4 rounded-lg font-semibold text-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-      >
-        {loading ? (
-          <span className="flex items-center justify-center gap-2">
-            <svg
-              className="animate-spin h-5 w-5"
-              viewBox="0 0 24 24"
-              fill="none"
-            >
-              <circle
-                className="opacity-25"
-                cx="12"
-                cy="12"
-                r="10"
-                stroke="currentColor"
-                strokeWidth="4"
-              />
-              <path
-                className="opacity-75"
-                fill="currentColor"
-                d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-              />
-            </svg>
-            Processing...
-          </span>
-        ) : (
-          `Pay ₹${booking.amount}`
-        )}
-      </button>
+        {/* Timer */}
+        <div className="bg-orange-50 border border-orange-200 rounded-xl p-4 text-center">
+          <p className="text-sm text-orange-600 mb-1">Slot held for</p>
+          <p className="text-3xl font-bold text-orange-600">
+            {Math.floor(timeLeft / 60)}:
+            {(timeLeft % 60).toString().padStart(2, "0")}
+          </p>
+        </div>
 
-      <p className="text-xs text-center text-gray-500">
-        🔒 Secure payment powered by Razorpay
-      </p>
+        {/* QR Code */}
+        <div className="text-center space-y-3">
+          <p className="font-semibold text-gray-800">
+            Scan to Pay via PhonePe / Any UPI App
+          </p>
+          <div className="flex justify-center">
+            {/* Replace with your actual QR image */}
+            <img
+              src={upiQrUrl || "/images/nca-upi-qr.png"}
+              alt="UPI QR Code"
+              className="w-52 h-52 border-4 border-blue-100 rounded-2xl"
+            />
+          </div>
+          <p className="text-gray-600 text-sm">
+            UPI ID:{" "}
+            <span className="font-mono font-semibold">
+              {upiId || "Contact academy"}
+            </span>
+          </p>
+        </div>
+
+        {/* Instructions */}
+        <div className="bg-blue-50 border border-blue-200 rounded-xl p-5 space-y-3">
+          <p className="font-semibold text-blue-900">
+            How to confirm your slot:
+          </p>
+          <ol className="text-sm text-blue-800 space-y-2 list-decimal list-inside">
+            <li>
+              Scan the QR above and pay <strong>₹{booking.amount}</strong>
+            </li>
+            <li>
+              Call us at <strong>{bookingPhone || "the academy"}</strong> after
+              payment
+            </li>
+            <li>
+              We'll confirm your slot — this page will update automatically ✅
+            </li>
+          </ol>
+        </div>
+
+        <p className="text-xs text-center text-gray-400">
+          This page refreshes automatically once your payment is confirmed.
+          Don't close it.
+        </p>
+      </div>
     </div>
   );
 }

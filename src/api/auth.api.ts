@@ -12,15 +12,15 @@ export type AuthResponse = {
   academyName: string;
   branchId: string;
   branchName: string;
+  branchAddress: string;
+  branchPhone: string;
 };
 
 export type OnboardingRequest = {
   academyName: string;
   academyCode: string;
   city?: string;
-  branchName: string;
-  branchAddress?: string;
-  branchPhone?: string;
+  branches: { name: string; address: string; phone: string }[];
   adminName: string;
   adminEmail: string;
   adminPassword: string;

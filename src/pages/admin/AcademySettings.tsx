@@ -17,7 +17,7 @@ import FeeSettingsManager from "./FeeSettingsManager";
 import CampTypeSettings from "./CampTypeSettings";
 import MediaSettingsManager from "./MediaSettingsManager";
 import TeamMembersAdmin from "./TeamMembersAdmin";
-
+import BranchesTab from "./BranchesTab";
 type SettingsMap = Record<string, string>;
 
 type TabType =
@@ -33,7 +33,8 @@ type TabType =
   | "batch"
   | "fees"
   | "media"
-  | "team";
+  | "team"
+  | "branches";
 
 function AcademySettings() {
   const navigate = useNavigate();
@@ -53,6 +54,12 @@ function AcademySettings() {
   const [secondaryColor, setSecondaryColor] = useState("");
   const [logoUrl, setLogoUrl] = useState("");
   const [contactEmail, setContactEmail] = useState("");
+  const [upiId, setUpiId] = useState("");
+  const [upiQrUrl, setUpiQrUrl] = useState("");
+  const [bookingPhone, setBookingPhone] = useState("");
+  const [announcementEnabled, setAnnouncementEnabled] = useState(true);
+  const [announcementText, setAnnouncementText] = useState("");
+  const [announcementExpiry, setAnnouncementExpiry] = useState("");
 
   // Theme settings
   const [buttonRadius, setButtonRadius] = useState("8");
@@ -90,11 +97,17 @@ function AcademySettings() {
       setAcademyCode(response.data.ACADEMY_CODE || "");
       setAdminPhone(response.data.ADMIN_PHONE || "");
       setPlayerIdPrefix(response.data.PLAYER_ID_PREFIX || "");
+      setAnnouncementEnabled(response.data.ANNOUNCEMENT_ENABLED !== "false");
+      setAnnouncementText(response.data.ANNOUNCEMENT_TEXT || "");
+      setAnnouncementExpiry(response.data.ANNOUNCEMENT_EXPIRY || "");
       setPlayerIdCounter(response.data.PLAYER_ID_COUNTER || "0");
       setPrimaryColor(response.data.PRIMARY_COLOR || "#2563eb");
       setSecondaryColor(response.data.SECONDARY_COLOR || "#10b981");
       setLogoUrl(response.data.LOGO_URL || "");
       setContactEmail(response.data.CONTACT_EMAIL || "");
+      setUpiId(response.data.UPI_ID || "");
+      setUpiQrUrl(response.data.UPI_QR_URL || "");
+      setBookingPhone(response.data.BOOKING_PHONE || "");
 
       // Theme settings
       setButtonRadius(response.data.BUTTON_RADIUS || "8");
@@ -163,6 +176,11 @@ function AcademySettings() {
         ACADEMY_NAME: academyName,
         ACADEMY_CODE: academyCode,
         ADMIN_PHONE: adminPhone,
+        UPI_ID: upiId,
+        BOOKING_PHONE: bookingPhone,
+        ANNOUNCEMENT_ENABLED: String(announcementEnabled),
+        ANNOUNCEMENT_TEXT: announcementText,
+        ANNOUNCEMENT_EXPIRY: announcementExpiry,
         PLAYER_ID_PREFIX: playerIdPrefix,
         PLAYER_ID_COUNTER: playerIdCounter,
         PRIMARY_COLOR: primaryColor,
@@ -242,6 +260,18 @@ function AcademySettings() {
             >
               General
             </button>
+
+            <button
+              onClick={() => setActiveTab("branches")}
+              className={`py-3 px-4 text-sm font-medium border-b-2 transition whitespace-nowrap ${
+                activeTab === "branches"
+                  ? "border-blue-600 text-blue-600"
+                  : "border-transparent text-gray-600 hover:text-blue-600"
+              }`}
+            >
+              Branches
+            </button>
+
             <button
               onClick={() => setActiveTab("branding")}
               className={`py-3 px-4 text-sm font-medium border-b-2 transition whitespace-nowrap ${
@@ -463,6 +493,119 @@ function AcademySettings() {
                 </p>
               </div>
 
+              {/* UPI / Payment Settings */}
+              <div className="border-t pt-6">
+                <h3 className="text-base font-semibold mb-4">
+                  💳 Payment Settings
+                </h3>
+
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      UPI ID
+                    </label>
+                    <input
+                      type="text"
+                      value={upiId}
+                      onChange={(e) => setUpiId(e.target.value)}
+                      placeholder="yourname@ybl"
+                      className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    />
+                    <p className="text-xs text-gray-500 mt-1">
+                      Shown to users on the payment page
+                    </p>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Booking Contact Phone
+                    </label>
+                    <input
+                      type="text"
+                      value={bookingPhone}
+                      onChange={(e) => setBookingPhone(e.target.value)}
+                      placeholder="+919876543210"
+                      className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    />
+                    <p className="text-xs text-gray-500 mt-1">
+                      Phone number users call after paying
+                    </p>
+                  </div>
+
+                  {/* QR Upload */}
+                  <ImageUpload
+                    currentUrl={upiQrUrl}
+                    uploadType="qr"
+                    uploadUrl="/admin/settings/upi-qr/upload"
+                    onUploadSuccess={(url) => {
+                      setUpiQrUrl(url);
+                      api.put("/admin/settings", { UPI_QR_URL: url });
+                    }}
+                    label="PhonePe / UPI QR Code"
+                    helpText="Upload your UPI QR image. Shown on the payment page."
+                  />
+                </div>
+              </div>
+
+              {/* Announcement Bar */}
+              <div className="border-t pt-6">
+                <h3 className="text-base font-semibold mb-4">
+                  📢 Announcement Bar
+                </h3>
+
+                <label className="flex items-center justify-between p-4 border rounded-lg bg-gray-50 mb-4 cursor-pointer">
+                  <div>
+                    <span className="font-medium">Show Announcement Bar</span>
+                    <p className="text-sm text-gray-500">
+                      Display a banner on the home page
+                    </p>
+                  </div>
+                  <input
+                    type="checkbox"
+                    checked={announcementEnabled}
+                    onChange={(e) => setAnnouncementEnabled(e.target.checked)}
+                    className="w-5 h-5 text-blue-600 rounded"
+                  />
+                </label>
+
+                <div className="mb-4">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Message{" "}
+                    <span className="text-gray-400 font-normal">
+                      ({announcementText.length}/120)
+                    </span>
+                  </label>
+                  <input
+                    type="text"
+                    value={announcementText}
+                    onChange={(e) =>
+                      setAnnouncementText(e.target.value.slice(0, 120))
+                    }
+                    placeholder="🏏 Summer Camp starts March 30! — Limited seats."
+                    className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
+                  />
+                  <p className="text-xs text-gray-400 mt-1">
+                    Max 120 characters. Keep it short for mobile.
+                  </p>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Auto-hide after date
+                  </label>
+                  <input
+                    type="date"
+                    value={announcementExpiry}
+                    onChange={(e) => setAnnouncementExpiry(e.target.value)}
+                    className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
+                  />
+                  <p className="text-xs text-gray-400 mt-1">
+                    Bar disappears automatically after this date. Leave empty to
+                    always show.
+                  </p>
+                </div>
+              </div>
+
               {/* Player ID Configuration */}
               <div className="border-t pt-6">
                 <h3 className="text-base font-semibold mb-4">
@@ -520,7 +663,7 @@ function AcademySettings() {
               </div>
             </div>
           )}
-
+          {activeTab === "branches" && <BranchesTab />}
           {/* BRANDING & THEME TAB */}
           {activeTab === "branding" && (
             <div className="space-y-8">
@@ -1051,7 +1194,6 @@ function AcademySettings() {
               </div>
             </div>
           )}
-
           {activeTab === "batch" && (
             <div className="space-y-8">
               <CampTypeSettings />
@@ -1077,13 +1219,10 @@ function AcademySettings() {
               </div>
             </div>
           )}
-
           {/* CONTENT & SOCIAL TAB */}
           {activeTab === "content" && <ContentSettings />}
-
           {/* CONTACT INFO TAB */}
           {activeTab === "contact" && <ContactInfoSettings />}
-
           {/* FACILITIES TAB */}
           {activeTab === "facilities" && (
             <div>
@@ -1110,7 +1249,6 @@ function AcademySettings() {
               <FacilitiesManager />
             </div>
           )}
-
           {/* TESTIMONIALS TAB */}
           {activeTab === "testimonials" && (
             <div>
@@ -1137,7 +1275,6 @@ function AcademySettings() {
               <TestimonialsManager />
             </div>
           )}
-
           {/* NEWS TAB */}
           {activeTab === "news" && (
             <div>
@@ -1164,7 +1301,6 @@ function AcademySettings() {
               <NewsManager />
             </div>
           )}
-
           {/* GALLERY TAB */}
           {activeTab === "gallery" && (
             <div>
@@ -1191,7 +1327,6 @@ function AcademySettings() {
               <GalleryManager />
             </div>
           )}
-
           {activeTab === "team" && (
             <div>
               <label className="flex items-center justify-between p-4 border rounded-lg bg-gray-50 mb-6 cursor-pointer">
@@ -1217,13 +1352,10 @@ function AcademySettings() {
               <TeamMembersAdmin />
             </div>
           )}
-
           {/* STAR PERFORMER TAB */}
           {activeTab === "starperformer" && <StarPerformerSettings />}
-
           {/* FEES TAB */}
           {activeTab === "fees" && <FeeSettingsManager />}
-
           {/* MEDIA TAB */}
           {activeTab === "media" && <MediaSettingsManager />}
         </div>

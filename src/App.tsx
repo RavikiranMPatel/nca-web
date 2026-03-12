@@ -52,6 +52,9 @@ import OnboardingPage from "./pages/OnboardingPage";
 import { checkOnboardingStatus } from "./api/auth.api";
 import TeamMembersAdmin from "./pages/admin/TeamMembersAdmin";
 import GenerateSlots from "./pages/slot-templates/GenerateSlots";
+import ManageUsersPage from "./pages/ManageUsersPage";
+import ManageBranchesPage from "./pages/ManageBranchesPage";
+import AdminManualBooking from "./pages/book-slot/AdminManualBooking";
 
 function App() {
   const [onboarded, setOnboarded] = useState<boolean | null>(null);
@@ -280,6 +283,17 @@ function App() {
           </ProtectedRoute>
         }
       />
+
+      <Route
+        path="/admin/bookings/manual"
+        element={
+          <ProtectedRoute roles={["ROLE_ADMIN", "ROLE_SUPER_ADMIN"]}>
+            <AppLayout>
+              <AdminManualBooking />
+            </AppLayout>
+          </ProtectedRoute>
+        }
+      />
       <Route
         path="/admin/date-overrides"
         element={
@@ -383,6 +397,23 @@ function App() {
             <AppLayout>
               <CreateEditTemplate />
             </AppLayout>
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/admin/branches"
+        element={
+          <ProtectedRoute roles={["ROLE_SUPER_ADMIN"]}>
+            <ManageBranchesPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/users"
+        element={
+          <ProtectedRoute roles={["ROLE_SUPER_ADMIN"]}>
+            <ManageUsersPage />
           </ProtectedRoute>
         }
       />

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { Upload, Trash2, Eye, EyeOff, Image as ImageIcon } from "lucide-react";
-import axiosInstance from "../../api/axiosInstance";
+import axiosInstance from "../../api/axios";
 import { getImageUrl } from "../../utils/imageUrl";
 
 type GalleryImage = {
@@ -21,7 +21,7 @@ const GalleryManager = () => {
 
   const loadImages = async () => {
     try {
-      const response = await axiosInstance.get("/api/admin/cms/gallery");
+      const response = await axiosInstance.get("/admin/cms/gallery");
       setImages(response.data);
       setLoading(false);
     } catch (error) {
@@ -37,19 +37,15 @@ const GalleryManager = () => {
     setUploading(true);
 
     try {
-      // Upload files one by one
       for (const file of files) {
         const formData = new FormData();
         formData.append("file", file);
 
-        // ✅ FIXED: Removed Content-Type header - let browser set it automatically
         const response = await axiosInstance.post(
-          "/api/admin/cms/gallery/upload-image",
+          "/admin/cms/gallery/upload-image",
           formData,
         );
 
-        // The response should be the image URL string
-        // Now create the gallery entry with the image URL
         const galleryEntry = {
           imageUrl: response.data,
           caption: "",
@@ -57,7 +53,7 @@ const GalleryManager = () => {
         };
 
         const createResponse = await axiosInstance.post(
-          "/api/admin/cms/gallery",
+          "/admin/cms/gallery", // ✅ removed /api
           galleryEntry,
         );
 
@@ -68,14 +64,13 @@ const GalleryManager = () => {
       alert("Failed to upload images");
     } finally {
       setUploading(false);
-      // Reset the input
       e.target.value = "";
     }
   };
 
   const handleToggle = async (id: string) => {
     try {
-      await axiosInstance.patch(`/api/admin/cms/gallery/${id}/toggle`);
+      await axiosInstance.patch(`/admin/cms/gallery/${id}/toggle`);
       setImages(
         images.map((img) =>
           img.id === id ? { ...img, active: !img.active } : img,
@@ -89,7 +84,7 @@ const GalleryManager = () => {
   const handleDelete = async (id: string) => {
     if (!confirm("Delete this image?")) return;
     try {
-      await axiosInstance.delete(`/api/admin/cms/gallery/${id}`);
+      await axiosInstance.delete(`/admin/cms/gallery/${id}`); // ✅ removed /api
       setImages(images.filter((img) => img.id !== id));
     } catch (error) {
       console.error("Error deleting:", error);
@@ -101,7 +96,8 @@ const GalleryManager = () => {
       const image = images.find((img) => img.id === id);
       if (!image) return;
 
-      await axiosInstance.put(`/api/admin/cms/gallery/${id}`, {
+      await axiosInstance.put(`/admin/cms/gallery/${id}`, {
+        // ✅ removed /api
         ...image,
         caption,
       });

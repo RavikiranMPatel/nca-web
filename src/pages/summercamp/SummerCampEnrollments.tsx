@@ -1,7 +1,14 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { motion } from "framer-motion";
-import { ArrowLeft, Search, Plus, Users, CreditCard } from "lucide-react";
+import {
+  ArrowLeft,
+  Search,
+  Plus,
+  Users,
+  CreditCard,
+  GitBranch,
+} from "lucide-react";
 import { toast } from "react-hot-toast";
 import {
   summerCampService,
@@ -9,7 +16,9 @@ import {
   getPaymentStatusColor,
   formatCampDate,
 } from "../../api/summerCampService";
+import { getAdminBranches } from "../../api/branch.api";
 import type { SummerCamp, SummerCampEnrollment } from "../../types/summercamp";
+import type { Branch } from "../../api/branch.api";
 import EnrollmentFormModal from "../../components/summercamp/EnrollmentFormModal";
 import PaymentRecordModal from "../../components/summercamp/PaymentRecordModal";
 
@@ -20,6 +29,9 @@ function SummerCampEnrollments() {
   const [camp, setCamp] = useState<SummerCamp | null>(null);
   const [enrollments, setEnrollments] = useState<SummerCampEnrollment[]>([]);
   const [loading, setLoading] = useState(true);
+
+  // Branch
+  const [campBranch, setCampBranch] = useState<Branch | null>(null);
 
   // Filters
   const [search, setSearch] = useState("");
@@ -41,12 +53,21 @@ function SummerCampEnrollments() {
   const loadData = async () => {
     try {
       setLoading(true);
-      const [campData, enrollmentsData] = await Promise.all([
+      const [campData, enrollmentsData, branchesData] = await Promise.all([
         summerCampService.getCampById(campId!),
         summerCampService.getEnrollments(campId!),
+        getAdminBranches(),
       ]);
       setCamp(campData);
       setEnrollments(enrollmentsData);
+
+      // Resolve branch
+      if ((campData as any).branchId) {
+        const matched = branchesData.find(
+          (b) => b.id === (campData as any).branchId,
+        );
+        setCampBranch(matched ?? null);
+      }
     } catch (error) {
       console.error("Error loading enrollments:", error);
       toast.error("Failed to load enrollments");
@@ -125,7 +146,18 @@ function SummerCampEnrollments() {
                 <h1 className="text-2xl font-bold text-slate-900">
                   Enrollments
                 </h1>
-                <p className="text-sm text-slate-600 mt-1">{camp?.name}</p>
+                <div className="flex items-center gap-2 mt-1 flex-wrap">
+                  <p className="text-sm text-slate-600">{camp?.name}</p>
+                  {campBranch && (
+                    <div className="flex items-center gap-1 px-2 py-0.5 bg-slate-100 rounded-full">
+                      <GitBranch size={11} className="text-slate-500" />
+                      <span className="text-xs text-slate-600 font-medium">
+                        {campBranch.name}
+                        {campBranch.isMainBranch && " · Main"}
+                      </span>
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
 
@@ -306,12 +338,10 @@ function SummerCampEnrollments() {
                     transition={{ delay: index * 0.05 }}
                     className="bg-white rounded-xl border border-slate-200 shadow-sm p-4"
                   >
-                    {/* Student Name */}
                     <h3 className="font-bold text-slate-900 mb-2">
                       {enrollment.playerName}
                     </h3>
 
-                    {/* Badges */}
                     <div className="flex flex-wrap gap-2 mb-3">
                       <span
                         className={`text-xs font-semibold px-2 py-1 rounded-full ${statusColor.bg} ${statusColor.text} border ${statusColor.border}`}
@@ -325,7 +355,6 @@ function SummerCampEnrollments() {
                       </span>
                     </div>
 
-                    {/* Details */}
                     <div className="space-y-2 text-sm mb-3">
                       {enrollment.playerPhone && (
                         <p className="text-slate-600">
@@ -354,7 +383,6 @@ function SummerCampEnrollments() {
                       </div>
                     </div>
 
-                    {/* Actions */}
                     <div className="flex gap-2">
                       <button
                         onClick={() => openPaymentModal(enrollment)}
@@ -409,7 +437,6 @@ function SummerCampEnrollments() {
                           key={enrollment.publicId}
                           className="hover:bg-slate-50 transition"
                         >
-                          {/* Student */}
                           <td className="px-4 py-3">
                             <div>
                               <p className="font-semibold text-slate-900">
@@ -422,7 +449,6 @@ function SummerCampEnrollments() {
                             </div>
                           </td>
 
-                          {/* Contact */}
                           <td className="px-4 py-3">
                             <div className="text-sm text-slate-600">
                               {enrollment.playerPhone && (
@@ -436,7 +462,6 @@ function SummerCampEnrollments() {
                             </div>
                           </td>
 
-                          {/* Status */}
                           <td className="px-4 py-3">
                             <span
                               className={`inline-block text-xs font-semibold px-2 py-1 rounded-full ${statusColor.bg} ${statusColor.text} border ${statusColor.border}`}
@@ -445,7 +470,6 @@ function SummerCampEnrollments() {
                             </span>
                           </td>
 
-                          {/* Payment */}
                           <td className="px-4 py-3">
                             <span
                               className={`inline-block text-xs font-semibold px-2 py-1 rounded-full ${paymentColor.bg} ${paymentColor.text} border ${paymentColor.border}`}
@@ -454,7 +478,6 @@ function SummerCampEnrollments() {
                             </span>
                           </td>
 
-                          {/* Fees */}
                           <td className="px-4 py-3 text-right">
                             <div className="text-sm">
                               <p className="font-semibold text-emerald-700">
@@ -466,7 +489,6 @@ function SummerCampEnrollments() {
                             </div>
                           </td>
 
-                          {/* Actions */}
                           <td className="px-4 py-3">
                             <div className="flex items-center justify-center gap-2">
                               <button

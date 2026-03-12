@@ -11,22 +11,18 @@ type ResultState = {
 function GenerateSlots() {
   const navigate = useNavigate();
 
-  // Single date
   const [singleDate, setSingleDate] = useState("");
   const [singleLoading, setSingleLoading] = useState(false);
   const [singleResult, setSingleResult] = useState<ResultState>(null);
 
-  // Bulk
   const [bulkDays, setBulkDays] = useState(30);
   const [bulkLoading, setBulkLoading] = useState(false);
   const [bulkResult, setBulkResult] = useState<ResultState>(null);
 
-  // Regenerate single date
   const [regenDate, setRegenDate] = useState("");
   const [regenLoading, setRegenLoading] = useState(false);
   const [regenResult, setRegenResult] = useState<ResultState>(null);
 
-  // Regenerate bulk
   const [regenBulkDays, setRegenBulkDays] = useState(30);
   const [regenBulkLoading, setRegenBulkLoading] = useState(false);
   const [regenBulkResult, setRegenBulkResult] = useState<ResultState>(null);
@@ -133,38 +129,41 @@ function GenerateSlots() {
   };
 
   return (
-    <div className="max-w-3xl mx-auto space-y-6">
+    <div className="max-w-3xl mx-auto space-y-4 sm:space-y-6">
       {/* HEADER */}
-      <div className="flex items-center gap-4">
+      <div className="flex items-center gap-3 sm:gap-4">
         <button
           onClick={() => navigate("/admin/slot-templates")}
-          className="p-2 hover:bg-gray-100 rounded transition"
+          className="p-2 hover:bg-gray-100 rounded transition flex-shrink-0"
         >
           <ArrowLeft size={20} />
         </button>
         <div>
-          <h1 className="text-2xl font-bold">Generate Slots</h1>
-          <p className="text-gray-600 text-sm mt-1">
+          <h1 className="text-xl sm:text-2xl font-bold">Generate Slots</h1>
+          <p className="text-gray-600 text-xs sm:text-sm mt-0.5">
             Generate or regenerate booking slots from templates
           </p>
         </div>
       </div>
 
       {/* SECTION 1: Generate for single date */}
-      <div className="bg-white rounded-lg shadow p-6 space-y-4">
+      <div className="bg-white rounded-lg shadow p-4 sm:p-6 space-y-4">
         <div className="flex items-center gap-3">
-          <div className="p-2 bg-green-100 rounded-lg">
+          <div className="p-2 bg-green-100 rounded-lg flex-shrink-0">
             <Zap size={20} className="text-green-600" />
           </div>
           <div>
-            <h2 className="text-lg font-semibold">Generate for a Date</h2>
-            <p className="text-sm text-gray-500">
+            <h2 className="text-base sm:text-lg font-semibold">
+              Generate for a Date
+            </h2>
+            <p className="text-xs sm:text-sm text-gray-500">
               Creates slots for a date that doesn't have any yet
             </p>
           </div>
         </div>
 
-        <div className="flex gap-3 items-end">
+        {/* Stack vertically on mobile */}
+        <div className="flex flex-col sm:flex-row gap-3 sm:items-end">
           <div className="flex-1">
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Date
@@ -180,7 +179,7 @@ function GenerateSlots() {
           <button
             onClick={handleGenerate}
             disabled={!singleDate || singleLoading}
-            className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition font-medium disabled:opacity-50 text-sm"
+            className="w-full sm:w-auto px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition font-medium disabled:opacity-50 text-sm"
           >
             {singleLoading ? "Generating..." : "Generate"}
           </button>
@@ -190,21 +189,22 @@ function GenerateSlots() {
       </div>
 
       {/* SECTION 2: Bulk generate */}
-      <div className="bg-white rounded-lg shadow p-6 space-y-4">
+      <div className="bg-white rounded-lg shadow p-4 sm:p-6 space-y-4">
         <div className="flex items-center gap-3">
-          <div className="p-2 bg-blue-100 rounded-lg">
+          <div className="p-2 bg-blue-100 rounded-lg flex-shrink-0">
             <Zap size={20} className="text-blue-600" />
           </div>
           <div>
-            <h2 className="text-lg font-semibold">Bulk Generate</h2>
-            <p className="text-sm text-gray-500">
-              Generate slots for multiple upcoming days (skips dates that
-              already have slots)
+            <h2 className="text-base sm:text-lg font-semibold">
+              Bulk Generate
+            </h2>
+            <p className="text-xs sm:text-sm text-gray-500">
+              Generate slots for multiple upcoming days (skips existing slots)
             </p>
           </div>
         </div>
 
-        <div className="flex gap-3 items-end">
+        <div className="flex flex-col sm:flex-row gap-3 sm:items-end">
           <div className="flex-1">
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Number of Days
@@ -221,7 +221,7 @@ function GenerateSlots() {
           <button
             onClick={handleBulkGenerate}
             disabled={bulkLoading}
-            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-medium disabled:opacity-50 text-sm"
+            className="w-full sm:w-auto px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-medium disabled:opacity-50 text-sm"
           >
             {bulkLoading ? "Generating..." : `Generate ${bulkDays} Days`}
           </button>
@@ -231,9 +231,9 @@ function GenerateSlots() {
       </div>
 
       {/* DIVIDER */}
-      <div className="flex items-center gap-4">
+      <div className="flex items-center gap-3 sm:gap-4">
         <div className="flex-1 h-px bg-gray-200" />
-        <span className="text-sm text-gray-500 font-medium">
+        <span className="text-xs text-gray-500 font-medium text-center whitespace-nowrap">
           REGENERATE (use when template prices changed)
         </span>
         <div className="flex-1 h-px bg-gray-200" />
@@ -242,37 +242,37 @@ function GenerateSlots() {
       {/* WARNING BOX */}
       <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 flex gap-3">
         <AlertTriangle
-          size={20}
+          size={18}
           className="text-amber-600 flex-shrink-0 mt-0.5"
         />
         <div className="text-sm text-amber-800">
           <p className="font-semibold mb-1">What is Regenerate?</p>
-          <p>
+          <p className="text-xs sm:text-sm leading-relaxed">
             Regenerate <strong>deletes existing unbooked slots</strong> and
-            recreates them fresh from the current template. Use this when you've
-            updated prices or timings in a template and want those changes to
-            reflect on already-generated slots.
-            <strong> Existing bookings are never deleted.</strong>
+            recreates them from the current template. Use this when you've
+            updated prices or timings.{" "}
+            <strong>Existing bookings are never deleted.</strong>
           </p>
         </div>
       </div>
 
       {/* SECTION 3: Regenerate single date */}
-      <div className="bg-white rounded-lg shadow p-6 space-y-4">
+      <div className="bg-white rounded-lg shadow p-4 sm:p-6 space-y-4">
         <div className="flex items-center gap-3">
-          <div className="p-2 bg-orange-100 rounded-lg">
+          <div className="p-2 bg-orange-100 rounded-lg flex-shrink-0">
             <RefreshCw size={20} className="text-orange-600" />
           </div>
           <div>
-            <h2 className="text-lg font-semibold">Regenerate for a Date</h2>
-            <p className="text-sm text-gray-500">
-              Delete and recreate slots for a specific date using the latest
-              template
+            <h2 className="text-base sm:text-lg font-semibold">
+              Regenerate for a Date
+            </h2>
+            <p className="text-xs sm:text-sm text-gray-500">
+              Delete and recreate slots for a specific date
             </p>
           </div>
         </div>
 
-        <div className="flex gap-3 items-end">
+        <div className="flex flex-col sm:flex-row gap-3 sm:items-end">
           <div className="flex-1">
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Date
@@ -287,7 +287,7 @@ function GenerateSlots() {
           <button
             onClick={handleRegenerate}
             disabled={!regenDate || regenLoading}
-            className="px-4 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition font-medium disabled:opacity-50 text-sm"
+            className="w-full sm:w-auto px-4 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition font-medium disabled:opacity-50 text-sm"
           >
             {regenLoading ? "Regenerating..." : "Regenerate"}
           </button>
@@ -297,21 +297,23 @@ function GenerateSlots() {
       </div>
 
       {/* SECTION 4: Bulk regenerate */}
-      <div className="bg-white rounded-lg shadow p-6 space-y-4">
+      <div className="bg-white rounded-lg shadow p-4 sm:p-6 space-y-4">
         <div className="flex items-center gap-3">
-          <div className="p-2 bg-red-100 rounded-lg">
+          <div className="p-2 bg-red-100 rounded-lg flex-shrink-0">
             <RefreshCw size={20} className="text-red-600" />
           </div>
           <div>
-            <h2 className="text-lg font-semibold">Bulk Regenerate</h2>
-            <p className="text-sm text-gray-500">
-              Delete and recreate slots for multiple days — use after major
-              template price updates
+            <h2 className="text-base sm:text-lg font-semibold">
+              Bulk Regenerate
+            </h2>
+            <p className="text-xs sm:text-sm text-gray-500">
+              Delete and recreate slots for multiple days after major template
+              updates
             </p>
           </div>
         </div>
 
-        <div className="flex gap-3 items-end">
+        <div className="flex flex-col sm:flex-row gap-3 sm:items-end">
           <div className="flex-1">
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Number of Days
@@ -328,7 +330,7 @@ function GenerateSlots() {
           <button
             onClick={handleBulkRegenerate}
             disabled={regenBulkLoading}
-            className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition font-medium disabled:opacity-50 text-sm"
+            className="w-full sm:w-auto px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition font-medium disabled:opacity-50 text-sm"
           >
             {regenBulkLoading
               ? "Regenerating..."

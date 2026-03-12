@@ -1,13 +1,17 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { ArrowLeft, Save, Plus, Trash2 } from "lucide-react";
+import { ArrowLeft, Save, Plus, Trash2, GitBranch } from "lucide-react";
 import { toast } from "react-hot-toast";
 import api from "../../api/axios";
 import { summerCampService } from "../../api/summerCampService";
+import { getAdminBranches } from "../../api/branch.api";
+import type { Branch } from "../../api/branch.api";
+
 import type {
   SummerCampUpdateRequest,
   FeeRuleCreateRequest,
 } from "../../types/summercamp";
+
 import Button from "../../components/Button";
 
 type FeeRuleForm = {
@@ -25,6 +29,9 @@ function SummerCampEdit() {
 
   // Camp types
   const [campTypes, setCampTypes] = useState<string[]>([]);
+
+  // Branch (read-only)
+  const [campBranch, setCampBranch] = useState<Branch | null>(null);
 
   const [formData, setFormData] = useState<SummerCampUpdateRequest>({
     name: "",
@@ -57,9 +64,11 @@ function SummerCampEdit() {
   const loadCampData = async () => {
     try {
       setLoading(true);
-      const [camp, existingFeeRules] = await Promise.all([
+
+      const [camp, existingFeeRules, branches] = await Promise.all([
         summerCampService.getCampById(campId!),
         summerCampService.getFeeRules(campId!),
+        getAdminBranches(),
       ]);
 
       setFormData({
@@ -80,6 +89,12 @@ function SummerCampEdit() {
           isNew: false,
         })),
       );
+
+      // Resolve branch
+      if ((camp as any).branchId) {
+        const matched = branches.find((b) => b.id === (camp as any).branchId);
+        setCampBranch(matched ?? null);
+      }
     } catch (error) {
       console.error("Error loading camp data:", error);
       toast.error("Failed to load camp data");
@@ -89,14 +104,13 @@ function SummerCampEdit() {
     }
   };
 
-  const formatDisplayName = (type: string): string => {
-    return type
+  const formatDisplayName = (type: string): string =>
+    type
       .replace(/_CAMP$/, "")
       .replace(/_/g, " ")
       .split(" ")
       .map((word) => word.charAt(0) + word.slice(1).toLowerCase())
       .join(" ");
-  };
 
   const handleChange = (
     e: React.ChangeEvent<
@@ -121,53 +135,38 @@ function SummerCampEdit() {
     }
   };
 
-  // Fee Rules Management
+  // Fee Rules
   const addFeeRule = () => {
     setFeeRules((prev) => [
       ...prev,
-      {
-        id: `new_${Date.now()}`,
-        batchCount: "",
-        feeAmount: "",
-        isNew: true,
-      },
+      { id: `new_${Date.now()}`, batchCount: "", feeAmount: "", isNew: true },
     ]);
   };
 
-  const removeFeeRule = (id: string) => {
+  const removeFeeRule = (id: string) =>
     setFeeRules((prev) => prev.filter((rule) => rule.id !== id));
-  };
 
-  const updateFeeRule = (
-    id: string,
-    field: keyof FeeRuleForm,
-    value: string,
-  ) => {
+  const updateFeeRule = (id: string, field: keyof FeeRuleForm, value: string) =>
     setFeeRules((prev) =>
       prev.map((rule) => (rule.id === id ? { ...rule, [field]: value } : rule)),
     );
-  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    // Validation
     if (!formData.name?.trim()) {
       toast.error("Camp name is required");
       return;
     }
-
     if (!formData.startDate || !formData.endDate) {
       toast.error("Start and end dates are required");
       return;
     }
-
     if (new Date(formData.startDate) > new Date(formData.endDate)) {
       toast.error("End date must be after start date");
       return;
     }
 
-    // Validate fee rules
     const invalidFeeRule = feeRules.find(
       (rule) =>
         !rule.batchCount ||
@@ -180,12 +179,10 @@ function SummerCampEdit() {
       return;
     }
 
-    // Check for duplicate batch counts
     const batchCounts = feeRules.map((r) => parseInt(r.batchCount));
-    const hasDuplicates = batchCounts.some(
-      (count, index) => batchCounts.indexOf(count) !== index,
-    );
-    if (hasDuplicates) {
+    if (
+      batchCounts.some((count, index) => batchCounts.indexOf(count) !== index)
+    ) {
       toast.error("Duplicate batch counts are not allowed");
       return;
     }
@@ -193,10 +190,8 @@ function SummerCampEdit() {
     setSaving(true);
 
     try {
-      // Update camp
       await summerCampService.updateCamp(campId!, formData);
 
-      // Replace all fee rules
       const feeRulesData: FeeRuleCreateRequest[] = feeRules.map((rule) => ({
         batchCount: parseInt(rule.batchCount),
         feeAmount: parseFloat(rule.feeAmount),
@@ -248,6 +243,22 @@ function SummerCampEdit() {
         onSubmit={handleSubmit}
         className="max-w-4xl mx-auto px-4 py-6 space-y-6"
       >
+        {/* BRANCH READ-ONLY BANNER */}
+        <div className="flex items-center gap-3 px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl">
+          <GitBranch size={16} className="text-slate-500 flex-shrink-0" />
+          <div className="text-sm">
+            <span className="text-slate-500">Branch: </span>
+            <span className="text-slate-800 font-semibold">
+              {campBranch
+                ? `${campBranch.name}${campBranch.isMainBranch ? " (Main)" : ""}`
+                : "—"}
+            </span>
+            <span className="text-slate-400 ml-2 text-xs">
+              · Cannot be changed
+            </span>
+          </div>
+        </div>
+
         {/* BASIC INFO */}
         <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200 space-y-4">
           <h2 className="text-lg font-semibold text-slate-900">
@@ -255,7 +266,7 @@ function SummerCampEdit() {
           </h2>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {/* Camp Type - READ ONLY */}
+            {/* Camp Type — READ ONLY */}
             <div className="md:col-span-2">
               <label className="block text-sm font-medium text-slate-700 mb-2">
                 Camp Type
@@ -403,13 +414,12 @@ function SummerCampEdit() {
             </div>
           ) : (
             <div className="space-y-3">
-              {feeRules.map((rule, index) => (
+              {feeRules.map((rule) => (
                 <div
                   key={rule.id}
                   className="p-4 bg-slate-50 rounded-lg border border-slate-200"
                 >
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                    {/* Batch Count */}
                     <div>
                       <label className="block text-xs font-medium text-slate-600 mb-1">
                         Number of Sessions
@@ -427,7 +437,6 @@ function SummerCampEdit() {
                       />
                     </div>
 
-                    {/* Fee Amount */}
                     <div>
                       <label className="block text-xs font-medium text-slate-600 mb-1">
                         Fee Amount (₹)
@@ -445,7 +454,6 @@ function SummerCampEdit() {
                       />
                     </div>
 
-                    {/* Remove Button */}
                     <div className="flex items-end">
                       <button
                         type="button"
@@ -458,10 +466,13 @@ function SummerCampEdit() {
                     </div>
                   </div>
 
-                  {/* Helper text */}
                   <p className="text-xs text-slate-500 mt-2">
                     {rule.batchCount && rule.feeAmount
-                      ? `Students attending ${rule.batchCount} ${parseInt(rule.batchCount) === 1 ? "session" : "sessions"} per day will pay ₹${parseFloat(rule.feeAmount).toLocaleString()}`
+                      ? `Students attending ${rule.batchCount} ${
+                          parseInt(rule.batchCount) === 1
+                            ? "session"
+                            : "sessions"
+                        } per day will pay ₹${parseFloat(rule.feeAmount).toLocaleString()}`
                       : "Set the fee for students attending this many sessions per day"}
                   </p>
                 </div>

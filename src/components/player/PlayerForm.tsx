@@ -7,6 +7,7 @@ import {
 } from "../../api/batchService";
 import type { Batch } from "../../types/batch.types";
 import type { PlayerFormData } from "../../api/playerService/playerService";
+import type { Branch } from "../../api/branch.api";
 
 type FeePlanOption = {
   publicId: string;
@@ -31,10 +32,14 @@ type Props = {
   batchIds?: string[];
   onBatchChange?: (batchIds: string[]) => void;
   invalidFields?: Record<string, boolean>;
-  // Fee plan props (optional — only used in RegisterPlayer, not UpdatePlayer)
+  // Fee plan props (optional — only used in RegisterPlayer)
   feePlans?: FeePlanOption[];
   selectedFeePlan?: string;
   onFeePlanChange?: (planPublicId: string) => void;
+  // Branch props (optional — only shown to super admin in RegisterPlayer)
+  branches?: Branch[];
+  selectedBranchId?: string;
+  onBranchChange?: (branchId: string) => void;
 };
 
 function PlayerForm({
@@ -51,25 +56,35 @@ function PlayerForm({
   feePlans = [],
   selectedFeePlan = "",
   onFeePlanChange,
+  branches = [],
+  selectedBranchId = "",
+  onBranchChange,
 }: Props) {
   const [availableBatches, setAvailableBatches] = useState<Batch[]>([]);
   const [loadingBatches, setLoadingBatches] = useState(true);
 
   useEffect(() => {
+    if (onBranchChange && !selectedBranchId) {
+      setAvailableBatches([]);
+      setLoadingBatches(false);
+      return;
+    }
     const loadBatches = async () => {
+      setLoadingBatches(true);
       try {
-        const data = await fetchActiveBatches("REGULAR");
+        const data = await fetchActiveBatches(
+          "REGULAR",
+          selectedBranchId || undefined,
+        );
         setAvailableBatches(data);
       } catch (error) {
-        console.error("Failed to load batches:", error);
         setAvailableBatches([]);
       } finally {
         setLoadingBatches(false);
       }
     };
-
     loadBatches();
-  }, []);
+  }, [selectedBranchId, onBranchChange]);
 
   const handlePhotoSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -303,8 +318,7 @@ function PlayerForm({
 
           <div className="md:col-span-2">
             <label className="block text-sm font-medium mb-1">
-              Address
-              <span className="text-red-500">*</span>
+              Address <span className="text-red-500">*</span>
             </label>
             <textarea
               name="address"
@@ -327,6 +341,40 @@ function PlayerForm({
         <h2 className="text-lg font-semibold">Academy Information</h2>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {/* BRANCH DROPDOWN — only shown to super admin */}
+          {onBranchChange && (
+            <div className="md:col-span-2">
+              <label className="block text-sm font-medium mb-1">
+                Branch <span className="text-red-500">*</span>
+              </label>
+              <select
+                value={selectedBranchId}
+                onChange={(e) => onBranchChange(e.target.value)}
+                className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 ${
+                  invalidFields.branchId
+                    ? "border-red-500 focus:ring-red-500"
+                    : "focus:ring-blue-500"
+                }`}
+              >
+                <option value="">Select Branch</option>
+                {branches
+                  .filter((b) => b.active)
+                  .map((b) => (
+                    <option key={b.id} value={b.id}>
+                      {b.name}
+                      {b.isMainBranch ? " (Main)" : ""}
+                    </option>
+                  ))}
+              </select>
+              {invalidFields.branchId && (
+                <p className="text-red-500 text-xs mt-1">Branch is required</p>
+              )}
+              <p className="text-xs text-gray-500 mt-1">
+                Player will be assigned to this branch
+              </p>
+            </div>
+          )}
+
           <div>
             <label className="block text-sm font-medium mb-1">
               Profession <span className="text-red-500">*</span>
@@ -420,7 +468,13 @@ function PlayerForm({
               Player can be assigned to multiple batches
             </p>
 
-            {loadingBatches ? (
+            {onBranchChange && !selectedBranchId ? (
+              <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 text-center">
+                <p className="text-sm text-gray-500">
+                  Select a branch first to see available batches
+                </p>
+              </div>
+            ) : loadingBatches ? (
               <div className="text-sm text-gray-500 py-4 text-center">
                 Loading batches...
               </div>
@@ -597,9 +651,39 @@ function PlayerForm({
             Cancel
           </Button>
         )}
-        <Button type="submit" variant="primary" disabled={loading}>
-          {loading ? "Saving..." : submitLabel}
-        </Button>
+        <button
+          type="submit"
+          disabled={loading}
+          className={`w-full md:w-auto px-6 py-2 bg-blue-600 text-white rounded-md font-medium transition
+    ${loading ? "opacity-50 cursor-not-allowed" : "hover:bg-blue-700"}`}
+        >
+          {loading ? (
+            <span className="flex items-center justify-center gap-2">
+              <svg
+                className="animate-spin h-4 w-4"
+                viewBox="0 0 24 24"
+                fill="none"
+              >
+                <circle
+                  className="opacity-25"
+                  cx="12"
+                  cy="12"
+                  r="10"
+                  stroke="currentColor"
+                  strokeWidth="4"
+                />
+                <path
+                  className="opacity-75"
+                  fill="currentColor"
+                  d="M4 12a8 8 0 018-8v8z"
+                />
+              </svg>
+              Registering...
+            </span>
+          ) : (
+            submitLabel
+          )}
+        </button>
       </div>
     </div>
   );
