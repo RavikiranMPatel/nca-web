@@ -10,7 +10,7 @@ import {
   Eye,
 } from "lucide-react";
 import publicApi from "../../api/publicApi";
-import axiosInstance from "../../api/axiosInstance";
+import api from "../../api/axios";
 
 const ContactInfoSettings = () => {
   const [settings, setSettings] = useState({
@@ -61,7 +61,7 @@ const ContactInfoSettings = () => {
     try {
       // Save each setting individually
       const updates = Object.entries(settings).map(([key, value]) =>
-        axiosInstance.put(`/api/admin/settings/${key}`, { value }),
+        api.put(`/admin/settings/${key}`, { value }),
       );
 
       await Promise.all(updates);
