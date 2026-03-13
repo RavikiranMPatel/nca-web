@@ -90,12 +90,7 @@ const ContentSettings = () => {
     setMessage({ type: "", text: "" });
 
     try {
-      // Save each setting individually
-      const updates = Object.entries(settings).map(([key, value]) =>
-        api.put(`/admin/settings/${key}`, { value }),
-      );
-
-      await Promise.all(updates);
+      await api.put("/admin/settings", settings);
 
       setMessage({
         type: "success",

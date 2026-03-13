@@ -533,63 +533,6 @@ function Home() {
         </section>
       )}
 
-      {/* ── STATS ── */}
-      {statsEnabled && (
-        <section className="py-10 md:py-14 px-4 bg-white border-y border-gray-100">
-          <div className="max-w-5xl mx-auto">
-            <SectionHeading
-              title="Our Achievements"
-              subtitle="Numbers that speak for themselves"
-              primaryColor={primaryColor}
-            />
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
-              {[
-                {
-                  icon: <Users size={36} />,
-                  number: "500+",
-                  label: "Students Trained",
-                },
-                {
-                  icon: <Calendar size={36} />,
-                  number: "10+",
-                  label: "Years Experience",
-                },
-                {
-                  icon: <Trophy size={36} />,
-                  number: "50+",
-                  label: "Tournaments Won",
-                },
-                {
-                  icon: <Target size={36} />,
-                  number: "98%",
-                  label: "Success Rate",
-                },
-              ].map((stat) => (
-                <div
-                  key={stat.label}
-                  className={`bg-white p-6 text-center hover:shadow-xl transition-shadow ${getShadowClass()}`}
-                  style={getCardStyle()}
-                >
-                  <div
-                    className="flex justify-center mb-3"
-                    style={{ color: primaryColor }}
-                  >
-                    {stat.icon}
-                  </div>
-                  <div
-                    className="text-3xl md:text-4xl font-extrabold mb-1"
-                    style={{ color: primaryColor }}
-                  >
-                    {stat.number}
-                  </div>
-                  <div className="text-gray-500 text-sm">{stat.label}</div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </section>
-      )}
-
       {/* ── STAR PERFORMER ── */}
       {starPerformerEnabled && (
         <section

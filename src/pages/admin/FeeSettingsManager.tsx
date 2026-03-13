@@ -8,7 +8,6 @@ import {
   X,
   IndianRupee,
   Calendar,
-  Tag,
   Percent,
 } from "lucide-react";
 import api from "../../api/axios";
