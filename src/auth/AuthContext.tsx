@@ -2,6 +2,12 @@
 import { createContext, useState } from "react";
 import type { ReactNode } from "react";
 
+declare global {
+  interface Window {
+    gtag: (...args: unknown[]) => void;
+  }
+}
+
 export type LoginData = {
   token: string;
   role: string;
@@ -83,6 +89,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (data.academyName) localStorage.setItem("academyName", data.academyName);
     if (data.branchId) localStorage.setItem("branchId", data.branchId);
     if (data.branchName) localStorage.setItem("branchName", data.branchName);
+
+    if (typeof window.gtag === "function") {
+      window.gtag("set", "user_properties", {
+        user_role: data.role,
+        branch: data.branchName ?? "unknown",
+        academy: data.academyName ?? "unknown",
+      });
+    }
   };
 
   const logout = () => {
@@ -108,6 +122,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     localStorage.removeItem("userId");
     localStorage.removeItem("playerId");
     localStorage.removeItem("playerName");
+
+    if (typeof window.gtag === "function") {
+      window.gtag("set", "user_properties", {
+        user_role: null,
+        branch: null,
+        academy: null,
+      });
+    }
   };
 
   return (
