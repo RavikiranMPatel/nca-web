@@ -55,16 +55,45 @@ function CreateEditTemplate() {
 
   const isBowling = formData.resourceCategory === "BOWLING_MACHINE";
 
+  const [bulkPrice60, setBulkPrice60] = useState("");
+  const [bulkPrice120, setBulkPrice120] = useState("");
+  const [bulkPrice, setBulkPrice] = useState("");
+
+  const applyBulkPrices = () => {
+    const newSlots = formData.slots.map((slot) => ({
+      ...slot,
+      ...(isBowling
+        ? {
+            price60Balls: bulkPrice60
+              ? parseFloat(bulkPrice60)
+              : slot.price60Balls,
+            price120Balls: bulkPrice120
+              ? parseFloat(bulkPrice120)
+              : slot.price120Balls,
+          }
+        : {
+            price: bulkPrice ? parseFloat(bulkPrice) : slot.price,
+          }),
+    }));
+    setFormData({ ...formData, slots: newSlots });
+    setBulkPrice60("");
+    setBulkPrice120("");
+    setBulkPrice("");
+  };
+
   useEffect(() => {
     const loadTemplate = async () => {
       try {
         const response = await api.get(`/admin/slot-templates/${id}`);
         const data = response.data;
+        console.log("Template data:", data); // ADD THIS
         // Detect bowling machine template from slots having price60Balls
+        const isBowlingTemplate = data.resourceType === "BOWLING_MACHINE";
         setFormData({
           name: data.name,
           description: data.description,
-          templateType: data.templateType,
+          templateType: isBowlingTemplate ? "WEEKDAY" : data.templateType,
+
           resourceCategory: (data.resourceType === "BOWLING_MACHINE"
             ? "BOWLING_MACHINE"
             : "TURF_ASTRO") as ResourceCategory,
@@ -165,8 +194,8 @@ function CreateEditTemplate() {
         description: formData.description,
         templateType: formData.templateType,
         resourceType: formData.resourceCategory,
-        defaultWeekday: formData.isDefaultWeekday,
-        defaultWeekend: formData.isDefaultWeekend,
+        defaultWeekday: isBowling ? false : formData.isDefaultWeekday,
+        defaultWeekend: isBowling ? false : formData.isDefaultWeekend,
         slots: formData.slots,
       };
 
@@ -457,27 +486,28 @@ function CreateEditTemplate() {
               </div>
             )}
           </div>
-
-          <div>
-            <label className="block text-sm font-medium mb-1.5">
-              Template Type
-            </label>
-            <select
-              value={formData.templateType}
-              onChange={(e) =>
-                setFormData({
-                  ...formData,
-                  templateType: e.target.value as any,
-                })
-              }
-              className="w-full border rounded-lg px-3 py-2 text-sm"
-            >
-              <option value="WEEKDAY">Weekday (Mon–Fri)</option>
-              <option value="WEEKEND">Weekend (Sat–Sun)</option>
-              <option value="HOLIDAY">Holiday</option>
-              <option value="CUSTOM">Custom</option>
-            </select>
-          </div>
+          {!isBowling && (
+            <div>
+              <label className="block text-sm font-medium mb-1.5">
+                Template Type
+              </label>
+              <select
+                value={formData.templateType}
+                onChange={(e) =>
+                  setFormData({
+                    ...formData,
+                    templateType: e.target.value as any,
+                  })
+                }
+                className="w-full border rounded-lg px-3 py-2 text-sm"
+              >
+                <option value="WEEKDAY">Weekday (Mon–Fri)</option>
+                <option value="WEEKEND">Weekend (Sat–Sun)</option>
+                <option value="HOLIDAY">Holiday</option>
+                <option value="CUSTOM">Custom</option>
+              </select>
+            </div>
+          )}
 
           {!isBowling && (
             <div className="space-y-2">
@@ -559,6 +589,70 @@ function CreateEditTemplate() {
 
         {/* SLOTS */}
         <div className="bg-white rounded-lg shadow p-4 sm:p-6 space-y-4">
+          {/* BULK PRICE UPDATE */}
+          {formData.slots.length > 0 && (
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 flex flex-wrap items-end gap-3">
+              <p className="text-xs font-semibold text-blue-700 w-full">
+                ⚡ Apply price to all {formData.slots.length} slots:
+              </p>
+              {isBowling ? (
+                <>
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-xs text-gray-600 whitespace-nowrap">
+                      ₹ 60 balls
+                    </span>
+                    <input
+                      type="number"
+                      value={bulkPrice60}
+                      onChange={(e) => setBulkPrice60(e.target.value)}
+                      className="border rounded px-2 py-1 text-sm w-20"
+                      placeholder={String(
+                        formData.slots[0]?.price60Balls ?? 300,
+                      )}
+                      min="0"
+                      step="50"
+                    />
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-xs text-gray-600 whitespace-nowrap">
+                      ₹ 120 balls
+                    </span>
+                    <input
+                      type="number"
+                      value={bulkPrice120}
+                      onChange={(e) => setBulkPrice120(e.target.value)}
+                      className="border rounded px-2 py-1 text-sm w-20"
+                      placeholder={String(
+                        formData.slots[0]?.price120Balls ?? 500,
+                      )}
+                      min="0"
+                      step="50"
+                    />
+                  </div>
+                </>
+              ) : (
+                <div className="flex items-center gap-1.5">
+                  <span className="text-xs text-gray-600">₹</span>
+                  <input
+                    type="number"
+                    value={bulkPrice}
+                    onChange={(e) => setBulkPrice(e.target.value)}
+                    className="border rounded px-2 py-1 text-sm w-24"
+                    placeholder={String(formData.slots[0]?.price ?? 500)}
+                    min="0"
+                    step="50"
+                  />
+                </div>
+              )}
+              <button
+                type="button"
+                onClick={applyBulkPrices}
+                className="px-3 py-1.5 bg-blue-600 text-white rounded-lg text-xs font-semibold hover:bg-blue-700"
+              >
+                Apply to All
+              </button>
+            </div>
+          )}
           <div className="flex items-center justify-between">
             <div>
               <h2 className="text-base sm:text-lg font-semibold">
