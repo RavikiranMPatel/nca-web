@@ -1,6 +1,13 @@
 {
   "name": "NextGen Cricket Academy Mysuru",
   "short_name": "NCA Mysuru",
+  "description": "Professional cricket coaching academy in Mysuru with world class facilities.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "theme_color": "#143f5f",
+  "background_color": "#143f5f",
   "icons": [
     {
       "src": "/web-app-manifest-192x192.png",
@@ -13,9 +20,14 @@
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "maskable"
+    },
+    {
+      "src": "/favicon-96x96.png",
+      "sizes": "96x96",
+      "type": "image/png",
+      "purpose": "any"
     }
   ],
-  "theme_color": "#143f5f",
-  "background_color": "#ffffff",
-  "display": "standalone"
+  "categories": ["sports", "education"],
+  "lang": "en-IN"
 }
