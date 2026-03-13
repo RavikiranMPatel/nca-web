@@ -148,6 +148,9 @@ function ManageResources() {
 
   const turfResources = resources.filter((r) => r.type === "TURF");
   const astroResources = resources.filter((r) => r.type === "ASTRO");
+  const bowlingResources = resources.filter(
+    (r) => r.type === "BOWLING_MACHINE",
+  ); // add this
 
   return (
     <div className="max-w-6xl mx-auto space-y-6">
@@ -228,6 +231,30 @@ function ManageResources() {
         </div>
       </div>
 
+      <div className="bg-white rounded-lg shadow">
+        <div className="p-6 border-b">
+          <h2 className="text-lg font-semibold">
+            Bowling Machines ({bowlingResources.length})
+          </h2>
+        </div>
+        <div className="p-6 space-y-4">
+          {bowlingResources.length === 0 ? (
+            <p className="text-gray-400 text-sm">
+              No bowling machine resources added yet.
+            </p>
+          ) : (
+            bowlingResources.map((resource) => (
+              <ResourceCard
+                key={resource.id}
+                resource={resource}
+                onToggle={toggleActive}
+                onEdit={handleOpenEdit}
+              />
+            ))
+          )}
+        </div>
+      </div>
+
       {/* INFO BOX */}
       <div className="bg-blue-50 border border-blue-200 rounded-lg p-6">
         <h3 className="font-semibold text-blue-900 mb-2">ℹ️ How it works:</h3>
@@ -281,6 +308,9 @@ function ManageResources() {
                 >
                   <option value="TURF">TURF (Turf Wicket)</option>
                   <option value="ASTRO">ASTRO (Astro Turf)</option>
+                  <option value="BOWLING_MACHINE">
+                    BOWLING_MACHINE (Bowling Machine)
+                  </option>
                 </select>
               </div>
 
