@@ -55,6 +55,7 @@ import GenerateSlots from "./pages/slot-templates/GenerateSlots";
 import ManageUsersPage from "./pages/ManageUsersPage";
 import ManageBranchesPage from "./pages/ManageBranchesPage";
 import AdminManualBooking from "./pages/book-slot/AdminManualBooking";
+import AdminMembersPage from "./pages/admin/AdminMembersPage";
 
 function App() {
   const [onboarded, setOnboarded] = useState<boolean | null>(null);
@@ -290,6 +291,16 @@ function App() {
           <ProtectedRoute roles={["ROLE_ADMIN", "ROLE_SUPER_ADMIN"]}>
             <AppLayout>
               <AdminManualBooking />
+            </AppLayout>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/members"
+        element={
+          <ProtectedRoute roles={["ROLE_SUPER_ADMIN"]}>
+            <AppLayout>
+              <AdminMembersPage />
             </AppLayout>
           </ProtectedRoute>
         }

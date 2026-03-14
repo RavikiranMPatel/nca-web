@@ -19,6 +19,7 @@ import MediaSettingsManager from "./MediaSettingsManager";
 import TeamMembersAdmin from "./TeamMembersAdmin";
 import BranchesTab from "./BranchesTab";
 type SettingsMap = Record<string, string>;
+import SubscriptionPricingManager from "./SubscriptionPricingManager";
 
 type TabType =
   | "general"
@@ -34,7 +35,8 @@ type TabType =
   | "fees"
   | "media"
   | "team"
-  | "branches";
+  | "branches"
+  | "subscription";
 
 function AcademySettings() {
   const navigate = useNavigate();
@@ -303,6 +305,17 @@ function AcademySettings() {
               }`}
             >
               Fees
+            </button>
+
+            <button
+              onClick={() => setActiveTab("subscription")}
+              className={`py-3 px-4 text-sm font-medium border-b-2 transition whitespace-nowrap ${
+                activeTab === "subscription"
+                  ? "border-blue-600 text-blue-600"
+                  : "border-transparent text-gray-600 hover:text-blue-600"
+              }`}
+            >
+              🏏 Subscriptions
             </button>
 
             <button
@@ -1356,6 +1369,9 @@ function AcademySettings() {
           {activeTab === "starperformer" && <StarPerformerSettings />}
           {/* FEES TAB */}
           {activeTab === "fees" && <FeeSettingsManager />}
+
+          {activeTab === "subscription" && <SubscriptionPricingManager />}
+
           {/* MEDIA TAB */}
           {activeTab === "media" && <MediaSettingsManager />}
         </div>

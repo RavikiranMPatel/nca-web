@@ -25,12 +25,23 @@ type BookingStatusResponse = {
 function BookingSuccess() {
   const navigate = useNavigate();
   const { state } = useLocation() as {
-    state?: { bookingPublicId?: string; isGuest?: boolean };
+    state?: {
+      bookingPublicId?: string;
+      isGuest?: boolean;
+      isMember?: boolean;
+      sessionsDeducted?: number;
+      sessionsRemaining?: number;
+    };
   };
 
   const [booking, setBooking] = useState<BookingStatusResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+
+  // Add to BookingSuccess.tsx — member instant confirmation state
+  const isMemberBooking = state?.isMember === true;
+  const sessionsDeducted = state?.sessionsDeducted;
+  const sessionsRemaining = state?.sessionsRemaining;
 
   const isGuest = state?.isGuest || false;
 
@@ -131,12 +142,18 @@ function BookingSuccess() {
             </svg>
           </div>
           <h2 className="text-2xl font-bold text-gray-900 mb-2">
-            Confirming Your Payment
+            {isMemberBooking
+              ? "Confirming Your Booking"
+              : "Confirming Your Payment"}
           </h2>
           <p className="text-gray-600">
-            Please wait while we verify your payment...
+            {isMemberBooking
+              ? "Please wait while we confirm your booking..."
+              : "Please wait while we verify your payment..."}
           </p>
-          <p className="text-sm text-gray-500 mt-4">Don't close this page</p>
+          {!isMemberBooking && (
+            <p className="text-sm text-gray-500 mt-4">Don't close this page</p>
+          )}
         </div>
       </div>
     );
@@ -227,6 +244,20 @@ function BookingSuccess() {
                   {booking.bookingPublicId}
                 </p>
               </div>
+
+              {/* Member Sessions Info */}
+              {isMemberBooking && sessionsDeducted && (
+                <div className="bg-green-50 border border-green-200 rounded-lg p-4 text-center">
+                  <p className="text-sm text-green-800 font-semibold">
+                    🏏 {sessionsDeducted} session
+                    {sessionsDeducted > 1 ? "s" : ""} deducted from your
+                    membership
+                  </p>
+                  <p className="text-sm text-green-700 mt-1">
+                    Sessions remaining: <strong>{sessionsRemaining}</strong>
+                  </p>
+                </div>
+              )}
 
               {/* Date */}
               <div className="flex items-start gap-4">

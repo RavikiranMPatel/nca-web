@@ -10,13 +10,21 @@ type BookingDraft = {
   ballCount?: number | null;
 };
 
+type MemberStatus = {
+  isMember: boolean;
+  sessionsRemaining?: number;
+  expiresOn?: string;
+};
+
 function ConfirmBooking() {
   const navigate = useNavigate();
   const location = useLocation();
   const draft = location.state as BookingDraft | null;
 
   const [loading, setLoading] = useState(false);
+  const [memberLoading, setMemberLoading] = useState(false);
   const [error, setError] = useState("");
+  const [memberStatus, setMemberStatus] = useState<MemberStatus | null>(null);
 
   // Guest fields
   const [guestPhone, setGuestPhone] = useState("");
@@ -28,10 +36,23 @@ function ConfirmBooking() {
   const [notifyEmail, setNotifyEmail] = useState("");
 
   const isLoggedIn = !!localStorage.getItem("accessToken");
+  const isBowlingMachine = draft?.resource === "BOWLING_MACHINE";
 
   useEffect(() => {
     if (!draft) navigate("/book-slot", { replace: true });
   }, [draft, navigate]);
+
+  // Check membership status for logged-in bowling machine bookings
+  useEffect(() => {
+    if (!isLoggedIn || !isBowlingMachine) return;
+
+    setMemberLoading(true);
+    api
+      .get("/subscriptions/is-member")
+      .then((res) => setMemberStatus(res.data))
+      .catch(() => setMemberStatus({ isMember: false }))
+      .finally(() => setMemberLoading(false));
+  }, [isLoggedIn, isBowlingMachine]);
 
   if (!draft)
     return (
@@ -48,6 +69,9 @@ function ConfirmBooking() {
         ? "Turf"
         : "Astro";
 
+  const isMember = memberStatus?.isMember === true;
+  const sessionsNeeded = ballCount === 120 ? 2 : 1;
+
   const handleConfirm = async () => {
     setLoading(true);
     setError("");
@@ -56,7 +80,8 @@ function ConfirmBooking() {
       let bookingId: string;
 
       if (isLoggedIn) {
-        if (!notifyPhone || notifyPhone.length !== 10) {
+        // Members don't need notify phone — confirmation sent automatically
+        if (!isMember && (!notifyPhone || notifyPhone.length !== 10)) {
           setError("Please enter a valid 10-digit WhatsApp number");
           setLoading(false);
           return;
@@ -70,6 +95,22 @@ function ConfirmBooking() {
         });
         bookingId = res.data.bookingPublicId;
 
+        // Members: booking is already confirmed, skip payment
+        if (isMember) {
+          navigate("/booking-success", {
+            replace: true,
+            state: {
+              bookingPublicId: bookingId,
+              isMember: true,
+              sessionsDeducted: sessionsNeeded,
+              sessionsRemaining:
+                (memberStatus?.sessionsRemaining ?? 0) - sessionsNeeded,
+            },
+          });
+          return;
+        }
+
+        // Non-members: save notify details, go to payment
         await api.patch(`/bookings/${bookingId}/notify-details`, {
           notifyPhone,
           notifyEmail,
@@ -116,11 +157,9 @@ function ConfirmBooking() {
         <div className="flex items-center gap-3">
           <button
             onClick={() =>
-              navigate("/book-slot", {
-                state: { date, resource, slot },
-              })
+              navigate("/book-slot", { state: { date, resource, slot } })
             }
-            className="w-9 h-9 flex items-center justify-center rounded-full 
+            className="w-9 h-9 flex items-center justify-center rounded-full
                        bg-white border border-gray-200 text-gray-600 shadow-sm"
           >
             ←
@@ -147,6 +186,57 @@ function ConfirmBooking() {
             )}
           </div>
         </div>
+
+        {/* Member Info Card */}
+        {isLoggedIn && isBowlingMachine && (
+          <>
+            {memberLoading ? (
+              <div className="bg-white rounded-2xl border border-gray-200 p-4 flex items-center gap-3">
+                <div className="w-5 h-5 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
+                <span className="text-sm text-gray-500">
+                  Checking membership…
+                </span>
+              </div>
+            ) : isMember ? (
+              <div className="bg-green-50 border border-green-200 rounded-2xl p-4 space-y-2">
+                <div className="flex items-center gap-2">
+                  <span className="text-green-600 text-lg">🏏</span>
+                  <p className="font-semibold text-green-800">Active Member</p>
+                </div>
+                <p className="text-sm text-green-700">
+                  Sessions remaining:{" "}
+                  <strong>{memberStatus?.sessionsRemaining}</strong>
+                  {sessionsNeeded === 2 && (
+                    <span className="text-green-600">
+                      {" "}
+                      (2 will be deducted for 120 balls)
+                    </span>
+                  )}
+                </p>
+                <p className="text-sm text-green-700">
+                  Valid till: <strong>{memberStatus?.expiresOn}</strong>
+                </p>
+                <div className="bg-green-100 rounded-xl px-3 py-2 mt-1">
+                  <p className="text-xs text-green-800 font-medium">
+                    ✅ Payment skipped — booking will be confirmed instantly!
+                  </p>
+                </div>
+              </div>
+            ) : (
+              // AFTER
+              <div className="bg-blue-50 border border-blue-200 rounded-xl px-4 py-3 text-sm text-blue-800">
+                💡 Not a member yet?{" "}
+                <button
+                  onClick={() => navigate("/my-bookings")}
+                  className="underline font-semibold text-blue-800 hover:text-blue-900"
+                >
+                  View subscription plans
+                </button>{" "}
+                to book without payment every time.
+              </div>
+            )}
+          </>
+        )}
 
         {/* Guest Fields */}
         {!isLoggedIn && (
@@ -202,8 +292,8 @@ function ConfirmBooking() {
           </div>
         )}
 
-        {/* Notify Fields — logged-in users */}
-        {isLoggedIn && (
+        {/* Notify Fields — logged-in NON-members only */}
+        {isLoggedIn && !isMember && (
           <div className="bg-white rounded-2xl border border-gray-200 p-5 shadow-sm space-y-4">
             <div className="bg-blue-50 border border-blue-200 rounded-xl px-4 py-3 text-sm text-blue-800">
               📲 We'll send your confirmation to these details after payment.
@@ -253,7 +343,7 @@ function ConfirmBooking() {
         {/* Continue Button */}
         <button
           onClick={handleConfirm}
-          disabled={loading}
+          disabled={loading || memberLoading}
           className="w-full bg-blue-600 text-white py-4 rounded-2xl font-bold text-base
                      hover:bg-blue-700 active:scale-95 transition-all shadow-md
                      disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
@@ -279,7 +369,11 @@ function ConfirmBooking() {
               />
             </svg>
           )}
-          {loading ? "Processing…" : "Continue to Payment →"}
+          {loading
+            ? "Processing…"
+            : isMember
+              ? "Confirm Booking (Member) →"
+              : "Continue to Payment →"}
         </button>
       </div>
     </div>

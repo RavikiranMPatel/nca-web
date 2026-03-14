@@ -325,6 +325,20 @@ function AdminDashboard() {
             </p>
           </div>
 
+          {/* BM MEMBERS */}
+          <div
+            onClick={() => navigate("/admin/members")}
+            className="bg-gradient-to-br from-teal-500 to-teal-600 p-6 rounded-lg shadow-lg hover:shadow-xl cursor-pointer transition transform hover:scale-105"
+          >
+            <div className="flex items-center gap-3 mb-3">
+              <UserCheck size={28} className="text-white" />
+              <h3 className="text-lg font-bold text-white">BM Members</h3>
+            </div>
+            <p className="text-sm text-teal-100">
+              Manage bowling machine subscribers, logged-in users and guests
+            </p>
+          </div>
+
           {/* CALENDAR VIEW */}
           <div
             onClick={() => navigate("/admin/date-overrides")}
