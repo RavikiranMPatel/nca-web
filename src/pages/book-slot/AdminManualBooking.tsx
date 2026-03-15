@@ -9,6 +9,8 @@ type Slot = {
   slotId: string;
   availableCount: number;
   price: number;
+  price60Balls: number | null;
+  price120Balls: number | null;
   slotType: "MORNING" | "AFTERNOON" | "EVENING";
   lightsRequired: boolean;
 };
@@ -23,7 +25,7 @@ type UserSuggestion = {
 type BookerType = "REGISTERED" | "GUEST";
 type PaymentStatus = "CONFIRMED" | "PENDING_PAYMENT";
 
-const RESOURCES = ["TURF", "ASTRO"];
+const RESOURCES = ["TURF", "ASTRO", "BOWLING_MACHINE"];
 
 const SLOT_GROUPS = [
   { key: "MORNING", label: "☀️ Morning", sub: "Before 12 PM" },
@@ -81,15 +83,24 @@ export default function AdminManualBooking() {
   // Step 3 – confirm
   const [paymentStatus, setPaymentStatus] =
     useState<PaymentStatus>("CONFIRMED");
+  const [ballCount, setBallCount] = useState<60 | 120 | null>(null);
   const [notes, setNotes] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState("");
   const [success, setSuccess] = useState(false);
 
+  // Reset ball count when resource changes
+  useEffect(() => {
+    setBallCount(null);
+    setSelectedSlot(null);
+    setSlots([]);
+  }, [resource]);
+
   // Fetch past slots when date + resource selected in Mode B
   useEffect(() => {
     if (mode !== "PAST" || !pastDate || !pastResource) {
       setPastSlots([]);
+      setBallCount(null);
       setPastTime("");
       return;
     }
@@ -120,11 +131,25 @@ export default function AdminManualBooking() {
 
   // ── Fetch slots ──────────────────────────────────────────────────────────────
 
+  // Reset slots and selection when ball count changes
+  useEffect(() => {
+    setSlots([]);
+    setSelectedSlot(null);
+    setSlotsError("");
+    setClosedMsg("");
+  }, [ballCount]);
+
   useEffect(() => {
     if (!date || !resource) {
       setSlots([]);
       setSlotsError("");
       setClosedMsg("");
+      return;
+    }
+
+    // Don't fetch for bowling machine until ball count selected
+    if (resource === "BOWLING_MACHINE" && !ballCount) {
+      setSlots([]);
       return;
     }
 
@@ -134,9 +159,14 @@ export default function AdminManualBooking() {
       setClosedMsg("");
       setSelectedSlot(null);
       try {
-        const res = await api.get("/slot/availability", {
-          params: { date, resourceType: resource },
-        });
+        const res =
+          resource === "BOWLING_MACHINE"
+            ? await api.get("/slot/bowling/availability", {
+                params: { date, ballCount },
+              })
+            : await api.get("/slot/availability", {
+                params: { date, resourceType: resource },
+              });
         if (!res.data.available) {
           setClosedMsg(res.data.message || "Facility closed");
           setSlots([]);
@@ -153,7 +183,14 @@ export default function AdminManualBooking() {
             time: `${fmt(s.startTime)} - ${fmt(s.endTime)}`,
             slotId: s.slotId,
             availableCount: s.availableCount,
-            price: s.price,
+            price:
+              resource === "BOWLING_MACHINE"
+                ? ballCount === 60
+                  ? s.price60Balls
+                  : s.price120Balls
+                : s.price,
+            price60Balls: s.price60Balls ?? null,
+            price120Balls: s.price120Balls ?? null,
             slotType: s.slotType,
             lightsRequired: s.lightsRequired,
           })),
@@ -215,6 +252,9 @@ export default function AdminManualBooking() {
               startTime: selectedSlot!.time.split(" - ")[0] + ":00",
               resourceType: resource,
               isPastSession: false,
+              ...(resource === "BOWLING_MACHINE" && ballCount
+                ? { ballCount }
+                : {}),
               paymentStatus,
               notes,
               isGuest: bookerType === "GUEST",
@@ -234,7 +274,8 @@ export default function AdminManualBooking() {
 
   // ── Validation ───────────────────────────────────────────────────────────────
 
-  const step1Valid = !!selectedSlot;
+  const step1Valid =
+    !!selectedSlot && (resource !== "BOWLING_MACHINE" || ballCount !== null);
   const step2Valid =
     bookerType === "REGISTERED"
       ? !!selectedUser
@@ -583,6 +624,43 @@ export default function AdminManualBooking() {
             </div>
           </div>
 
+          {/* Ball count selector — only for bowling machine */}
+          {resource === "BOWLING_MACHINE" && (
+            <div className="bg-white rounded-2xl border border-gray-200 p-5 shadow-sm">
+              <label className="block text-sm font-medium text-gray-700 mb-3">
+                Select Session *
+              </label>
+              <div className="grid grid-cols-2 gap-3">
+                <button
+                  onClick={() => setBallCount(60)}
+                  className={`py-4 rounded-xl border-2 text-center transition ${
+                    ballCount === 60
+                      ? "border-blue-600 bg-blue-50"
+                      : "border-gray-200 hover:border-blue-300"
+                  }`}
+                >
+                  <p className="text-xl font-bold text-blue-700">60</p>
+                  <p className="text-xs text-gray-500 mt-0.5">
+                    balls · 15 mins
+                  </p>
+                </button>
+                <button
+                  onClick={() => setBallCount(120)}
+                  className={`py-4 rounded-xl border-2 text-center transition ${
+                    ballCount === 120
+                      ? "border-blue-600 bg-blue-50"
+                      : "border-gray-200 hover:border-blue-300"
+                  }`}
+                >
+                  <p className="text-xl font-bold text-blue-700">120</p>
+                  <p className="text-xs text-gray-500 mt-0.5">
+                    balls · 30 mins
+                  </p>
+                </button>
+              </div>
+            </div>
+          )}
+
           {/* Slot grid */}
           <div className="bg-white rounded-2xl border border-gray-200 p-6 shadow-sm space-y-6">
             <h2 className="font-semibold text-gray-900">Available Slots</h2>
@@ -910,9 +988,25 @@ export default function AdminManualBooking() {
                 <SummaryRow label="Date" value={date} />
                 <SummaryRow label="Resource" value={resource} />
                 <SummaryRow label="Slot" value={selectedSlot?.time ?? ""} />
+                {resource === "BOWLING_MACHINE" && ballCount && (
+                  <SummaryRow
+                    label="Session"
+                    value={`${ballCount} balls (${ballCount === 60 ? "15 mins" : "30 mins"})`}
+                  />
+                )}
                 <SummaryRow
                   label="Amount"
-                  value={`₹${selectedSlot?.price ?? 0}`}
+                  value={`₹${
+                    resource === "BOWLING_MACHINE"
+                      ? ballCount === 60
+                        ? (selectedSlot?.price60Balls ??
+                          selectedSlot?.price ??
+                          0)
+                        : (selectedSlot?.price120Balls ??
+                          selectedSlot?.price ??
+                          0)
+                      : (selectedSlot?.price ?? 0)
+                  }`}
                 />
                 <SummaryRow
                   label="Booker"
