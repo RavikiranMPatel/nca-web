@@ -87,6 +87,14 @@ function AdminMembersPage() {
     fetchQueued();
   }, []);
 
+  const [deductModal, setDeductModal] = useState<{
+    publicId: string;
+    userName: string;
+    sessionsRemaining: number;
+    action: "deduct" | "restore";
+  } | null>(null);
+  const [deducting, setDeducting] = useState(false);
+
   // ── Fetch on tab switch ─────────────────────────────────────────────────
   useEffect(() => {
     if (activeTab === "NON_SUBSCRIBERS" && nonSubscribers.length === 0) {
@@ -186,6 +194,31 @@ function AdminMembersPage() {
       fetchQueued();
     } catch (err: any) {
       toast.error(err?.response?.data?.message || "Failed to activate");
+    }
+  };
+
+  const handleManualSession = async (ballCount: number) => {
+    if (!deductModal) return;
+    setDeducting(true);
+    try {
+      const endpoint =
+        deductModal.action === "deduct"
+          ? `/admin/subscriptions/${deductModal.publicId}/deduct-session`
+          : `/admin/subscriptions/${deductModal.publicId}/restore-session`;
+
+      await api.post(endpoint, { ballCount });
+
+      toast.success(
+        deductModal.action === "deduct"
+          ? `${ballCount === 120 ? "2 sessions" : "1 session"} deducted from ${deductModal.userName}`
+          : `${ballCount === 120 ? "2 sessions" : "1 session"} restored for ${deductModal.userName}`,
+      );
+      setDeductModal(null);
+      fetchActive();
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message || "Failed");
+    } finally {
+      setDeducting(false);
     }
   };
 
@@ -413,13 +446,41 @@ function AdminMembersPage() {
                           </p>
                         )}
 
-                        <div className="flex gap-2 pt-1">
+                        <div className="flex gap-2 pt-1 flex-wrap">
+                          <button
+                            onClick={() =>
+                              setDeductModal({
+                                publicId: sub.publicId,
+                                userName: sub.userName,
+                                sessionsRemaining: sub.sessionsRemaining,
+                                action: "deduct",
+                              })
+                            }
+                            className="text-xs px-3 py-1.5 border border-amber-300
+               text-amber-700 rounded-lg hover:bg-amber-50 transition"
+                          >
+                            − Deduct Session
+                          </button>
+                          <button
+                            onClick={() =>
+                              setDeductModal({
+                                publicId: sub.publicId,
+                                userName: sub.userName,
+                                sessionsRemaining: sub.sessionsRemaining,
+                                action: "restore",
+                              })
+                            }
+                            className="text-xs px-3 py-1.5 border border-green-300
+               text-green-700 rounded-lg hover:bg-green-50 transition"
+                          >
+                            + Restore Session
+                          </button>
                           <button
                             onClick={() =>
                               handleCancelSubscription(sub.publicId)
                             }
                             className="text-xs px-3 py-1.5 border border-red-300
-                                       text-red-600 rounded-lg hover:bg-red-50 transition"
+               text-red-600 rounded-lg hover:bg-red-50 transition"
                           >
                             Cancel Subscription
                           </button>
@@ -652,6 +713,59 @@ function AdminMembersPage() {
             </div>
           )}
         </>
+      )}
+
+      {/* ── DEDUCT / RESTORE SESSION MODAL ──────────────────────────── */}
+      {deductModal && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6">
+            <h3 className="font-bold text-lg mb-1">
+              {deductModal.action === "deduct"
+                ? "− Deduct Session"
+                : "+ Restore Session"}
+            </h3>
+            <p className="text-sm text-slate-500 mb-1">
+              Player: <strong>{deductModal.userName}</strong>
+            </p>
+            <p className="text-sm text-slate-500 mb-5">
+              Sessions remaining:{" "}
+              <strong>{deductModal.sessionsRemaining}</strong>
+            </p>
+            <p className="text-sm font-semibold text-slate-700 mb-3">
+              How many balls?
+            </p>
+            <div className="grid grid-cols-2 gap-3 mb-5">
+              <button
+                onClick={() => handleManualSession(60)}
+                disabled={deducting}
+                className="py-4 rounded-xl border-2 border-blue-200 bg-blue-50
+                           hover:border-blue-400 transition text-center
+                           disabled:opacity-50"
+              >
+                <p className="text-xl font-bold text-blue-700">60</p>
+                <p className="text-xs text-blue-500">balls · 1 session</p>
+              </button>
+              <button
+                onClick={() => handleManualSession(120)}
+                disabled={deducting}
+                className="py-4 rounded-xl border-2 border-purple-200 bg-purple-50
+                           hover:border-purple-400 transition text-center
+                           disabled:opacity-50"
+              >
+                <p className="text-xl font-bold text-purple-700">120</p>
+                <p className="text-xs text-purple-500">balls · 2 sessions</p>
+              </button>
+            </div>
+            <button
+              onClick={() => setDeductModal(null)}
+              disabled={deducting}
+              className="w-full py-2.5 text-sm font-medium text-slate-600
+                         bg-slate-100 rounded-xl hover:bg-slate-200 transition"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
       )}
     </div>
   );

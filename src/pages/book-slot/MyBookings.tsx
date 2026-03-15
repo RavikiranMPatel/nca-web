@@ -64,16 +64,22 @@ function MyBookings() {
   const navigate = useNavigate();
 
   useEffect(() => {
+    // AFTER
     api
       .get("/bookings/my")
       .then((res) => setBookings(res.data))
-      .catch(() => setError("Unable to load bookings"))
+      .catch((err) => {
+        if (err?.response?.status === 401) return;
+        setError("Unable to load bookings");
+      })
       .finally(() => setLoading(false));
 
     api
       .get("/subscriptions/my")
       .then((res) => setSubInfo(res.data))
-      .catch(() => setSubInfo(null))
+      .catch((err) => {
+        if (err?.response?.status !== 401) setSubInfo(null);
+      })
       .finally(() => setSubLoading(false));
   }, []);
 

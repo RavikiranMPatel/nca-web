@@ -290,9 +290,37 @@ function Navbar() {
                             </p>
                           </div>
                         )}
+                        {/* ── NEW: My Profile link ── */}
+                        <button
+                          onClick={() => {
+                            navigate("/profile");
+                            setUserMenuOpen(false);
+                          }}
+                          className="w-full flex items-center gap-2 px-4 py-2.5 text-sm
+                 text-gray-700 hover:bg-gray-50 transition"
+                        >
+                          <User size={15} />
+                          My Profile
+                        </button>
+                        {/* ── NEW: My Subscription link (non-admin only) ── */}
+                        {!isAdmin && (
+                          <button
+                            onClick={() => {
+                              navigate("/my-subscription");
+                              setUserMenuOpen(false);
+                            }}
+                            className="w-full flex items-center gap-2 px-4 py-2.5 text-sm
+                   text-gray-700 hover:bg-gray-50 transition"
+                          >
+                            <span className="text-base leading-none">🏏</span>
+                            My Subscription
+                          </button>
+                        )}
+                        <div className="h-px bg-gray-100 my-1" />
                         <button
                           onClick={handleLogout}
-                          className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 transition"
+                          className="w-full flex items-center gap-2 px-4 py-2.5 text-sm
+                 text-red-600 hover:bg-red-50 transition"
                         >
                           <LogOut size={15} />
                           Logout
@@ -435,6 +463,36 @@ function Navbar() {
               )}
 
               <div className="h-px bg-gray-100 my-2" />
+
+              {isAuthenticated && (
+                <>
+                  <button
+                    onClick={() => {
+                      navigate("/profile");
+                      setMobileOpen(false);
+                    }}
+                    className="w-full flex items-center gap-2 px-3 py-2.5 text-sm
+                 text-gray-700 hover:bg-gray-50 rounded transition"
+                  >
+                    <User size={15} />
+                    My Profile
+                  </button>
+                  {!isAdmin && (
+                    <button
+                      onClick={() => {
+                        navigate("/my-subscription");
+                        setMobileOpen(false);
+                      }}
+                      className="w-full flex items-center gap-2 px-3 py-2.5 text-sm
+                   text-gray-700 hover:bg-gray-50 rounded transition"
+                    >
+                      <span className="text-base leading-none">🏏</span>
+                      My Subscription
+                    </button>
+                  )}
+                  <div className="h-px bg-gray-100 my-2" />
+                </>
+              )}
 
               {isAuthenticated ? (
                 <button

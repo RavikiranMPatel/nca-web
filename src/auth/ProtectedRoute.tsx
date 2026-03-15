@@ -16,14 +16,11 @@ function ProtectedRoute({ children, roles }: Props) {
     return <Navigate to="/login" replace />;
   }
 
-  if (!auth.isAuthenticated) {
-    return (
-      <Navigate
-        to="/login"
-        replace
-        state={{ from: location.pathname }}
-      />
-    );
+  const liveToken = localStorage.getItem("accessToken");
+
+  if (!auth.isAuthenticated || !liveToken) {
+    sessionStorage.setItem("redirectAfterLogin", location.pathname);
+    return <Navigate to="/login" replace />;
   }
 
   if (roles && roles.length > 0) {

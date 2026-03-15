@@ -56,6 +56,20 @@ import ManageUsersPage from "./pages/ManageUsersPage";
 import ManageBranchesPage from "./pages/ManageBranchesPage";
 import AdminManualBooking from "./pages/book-slot/AdminManualBooking";
 import AdminMembersPage from "./pages/admin/AdminMembersPage";
+import MySubscription from "./pages/book-slot/MySubscription";
+import UserProfilePage from "./pages/UserProfilePage";
+
+// Add route after /my-bookings route:
+<Route
+  path="/my-subscription"
+  element={
+    <ProtectedRoute>
+      <AppLayout>
+        <MySubscription />
+      </AppLayout>
+    </ProtectedRoute>
+  }
+/>;
 
 function App() {
   const [onboarded, setOnboarded] = useState<boolean | null>(null);
@@ -158,6 +172,28 @@ function App() {
           <ProtectedRoute>
             <AppLayout>
               <MyBookings />
+            </AppLayout>
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/my-subscription"
+        element={
+          <ProtectedRoute>
+            <AppLayout>
+              <MySubscription />
+            </AppLayout>
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/profile"
+        element={
+          <ProtectedRoute>
+            <AppLayout>
+              <UserProfilePage />
             </AppLayout>
           </ProtectedRoute>
         }

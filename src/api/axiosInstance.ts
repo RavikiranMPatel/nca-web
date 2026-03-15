@@ -30,9 +30,26 @@ axiosInstance.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response?.status === 401) {
-      // Token expired or invalid
+      // Clear all the same keys AuthContext.logout() clears
       localStorage.removeItem("accessToken");
-      localStorage.removeItem("refreshToken");
+      localStorage.removeItem("userRole");
+      localStorage.removeItem("userName");
+      localStorage.removeItem("userEmail");
+      localStorage.removeItem("userPublicId");
+      localStorage.removeItem("academyId");
+      localStorage.removeItem("academyName");
+      localStorage.removeItem("branchId");
+      localStorage.removeItem("branchName");
+      localStorage.removeItem("userId");
+      localStorage.removeItem("playerId");
+      localStorage.removeItem("playerName");
+
+      // Set flag so Login.tsx shows the yellow banner
+      sessionStorage.setItem("sessionExpired", "true");
+      sessionStorage.setItem(
+        "redirectAfterLogin",
+        window.location.pathname + window.location.search,
+      );
       window.location.href = "/login";
     }
     return Promise.reject(error);
