@@ -1,6 +1,12 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Calendar, ClipboardList, Power, Settings } from "lucide-react";
+import {
+  Calendar,
+  ClipboardList,
+  Power,
+  Settings,
+  TrendingUp,
+} from "lucide-react";
 import {
   Users,
   UserCheck,
@@ -43,6 +49,8 @@ function AdminDashboard() {
   const [summary, setSummary] = useState<DashboardSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const role = localStorage.getItem("userRole");
+  const isSuperAdmin = role === "ROLE_SUPER_ADMIN";
 
   useEffect(() => {
     setLoading(true);
@@ -443,6 +451,24 @@ function AdminDashboard() {
               Configure academy info, branding, and home page
             </p>
           </div>
+
+          {/* REVENUE DASHBOARD — Super Admin only */}
+          {isSuperAdmin && (
+            <div
+              onClick={() => navigate("/admin/revenue")}
+              className="bg-gradient-to-br from-emerald-500 to-teal-600 p-6 rounded-lg shadow-lg hover:shadow-xl cursor-pointer transition transform hover:scale-105"
+            >
+              <div className="flex items-center gap-3 mb-3">
+                <TrendingUp size={28} className="text-white" />
+                <h3 className="text-lg font-bold text-white">
+                  Revenue Dashboard
+                </h3>
+              </div>
+              <p className="text-sm text-emerald-100">
+                View combined fees &amp; booking payments
+              </p>
+            </div>
+          )}
         </div>
       </section>
     </div>

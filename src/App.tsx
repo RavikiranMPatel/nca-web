@@ -58,6 +58,7 @@ import AdminManualBooking from "./pages/book-slot/AdminManualBooking";
 import AdminMembersPage from "./pages/admin/AdminMembersPage";
 import MySubscription from "./pages/book-slot/MySubscription";
 import UserProfilePage from "./pages/UserProfilePage";
+import AdminRevenueDashboard from "./pages/admin/AdminRevenueDashboard";
 
 // Add route after /my-bookings route:
 <Route
@@ -337,6 +338,16 @@ function App() {
           <ProtectedRoute roles={["ROLE_SUPER_ADMIN"]}>
             <AppLayout>
               <AdminMembersPage />
+            </AppLayout>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/revenue"
+        element={
+          <ProtectedRoute roles={["ROLE_SUPER_ADMIN"]}>
+            <AppLayout>
+              <AdminRevenueDashboard />
             </AppLayout>
           </ProtectedRoute>
         }

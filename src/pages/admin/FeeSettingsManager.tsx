@@ -315,7 +315,7 @@ function FeeSettingsManager() {
                   type="text"
                   value={form.name}
                   onChange={(e) => setForm({ ...form, name: e.target.value })}
-                  placeholder="e.g., 6 Months Training"
+                  placeholder="e.g., Silver, Gold, Premium"
                   className="w-full px-4 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
               </div>

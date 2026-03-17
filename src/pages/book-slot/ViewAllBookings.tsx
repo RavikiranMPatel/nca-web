@@ -50,6 +50,24 @@ function ViewAllBookings() {
     }
   };
 
+  const downloadReceipt = async (publicId: string) => {
+    try {
+      const response = await api.get(`/bookings/admin/${publicId}/receipt`, {
+        responseType: "blob",
+      });
+      const url = window.URL.createObjectURL(
+        new Blob([response.data], { type: "application/pdf" }),
+      );
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `receipt-${publicId}.pdf`;
+      a.click();
+      window.URL.revokeObjectURL(url);
+    } catch (e: any) {
+      alert(e?.response?.data?.message || "Failed to download receipt");
+    }
+  };
+
   useEffect(() => {
     loadBookings();
   }, []);
@@ -431,24 +449,39 @@ function ViewAllBookings() {
 
                     {/* ✅ ADD THIS RIGHT HERE */}
                     <td className="p-4">
-                      {booking.status === "PENDING_PAYMENT" && (
-                        <div className="flex flex-col gap-1">
+                      <div className="flex flex-col gap-1">
+                        {booking.status === "PENDING_PAYMENT" && (
+                          <>
+                            <button
+                              onClick={() =>
+                                markAsPaid(booking.bookingPublicId)
+                              }
+                              disabled={marking === booking.bookingPublicId}
+                              className="flex items-center gap-1 bg-green-600 text-white px-3 py-1.5 rounded-lg text-xs font-semibold hover:bg-green-700 transition disabled:opacity-50"
+                            >
+                              {marking === booking.bookingPublicId
+                                ? "..."
+                                : "✓ Mark as Paid"}
+                            </button>
+                            {booking.notifyPhone && (
+                              <span className="text-xs text-gray-500">
+                                📱 {booking.notifyPhone}
+                              </span>
+                            )}
+                          </>
+                        )}
+                        {booking.status === "CONFIRMED" && (
                           <button
-                            onClick={() => markAsPaid(booking.bookingPublicId)}
-                            disabled={marking === booking.bookingPublicId}
-                            className="flex items-center gap-1 bg-green-600 text-white px-3 py-1.5 rounded-lg text-xs font-semibold hover:bg-green-700 transition disabled:opacity-50"
+                            onClick={() =>
+                              downloadReceipt(booking.bookingPublicId)
+                            }
+                            className="flex items-center gap-1 border border-blue-300 text-blue-600 px-3 py-1.5 rounded-lg text-xs font-semibold hover:bg-blue-50 transition"
                           >
-                            {marking === booking.bookingPublicId
-                              ? "..."
-                              : "✓ Mark as Paid"}
+                            <Download size={12} />
+                            Receipt
                           </button>
-                          {booking.notifyPhone && (
-                            <span className="text-xs text-gray-500">
-                              📱 {booking.notifyPhone}
-                            </span>
-                          )}
-                        </div>
-                      )}
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))}

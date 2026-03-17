@@ -1,11 +1,12 @@
 import { useEffect, useState } from "react";
-import { useLocation, useNavigate } from "react-router-dom";
+import { href, useLocation, useNavigate } from "react-router-dom";
 import {
   CheckCircle,
   Calendar,
   Clock,
   Grid3x3,
   Home,
+  Download,
   List,
 } from "lucide-react";
 import api from "../../api/axios";
@@ -338,7 +339,6 @@ function BookingSuccess() {
                   My Bookings
                 </button>
               )}
-
               <button
                 onClick={() => navigate("/home")}
                 className={`flex items-center justify-center gap-2 ${
@@ -351,6 +351,22 @@ function BookingSuccess() {
                 Go Home
               </button>
             </div>
+
+            {/* Download Receipt — logged-in confirmed bookings only */}
+
+            {!booking.isGuest && booking.status === "CONFIRMED" && (
+              <a
+                href={`${import.meta.env.VITE_API_BASE_URL}/bookings/${booking.bookingPublicId}/receipt`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center justify-center gap-2 border-2 border-green-300
+               text-green-700 py-3 rounded-xl font-semibold hover:bg-green-50
+               transition-colors text-sm"
+              >
+                <Download className="w-4 h-4" />
+                Download Receipt (PDF)
+              </a>
+            )}
 
             {/* Info Box */}
             <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-center">
