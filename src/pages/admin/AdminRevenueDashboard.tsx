@@ -138,6 +138,7 @@ function AdminRevenueDashboard() {
   const [customFrom, setCustomFrom] = useState("");
   const [customTo, setCustomTo] = useState("");
   const [showRangeMenu, setShowRangeMenu] = useState(false);
+  const [expandedUser, setExpandedUser] = useState<string | null>(null);
 
   // ── Load data ──────────────────────────────────────────────────────────────
   const load = async () => {
@@ -182,6 +183,42 @@ function AdminRevenueDashboard() {
       bookings.filter((b) => b.paymentStatus === "PAID" && inRange(b.slotDate)),
     [bookings, from, to],
   );
+
+  // ── Group bookings by user (phone OR email) ────────────────────────────
+  const groupedBookings = useMemo(() => {
+    const groups = new Map<
+      string,
+      {
+        key: string;
+        name: string;
+        contact: string;
+        bookings: Booking[];
+        total: number;
+      }
+    >();
+
+    filteredBookings.forEach((b) => {
+      // Use phone if email looks like a phone number, otherwise use email
+      const contact = b.bookedByEmail || b.notifyPhone || "unknown";
+      const key = contact; // group by email/phone
+
+      if (groups.has(key)) {
+        const g = groups.get(key)!;
+        g.bookings.push(b);
+        g.total += b.amount || 0;
+      } else {
+        groups.set(key, {
+          key,
+          name: b.playerName || contact,
+          contact,
+          bookings: [b],
+          total: b.amount || 0,
+        });
+      }
+    });
+
+    return Array.from(groups.values()).sort((a, b) => b.total - a.total);
+  }, [filteredBookings]);
 
   // ── Summary numbers ────────────────────────────────────────────────────────
   const feesTotal = filteredFees.reduce((s, p) => s + (p.amount || 0), 0);
@@ -661,75 +698,118 @@ function AdminRevenueDashboard() {
             </span>
           </div>
 
-          {filteredBookings.length === 0 ? (
+          {groupedBookings.length === 0 ? (
             <EmptyState message="No booking payments in this period" />
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr className="text-xs text-slate-500 uppercase tracking-wide border-b bg-slate-50/50">
-                    <th className="text-left px-5 py-3">Date</th>
-                    <th className="text-left px-5 py-3">User</th>
-                    <th className="text-left px-5 py-3">Resource</th>
-                    <th className="text-left px-5 py-3">Slot</th>
-                    <th className="text-left px-5 py-3">Amount</th>
-                    <th className="text-left px-5 py-3">Mode</th>
-                    <th className="text-left px-5 py-3">Status</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {filteredBookings.map((b) => (
-                    <tr
-                      key={b.bookingPublicId}
-                      className="hover:bg-slate-50 transition"
-                    >
-                      <td className="px-5 py-3 text-sm text-slate-600">
-                        {fmtDate(b.slotDate)}
-                      </td>
-                      <td className="px-5 py-3">
-                        <p className="text-sm font-medium text-slate-800">
-                          {b.playerName || "—"}
+            <div className="divide-y divide-slate-100">
+              {groupedBookings.map((group) => (
+                <div key={group.key}>
+                  {/* ── User Row (clickable header) ── */}
+                  <div
+                    onClick={() =>
+                      setExpandedUser(
+                        expandedUser === group.key ? null : group.key,
+                      )
+                    }
+                    className="flex items-center justify-between px-5 py-4 hover:bg-slate-50 cursor-pointer transition"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="w-9 h-9 rounded-full bg-orange-100 flex items-center justify-center flex-shrink-0">
+                        <span className="text-sm font-bold text-orange-600">
+                          {group.name.charAt(0).toUpperCase()}
+                        </span>
+                      </div>
+                      <div>
+                        <p className="text-sm font-semibold text-slate-800">
+                          {group.name}
                         </p>
                         <p className="text-xs text-slate-400">
-                          {b.bookedByEmail}
+                          {group.contact}
                         </p>
-                      </td>
-                      <td className="px-5 py-3 text-sm text-slate-700 font-medium">
-                        {b.resourceType}
-                      </td>
-                      <td className="px-5 py-3 text-sm text-slate-600">
-                        {b.startTime}–{b.endTime}
-                      </td>
-                      <td className="px-5 py-3 text-sm font-bold text-slate-900">
-                        {fmt(b.amount)}
-                      </td>
-                      <td className="px-5 py-3 text-sm text-slate-600">
-                        {fmtMode(b.paymentMode)}
-                      </td>
-                      <td className="px-5 py-3">
-                        <span className="inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-700">
-                          <CheckCircle2 size={11} />
-                          Paid
-                        </span>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-                <tfoot>
-                  <tr className="border-t-2 border-slate-200 bg-slate-50">
-                    <td
-                      colSpan={4}
-                      className="px-5 py-3 text-sm font-semibold text-slate-700"
-                    >
-                      Total
-                    </td>
-                    <td className="px-5 py-3 text-sm font-bold text-orange-600">
-                      {fmt(bookingsTotal)}
-                    </td>
-                    <td colSpan={3} />
-                  </tr>
-                </tfoot>
-              </table>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-6">
+                      <div className="text-right hidden sm:block">
+                        <p className="text-xs text-slate-400">
+                          {group.bookings.length} booking
+                          {group.bookings.length !== 1 ? "s" : ""}
+                        </p>
+                      </div>
+                      <p className="text-sm font-bold text-slate-900">
+                        {fmt(group.total)}
+                      </p>
+                      <span
+                        className={`text-slate-400 transition-transform ${
+                          expandedUser === group.key ? "rotate-180" : ""
+                        }`}
+                      >
+                        ▼
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* ── Expanded Booking History ── */}
+                  {expandedUser === group.key && (
+                    <div className="bg-slate-50 border-t border-slate-100">
+                      <table className="w-full">
+                        <thead>
+                          <tr className="text-xs text-slate-400 uppercase tracking-wide border-b border-slate-200">
+                            <th className="text-left px-8 py-2">Date</th>
+                            <th className="text-left px-5 py-2">Slot</th>
+                            <th className="text-left px-5 py-2">Resource</th>
+                            <th className="text-left px-5 py-2">Amount</th>
+                            <th className="text-left px-5 py-2">Mode</th>
+                            <th className="text-left px-5 py-2">Status</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100">
+                          {group.bookings
+                            .sort((a, b) => (b.slotDate > a.slotDate ? 1 : -1))
+                            .map((b) => (
+                              <tr
+                                key={b.bookingPublicId}
+                                className="hover:bg-white transition"
+                              >
+                                <td className="px-8 py-2.5 text-sm text-slate-600">
+                                  {fmtDate(b.slotDate)}
+                                </td>
+                                <td className="px-5 py-2.5 text-sm text-slate-600">
+                                  {b.startTime}–{b.endTime}
+                                </td>
+                                <td className="px-5 py-2.5 text-sm text-slate-600">
+                                  {b.resourceType}
+                                </td>
+                                <td className="px-5 py-2.5 text-sm font-bold text-slate-900">
+                                  {fmt(b.amount)}
+                                </td>
+                                <td className="px-5 py-2.5 text-sm text-slate-600">
+                                  {fmtMode(b.paymentMode)}
+                                </td>
+                                <td className="px-5 py-2.5">
+                                  <span className="inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-700">
+                                    <CheckCircle2 size={11} />
+                                    Paid
+                                  </span>
+                                </td>
+                              </tr>
+                            ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+              ))}
+
+              {/* ── Grand Total ── */}
+              <div className="flex items-center justify-between px-5 py-4 bg-slate-50 border-t-2 border-slate-200">
+                <span className="text-sm font-semibold text-slate-700">
+                  Total · {groupedBookings.length} user
+                  {groupedBookings.length !== 1 ? "s" : ""}
+                </span>
+                <span className="text-sm font-bold text-orange-600">
+                  {fmt(bookingsTotal)}
+                </span>
+              </div>
             </div>
           )}
         </div>
