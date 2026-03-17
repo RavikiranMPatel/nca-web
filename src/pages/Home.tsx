@@ -1,11 +1,8 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
-  Users,
   Trophy,
-  Target,
   Award,
-  Calendar,
   ArrowRight,
   Star,
   Facebook,
@@ -168,6 +165,7 @@ function Home() {
   const navigate = useNavigate();
 
   const [showLoginPrompt, setShowLoginPrompt] = useState(false);
+  const [expandedMemberId, setExpandedMemberId] = useState<string | null>(null);
   const [announcementVisible, setAnnouncementVisible] = useState(true);
   const [settings, setSettings] = useState<AcademySettings>({});
   const [loading, setLoading] = useState(true);
@@ -724,6 +722,11 @@ function Home() {
                   key={member.id}
                   className={`bg-white text-center p-6 hover:shadow-xl transition-shadow relative group ${getShadowClass()}`}
                   style={getCardStyle()}
+                  onClick={() =>
+                    setExpandedMemberId(
+                      expandedMemberId === member.id ? null : member.id,
+                    )
+                  }
                 >
                   <div
                     className="w-20 h-20 rounded-full overflow-hidden mx-auto mb-4 ring-4"
@@ -744,6 +747,7 @@ function Home() {
                       </div>
                     )}
                   </div>
+
                   <h3 className="font-bold text-gray-800">{member.name}</h3>
                   <p
                     className="text-sm font-medium mt-0.5"
@@ -751,25 +755,48 @@ function Home() {
                   >
                     {member.role}
                   </p>
+
                   {member.bio && (
                     <p className="text-xs text-gray-400 mt-2 leading-relaxed line-clamp-3">
                       {member.bio}
                     </p>
                   )}
 
-                  {/* ── HOVER TOOLTIP ── */}
+                  {/* Tap hint — mobile only */}
                   {member.bio && (
+                    <p
+                      className="sm:hidden text-xs mt-2 font-medium"
+                      style={{ color: primaryColor }}
+                    >
+                      {expandedMemberId === member.id
+                        ? "Tap to close ▲"
+                        : "Tap to read more ▼"}
+                    </p>
+                  )}
+
+                  {/* Mobile expanded bio */}
+                  {member.bio && expandedMemberId === member.id && (
                     <div
-                      className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-64 p-4 bg-gray-900 text-white text-xs leading-relaxed rounded-xl shadow-xl
-                             opacity-0 group-hover:opacity-100 pointer-events-none
-                             transition-opacity duration-200 z-30 text-left"
+                      className="sm:hidden mt-3 p-3 rounded-xl text-xs text-left leading-relaxed text-white"
+                      style={{ backgroundColor: "#1f2937" }}
                     >
                       {member.bio}
-                      {/* Arrow */}
+                    </div>
+                  )}
+
+                  {/* Desktop hover tooltip */}
+                  {member.bio && (
+                    <div
+                      className="hidden sm:block absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-64 p-4 bg-gray-900 text-white text-xs leading-relaxed rounded-xl shadow-xl
+                   opacity-0 group-hover:opacity-100 pointer-events-none
+                   transition-opacity duration-200 z-30 text-left"
+                      style={{ maxWidth: "min(256px, 90vw)" }}
+                    >
+                      {member.bio}
                       <div
                         className="absolute top-full left-1/2 -translate-x-1/2 w-0 h-0
-                                border-l-8 border-r-8 border-t-8
-                                border-l-transparent border-r-transparent border-t-gray-900"
+                        border-l-8 border-r-8 border-t-8
+                        border-l-transparent border-r-transparent border-t-gray-900"
                       />
                     </div>
                   )}
