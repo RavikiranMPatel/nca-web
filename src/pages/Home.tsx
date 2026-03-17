@@ -705,6 +705,7 @@ function Home() {
       )}
 
       {/* ── TEAM ── */}
+      {/* ── TEAM ── */}
       {settings.SECTION_TEAM_ENABLED !== "false" && team.length > 0 && (
         <section
           id="team"
@@ -721,7 +722,7 @@ function Home() {
               {team.map((member) => (
                 <div
                   key={member.id}
-                  className={`bg-white text-center p-6 hover:shadow-xl transition-shadow ${getShadowClass()}`}
+                  className={`bg-white text-center p-6 hover:shadow-xl transition-shadow relative group ${getShadowClass()}`}
                   style={getCardStyle()}
                 >
                   <div
@@ -754,6 +755,23 @@ function Home() {
                     <p className="text-xs text-gray-400 mt-2 leading-relaxed line-clamp-3">
                       {member.bio}
                     </p>
+                  )}
+
+                  {/* ── HOVER TOOLTIP ── */}
+                  {member.bio && (
+                    <div
+                      className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-64 p-4 bg-gray-900 text-white text-xs leading-relaxed rounded-xl shadow-xl
+                             opacity-0 group-hover:opacity-100 pointer-events-none
+                             transition-opacity duration-200 z-30 text-left"
+                    >
+                      {member.bio}
+                      {/* Arrow */}
+                      <div
+                        className="absolute top-full left-1/2 -translate-x-1/2 w-0 h-0
+                                border-l-8 border-r-8 border-t-8
+                                border-l-transparent border-r-transparent border-t-gray-900"
+                      />
+                    </div>
                   )}
                 </div>
               ))}
