@@ -316,6 +316,19 @@ function Navbar() {
                             My Subscription
                           </button>
                         )}
+                        {userRole === "ROLE_PLAYER" && isAuthenticated && (
+                          <button
+                            onClick={() => {
+                              navigate("/my-coaching");
+                              setUserMenuOpen(false);
+                            }}
+                            className="w-full flex items-center gap-2 px-4 py-2.5 text-sm
+               text-gray-700 hover:bg-gray-50 transition"
+                          >
+                            <span className="text-base leading-none">🏋️</span>
+                            My Coaching
+                          </button>
+                        )}
                         <div className="h-px bg-gray-100 my-1" />
                         <button
                           onClick={handleLogout}
@@ -492,6 +505,20 @@ function Navbar() {
                   )}
                   <div className="h-px bg-gray-100 my-2" />
                 </>
+              )}
+
+              {userRole === "ROLE_PLAYER" && isAuthenticated && (
+                <button
+                  onClick={() => {
+                    navigate("/my-coaching");
+                    setMobileOpen(false);
+                  }}
+                  className="w-full flex items-center gap-2 px-3 py-2.5 text-sm
+               text-gray-700 hover:bg-gray-50 rounded transition"
+                >
+                  <span className="text-base leading-none">🏋️</span>
+                  My Coaching
+                </button>
               )}
 
               {isAuthenticated ? (

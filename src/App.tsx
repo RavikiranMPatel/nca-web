@@ -59,6 +59,9 @@ import AdminMembersPage from "./pages/admin/AdminMembersPage";
 import MySubscription from "./pages/book-slot/MySubscription";
 import UserProfilePage from "./pages/UserProfilePage";
 import AdminRevenueDashboard from "./pages/admin/AdminRevenueDashboard";
+import PlayerCoachingPage from "./pages/player/PlayerCoachingPage";
+import CoachingDashboardPage from "./pages/coaching/CoachingDashboardPage";
+import PlayerCoachingViewPage from "./pages/player/PlayerCoachingViewPage";
 
 // Add route after /my-bookings route:
 <Route
@@ -380,7 +383,19 @@ function App() {
         <Route path="analysis" element={<PlayerAnalysisPage />} />
         <Route path="fees" element={<PlayerFeesTab />} />
         <Route path="media" element={<PlayerMediaPage />} />
+        <Route path="coaching" element={<PlayerCoachingPage />} />
       </Route>
+
+      <Route
+        path="/admin/coaching"
+        element={
+          <ProtectedRoute roles={["ROLE_ADMIN", "ROLE_SUPER_ADMIN"]}>
+            <AppLayout>
+              <CoachingDashboardPage />
+            </AppLayout>
+          </ProtectedRoute>
+        }
+      />
 
       <Route
         path="/admin/players/:playerPublicId/edit"
@@ -414,6 +429,18 @@ function App() {
           <ProtectedRoute roles={["ROLE_ADMIN", "ROLE_SUPER_ADMIN"]}>
             <AppLayout>
               <SlotTemplateManagement />
+            </AppLayout>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/my-coaching"
+        element={
+          <ProtectedRoute
+            roles={["ROLE_PLAYER", "ROLE_ADMIN", "ROLE_SUPER_ADMIN"]}
+          >
+            <AppLayout>
+              <PlayerCoachingViewPage />
             </AppLayout>
           </ProtectedRoute>
         }

@@ -81,6 +81,22 @@ type AcademySettings = {
   ANNOUNCEMENT_ENABLED?: string;
   ANNOUNCEMENT_TEXT?: string;
   ANNOUNCEMENT_EXPIRY?: string;
+  SECTION_YOUTUBE_ENABLED?: string;
+  YOUTUBE_HEADING?: string;
+  YOUTUBE_SUBHEADING?: string;
+  YOUTUBE_VIDEO_1?: string;
+  YOUTUBE_VIDEO_2?: string;
+  YOUTUBE_VIDEO_3?: string;
+  YOUTUBE_VIDEO_4?: string;
+  YOUTUBE_VIDEO_5?: string;
+  SECTION_INSTAGRAM_ENABLED?: string;
+  INSTAGRAM_HEADING?: string;
+  INSTAGRAM_SUBHEADING?: string;
+  INSTAGRAM_POST_1?: string;
+  INSTAGRAM_POST_2?: string;
+  INSTAGRAM_POST_3?: string;
+  INSTAGRAM_POST_4?: string;
+  INSTAGRAM_POST_5?: string;
 };
 
 type TeamMember = {
@@ -131,6 +147,186 @@ type GalleryImage = {
   caption?: string;
   active: boolean;
 };
+
+/* ─── YouTube Grid ──────────────────────────────────────── */
+function YoutubeGrid({
+  videos,
+  getShadowClass,
+  getCardStyle,
+  getButtonStyle,
+}: {
+  videos: string[];
+  primaryColor: string;
+  getShadowClass: () => string;
+  getCardStyle: () => object;
+  getButtonStyle: () => object;
+}) {
+  const getVideoInfo = (
+    url: string,
+  ): { embedUrl: string; isShort: boolean } | null => {
+    try {
+      const u = new URL(url);
+      // Shorts
+      if (u.pathname.startsWith("/shorts/")) {
+        const id = u.pathname.split("/shorts/")[1].split("?")[0];
+        return {
+          embedUrl: `https://www.youtube.com/embed/${id}`,
+          isShort: true,
+        };
+      }
+      // Regular
+      const videoId =
+        u.searchParams.get("v") ||
+        (u.hostname === "youtu.be" ? u.pathname.slice(1) : null);
+      if (videoId)
+        return {
+          embedUrl: `https://www.youtube.com/embed/${videoId}`,
+          isShort: false,
+        };
+      return null;
+    } catch {
+      return null;
+    }
+  };
+
+  return (
+    <>
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-4 items-start">
+        {videos.map((url, i) => {
+          const info = getVideoInfo(url);
+          if (!info) return null;
+          return (
+            <div
+              key={i}
+              className={`overflow-hidden bg-black ${getShadowClass()} ${!info.isShort ? "col-span-2 md:col-span-1" : "col-span-1"}`}
+              style={getCardStyle()}
+            >
+              <div
+                className="relative w-full"
+                style={{ paddingBottom: info.isShort ? "177.78%" : "56.25%" }}
+              >
+                <iframe
+                  src={info.embedUrl}
+                  title={`Video ${i + 1}`}
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                  allowFullScreen
+                  className="absolute inset-0 w-full h-full"
+                  style={{ border: "none" }}
+                />
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      <div className="text-center mt-8">
+        <a
+          href="https://www.youtube.com/@nextgencricketacademy-j9t"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-2 px-6 py-3 text-white font-semibold text-sm hover:opacity-90 transition shadow"
+          style={{ backgroundColor: "#FF0000", ...getButtonStyle() }}
+        >
+          <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z" />
+          </svg>
+          View Our YouTube Channel
+        </a>
+      </div>
+    </>
+  );
+}
+
+/* ─── Instagram Grid ─────────────────────────────────────── */
+function InstagramGrid({
+  posts,
+  getShadowClass,
+  getCardStyle,
+  getButtonStyle,
+  instagramUrl,
+}: {
+  posts: string[];
+  primaryColor: string;
+  getShadowClass: () => string;
+  getCardStyle: () => object;
+  getButtonStyle: () => object;
+  instagramUrl?: string;
+}) {
+  useEffect(() => {
+    // Load Instagram embed script
+    if ((window as any).instgrm) {
+      (window as any).instgrm.Embeds.process();
+    } else {
+      const script = document.createElement("script");
+      script.src = "https://www.instagram.com/embed.js";
+      script.async = true;
+      script.onload = () => {
+        if ((window as any).instgrm) {
+          (window as any).instgrm.Embeds.process();
+        }
+      };
+      document.body.appendChild(script);
+    }
+  }, [posts]);
+
+  const getCleanUrl = (url: string): string => {
+    // Strip query params like ?utm_source etc, keep just the post URL
+    try {
+      const u = new URL(url);
+      return `${u.origin}${u.pathname}`;
+    } catch {
+      return url;
+    }
+  };
+
+  return (
+    <>
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
+        {posts.map((url, i) => (
+          <div
+            key={i}
+            className={`overflow-hidden bg-white ${getShadowClass()}`}
+            style={getCardStyle()}
+          >
+            <blockquote
+              className="instagram-media"
+              data-instgrm-permalink={getCleanUrl(url)}
+              data-instgrm-version="14"
+              style={{
+                background: "#FFF",
+                border: 0,
+                borderRadius: "3px",
+                boxShadow: "none",
+                margin: "0",
+                maxWidth: "100%",
+                minWidth: "100%",
+                padding: 0,
+                width: "100%",
+              }}
+            />
+          </div>
+        ))}
+      </div>
+      <div className="text-center mt-8">
+        <a
+          href={instagramUrl || "https://www.instagram.com"}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-2 px-6 py-3 text-white font-semibold text-sm hover:opacity-90 transition shadow"
+          style={{
+            background:
+              "linear-gradient(45deg, #f09433, #e6683c, #dc2743, #cc2366, #bc1888)",
+            ...getButtonStyle(),
+          }}
+        >
+          <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zM12 0C8.741 0 8.333.014 7.053.072 2.695.272.273 2.69.073 7.052.014 8.333 0 8.741 0 12c0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98C8.333 23.986 8.741 24 12 24c3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98C15.668.014 15.259 0 12 0zm0 5.838a6.162 6.162 0 1 0 0 12.324 6.162 6.162 0 0 0 0-12.324zM12 16a4 4 0 1 1 0-8 4 4 0 0 1 0 8zm6.406-11.845a1.44 1.44 0 1 0 0 2.881 1.44 1.44 0 0 0 0-2.881z" />
+          </svg>
+          Follow Us on Instagram
+        </a>
+      </div>
+    </>
+  );
+}
 
 /* ─── Section Heading ───────────────────────────────────── */
 function SectionHeading({
@@ -190,13 +386,39 @@ function Home() {
   const slideDuration = parseInt(settings.SLIDE_DURATION || "5000");
 
   const sliderEnabled = settings.SECTION_SLIDER_ENABLED !== "false";
-  const statsEnabled = settings.SECTION_STATS_ENABLED !== "false";
+
   const facilitiesEnabled = settings.SECTION_FACILITIES_ENABLED !== "false";
   const testimonialsEnabled = settings.SECTION_TESTIMONIALS_ENABLED !== "false";
   const newsEnabled = settings.SECTION_NEWS_ENABLED !== "false";
   const galleryEnabled = settings.SECTION_GALLERY_ENABLED !== "false";
   const starPerformerEnabled =
     settings.SECTION_STAR_PERFORMER_ENABLED !== "false";
+
+  const youtubeEnabled = settings.SECTION_YOUTUBE_ENABLED !== "false";
+  const youtubeHeading = settings.YOUTUBE_HEADING || "Watch Us in Action";
+  const youtubeSubheading =
+    settings.YOUTUBE_SUBHEADING ||
+    "Training highlights, match moments and more from our academy";
+  const youtubeVideos = [
+    settings.YOUTUBE_VIDEO_1,
+    settings.YOUTUBE_VIDEO_2,
+    settings.YOUTUBE_VIDEO_3,
+    settings.YOUTUBE_VIDEO_4,
+    settings.YOUTUBE_VIDEO_5,
+  ].filter(Boolean) as string[];
+
+  const instagramEnabled = settings.SECTION_INSTAGRAM_ENABLED !== "false";
+  const instagramHeading =
+    settings.INSTAGRAM_HEADING || "Follow Us on Instagram";
+  const instagramSubheading =
+    settings.INSTAGRAM_SUBHEADING || "Stay connected with our latest updates";
+  const instagramPosts = [
+    settings.INSTAGRAM_POST_1,
+    settings.INSTAGRAM_POST_2,
+    settings.INSTAGRAM_POST_3,
+    settings.INSTAGRAM_POST_4,
+    settings.INSTAGRAM_POST_5,
+  ].filter(Boolean) as string[];
 
   const starPerformerHeading =
     settings.STAR_PERFORMER_HEADING || "Star Performer of the Week";
@@ -987,6 +1209,52 @@ function Home() {
                 </div>
               ))}
             </div>
+          </div>
+        </section>
+      )}
+
+      {/* ── YOUTUBE VIDEOS ── */}
+
+      {youtubeEnabled && youtubeVideos.length > 0 && (
+        <section id="videos" className="py-10 md:py-14 px-4 bg-white">
+          <div className="max-w-6xl mx-auto">
+            <SectionHeading
+              title={youtubeHeading}
+              subtitle={youtubeSubheading}
+              primaryColor={primaryColor}
+            />
+            <YoutubeGrid
+              videos={youtubeVideos}
+              primaryColor={primaryColor}
+              getShadowClass={getShadowClass}
+              getCardStyle={getCardStyle}
+              getButtonStyle={getButtonStyle}
+            />
+          </div>
+        </section>
+      )}
+
+      {/* ── INSTAGRAM ── */}
+      {instagramEnabled && instagramPosts.length > 0 && (
+        <section
+          id="instagram"
+          className="py-10 md:py-14 px-4"
+          style={{ backgroundColor: `${primaryColor}06` }}
+        >
+          <div className="max-w-6xl mx-auto">
+            <SectionHeading
+              title={instagramHeading}
+              subtitle={instagramSubheading}
+              primaryColor={primaryColor}
+            />
+            <InstagramGrid
+              posts={instagramPosts}
+              primaryColor={primaryColor}
+              getShadowClass={getShadowClass}
+              getCardStyle={getCardStyle}
+              getButtonStyle={getButtonStyle}
+              instagramUrl={socialLinks.instagram}
+            />
           </div>
         </section>
       )}

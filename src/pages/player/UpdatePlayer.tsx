@@ -120,6 +120,54 @@ function UpdatePlayer() {
       return;
     }
 
+    // ── Email uniqueness check (skip if email unchanged) ──────────
+    if (formData.email?.trim()) {
+      try {
+        const res = await api.get("/admin/players/check-email", {
+          params: {
+            email: formData.email.trim(),
+            excludePublicId: playerPublicId,
+          },
+        });
+        if (res.data.exists) {
+          toast.error("This email is already used by another player");
+          return;
+        }
+      } catch {
+        // non-blocking — proceed if check fails
+      }
+    }
+
+    // ── Phone format validation ────────────────────────────────────
+    if (formData.phone?.trim()) {
+      if (!/^[6-9]\d{9}$/.test(formData.phone.trim())) {
+        toast.error("Invalid phone number format");
+        return;
+      }
+    }
+
+    // ── Phone uniqueness check ─────────────────────────────────────
+    if (formData.phone?.trim()) {
+      if (!/^[6-9]\d{9}$/.test(formData.phone.trim())) {
+        toast.error("Invalid phone number format");
+        return;
+      }
+      try {
+        const res = await api.get("/admin/players/check-phone", {
+          params: {
+            phone: formData.phone.trim(),
+            excludePublicId: playerPublicId,
+          },
+        });
+        if (res.data.exists) {
+          toast.error("This phone number is already used by another player");
+          return;
+        }
+      } catch {
+        // non-blocking
+      }
+    }
+
     setLoading(true);
 
     try {

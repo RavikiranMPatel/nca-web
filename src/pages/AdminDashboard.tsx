@@ -290,6 +290,20 @@ function AdminDashboard() {
               Track and manage player enquiries and follow-ups
             </p>
           </div>
+
+          {/* 1-ON-1 COACHING */}
+          <div
+            onClick={() => navigate("/admin/coaching")}
+            className="bg-gradient-to-br from-indigo-500 to-indigo-600 p-6 rounded-lg shadow-lg hover:shadow-xl cursor-pointer transition transform hover:scale-105"
+          >
+            <div className="flex items-center gap-3 mb-3">
+              <UserCheck size={28} className="text-white" />
+              <h3 className="text-lg font-bold text-white">1-on-1 Coaching</h3>
+            </div>
+            <p className="text-sm text-indigo-100">
+              Track practice, goals & match performance for individual players
+            </p>
+          </div>
         </div>
       </section>
 

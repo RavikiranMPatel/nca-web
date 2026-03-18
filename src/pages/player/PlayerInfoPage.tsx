@@ -33,6 +33,253 @@ type PlayerInfo = {
   status: string;
 };
 
+// ── Account Access Section ────────────────────────────────────────
+
+function AccountAccessSection({
+  playerPublicId,
+  playerEmail,
+}: {
+  playerPublicId: string;
+  playerEmail?: string;
+}) {
+  const role = localStorage.getItem("userRole");
+  const isAdminOrSuper = role === "ROLE_ADMIN" || role === "ROLE_SUPER_ADMIN";
+
+  const [account, setAccount] = useState<any | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [showCreate, setShowCreate] = useState(false);
+  const [showReset, setShowReset] = useState(false);
+  const [email, setEmail] = useState(playerEmail || "");
+  const [password, setPassword] = useState("");
+  const [resetPassword, setResetPassword] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    loadAccount();
+  }, [playerPublicId]);
+
+  const loadAccount = async () => {
+    setLoading(true);
+    try {
+      const res = await api.get(`/admin/players/${playerPublicId}/account`);
+      setAccount(res.data);
+    } catch {
+      setAccount(null);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleCreate = async () => {
+    if (!email.trim()) {
+      toast.error("Email is required");
+      return;
+    }
+    if (password.length < 6) {
+      toast.error("Password must be at least 6 characters");
+      return;
+    }
+    setSaving(true);
+    try {
+      await api.post(`/admin/players/${playerPublicId}/create-account`, {
+        email: email.trim(),
+        password,
+      });
+      toast.success("Account created & credentials sent via WhatsApp!");
+      setShowCreate(false);
+      setPassword("");
+      loadAccount();
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message || "Failed to create account");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleReset = async () => {
+    if (resetPassword.length < 6) {
+      toast.error("Password must be at least 6 characters");
+      return;
+    }
+    setSaving(true);
+    try {
+      await api.put(`/admin/players/${playerPublicId}/account/reset-password`, {
+        password: resetPassword,
+      });
+      toast.success("Password reset & sent via WhatsApp!");
+      setShowReset(false);
+      setResetPassword("");
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message || "Failed to reset password");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (!isAdminOrSuper) return null;
+
+  return (
+    <div className="bg-white p-6 rounded-lg shadow">
+      <h2 className="text-lg font-semibold mb-4">Account Access</h2>
+
+      {loading ? (
+        <div className="flex items-center gap-2 text-sm text-gray-400">
+          <div className="w-4 h-4 border-2 border-gray-200 border-t-blue-500 rounded-full animate-spin" />
+          Checking account...
+        </div>
+      ) : account?.exists ? (
+        <div className="space-y-4">
+          <div className="flex items-center gap-3 bg-green-50 border border-green-200 rounded-lg px-4 py-3">
+            <div className="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center text-green-600 font-bold text-sm flex-shrink-0">
+              ✓
+            </div>
+            <div>
+              <p className="text-sm font-semibold text-green-800">
+                Login account active
+              </p>
+              <p className="text-xs text-green-600">{account.email}</p>
+            </div>
+            <span
+              className={`ml-auto text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                account.active
+                  ? "bg-green-100 text-green-700"
+                  : "bg-red-100 text-red-600"
+              }`}
+            >
+              {account.active ? "ACTIVE" : "DISABLED"}
+            </span>
+          </div>
+
+          {!showReset ? (
+            <button
+              onClick={() => setShowReset(true)}
+              className="text-sm text-blue-600 font-medium hover:text-blue-700"
+            >
+              Reset Password
+            </button>
+          ) : (
+            <div className="space-y-3 bg-slate-50 rounded-lg p-4 border border-slate-200">
+              <p className="text-sm font-semibold text-slate-700">
+                Reset Password
+              </p>
+              <input
+                type="text"
+                value={resetPassword}
+                onChange={(e) => setResetPassword(e.target.value)}
+                placeholder="New password (min 6 chars)"
+                className="w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+              <p className="text-xs text-slate-500">
+                New password will be sent via WhatsApp to the player.
+              </p>
+              <div className="flex gap-2">
+                <button
+                  onClick={handleReset}
+                  disabled={saving}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-semibold hover:bg-blue-700 disabled:opacity-50"
+                >
+                  {saving ? "Saving..." : "Reset & Send"}
+                </button>
+                <button
+                  onClick={() => {
+                    setShowReset(false);
+                    setResetPassword("");
+                  }}
+                  className="px-4 py-2 bg-slate-100 text-slate-700 rounded-lg text-sm font-medium hover:bg-slate-200"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      ) : (
+        <div className="space-y-4">
+          <div className="flex items-center gap-3 bg-slate-50 border border-slate-200 rounded-lg px-4 py-3">
+            <div className="w-8 h-8 bg-slate-100 rounded-full flex items-center justify-center text-slate-400 text-sm flex-shrink-0">
+              ?
+            </div>
+            <div>
+              <p className="text-sm font-medium text-slate-700">
+                No login account yet
+              </p>
+              <p className="text-xs text-slate-400">
+                Player cannot access the coaching view
+              </p>
+            </div>
+          </div>
+
+          {!showCreate ? (
+            <button
+              onClick={() => {
+                setEmail(playerEmail || "");
+                setShowCreate(true);
+              }}
+              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-semibold hover:bg-blue-700 transition"
+            >
+              + Create Player Login
+            </button>
+          ) : (
+            <div className="space-y-3 bg-slate-50 rounded-lg p-4 border border-slate-200">
+              <p className="text-sm font-semibold text-slate-700">
+                Create Login Account
+              </p>
+              <div>
+                <label className="block text-xs font-medium text-slate-600 mb-1">
+                  Email *
+                </label>
+                <input
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="player@email.com"
+                  className="w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-600 mb-1">
+                  Temporary Password *
+                </label>
+                <input
+                  type="text"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="Min 6 characters"
+                  className="w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+              <p className="text-xs text-slate-500">
+                Credentials will be sent via WhatsApp to the player's phone
+                number.
+              </p>
+              <div className="flex gap-2">
+                <button
+                  onClick={handleCreate}
+                  disabled={saving}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-semibold hover:bg-blue-700 disabled:opacity-50"
+                >
+                  {saving ? "Creating..." : "Create & Send"}
+                </button>
+                <button
+                  onClick={() => {
+                    setShowCreate(false);
+                    setPassword("");
+                  }}
+                  className="px-4 py-2 bg-slate-100 text-slate-700 rounded-lg text-sm font-medium hover:bg-slate-200"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Main Page ─────────────────────────────────────────────────────
+
 function PlayerInfoPage() {
   const { playerPublicId } = useParams();
 
@@ -59,29 +306,20 @@ function PlayerInfoPage() {
 
   const handleToggleStatus = async (reason: string) => {
     if (!playerPublicId) return;
-
     setToggling(true);
     try {
       const response = await togglePlayerStatus(playerPublicId, reason);
-
       toast.success(response.message);
-
-      // Update local state
       setPlayer((prev) =>
         prev
-          ? {
-              ...prev,
-              active: response.active,
-              status: response.status,
-            }
+          ? { ...prev, active: response.active, status: response.status }
           : null,
       );
-
       setShowToggleModal(false);
     } catch (error: any) {
-      const message =
-        error?.response?.data?.message || "Failed to update player status";
-      toast.error(message);
+      toast.error(
+        error?.response?.data?.message || "Failed to update player status",
+      );
     } finally {
       setToggling(false);
     }
@@ -103,7 +341,7 @@ function PlayerInfoPage() {
 
   return (
     <div className="space-y-6">
-      {/* STATUS BANNER (if inactive) */}
+      {/* STATUS BANNER */}
       {!player.active && (
         <div className="bg-red-50 border-l-4 border-red-500 p-4 rounded-lg">
           <div className="flex items-center gap-3">
@@ -122,8 +360,6 @@ function PlayerInfoPage() {
       {/* PLAYER PHOTO & STATUS */}
       <div className="bg-white p-6 rounded-lg shadow">
         <div className="flex flex-col md:flex-row items-center md:items-start gap-6">
-          {/* Photo */}
-
           <div className="relative">
             {player.photoUrl ? (
               <img
@@ -138,23 +374,13 @@ function PlayerInfoPage() {
                 }}
               />
             ) : null}
-
-            {/* Fallback avatar - show if no photo or error */}
             <div
-              className={`w-40 h-40 rounded-full bg-gray-200 flex items-center justify-center border-4 border-gray-300 ${
-                player.photoUrl ? "hidden" : ""
-              }`}
+              className={`w-40 h-40 rounded-full bg-gray-200 flex items-center justify-center border-4 border-gray-300 ${player.photoUrl ? "hidden" : ""}`}
             >
               <User size={64} className="text-gray-400" />
             </div>
-
-            {/* Status badge on photo */}
             <div
-              className={`absolute bottom-2 right-2 px-3 py-1 rounded-full text-xs font-bold shadow-lg ${
-                player.active
-                  ? "bg-green-500 text-white"
-                  : "bg-red-500 text-white"
-              }`}
+              className={`absolute bottom-2 right-2 px-3 py-1 rounded-full text-xs font-bold shadow-lg ${player.active ? "bg-green-500 text-white" : "bg-red-500 text-white"}`}
             >
               {player.active ? (
                 <div className="flex items-center gap-1">
@@ -168,7 +394,6 @@ function PlayerInfoPage() {
             </div>
           </div>
 
-          {/* Player Name & Toggle Button */}
           <div className="flex-1 text-center md:text-left">
             <h2 className="text-2xl font-bold text-gray-900">
               {player.displayName}
@@ -176,8 +401,6 @@ function PlayerInfoPage() {
             <p className="text-sm text-gray-500 mt-1">
               Status: <span className="font-medium">{player.status}</span>
             </p>
-
-            {/* Toggle Status Button (Super Admin Only) */}
             {isSuperAdmin && (
               <button
                 onClick={() => setShowToggleModal(true)}
@@ -239,7 +462,13 @@ function PlayerInfoPage() {
         </Section>
       )}
 
-      {/* Status Toggle Modal */}
+      {/* ACCOUNT ACCESS */}
+      <AccountAccessSection
+        playerPublicId={playerPublicId!}
+        playerEmail={player.email}
+      />
+
+      {/* STATUS TOGGLE MODAL */}
       <PlayerStatusToggleModal
         open={showToggleModal}
         playerName={player.displayName}
@@ -252,7 +481,7 @@ function PlayerInfoPage() {
   );
 }
 
-/* ================= HELPERS ================= */
+/* ── Helpers ─────────────────────────────────────────────────────── */
 
 function Section({
   title,

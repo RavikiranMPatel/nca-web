@@ -20,6 +20,8 @@ import TeamMembersAdmin from "./TeamMembersAdmin";
 import BranchesTab from "./BranchesTab";
 type SettingsMap = Record<string, string>;
 import SubscriptionPricingManager from "./SubscriptionPricingManager";
+import YouTubeSettings from "./YouTubeSettings";
+import InstagramSettings from "./InstagramSettings";
 
 type TabType =
   | "general"
@@ -36,6 +38,8 @@ type TabType =
   | "media"
   | "team"
   | "branches"
+  | "youtube"
+  | "instagram"
   | "subscription";
 
 function AcademySettings() {
@@ -379,6 +383,29 @@ function AcademySettings() {
             >
               News
             </button>
+
+            <button
+              onClick={() => setActiveTab("youtube")}
+              className={`py-3 px-4 text-sm font-medium border-b-2 transition whitespace-nowrap ${
+                activeTab === "youtube"
+                  ? "border-blue-600 text-blue-600"
+                  : "border-transparent text-gray-600 hover:text-blue-600"
+              }`}
+            >
+              ▶️ YouTube
+            </button>
+
+            <button
+              onClick={() => setActiveTab("instagram")}
+              className={`py-3 px-4 text-sm font-medium border-b-2 transition whitespace-nowrap ${
+                activeTab === "instagram"
+                  ? "border-blue-600 text-blue-600"
+                  : "border-transparent text-gray-600 hover:text-blue-600"
+              }`}
+            >
+              📸 Instagram
+            </button>
+
             <button
               onClick={() => setActiveTab("gallery")}
               className={`py-3 px-4 text-sm font-medium border-b-2 transition whitespace-nowrap ${
@@ -1314,6 +1341,10 @@ function AcademySettings() {
               <NewsManager />
             </div>
           )}
+          {/* GALLERY TAB */}
+          {activeTab === "youtube" && <YouTubeSettings />}
+
+          {activeTab === "instagram" && <InstagramSettings />}
           {/* GALLERY TAB */}
           {activeTab === "gallery" && (
             <div>
