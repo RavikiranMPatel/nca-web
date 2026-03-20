@@ -2,8 +2,11 @@ import { useEffect, useState } from "react";
 import { toast } from "react-hot-toast";
 import api from "../../api/axios";
 import { Plus, Trash2 } from "lucide-react";
+import PresenceBanner from "../../components/PresenceBanner";
+import { useAuth } from "../../auth/useAuth";
 
 function CampTypeSettings() {
+  const { academyId } = useAuth();
   const [campTypes, setCampTypes] = useState<string[]>([]);
   const [newCampType, setNewCampType] = useState("");
   const [loading, setLoading] = useState(false);
@@ -86,6 +89,11 @@ function CampTypeSettings() {
   return (
     <div className="space-y-6">
       <div>
+        <PresenceBanner
+          entity="facilities-manager"
+          id={academyId ?? undefined}
+        />
+
         <h3 className="text-lg font-semibold text-slate-900 mb-2">
           Camp Type Settings
         </h3>

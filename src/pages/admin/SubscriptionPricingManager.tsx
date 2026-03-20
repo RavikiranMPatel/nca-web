@@ -1,4 +1,6 @@
 import { useEffect, useState } from "react";
+import PresenceBanner from "../../components/PresenceBanner";
+import { useAuth } from "../../auth/useAuth";
 import {
   Plus,
   Edit2,
@@ -48,6 +50,7 @@ const MONTH_OPTIONS = [1, 3, 6, 12];
 // ── Component ─────────────────────────────────────────────────────────────
 
 function SubscriptionPricingManager() {
+  const { academyId } = useAuth();
   const [plans, setPlans] = useState<SubscriptionPlan[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -172,6 +175,10 @@ function SubscriptionPricingManager() {
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-lg font-semibold">Subscription Plans</h2>
+          <PresenceBanner
+            entity="facilities-manager"
+            id={academyId ?? undefined}
+          />
           <p className="text-sm text-gray-500 mt-1">
             Configure bowling machine membership pricing. Registration fee is
             charged only once per user.

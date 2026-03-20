@@ -2,6 +2,8 @@ import React, { useState, useEffect } from "react";
 import { Upload, Trash2, Eye, EyeOff, Image as ImageIcon } from "lucide-react";
 import axiosInstance from "../../api/axios";
 import { getImageUrl } from "../../utils/imageUrl";
+import PresenceBanner from "../../components/PresenceBanner";
+import { useAuth } from "../../auth/useAuth";
 
 type GalleryImage = {
   id: string;
@@ -11,6 +13,7 @@ type GalleryImage = {
 };
 
 const GalleryManager = () => {
+  const { academyId } = useAuth();
   const [images, setImages] = useState<GalleryImage[]>([]);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
@@ -125,6 +128,11 @@ const GalleryManager = () => {
               <ImageIcon className="w-6 h-6 text-blue-600" />
               Gallery Management
             </h2>
+            <PresenceBanner
+              entity="facilities-manager"
+              id={academyId ?? undefined}
+            />
+
             <p className="text-gray-600 mt-1">
               Upload and manage gallery images
             </p>

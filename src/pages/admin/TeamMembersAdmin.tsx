@@ -3,6 +3,8 @@ import api from "../../api/axios";
 import toast from "react-hot-toast";
 import Cropper from "react-easy-crop";
 import type { Area } from "react-easy-crop";
+import PresenceBanner from "../../components/PresenceBanner";
+import { useAuth } from "../../auth/useAuth";
 import {
   Plus,
   Pencil,
@@ -51,6 +53,7 @@ const EMPTY_FORM: FormState = {
 // ── Main Component ────────────────────────────────────────────────────────────
 
 export default function TeamMembersAdmin() {
+  const { academyId } = useAuth();
   const [members, setMembers] = useState<TeamMember[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -253,6 +256,10 @@ export default function TeamMembersAdmin() {
             <Users size={20} className="text-blue-600" />
             Team Members
           </h2>
+          <PresenceBanner
+            entity="branches-tab"
+            id={academyId ?? undefined}
+          />{" "}
           <p className="text-sm text-gray-500 mt-0.5">
             Manage coaches and staff shown on your website
           </p>

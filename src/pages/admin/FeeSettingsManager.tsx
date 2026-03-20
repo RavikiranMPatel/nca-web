@@ -1,4 +1,6 @@
 import { useEffect, useState } from "react";
+import PresenceBanner from "../../components/PresenceBanner";
+import { useAuth } from "../../auth/useAuth";
 import {
   Plus,
   Edit2,
@@ -49,6 +51,7 @@ const EMPTY_FORM: PlanFormData = {
 };
 
 function FeeSettingsManager() {
+  const { academyId } = useAuth();
   const [plans, setPlans] = useState<FeePlan[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -158,6 +161,10 @@ function FeeSettingsManager() {
           <p className="text-sm text-gray-500 mt-1">
             Configure training fee plans, durations, and discounts
           </p>
+          <PresenceBanner
+            entity="facilities-manager"
+            id={academyId ?? undefined}
+          />
         </div>
         <button
           onClick={handleAdd}

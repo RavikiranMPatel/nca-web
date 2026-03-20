@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import {
   MessageSquare,
   Users,
@@ -16,8 +16,11 @@ import {
 } from "lucide-react";
 import publicApi from "../../api/publicApi";
 import api from "../../api/axios";
+import PresenceBanner from "../../components/PresenceBanner";
+import { useAuth } from "../../auth/useAuth";
 
 const ContentSettings = () => {
+  const { academyId } = useAuth();
   const [settings, setSettings] = useState({
     // Testimonials Section
     TESTIMONIALS_HEADING: "",
@@ -121,6 +124,10 @@ const ContentSettings = () => {
             <FileText className="w-6 h-6 text-blue-600" />
             Content & Social Media Settings
           </h2>
+          <PresenceBanner
+            entity="facilities-manager"
+            id={academyId ?? undefined}
+          />
           <p className="text-gray-600 mt-1">
             Customize homepage section headings and social media links
           </p>

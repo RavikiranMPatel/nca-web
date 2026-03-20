@@ -15,6 +15,8 @@ import {
   ChevronUp,
   Clock,
 } from "lucide-react";
+import PresenceBanner from "../../components/PresenceBanner";
+import { useAuth } from "../../auth/useAuth";
 
 // ── Types ─────────────────────────────────────────────────────────────────
 
@@ -61,6 +63,7 @@ type Tab = "ACTIVE" | "QUEUED" | "NON_SUBSCRIBERS" | "GUESTS";
 // ── Main Component ────────────────────────────────────────────────────────
 
 function AdminMembersPage() {
+  const { academyId } = useAuth();
   const [activeTab, setActiveTab] = useState<Tab>("ACTIVE");
 
   const [activeSubscribers, setActiveSubscribers] = useState<
@@ -271,6 +274,7 @@ function AdminMembersPage() {
         <h2 className="text-lg font-semibold text-slate-900">
           Bowling Machine Members
         </h2>
+        <PresenceBanner entity="branches-tab" id={academyId ?? undefined} />{" "}
         <p className="text-sm text-slate-500 mt-1">
           Manage subscribers, logged-in users, and guest bookers
         </p>

@@ -2,8 +2,11 @@ import { useEffect, useState } from "react";
 import { Save, Youtube } from "lucide-react";
 import api from "../../api/axios";
 import { toast } from "react-hot-toast";
+import PresenceBanner from "../../components/PresenceBanner";
+import { useAuth } from "../../auth/useAuth";
 
 export default function YouTubeSettings() {
+  const { academyId } = useAuth();
   const [enabled, setEnabled] = useState(true);
   const [heading, setHeading] = useState("Watch Us in Action");
   const [subheading, setSubheading] = useState(
@@ -61,6 +64,10 @@ export default function YouTubeSettings() {
           <p className="text-sm text-gray-500">
             YouTube videos section visible on home page
           </p>
+          <PresenceBanner
+            entity="branches-tab"
+            id={academyId ?? undefined}
+          />{" "}
         </div>
         <input
           type="checkbox"

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import {
   MapPin,
   Phone,
@@ -11,8 +11,11 @@ import {
 } from "lucide-react";
 import publicApi from "../../api/publicApi";
 import api from "../../api/axios";
+import PresenceBanner from "../../components/PresenceBanner";
+import { useAuth } from "../../auth/useAuth";
 
 const ContactInfoSettings = () => {
+  const { academyId } = useAuth();
   const [settings, setSettings] = useState({
     CONTACT_ADDRESS_LINE1: "",
     CONTACT_ADDRESS_LINE2: "",
@@ -95,6 +98,10 @@ const ContactInfoSettings = () => {
             <MapPin className="w-6 h-6 text-blue-600" />
             Contact Information
           </h2>
+          <PresenceBanner
+            entity="branches-tab"
+            id={academyId ?? undefined}
+          />{" "}
           <p className="text-gray-600 mt-1">
             Update your academy's contact details displayed on the website
           </p>

@@ -3,8 +3,11 @@ import { Star, Upload, Save, AlertCircle, CheckCircle } from "lucide-react";
 import publicApi from "../../api/publicApi";
 import api from "../../api/axios";
 import { getImageUrl } from "../../utils/imageUrl";
+import PresenceBanner from "../../components/PresenceBanner";
+import { useAuth } from "../../auth/useAuth";
 
 const StarPerformerSettings = () => {
+  const { academyId } = useAuth();
   const [settings, setSettings] = useState({
     SECTION_STAR_PERFORMER_ENABLED: "",
     STAR_PERFORMER_HEADING: "",
@@ -141,6 +144,10 @@ const StarPerformerSettings = () => {
             <Star className="w-6 h-6 text-yellow-500" />
             Star Performer Settings
           </h2>
+          <PresenceBanner
+            entity="branches-tab"
+            id={academyId ?? undefined}
+          />{" "}
           <p className="text-gray-600 mt-1">
             Showcase your academy's outstanding performer
           </p>

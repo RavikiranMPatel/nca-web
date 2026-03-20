@@ -2,10 +2,13 @@ import { useEffect, useState } from "react";
 import { toast } from "react-hot-toast";
 import { Save, Camera, Video, Eye, EyeOff, Hash } from "lucide-react";
 import api from "../../api/axios";
+import PresenceBanner from "../../components/PresenceBanner";
+import { useAuth } from "../../auth/useAuth";
 
 type SettingsMap = Record<string, string>;
 
 function MediaSettingsManager() {
+  const { academyId } = useAuth();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
@@ -86,6 +89,10 @@ function MediaSettingsManager() {
         <h2 className="text-lg font-semibold text-slate-900">
           📸 Media Gallery Settings
         </h2>
+        <PresenceBanner
+          entity="facilities-manager"
+          id={academyId ?? undefined}
+        />
         <p className="text-sm text-slate-600 mt-1">
           Configure the player media gallery feature
         </p>
