@@ -22,6 +22,8 @@ type SettingsMap = Record<string, string>;
 import SubscriptionPricingManager from "./SubscriptionPricingManager";
 import YouTubeSettings from "./YouTubeSettings";
 import InstagramSettings from "./InstagramSettings";
+import PresenceBanner from "../../components/PresenceBanner";
+import { useAuth } from "../../auth/useAuth";
 
 type TabType =
   | "general"
@@ -44,7 +46,7 @@ type TabType =
 
 function AcademySettings() {
   const navigate = useNavigate();
-
+  const { academyId } = useAuth();
   const [activeTab, setActiveTab] = useState<TabType>("general");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -446,7 +448,10 @@ function AcademySettings() {
           {activeTab === "general" && (
             <div className="space-y-6">
               <h2 className="text-lg font-semibold mb-4">General Settings</h2>
-
+              <PresenceBanner
+                entity={`academy-general`}
+                id={academyId ?? undefined}
+              />
               <label className="flex items-center justify-between p-4 border rounded-lg bg-gray-50 cursor-pointer">
                 <div>
                   <span className="font-medium">Section Enabled</span>
@@ -524,7 +529,7 @@ function AcademySettings() {
                   type="tel"
                   value={adminPhone}
                   onChange={(e) => setAdminPhone(e.target.value)}
-                  placeholder="+919876543210"
+                  placeholder=""
                   className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 />
                 <p className="text-xs text-gray-500 mt-1">
@@ -564,7 +569,7 @@ function AcademySettings() {
                       type="text"
                       value={bookingPhone}
                       onChange={(e) => setBookingPhone(e.target.value)}
-                      placeholder="+919876543210"
+                      placeholder=""
                       className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     />
                     <p className="text-xs text-gray-500 mt-1">
@@ -710,7 +715,10 @@ function AcademySettings() {
               <h2 className="text-lg font-semibold mb-4">
                 Branding & Theme Customization
               </h2>
-
+              <PresenceBanner
+                entity={`academy-branding`}
+                id={academyId ?? undefined}
+              />
               <label className="flex items-center justify-between p-4 border rounded-lg bg-gray-50 cursor-pointer">
                 <div>
                   <span className="font-medium">Section Enabled</span>

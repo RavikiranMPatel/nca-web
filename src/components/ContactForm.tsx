@@ -347,7 +347,7 @@ function Field({
       <label className="block text-sm font-semibold text-gray-700 mb-1.5">
         {label} {required && <span className="text-red-400">*</span>}
         {optional && (
-          <span className="text-gray-400 font-normal text-xs">(optional)</span>
+          <span className="text-gray-400 font-normal text-xs"></span>
         )}
       </label>
       <input

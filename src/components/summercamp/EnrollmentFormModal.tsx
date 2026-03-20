@@ -71,7 +71,6 @@ function EnrollmentFormModal({
 
   const validateIndianPhone = (phone: string) => {
     const cleaned = phone.replace(/\s+/g, "");
-    // Accepts: 9876543210 or +919876543210 or 919876543210
     return /^(\+91|91)?[6-9]\d{9}$/.test(cleaned);
   };
 
@@ -95,9 +94,7 @@ function EnrollmentFormModal({
     if (!formData.guardianPhone?.trim()) {
       errors.push("Guardian phone number is required");
     } else if (!validateIndianPhone(formData.guardianPhone)) {
-      errors.push(
-        "Enter a valid Indian mobile number (e.g. 9876543210 or +919876543210)",
-      );
+      errors.push("Enter a valid Indian mobile number (e.g. 9876543210)");
     }
 
     if (errors.length > 0) {

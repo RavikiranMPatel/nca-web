@@ -25,14 +25,27 @@ api.interceptors.response.use(
 
       // ✅ Redirect ONLY if user was logged in
       if (token) {
+        const message = error.response?.data?.message || "";
         localStorage.removeItem("accessToken");
         localStorage.removeItem("userId");
         localStorage.removeItem("playerId");
         localStorage.removeItem("playerName");
         localStorage.removeItem("userRole");
 
-        // ✅ Set session expired flag
-        sessionStorage.setItem("sessionExpired", "true");
+        localStorage.removeItem("userName");
+        localStorage.removeItem("userEmail");
+        localStorage.removeItem("userPublicId");
+        localStorage.removeItem("academyId");
+        localStorage.removeItem("academyName");
+        localStorage.removeItem("branchId");
+        localStorage.removeItem("branchName");
+
+        if (message.includes("Session expired")) {
+          sessionStorage.setItem("sessionExpired", "another_device");
+        } else {
+          sessionStorage.setItem("sessionExpired", "true");
+        }
+
         sessionStorage.setItem(
           "redirectAfterLogin",
           window.location.pathname + window.location.search,

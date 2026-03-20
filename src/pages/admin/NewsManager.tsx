@@ -11,6 +11,8 @@ import {
 } from "lucide-react";
 import api from "../../api/axios";
 import { getImageUrl } from "../../utils/imageUrl";
+import PresenceBanner from "../../components/PresenceBanner";
+import { useAuth } from "../../auth/useAuth";
 
 type NewsPost = {
   id: string;
@@ -25,6 +27,7 @@ type NewsPost = {
 };
 
 const NewsManager = () => {
+  const { academyId } = useAuth();
   const [news, setNews] = useState<NewsPost[]>([]);
   const [loading, setLoading] = useState(true);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -81,7 +84,6 @@ const NewsManager = () => {
     fd.append("file", file);
 
     try {
-      // ✅ FIXED: Removed Content-Type header - let browser set it automatically
       const response = await api.post("/admin/cms/news/upload-image", fd);
       setFormData((prev) => ({ ...prev, featuredImageUrl: response.data }));
     } catch (error) {
@@ -178,6 +180,10 @@ const NewsManager = () => {
             <p className="text-gray-600 mt-1">
               Manage news articles and announcements
             </p>
+            <PresenceBanner
+              entity="YOUR-MANAGER-NAME"
+              id={academyId ?? undefined}
+            />
           </div>
           <button
             onClick={handleAdd}
@@ -194,6 +200,9 @@ const NewsManager = () => {
           <h3 className="text-lg font-semibold mb-4">
             {isAdding ? "Add New" : "Edit"} News Article
           </h3>
+          {editingId && (
+            <PresenceBanner entity="YOUR-ENTITY-NAME" id={editingId} />
+          )}
           <div className="space-y-4">
             <div>
               <label className="block text-sm font-medium mb-2">Title *</label>

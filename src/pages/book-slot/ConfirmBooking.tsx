@@ -251,7 +251,7 @@ function ConfirmBooking() {
                 type="tel"
                 inputMode="numeric"
                 maxLength={10}
-                placeholder="9876543210"
+                placeholder=""
                 value={guestPhone}
                 onChange={(e) =>
                   setGuestPhone(e.target.value.replace(/\D/g, ""))
@@ -307,7 +307,7 @@ function ConfirmBooking() {
                 type="tel"
                 inputMode="numeric"
                 maxLength={10}
-                placeholder="9876543210"
+                placeholder=""
                 value={notifyPhone}
                 onChange={(e) =>
                   setNotifyPhone(e.target.value.replace(/\D/g, ""))

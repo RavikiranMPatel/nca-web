@@ -16,6 +16,8 @@ function PlayerOverviewPage() {
   const [playerName, setPlayerName] = useState<string>("");
   const [showTooltip, setShowTooltip] = useState(false);
 
+  const isExternalPlayer = playerPublicId?.startsWith("EXT-") ?? false;
+
   /* ================= LOAD PLAYER NAME ================= */
   useEffect(() => {
     if (!playerPublicId) return;
@@ -131,33 +133,39 @@ function PlayerOverviewPage() {
           Info
         </TabButton>
 
-        <TabButton
-          active={activeTab === "Stats"}
-          onClick={() => navigate(`/admin/players/${playerPublicId}/stats`)}
-        >
-          Stats
-        </TabButton>
+        {!isExternalPlayer && (
+          <>
+            <TabButton
+              active={activeTab === "Stats"}
+              onClick={() => navigate(`/admin/players/${playerPublicId}/stats`)}
+            >
+              Stats
+            </TabButton>
 
-        <TabButton
-          active={activeTab === "Analysis"}
-          onClick={() => navigate(`/admin/players/${playerPublicId}/analysis`)}
-        >
-          Analysis
-        </TabButton>
+            <TabButton
+              active={activeTab === "Analysis"}
+              onClick={() =>
+                navigate(`/admin/players/${playerPublicId}/analysis`)
+              }
+            >
+              Analysis
+            </TabButton>
 
-        <TabButton
-          active={activeTab === "Fees"}
-          onClick={() => navigate(`/admin/players/${playerPublicId}/fees`)}
-        >
-          Fees
-        </TabButton>
+            <TabButton
+              active={activeTab === "Fees"}
+              onClick={() => navigate(`/admin/players/${playerPublicId}/fees`)}
+            >
+              Fees
+            </TabButton>
 
-        <TabButton
-          active={activeTab === "Media"}
-          onClick={() => navigate(`/admin/players/${playerPublicId}/media`)}
-        >
-          📸 Media
-        </TabButton>
+            <TabButton
+              active={activeTab === "Media"}
+              onClick={() => navigate(`/admin/players/${playerPublicId}/media`)}
+            >
+              📸 Media
+            </TabButton>
+          </>
+        )}
 
         <TabButton
           active={activeTab === "Coaching"}

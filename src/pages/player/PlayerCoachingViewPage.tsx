@@ -8,19 +8,20 @@ import {
   ChevronDown,
   ChevronUp,
   Clock,
-  ArrowLeft,
   CheckCircle2,
   Circle,
   AlertCircle,
+  TrendingUp,
 } from "lucide-react";
 import { toast } from "react-hot-toast";
 import api from "../../api/axios";
 import { useAuth } from "../../auth/useAuth";
-import type {
-  PracticeDayResponse,
-  PlayerGoalResponse,
-  MatchPerformanceResponse,
-  DrillAssignmentResponse,
+import {
+  type PracticeDayResponse,
+  type PlayerGoalResponse,
+  type MatchPerformanceResponse,
+  type DrillAssignmentResponse,
+  coachingService,
 } from "../../api/playerService/coachingService";
 
 // ── Constants ──────────────────────────────────────────────────────
@@ -30,6 +31,7 @@ const SUB_TABS = [
   { key: "drills", label: "Drills", icon: <Dumbbell size={16} /> },
   { key: "goals", label: "Goals", icon: <Target size={16} /> },
   { key: "matches", label: "Matches", icon: <Trophy size={16} /> },
+  { key: "progress", label: "Progress", icon: <TrendingUp size={16} /> },
 ] as const;
 
 type SubTab = (typeof SUB_TABS)[number]["key"];
@@ -104,6 +106,7 @@ export default function PlayerCoachingViewPage() {
   const [drills, setDrills] = useState<DrillAssignmentResponse[]>([]);
   const [loading, setLoading] = useState(true);
   const [notLinked, setNotLinked] = useState(false);
+  const [progress, setProgress] = useState<any | null>(null);
 
   useEffect(() => {
     loadAll();
@@ -112,16 +115,18 @@ export default function PlayerCoachingViewPage() {
   const loadAll = async () => {
     setLoading(true);
     try {
-      const [pdRes, gRes, mRes, dRes] = await Promise.all([
+      const [pdRes, gRes, mRes, dRes, prRes] = await Promise.all([
         api.get("/player/coaching/practice-days"),
         api.get("/player/coaching/goals"),
         api.get("/player/coaching/matches"),
         api.get("/player/coaching/drills"),
+        api.get("/player/coaching/progress"),
       ]);
       setPracticeDays(pdRes.data);
       setGoals(gRes.data);
       setMatches(mRes.data);
       setDrills(dRes.data);
+      setProgress(prRes.data);
     } catch (err: any) {
       if (err?.response?.status === 404) {
         setNotLinked(true);
@@ -202,7 +207,9 @@ export default function PlayerCoachingViewPage() {
                 ? activeGoals.length
                 : tab.key === "drills"
                   ? pendingDrills.length
-                  : matches.length;
+                  : tab.key === "matches"
+                    ? matches.length
+                    : 0; // progress tab has no badge
 
           return (
             <button
@@ -248,7 +255,9 @@ export default function PlayerCoachingViewPage() {
       )}
 
       {/* ── Drills ────────────────────────────────────────────── */}
-      {!loading && activeTab === "drills" && <DrillsSection drills={drills} />}
+      {!loading && activeTab === "drills" && (
+        <DrillsSection drills={drills} onUpdated={loadAll} />
+      )}
 
       {/* ── Goals ─────────────────────────────────────────────── */}
       {!loading && activeTab === "goals" && <GoalsSection goals={goals} />}
@@ -256,6 +265,10 @@ export default function PlayerCoachingViewPage() {
       {/* ── Matches ───────────────────────────────────────────── */}
       {!loading && activeTab === "matches" && (
         <MatchesSection matches={matches} />
+      )}
+
+      {!loading && activeTab === "progress" && (
+        <ProgressSection progress={progress} />
       )}
     </div>
   );
@@ -398,7 +411,13 @@ function PracticeSection({
 
 // ── Drills Section ────────────────────────────────────────────────
 
-function DrillsSection({ drills }: { drills: DrillAssignmentResponse[] }) {
+function DrillsSection({
+  drills,
+  onUpdated,
+}: {
+  drills: DrillAssignmentResponse[];
+  onUpdated: () => void;
+}) {
   if (drills.length === 0) {
     return <EmptyState icon="🏋️" message="No drills assigned yet." />;
   }
@@ -420,7 +439,11 @@ function DrillsSection({ drills }: { drills: DrillAssignmentResponse[] }) {
             Pending — {pending.length}
           </p>
           {pending.map((drill) => (
-            <DrillCard key={drill.publicId} drill={drill} />
+            <DrillCard
+              key={drill.publicId}
+              drill={drill}
+              onUpdated={onUpdated}
+            />
           ))}
         </div>
       )}
@@ -430,7 +453,11 @@ function DrillsSection({ drills }: { drills: DrillAssignmentResponse[] }) {
             Completed — {completed.length}
           </p>
           {completed.map((drill) => (
-            <DrillCard key={drill.publicId} drill={drill} />
+            <DrillCard
+              key={drill.publicId}
+              drill={drill}
+              onUpdated={onUpdated}
+            />
           ))}
         </div>
       )}
@@ -438,9 +465,49 @@ function DrillsSection({ drills }: { drills: DrillAssignmentResponse[] }) {
   );
 }
 
-function DrillCard({ drill }: { drill: DrillAssignmentResponse }) {
+function DrillCard({
+  drill,
+  onUpdated,
+}: {
+  drill: DrillAssignmentResponse;
+  onUpdated: () => void;
+}) {
+  const [showComplete, setShowComplete] = useState(false);
+  const [status, setStatus] = useState<"COMPLETED" | "SKIPPED">("COMPLETED");
+  const [note, setNote] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  const isPending =
+    drill.completionStatus === "ASSIGNED" ||
+    drill.completionStatus === "IN_PROGRESS";
+
+  const handleSubmit = async () => {
+    setSaving(true);
+    console.log("🏏 Submitting drill completion:", {
+      drillPublicId: drill.publicId,
+      status,
+      note,
+    });
+    try {
+      await coachingService.completeDrill(drill.publicId, status, note);
+      toast.success(
+        status === "COMPLETED"
+          ? "Drill marked as completed! 🎉"
+          : "Drill skipped",
+      );
+      setShowComplete(false);
+      setNote("");
+      onUpdated();
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message || "Failed to update drill");
+    } finally {
+      setSaving(false);
+    }
+  };
+
   return (
-    <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-4">
+    <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-4 space-y-3">
+      {/* ── Drill info ── */}
       <div className="flex items-start justify-between gap-2">
         <div className="flex-1 min-w-0">
           <p className="font-semibold text-gray-900 text-sm">{drill.name}</p>
@@ -468,11 +535,93 @@ function DrillCard({ drill }: { drill: DrillAssignmentResponse }) {
           </div>
         </div>
         <span
-          className={`text-[10px] font-bold px-2 py-1 rounded-xl flex-shrink-0 ${DRILL_STATUS_STYLES[drill.completionStatus] || "bg-slate-100 text-slate-500"}`}
+          className={`text-[10px] font-bold px-2 py-1 rounded-xl flex-shrink-0 ${
+            DRILL_STATUS_STYLES[drill.completionStatus] ||
+            "bg-slate-100 text-slate-500"
+          }`}
         >
           {drill.completionStatus.replace(/_/g, " ")}
         </span>
       </div>
+
+      {/* ── Completion note if already done ── */}
+      {drill.completionNotes && !isPending && (
+        <div className="bg-gray-50 rounded-xl px-3 py-2 border border-gray-100">
+          <p className="text-xs text-gray-500 font-medium mb-0.5">Your note:</p>
+          <p className="text-xs text-gray-600">{drill.completionNotes}</p>
+        </div>
+      )}
+
+      {/* ── Mark complete button — only for pending ── */}
+      {isPending && !showComplete && (
+        <button
+          onClick={() => setShowComplete(true)}
+          className="w-full flex items-center justify-center gap-2 py-2.5 bg-green-600 text-white rounded-xl text-sm font-semibold hover:bg-green-700 transition"
+        >
+          <CheckCircle2 size={16} /> Mark Complete
+        </button>
+      )}
+
+      {/* ── Inline completion form ── */}
+      {isPending && showComplete && (
+        <div className="space-y-3 bg-green-50 rounded-xl p-3 border border-green-100">
+          <p className="text-xs font-bold text-green-800">
+            Update Drill Status
+          </p>
+
+          {/* Status toggle */}
+          <div className="flex gap-2">
+            {(["COMPLETED", "SKIPPED"] as const).map((s) => (
+              <button
+                key={s}
+                onClick={() => setStatus(s)}
+                className={`flex-1 py-2 rounded-xl text-xs font-semibold border-2 transition-all ${
+                  status === s
+                    ? s === "COMPLETED"
+                      ? "bg-green-600 border-green-600 text-white"
+                      : "bg-slate-500 border-slate-500 text-white"
+                    : "bg-white border-gray-200 text-gray-600"
+                }`}
+              >
+                {s === "COMPLETED" ? "✅ Completed" : "⏭ Skipped"}
+              </button>
+            ))}
+          </div>
+
+          {/* Note */}
+          <textarea
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+            placeholder={
+              status === "COMPLETED"
+                ? "How did it go? Any feedback..."
+                : "Why are you skipping this?"
+            }
+            rows={2}
+            className="w-full px-3 py-2 border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-green-500 resize-none bg-white"
+          />
+
+          {/* Action buttons */}
+          <div className="flex gap-2">
+            <button
+              onClick={handleSubmit}
+              disabled={saving}
+              className="flex-1 py-2.5 bg-green-600 text-white rounded-xl text-sm font-semibold hover:bg-green-700 disabled:opacity-50"
+            >
+              {saving ? "Saving..." : "Submit"}
+            </button>
+            <button
+              onClick={() => {
+                setShowComplete(false);
+                setNote("");
+              }}
+              className="flex-1 py-2.5 bg-white text-gray-600 rounded-xl text-sm font-medium border hover:bg-gray-50"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -757,6 +906,265 @@ function MatchesSection({ matches }: { matches: MatchPerformanceResponse[] }) {
           </div>
         );
       })}
+    </div>
+  );
+}
+
+// ── Progress Section ──────────────────────────────────────────────
+
+function ProgressSection({ progress }: { progress: any }) {
+  if (!progress) {
+    return <EmptyState icon="📈" message="No progress data yet." />;
+  }
+
+  const {
+    goalStats,
+    drillStats,
+    practiceFrequency,
+    matchTrends,
+    assessmentTrends,
+  } = progress;
+
+  return (
+    <div className="space-y-4">
+      {/* ── Summary Cards ── */}
+      <div className="grid grid-cols-2 gap-3">
+        {/* Goal completion */}
+        <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-4">
+          <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">
+            Goals
+          </p>
+          <p className="text-3xl font-bold text-green-600">
+            {goalStats?.completionRate ?? 0}%
+          </p>
+          <p className="text-xs text-gray-500 mt-1">completion rate</p>
+          <div className="flex gap-2 mt-2 flex-wrap">
+            <span className="text-[10px] bg-green-50 text-green-700 px-2 py-0.5 rounded-full font-semibold">
+              ✅ {goalStats?.achieved ?? 0} achieved
+            </span>
+            <span className="text-[10px] bg-blue-50 text-blue-700 px-2 py-0.5 rounded-full font-semibold">
+              🔄 {goalStats?.inProgress ?? 0} active
+            </span>
+          </div>
+        </div>
+
+        {/* Drill completion */}
+        <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-4">
+          <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">
+            Drills
+          </p>
+          <p className="text-3xl font-bold text-blue-600">
+            {drillStats?.completionRate ?? 0}%
+          </p>
+          <p className="text-xs text-gray-500 mt-1">completion rate</p>
+          <div className="flex gap-2 mt-2 flex-wrap">
+            <span className="text-[10px] bg-green-50 text-green-700 px-2 py-0.5 rounded-full font-semibold">
+              ✅ {drillStats?.completed ?? 0} done
+            </span>
+            <span className="text-[10px] bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full font-semibold">
+              ⏭ {drillStats?.skipped ?? 0} skipped
+            </span>
+          </div>
+        </div>
+
+        {/* Practice sessions */}
+        <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-4">
+          <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">
+            Sessions
+          </p>
+          <p className="text-3xl font-bold text-purple-600">
+            {practiceFrequency?.length ?? 0}
+          </p>
+          <p className="text-xs text-gray-500 mt-1">total practice days</p>
+          <p className="text-[10px] text-gray-400 mt-2">
+            {practiceFrequency?.reduce(
+              (sum: number, p: any) => sum + (p.duration || 0),
+              0,
+            ) ?? 0}{" "}
+            mins total
+          </p>
+        </div>
+
+        {/* Matches */}
+        <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-4">
+          <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">
+            Matches
+          </p>
+          <p className="text-3xl font-bold text-orange-600">
+            {matchTrends?.length ?? 0}
+          </p>
+          <p className="text-xs text-gray-500 mt-1">total matches played</p>
+          <p className="text-[10px] text-gray-400 mt-2">
+            {matchTrends?.reduce(
+              (sum: number, m: any) => sum + (m.batting?.runs || 0),
+              0,
+            ) ?? 0}{" "}
+            total runs
+          </p>
+        </div>
+      </div>
+
+      {/* ── Match Performance Timeline ── */}
+      {matchTrends && matchTrends.length > 0 && (
+        <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-4">
+          <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">
+            Match Performance Trend
+          </p>
+          <div className="space-y-2">
+            {matchTrends.map((m: any, i: number) => (
+              <div key={i} className="flex items-center gap-3 text-xs">
+                <span className="text-gray-400 w-20 flex-shrink-0">
+                  {new Date(m.date).toLocaleDateString("en-IN", {
+                    day: "2-digit",
+                    month: "short",
+                  })}
+                </span>
+                <span className="text-gray-500 flex-shrink-0 w-16 truncate">
+                  vs {m.opposition || "—"}
+                </span>
+                {m.batting?.runs != null && (
+                  <span className="bg-blue-50 text-blue-700 px-2 py-0.5 rounded-full font-semibold">
+                    🏏 {m.batting.runs}R
+                  </span>
+                )}
+                {m.bowling?.wickets != null && (
+                  <span className="bg-green-50 text-green-700 px-2 py-0.5 rounded-full font-semibold">
+                    🎯 {m.bowling.wickets}W
+                  </span>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* ── Assessment Skill Ratings ── */}
+      {assessmentTrends && assessmentTrends.length > 0 && (
+        <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-4">
+          <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">
+            Latest Assessment
+          </p>
+          {(() => {
+            const latest = assessmentTrends[assessmentTrends.length - 1];
+            const categories = [
+              { label: "Cricket", data: latest.cricket, color: "bg-blue-500" },
+              {
+                label: "Fielding",
+                data: latest.fielding,
+                color: "bg-teal-500",
+              },
+              {
+                label: "Fitness",
+                data: latest.fitness,
+                color: "bg-orange-500",
+              },
+              { label: "Mental", data: latest.mental, color: "bg-purple-500" },
+            ];
+
+            return (
+              <div className="space-y-3">
+                <p className="text-[10px] text-gray-400">
+                  Assessment date: {latest.date}
+                </p>
+                {categories.map((cat) => {
+                  if (!cat.data) return null;
+                  const RATING_MAP: Record<string, number> = {
+                    NEEDS_WORK: 1,
+                    DEVELOPING: 2,
+                    GOOD: 3,
+                    EXCELLENT: 4,
+                  };
+
+                  const extractRatings = (obj: any): number[] => {
+                    if (!obj || typeof obj !== "object") return [];
+                    const results: number[] = [];
+                    for (const val of Object.values(obj)) {
+                      if (typeof val === "object" && val !== null) {
+                        if (
+                          "rating" in val &&
+                          typeof (val as any).rating === "string"
+                        ) {
+                          const score = RATING_MAP[(val as any).rating];
+                          if (score !== undefined) results.push(score);
+                        } else {
+                          results.push(...extractRatings(val));
+                        }
+                      }
+                    }
+                    return results;
+                  };
+
+                  const scores = extractRatings(cat.data);
+                  const avg = scores.length
+                    ? Math.round(
+                        (scores.reduce((a, b) => a + b, 0) / scores.length) *
+                          10,
+                      ) / 10
+                    : 0;
+                  const pct = (avg / 4) * 100; // ← max is 4 (EXCELLENT), not 5
+
+                  return (
+                    <div key={cat.label}>
+                      <div className="flex justify-between text-xs mb-1">
+                        <span className="font-medium text-gray-700">
+                          {cat.label}
+                        </span>
+                        <span className="text-gray-500">{avg}/4</span>
+                      </div>
+                      <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+                        <div
+                          className={`h-full ${cat.color} rounded-full transition-all`}
+                          style={{ width: `${pct}%` }}
+                        />
+                      </div>
+                    </div>
+                  );
+                })}
+
+                {/* Trend if multiple assessments */}
+                {assessmentTrends.length > 1 && (
+                  <p className="text-[10px] text-gray-400 mt-2">
+                    📈 {assessmentTrends.length} assessments recorded —
+                    improving over time
+                  </p>
+                )}
+              </div>
+            );
+          })()}
+        </div>
+      )}
+
+      {/* ── Practice Timeline ── */}
+      {practiceFrequency && practiceFrequency.length > 0 && (
+        <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-4">
+          <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">
+            Practice Timeline
+          </p>
+          <div className="space-y-1.5">
+            {practiceFrequency.slice(0, 8).map((p: any, i: number) => (
+              <div key={i} className="flex items-center gap-3 text-xs">
+                <span className="text-gray-400 w-20 flex-shrink-0">
+                  {new Date(p.date).toLocaleDateString("en-IN", {
+                    day: "2-digit",
+                    month: "short",
+                  })}
+                </span>
+                <div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-purple-400 rounded-full"
+                    style={{
+                      width: `${Math.min((p.duration / 120) * 100, 100)}%`,
+                    }}
+                  />
+                </div>
+                <span className="text-gray-500 w-14 text-right">
+                  {p.duration} min
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

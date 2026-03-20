@@ -18,6 +18,8 @@ import {
   toggleBranchActive,
   type Branch,
 } from "../../api/branch.api";
+import PresenceBanner from "../../components/PresenceBanner";
+import { useAuth } from "../../auth/useAuth";
 
 // ── Create Branch Modal ───────────────────────────────────────────────────────
 
@@ -231,6 +233,7 @@ function CreateBranchModal({ onClose, onCreated }: CreateModalProps) {
 // ── Branches Tab ──────────────────────────────────────────────────────────────
 
 export default function BranchesTab() {
+  const { academyId } = useAuth();
   const [branches, setBranches] = useState<Branch[]>([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
@@ -287,6 +290,7 @@ export default function BranchesTab() {
 
   return (
     <div className="space-y-5">
+      <PresenceBanner entity="branches-tab" id={academyId ?? undefined} />{" "}
       {/* Tab Header */}
       <div className="flex items-center justify-between">
         <div>
@@ -304,7 +308,6 @@ export default function BranchesTab() {
           Add Branch
         </button>
       </div>
-
       {/* Branch cards */}
       <div className="grid gap-4 sm:grid-cols-2">
         {branches.map((branch) => (
@@ -403,7 +406,6 @@ export default function BranchesTab() {
           </div>
         ))}
       </div>
-
       {/* Empty state */}
       {branches.length === 0 && (
         <div className="border border-dashed border-slate-300 rounded-xl p-10 text-center">
@@ -423,7 +425,6 @@ export default function BranchesTab() {
           </button>
         </div>
       )}
-
       {showModal && (
         <CreateBranchModal
           onClose={() => setShowModal(false)}

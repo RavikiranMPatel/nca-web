@@ -8,6 +8,10 @@ import { getImageUrl } from "../utils/imageUrl";
 function Login() {
   const [error, setError] = useState(() => {
     const sessionExpired = sessionStorage.getItem("sessionExpired");
+    if (sessionExpired === "another_device") {
+      sessionStorage.removeItem("sessionExpired");
+      return "Your account was logged in from another device. Please login again.";
+    }
     if (sessionExpired === "true") {
       sessionStorage.removeItem("sessionExpired");
       return "Your session has expired. Please login again.";
@@ -90,7 +94,7 @@ function Login() {
         {error && (
           <div
             className={`border px-4 py-2 rounded mb-4 text-sm ${
-              error.includes("session")
+              error.includes("session") || error.includes("another device")
                 ? "bg-yellow-50 border-yellow-300 text-yellow-700"
                 : "bg-red-50 border-red-300 text-red-700"
             }`}

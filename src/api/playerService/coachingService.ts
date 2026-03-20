@@ -358,6 +358,16 @@ export const coachingService = {
       `/admin/players/${playerPublicId}/match-performances/${publicId}`,
     );
   },
+  completeDrill: async (
+    drillPublicId: string,
+    status: "COMPLETED" | "SKIPPED",
+    completionNote?: string,
+  ): Promise<void> => {
+    await api.patch(`/player/coaching/drills/${drillPublicId}/complete`, {
+      status,
+      completionNote,
+    });
+  },
 };
 
 export default coachingService;

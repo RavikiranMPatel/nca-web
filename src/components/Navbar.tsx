@@ -9,6 +9,7 @@ import {
   LogIn,
   UserPlus,
   ChevronDown,
+  CheckCircle,
 } from "lucide-react";
 import { useState, useEffect, useRef } from "react";
 import LoginPromptModal from "../components/LoginPromptModal";
@@ -17,10 +18,64 @@ import publicApi from "../api/publicApi";
 
 const ADMIN_ROLES = ["ROLE_ADMIN", "ROLE_SUPER_ADMIN"];
 
+function LogoutConfirmModal({
+  open,
+  onConfirm,
+  onCancel,
+}: {
+  open: boolean;
+  onConfirm: () => void;
+  onCancel: () => void;
+}) {
+  if (!open) return null;
+  return (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 backdrop-blur-sm">
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm mx-4 p-6">
+        <div className="flex flex-col items-center gap-3 text-center">
+          <div className="w-12 h-12 rounded-full bg-red-50 flex items-center justify-center">
+            <LogOut size={22} className="text-red-500" />
+          </div>
+          <h2 className="text-lg font-semibold text-gray-800">Log out?</h2>
+          <p className="text-sm text-gray-500">
+            Are you sure you want to log out of your account?
+          </p>
+        </div>
+        <div className="flex gap-3 mt-6">
+          <button
+            onClick={onCancel}
+            className="flex-1 py-2.5 rounded-lg border border-gray-200 text-sm font-medium text-gray-700 hover:bg-gray-50 transition"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={onConfirm}
+            className="flex-1 py-2.5 rounded-lg bg-red-500 text-white text-sm font-medium hover:bg-red-600 transition"
+          >
+            Yes, log out
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function LogoutToast({ show }: { show: boolean }) {
+  if (!show) return null;
+  return (
+    <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[200] flex items-center gap-2 bg-gray-900 text-white text-sm font-medium px-4 py-3 rounded-xl shadow-lg">
+      <CheckCircle size={16} className="text-green-400 flex-shrink-0" />
+      You've been logged out successfully
+    </div>
+  );
+}
+
 function Navbar() {
   const { logout, isAuthenticated, userName, userRole, branchName } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
+
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
+  const [showLogoutToast, setShowLogoutToast] = useState(false);
 
   const isAdmin = !!userRole && ADMIN_ROLES.includes(userRole);
 
@@ -102,12 +157,21 @@ function Navbar() {
     };
   }, [mobileOpen]);
 
-  const handleLogout = () => {
+  const requestLogout = () => {
+    setUserMenuOpen(false);
+    setMobileOpen(false);
+    setShowLogoutConfirm(true);
+  };
+
+  const confirmLogout = () => {
+    setShowLogoutConfirm(false);
     logout();
     navigate("/home");
-    setMobileOpen(false);
-    setUserMenuOpen(false);
+    setShowLogoutToast(true);
+    setTimeout(() => setShowLogoutToast(false), 3000);
   };
+
+  const cancelLogout = () => setShowLogoutConfirm(false);
 
   const guardedNavigate = (path: string, message: string) => {
     if (!isAuthenticated) {
@@ -331,7 +395,7 @@ function Navbar() {
                         )}
                         <div className="h-px bg-gray-100 my-1" />
                         <button
-                          onClick={handleLogout}
+                          onClick={requestLogout}
                           className="w-full flex items-center gap-2 px-4 py-2.5 text-sm
                  text-red-600 hover:bg-red-50 transition"
                         >
@@ -523,7 +587,7 @@ function Navbar() {
 
               {isAuthenticated ? (
                 <button
-                  onClick={handleLogout}
+                  onClick={requestLogout}
                   className="w-full flex items-center justify-center gap-2 bg-red-500 text-white py-2.5 rounded hover:bg-red-600 transition text-sm font-medium"
                 >
                   <LogOut size={15} />
@@ -561,6 +625,14 @@ function Navbar() {
         onConfirm={() => navigate("/login")}
         onCancel={() => setLoginPromptMessage(null)}
       />
+
+      <LogoutConfirmModal
+        open={showLogoutConfirm}
+        onConfirm={confirmLogout}
+        onCancel={cancelLogout}
+      />
+
+      <LogoutToast show={showLogoutToast} />
     </>
   );
 }

@@ -2,6 +2,8 @@ import { useState, useEffect } from "react";
 import { Plus, Edit2, Trash2, Save, X, Award, Eye, EyeOff } from "lucide-react";
 import api from "../../api/axios";
 import publicApi from "../../api/publicApi";
+import PresenceBanner from "../../components/PresenceBanner";
+import { useAuth } from "../../auth/useAuth";
 
 type Facility = {
   id: string;
@@ -13,6 +15,7 @@ type Facility = {
 };
 
 const FacilitiesManager = () => {
+  const { academyId } = useAuth();
   const [facilities, setFacilities] = useState<Facility[]>([]);
   const [loading, setLoading] = useState(true);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -139,6 +142,10 @@ const FacilitiesManager = () => {
             <p className="text-gray-600 mt-1">
               Manage the facilities showcased on your homepage
             </p>
+            <PresenceBanner
+              entity="facilities-manager"
+              id={academyId ?? undefined}
+            />
           </div>
           <button
             onClick={handleAdd}
@@ -157,6 +164,8 @@ const FacilitiesManager = () => {
           <h3 className="text-lg font-semibold mb-4">
             {isAdding ? "Add New Facility" : "Edit Facility"}
           </h3>
+
+          {editingId && <PresenceBanner entity="facility" id={editingId} />}
 
           <div className="space-y-4">
             <div>

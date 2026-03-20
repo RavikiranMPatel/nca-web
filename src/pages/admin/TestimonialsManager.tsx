@@ -12,6 +12,8 @@ import {
 } from "lucide-react";
 import api from "../../api/axios";
 import { getImageUrl } from "../../utils/imageUrl";
+import PresenceBanner from "../../components/PresenceBanner";
+import { useAuth } from "../../auth/useAuth";
 
 type Testimonial = {
   id: string;
@@ -26,6 +28,7 @@ type Testimonial = {
 };
 
 const TestimonialsManager = () => {
+  const { academyId } = useAuth();
   const [testimonials, setTestimonials] = useState<Testimonial[]>([]);
   const [loading, setLoading] = useState(true);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -159,6 +162,10 @@ const TestimonialsManager = () => {
           <div>
             <h2 className="text-2xl font-bold">Testimonials Management</h2>
             <p className="text-gray-600 mt-1">Manage customer testimonials</p>
+            <PresenceBanner
+              entity="testimonials-manager"
+              id={academyId ?? undefined}
+            />
           </div>
           <button
             onClick={handleAdd}
@@ -175,6 +182,7 @@ const TestimonialsManager = () => {
           <h3 className="text-lg font-semibold mb-4">
             {isAdding ? "Add New" : "Edit"} Testimonial
           </h3>
+          {editingId && <PresenceBanner entity="testimonial" id={editingId} />}
           <div className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
               <div>

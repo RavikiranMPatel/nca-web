@@ -88,6 +88,13 @@ function UserProfilePage() {
   const handleChangePassword = async () => {
     setPasswordError("");
 
+    if (newPassword === currentPassword) {
+      setPasswordError(
+        "New password must be different from your current password",
+      );
+      return;
+    }
+
     if (!currentPassword || !newPassword || !confirmPassword) {
       setPasswordError("All fields are required");
       return;
@@ -246,7 +253,7 @@ function UserProfilePage() {
               maxLength={10}
               value={phone}
               onChange={(e) => setPhone(e.target.value.replace(/\D/g, ""))}
-              placeholder="9876543210"
+              placeholder=""
               className="flex-1 px-3 py-3 text-sm focus:outline-none"
             />
           </div>

@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, Search, Plus, Users, UserPlus } from "lucide-react";
+import { ArrowLeft, Search, Users, UserPlus } from "lucide-react";
 import { toast } from "react-hot-toast";
 import api from "../../api/axios";
 
@@ -42,9 +42,9 @@ function CoachingDashboardPage() {
   const loadPlayers = async () => {
     setLoading(true);
     try {
-      // Load both own academy active players + external one-on-one players
       const [ownRes, extRes] = await Promise.all([
-        api.get("/admin/players?activeOnly=true"),
+        // ← Change this: only fetch own players who have coaching data
+        api.get("/admin/players/coaching/own"),
         api.get("/admin/players/coaching/players"),
       ]);
       const own: CoachingPlayer[] = ownRes.data.map((p: any) => ({
@@ -62,7 +62,6 @@ function CoachingDashboardPage() {
         sourceAcademyName: p.sourceAcademyName,
         active: p.active,
       }));
-      // Merge, dedup by publicId (ext players won't be in own)
       const ownIds = new Set(own.map((p) => p.publicId));
       setPlayers([...own, ...ext.filter((p) => !ownIds.has(p.publicId))]);
     } catch {
