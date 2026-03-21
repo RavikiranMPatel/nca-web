@@ -51,7 +51,6 @@ function MyBookings() {
   const [subInfo, setSubInfo] = useState<SubscriptionInfo | null>(null);
   const [subLoading, setSubLoading] = useState(true);
 
-  // Plan modal state
   const [showPlansModal, setShowPlansModal] = useState(false);
   const [plans, setPlans] = useState<Plan[]>([]);
   const [plansLoading, setPlansLoading] = useState(false);
@@ -64,7 +63,6 @@ function MyBookings() {
   const navigate = useNavigate();
 
   useEffect(() => {
-    // AFTER
     api
       .get("/bookings/my")
       .then((res) => setBookings(res.data))
@@ -106,7 +104,6 @@ function MyBookings() {
     try {
       await api.post("/subscriptions/request", { planPublicId });
       setRequestSuccess(true);
-      // Refresh subscription info
       const res = await api.get("/subscriptions/my");
       setSubInfo(res.data);
     } catch (err: any) {
@@ -115,8 +112,6 @@ function MyBookings() {
       setRequesting(null);
     }
   };
-
-  // ---------------- FILTER LOGIC — UNCHANGED ----------------
 
   const today = new Date().toISOString().split("T")[0];
 
@@ -136,16 +131,12 @@ function MyBookings() {
     });
   }, [bookings, filter, today]);
 
-  // ---------------- PAGINATION — UNCHANGED ----------------
-
   const totalPages = Math.ceil(filteredBookings.length / PAGE_SIZE);
 
   const pagedBookings = useMemo(() => {
     const start = (page - 1) * PAGE_SIZE;
     return filteredBookings.slice(start, start + PAGE_SIZE);
   }, [filteredBookings, page]);
-
-  // ---------------- ACTIONS — UNCHANGED ----------------
 
   const cancelBooking = async (bookingId: string) => {
     if (!confirm("Cancel this booking?")) return;
@@ -161,17 +152,18 @@ function MyBookings() {
     }
   };
 
-  // ---------------- UI ----------------
-
   if (loading) {
-    return <div className="text-center mt-10">Loading bookings…</div>;
+    return (
+      <div className="flex items-center justify-center min-h-[40vh]">
+        <div className="w-8 h-8 border-4 border-slate-200 border-t-blue-600 rounded-full animate-spin" />
+      </div>
+    );
   }
 
   if (error) {
     return <div className="text-center text-red-600 mt-10">{error}</div>;
   }
 
-  // Group plans by sessionsPerMonth for display
   const grouped = plans.reduce(
     (acc, plan) => {
       const key = plan.sessionsPerMonth;
@@ -185,75 +177,80 @@ function MyBookings() {
   const monthLabel = (m: number) =>
     m === 1 ? "1 Month" : m === 12 ? "1 Year" : `${m} Months`;
 
+  const statusStyle = (status: string) => {
+    switch (status) {
+      case "CONFIRMED":
+        return "text-green-600";
+      case "PENDING_PAYMENT":
+        return "text-orange-500";
+      default:
+        return "text-red-500";
+    }
+  };
+
+  const statusLabel = (status: string) => {
+    switch (status) {
+      case "CONFIRMED":
+        return "Confirmed";
+      case "PENDING_PAYMENT":
+        return "Pending Payment";
+      case "CANCELLED":
+        return "Cancelled";
+      case "EXPIRED":
+        return "Expired";
+      default:
+        return status;
+    }
+  };
+
   return (
-    <div className="max-w-5xl mx-auto mt-10 px-4">
-      <h1 className="text-2xl font-semibold mb-6">My Bookings</h1>
+    <div className="max-w-2xl mx-auto px-4 py-6 pb-24">
+      <h1 className="text-xl font-bold text-gray-900 mb-4">My Bookings</h1>
 
-      {/* ── SUBSCRIPTION INFO CARD ─────────────────────────────────── */}
-      {!subLoading &&
-        subInfo &&
-        subInfo.hasMembership &&
-        subInfo.subscription && (
-          <div
-            className="mb-6 bg-gradient-to-r from-blue-600 to-blue-700
-                        rounded-2xl p-5 text-white shadow-md"
-          >
-            <div className="flex items-center justify-between flex-wrap gap-3">
-              <div>
-                <p className="text-blue-100 text-xs font-medium uppercase tracking-wide mb-1">
-                  🏏 Active Membership
-                </p>
-                <p className="text-2xl font-bold">
-                  {subInfo.subscription.sessionsRemaining}{" "}
-                  <span className="text-lg font-normal text-blue-100">
-                    sessions remaining
-                  </span>
-                </p>
-                <p className="text-blue-200 text-sm mt-1">
-                  {subInfo.subscription.sessionsUsed} used of{" "}
-                  {subInfo.subscription.totalSessions} total · Valid till{" "}
-                  {subInfo.subscription.expiresOn}
-                </p>
+      {/* ── ACTIVE MEMBERSHIP CARD ── */}
+      {!subLoading && subInfo?.hasMembership && subInfo.subscription && (
+        <div className="mb-4 bg-gradient-to-r from-blue-600 to-blue-700 rounded-2xl p-4 text-white shadow-md">
+          <p className="text-blue-100 text-xs font-medium uppercase tracking-wide mb-1">
+            🏏 Active Membership
+          </p>
+          <p className="text-2xl font-bold">
+            {subInfo.subscription.sessionsRemaining}{" "}
+            <span className="text-base font-normal text-blue-100">
+              sessions remaining
+            </span>
+          </p>
+          <div className="flex items-center justify-between mt-2 gap-3">
+            <div className="flex-1">
+              <div className="w-full bg-blue-500 rounded-full h-2">
+                <div
+                  className="bg-white rounded-full h-2 transition-all"
+                  style={{
+                    width: `${Math.round(
+                      (subInfo.subscription.sessionsRemaining /
+                        subInfo.subscription.totalSessions) *
+                        100,
+                    )}%`,
+                  }}
+                />
               </div>
-              <div className="text-right">
-                <div className="w-32 bg-blue-500 rounded-full h-2.5 mb-1">
-                  <div
-                    className="bg-white rounded-full h-2.5 transition-all"
-                    style={{
-                      width: `${Math.round(
-                        (subInfo.subscription.sessionsRemaining /
-                          subInfo.subscription.totalSessions) *
-                          100,
-                      )}%`,
-                    }}
-                  />
-                </div>
-                <p className="text-xs text-blue-200">
-                  {Math.round(
-                    (subInfo.subscription.sessionsRemaining /
-                      subInfo.subscription.totalSessions) *
-                      100,
-                  )}
-                  % remaining
-                </p>
-                <button
-                  onClick={() => navigate("/my-subscription")}
-                  className="mt-2 text-xs bg-white text-blue-700 font-semibold
-                           px-3 py-1.5 rounded-lg hover:bg-blue-50 transition"
-                >
-                  View Details
-                </button>
-              </div>
+              <p className="text-xs text-blue-200 mt-1">
+                {subInfo.subscription.sessionsUsed} used · valid till{" "}
+                {subInfo.subscription.expiresOn}
+              </p>
             </div>
+            <button
+              onClick={() => navigate("/my-subscription")}
+              className="shrink-0 text-xs bg-white text-blue-700 font-semibold px-3 py-1.5 rounded-lg hover:bg-blue-50 transition"
+            >
+              Details
+            </button>
           </div>
-        )}
+        </div>
+      )}
 
-      {/* Queued subscription notice */}
-      {!subLoading && subInfo && subInfo.hasQueued && subInfo.queued && (
-        <div
-          className="mb-6 bg-amber-50 border border-amber-200
-                        rounded-2xl p-4 flex items-start gap-3"
-        >
+      {/* ── QUEUED SUBSCRIPTION ── */}
+      {!subLoading && subInfo?.hasQueued && subInfo.queued && (
+        <div className="mb-4 bg-amber-50 border border-amber-200 rounded-2xl p-4 flex items-start gap-3">
           <span className="text-amber-500 text-xl mt-0.5">⏳</span>
           <div className="flex-1">
             <p className="text-sm font-semibold text-amber-800">
@@ -262,118 +259,103 @@ function MyBookings() {
             <p className="text-xs text-amber-700 mt-0.5">
               Your {subInfo.queued.totalSessions}-session /{" "}
               {subInfo.queued.planMonths}-month plan is queued. Admin will
-              activate it after payment verification.
+              activate after payment verification.
             </p>
-            <div className="mt-3 bg-amber-100 rounded-xl p-3">
-              <p className="text-xs font-semibold text-amber-800 mb-1">
-                📲 How to complete payment:
+            <div className="mt-3 bg-amber-100 rounded-xl p-3 space-y-1">
+              <p className="text-xs font-semibold text-amber-800">
+                📲 Next Steps:
               </p>
               <p className="text-xs text-amber-700">
                 1. Pay ₹{subInfo.queued.pricePaid?.toLocaleString("en-IN")} via
                 UPI/cash to the academy
               </p>
               <p className="text-xs text-amber-700">
-                2. Call or WhatsApp the academy to confirm payment
+                2. Call or WhatsApp the academy to confirm
               </p>
               <p className="text-xs text-amber-700">
-                3. Admin will activate your subscription within 24 hours
+                3. Admin activates within 24 hours
               </p>
             </div>
           </div>
         </div>
       )}
 
-      {/* No membership nudge */}
+      {/* ── NO MEMBERSHIP NUDGE ── */}
       {!subLoading &&
         subInfo &&
         !subInfo.hasMembership &&
         !subInfo.hasQueued && (
-          <div
-            className="mb-6 bg-slate-50 border border-slate-200
-                          rounded-2xl p-4 flex items-center justify-between gap-3"
-          >
+          <div className="mb-4 bg-slate-50 border border-slate-200 rounded-2xl p-4 flex items-center justify-between gap-3">
             <p className="text-sm text-slate-600">
-              🏏 Book bowling machine slots without payment every time —
-              subscribe to a membership plan!
+              🏏 Subscribe to book bowling machine slots without paying every
+              time!
             </p>
             <button
               onClick={handleOpenPlans}
-              className="shrink-0 text-xs bg-blue-600 text-white font-semibold
-                         px-3 py-1.5 rounded-lg hover:bg-blue-700 transition"
+              className="shrink-0 text-xs bg-blue-600 text-white font-semibold px-3 py-1.5 rounded-lg hover:bg-blue-700 transition"
             >
               View Plans
             </button>
           </div>
         )}
 
-      {/* FILTER TABS — UNCHANGED */}
-      <div className="flex gap-4 mb-6">
-        <button
-          onClick={() => {
-            setFilter("UPCOMING");
-            setPage(1);
-          }}
-          className={`px-4 py-2 rounded ${
-            filter === "UPCOMING" ? "bg-blue-600 text-white" : "border"
-          }`}
-        >
-          Upcoming
-        </button>
-        <button
-          onClick={() => {
-            setFilter("PAST");
-            setPage(1);
-          }}
-          className={`px-4 py-2 rounded ${
-            filter === "PAST" ? "bg-blue-600 text-white" : "border"
-          }`}
-        >
-          Past
-        </button>
+      {/* ── FILTER TABS ── */}
+      <div className="flex gap-2 mb-4">
+        {(["UPCOMING", "PAST"] as const).map((f) => (
+          <button
+            key={f}
+            onClick={() => {
+              setFilter(f);
+              setPage(1);
+            }}
+            className={`flex-1 py-2 rounded-xl text-sm font-semibold transition ${
+              filter === f
+                ? "bg-blue-600 text-white shadow-sm"
+                : "bg-white border border-gray-200 text-gray-600"
+            }`}
+          >
+            {f === "UPCOMING" ? "Upcoming" : "Past"}
+          </button>
+        ))}
       </div>
 
-      {/* EMPTY STATE — UNCHANGED */}
+      {/* ── EMPTY STATE ── */}
       {filteredBookings.length === 0 && (
-        <div className="text-center mt-10 text-gray-500">
-          No {filter.toLowerCase()} bookings found.
+        <div className="text-center py-12 text-gray-400">
+          <p className="text-3xl mb-2">📅</p>
+          <p className="text-sm">No {filter.toLowerCase()} bookings found.</p>
         </div>
       )}
 
-      {/* LIST — UNCHANGED */}
-      <div className="space-y-4">
+      {/* ── BOOKING CARDS ── */}
+      <div className="space-y-3">
         {pagedBookings.map((b) => (
           <div
             key={b.bookingPublicId}
-            className="border rounded p-4 flex justify-between items-center"
+            className="bg-white rounded-xl border border-gray-200 shadow-sm p-4"
           >
-            <div className="space-y-1 text-sm">
-              <p>
-                <strong>Date:</strong> {b.date}
+            {/* Top row: resource + status badge */}
+            <div className="flex items-center justify-between mb-2">
+              <p className="font-semibold text-gray-900 text-sm">
+                {b.resource}
               </p>
-              <p>
-                <strong>Time:</strong> {b.slot}
-              </p>
-              <p>
-                <strong>Resource:</strong> {b.resource}
-              </p>
-              <p>
-                <strong>Amount:</strong> ₹{b.amount}
-              </p>
-              <p>
-                <strong>Status:</strong>{" "}
-                <span
-                  className={
-                    b.status === "CONFIRMED"
-                      ? "text-green-600"
-                      : b.status === "PENDING_PAYMENT"
-                        ? "text-orange-600"
-                        : "text-red-600"
-                  }
-                >
-                  {b.status}
-                </span>
-              </p>
+              <span
+                className={`text-xs font-semibold ${statusStyle(b.status)}`}
+              >
+                {statusLabel(b.status)}
+              </span>
             </div>
+
+            {/* Date / time / amount row */}
+            <div className="flex items-center gap-4 text-xs text-gray-500 mb-3">
+              <span>📅 {b.date}</span>
+              <span>🕐 {b.slot}</span>
+              <span className="ml-auto font-semibold text-gray-800 text-sm">
+                ₹{b.amount}
+              </span>
+            </div>
+
+            {/* Action buttons */}
             <div className="flex gap-2">
               {b.status === "PENDING_PAYMENT" && (
                 <button
@@ -381,7 +363,7 @@ function MyBookings() {
                     localStorage.setItem("activeBookingId", b.bookingPublicId);
                     navigate("/payment");
                   }}
-                  className="bg-green-600 text-white px-4 py-2 rounded"
+                  className="flex-1 bg-green-600 text-white py-2 rounded-lg text-sm font-semibold hover:bg-green-700 transition"
                 >
                   Pay Now
                 </button>
@@ -389,7 +371,7 @@ function MyBookings() {
               {b.status === "CONFIRMED" && filter === "UPCOMING" && (
                 <button
                   onClick={() => cancelBooking(b.bookingPublicId)}
-                  className="border border-red-500 text-red-500 px-4 py-2 rounded"
+                  className="flex-1 border border-red-300 text-red-500 py-2 rounded-lg text-sm font-semibold hover:bg-red-50 transition"
                 >
                   Cancel
                 </button>
@@ -399,48 +381,38 @@ function MyBookings() {
         ))}
       </div>
 
-      {/* PAGINATION — UNCHANGED */}
+      {/* ── PAGINATION ── */}
       {totalPages > 1 && (
-        <div className="flex justify-center gap-2 mt-8">
+        <div className="flex justify-center items-center gap-3 mt-6">
           <button
             disabled={page === 1}
             onClick={() => setPage((p) => p - 1)}
-            className="px-4 py-2 border rounded disabled:opacity-50"
+            className="px-4 py-2 border border-gray-200 rounded-lg text-sm disabled:opacity-40 hover:bg-gray-50 transition"
           >
             Prev
           </button>
-          <span className="px-4 py-2">
-            Page {page} of {totalPages}
+          <span className="text-sm text-gray-600">
+            {page} / {totalPages}
           </span>
           <button
             disabled={page === totalPages}
             onClick={() => setPage((p) => p + 1)}
-            className="px-4 py-2 border rounded disabled:opacity-50"
+            className="px-4 py-2 border border-gray-200 rounded-lg text-sm disabled:opacity-40 hover:bg-gray-50 transition"
           >
             Next
           </button>
         </div>
       )}
 
-      {/* ── SUBSCRIPTION PLANS MODAL ──────────────────────────────── */}
+      {/* ── SUBSCRIPTION PLANS MODAL ── */}
       {showPlansModal && (
-        <div
-          className="fixed inset-0 bg-black/50 z-50 flex items-end sm:items-center
-                        justify-center p-4"
-        >
-          <div
-            className="bg-white rounded-2xl shadow-xl w-full max-w-lg
-                          max-h-[90vh] overflow-y-auto"
-          >
-            {/* Modal Header */}
-            <div
-              className="flex items-center justify-between px-5 py-4
-                            border-b bg-slate-50 rounded-t-2xl sticky top-0"
-            >
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center">
+          <div className="bg-white rounded-t-2xl sm:rounded-2xl shadow-xl w-full sm:max-w-lg max-h-[92vh] overflow-y-auto">
+            <div className="flex items-center justify-between px-5 py-4 border-b bg-slate-50 rounded-t-2xl sticky top-0">
               <div>
-                <h3 className="font-bold text-lg">🏏 Membership Plans</h3>
+                <h3 className="font-bold text-base">🏏 Membership Plans</h3>
                 <p className="text-xs text-slate-500 mt-0.5">
-                  Book bowling machine slots without payment every time
+                  Book slots without paying every time
                 </p>
               </div>
               <button
@@ -452,13 +424,9 @@ function MyBookings() {
             </div>
 
             <div className="p-5">
-              {/* Success State */}
               {requestSuccess ? (
                 <div className="text-center py-8">
-                  <div
-                    className="w-16 h-16 bg-green-100 rounded-full flex items-center
-                                  justify-center mx-auto mb-4"
-                  >
+                  <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
                     <CheckCircle size={32} className="text-green-600" />
                   </div>
                   <h4 className="text-lg font-bold text-slate-900 mb-2">
@@ -467,8 +435,8 @@ function MyBookings() {
                   <p className="text-sm text-slate-600 mb-2">
                     Your subscription request has been received.
                   </p>
-                  <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-left mt-4">
-                    <p className="text-xs font-semibold text-amber-800 mb-2">
+                  <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-left mt-4 space-y-1">
+                    <p className="text-xs font-semibold text-amber-800">
                       📲 Next Steps:
                     </p>
                     <p className="text-xs text-amber-700">
@@ -478,26 +446,22 @@ function MyBookings() {
                       2. Call or WhatsApp the academy to confirm
                     </p>
                     <p className="text-xs text-amber-700">
-                      3. Admin activates your subscription within 24 hours
+                      3. Admin activates within 24 hours
                     </p>
-                    <p className="text-xs text-amber-700 mt-2 font-medium">
-                      You'll receive a WhatsApp confirmation once activated!
+                    <p className="text-xs text-amber-700 font-medium">
+                      You'll get a WhatsApp confirmation once activated!
                     </p>
                   </div>
                   <button
                     onClick={() => setShowPlansModal(false)}
-                    className="mt-5 w-full bg-blue-600 text-white py-3 rounded-xl
-                               font-semibold hover:bg-blue-700 transition"
+                    className="mt-5 w-full bg-blue-600 text-white py-3 rounded-xl font-semibold hover:bg-blue-700 transition"
                   >
                     Got it!
                   </button>
                 </div>
               ) : plansLoading ? (
                 <div className="flex justify-center py-12">
-                  <div
-                    className="w-8 h-8 border-4 border-slate-200 border-t-blue-600
-                                  rounded-full animate-spin"
-                  />
+                  <div className="w-8 h-8 border-4 border-slate-200 border-t-blue-600 rounded-full animate-spin" />
                 </div>
               ) : plans.length === 0 ? (
                 <div className="text-center py-12 text-slate-500">
@@ -506,7 +470,6 @@ function MyBookings() {
                 </div>
               ) : (
                 <div className="space-y-6">
-                  {/* Registration fee notice */}
                   <div className="bg-blue-50 border border-blue-200 rounded-xl p-3">
                     <p className="text-xs text-blue-800">
                       <strong>ℹ️ One-time registration fee</strong> of ₹
@@ -516,7 +479,6 @@ function MyBookings() {
                     </p>
                   </div>
 
-                  {/* Plans grouped by sessions */}
                   {Object.entries(grouped)
                     .sort(([a], [b]) => parseInt(a) - parseInt(b))
                     .map(([sessions, groupPlans]) => (
@@ -527,7 +489,6 @@ function MyBookings() {
                             {sessions} Sessions / Month
                           </p>
                         </div>
-
                         <div className="space-y-2">
                           {groupPlans
                             .sort((a, b) => a.months - b.months)
@@ -535,12 +496,10 @@ function MyBookings() {
                               const firstTimeTotal =
                                 plan.price + plan.registrationFee;
                               const isRequesting = requesting === plan.publicId;
-
                               return (
                                 <div
                                   key={plan.publicId}
-                                  className="border-2 border-slate-200 rounded-xl p-4
-                                             hover:border-blue-300 transition"
+                                  className="border-2 border-slate-200 rounded-xl p-4 hover:border-blue-300 transition"
                                 >
                                   <div className="flex items-center justify-between">
                                     <div>
@@ -556,7 +515,7 @@ function MyBookings() {
                                         </p>
                                       )}
                                     </div>
-                                    <div className="text-right">
+                                    <div className="text-right flex-shrink-0 ml-3">
                                       <p className="text-xl font-bold text-blue-700">
                                         ₹{plan.price.toLocaleString("en-IN")}
                                       </p>
@@ -565,7 +524,7 @@ function MyBookings() {
                                         {plan.registrationFee.toLocaleString(
                                           "en-IN",
                                         )}{" "}
-                                        reg (1st time)
+                                        reg (1st)
                                       </p>
                                       <p className="text-xs text-slate-500 font-medium">
                                         Total: ₹
@@ -573,25 +532,16 @@ function MyBookings() {
                                       </p>
                                     </div>
                                   </div>
-
                                   <button
                                     onClick={() =>
                                       handleRequestPlan(plan.publicId)
                                     }
                                     disabled={!!requesting}
-                                    className="mt-3 w-full bg-blue-600 text-white py-2.5
-                                               rounded-xl text-sm font-semibold
-                                               hover:bg-blue-700 transition
-                                               disabled:opacity-50 disabled:cursor-not-allowed
-                                               flex items-center justify-center gap-2"
+                                    className="mt-3 w-full bg-blue-600 text-white py-2.5 rounded-xl text-sm font-semibold hover:bg-blue-700 transition disabled:opacity-50 flex items-center justify-center gap-2"
                                   >
                                     {isRequesting ? (
                                       <>
-                                        <div
-                                          className="w-4 h-4 border-2 border-white
-                                                        border-t-transparent rounded-full
-                                                        animate-spin"
-                                        />
+                                        <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />{" "}
                                         Requesting…
                                       </>
                                     ) : (

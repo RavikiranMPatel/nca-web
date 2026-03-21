@@ -62,6 +62,7 @@ import AdminRevenueDashboard from "./pages/admin/AdminRevenueDashboard";
 import PlayerCoachingPage from "./pages/player/PlayerCoachingPage";
 import CoachingDashboardPage from "./pages/coaching/CoachingDashboardPage";
 import PlayerCoachingViewPage from "./pages/player/PlayerCoachingViewPage";
+import UserFormPage from "./pages/UserFormPage";
 
 // Add route after /my-bookings route:
 <Route
@@ -268,6 +269,26 @@ function App() {
           <ProtectedRoute roles={["ROLE_ADMIN", "ROLE_SUPER_ADMIN"]}>
             <AppLayout>
               <AdminUsers />
+            </AppLayout>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/users/new"
+        element={
+          <ProtectedRoute roles={["ROLE_SUPER_ADMIN"]}>
+            <AppLayout>
+              <UserFormPage />
+            </AppLayout>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/users/:publicId/edit"
+        element={
+          <ProtectedRoute roles={["ROLE_SUPER_ADMIN"]}>
+            <AppLayout>
+              <UserFormPage />
             </AppLayout>
           </ProtectedRoute>
         }
