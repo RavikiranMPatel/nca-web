@@ -96,16 +96,12 @@ function ConfirmBooking() {
         bookingId = res.data.bookingPublicId;
 
         // Members: booking is already confirmed, skip payment
+        // Members: no payment, go to pending approval screen
         if (isMember) {
-          navigate("/booking-success", {
+          localStorage.setItem("activeBookingId", bookingId);
+          navigate("/payment", {
             replace: true,
-            state: {
-              bookingPublicId: bookingId,
-              isMember: true,
-              sessionsDeducted: sessionsNeeded,
-              sessionsRemaining:
-                (memberStatus?.sessionsRemaining ?? 0) - sessionsNeeded,
-            },
+            state: { isMemberBooking: true },
           });
           return;
         }

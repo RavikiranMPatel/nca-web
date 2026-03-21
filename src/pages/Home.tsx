@@ -339,17 +339,17 @@ function SectionHeading({
   primaryColor: string;
 }) {
   return (
-    <div className="text-center mb-12">
-      <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mb-3">
+    <div className="text-center mb-6 md:mb-12">
+      <h2 className="text-2xl md:text-4xl font-bold text-gray-900 mb-2">
         {title}
       </h2>
       {subtitle && (
-        <p className="text-gray-500 text-base md:text-lg max-w-2xl mx-auto">
+        <p className="text-gray-500 text-sm md:text-lg max-w-2xl mx-auto">
           {subtitle}
         </p>
       )}
       <div
-        className="h-1 w-16 mx-auto mt-4 rounded-full"
+        className="h-1 w-12 md:w-16 mx-auto mt-3 rounded-full"
         style={{ backgroundColor: primaryColor }}
       />
     </div>
@@ -658,19 +658,19 @@ function Home() {
       {/* ── CTA STRIP — shown below slider ── */}
       {hasSlider && (
         <section
-          className="py-5 px-4 border-b"
+          className="py-4 px-4 border-b"
           style={{
             background: `linear-gradient(135deg, ${primaryColor}08 0%, #ffffff 60%, ${secondaryColor}08 100%)`,
           }}
         >
-          <div className="flex justify-center gap-3">
+          <div className="flex gap-3 max-w-lg mx-auto">
             <button
               onClick={() => navigate("/book-slot")}
               style={{ backgroundColor: primaryColor, ...getButtonStyle() }}
-              className="px-8 py-3 text-white font-bold text-sm hover:opacity-90 transition shadow-md flex items-center gap-2"
+              className="flex-1 py-3 text-white font-bold text-sm hover:opacity-90 transition shadow-md flex items-center justify-center gap-1.5"
             >
               🏏 Book a Training Slot
-              <ArrowRight size={16} />
+              <ArrowRight size={15} />
             </button>
             <button
               onClick={() =>
@@ -678,7 +678,7 @@ function Home() {
                   .getElementById("contact")
                   ?.scrollIntoView({ behavior: "smooth" })
               }
-              className="px-8 py-3 border-2 font-semibold text-sm hover:bg-gray-50 transition flex items-center gap-2"
+              className="flex-1 py-3 border-2 font-semibold text-sm hover:bg-gray-50 transition flex items-center justify-center"
               style={{
                 borderColor: primaryColor,
                 color: primaryColor,
@@ -863,14 +863,16 @@ function Home() {
 
       {/* ── FACILITIES ── */}
       {facilitiesEnabled && (
-        <section id="facilities" className="py-10 md:py-14 px-4 bg-white">
+        <section id="facilities" className="py-8 md:py-14 px-4 bg-white">
           <div className="max-w-6xl mx-auto">
             <SectionHeading
               title="World-Class Facilities"
               subtitle="State-of-the-art infrastructure designed to bring out the best in every player"
               primaryColor={primaryColor}
             />
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+
+            {/* Mobile: horizontal scroll  |  Desktop: 3-col grid */}
+            <div className="flex md:grid md:grid-cols-3 gap-4 overflow-x-auto pb-2 md:overflow-visible md:pb-0 -mx-4 px-4 md:mx-0 md:px-0 snap-x snap-mandatory scroll-smooth">
               {(facilities.length > 0
                 ? facilities
                 : [
@@ -902,19 +904,19 @@ function Home() {
               ).map((facility) => (
                 <div
                   key={facility.id}
-                  className={`bg-white p-7 hover:shadow-xl transition-shadow border-t-4 ${getShadowClass()}`}
+                  className={`bg-white p-5 md:p-7 border-t-4 ${getShadowClass()} flex-shrink-0 w-[72vw] md:w-auto snap-start`}
                   style={{ borderColor: primaryColor, ...getCardStyle() }}
                 >
                   <div
-                    className="w-14 h-14 rounded-xl mb-5 flex items-center justify-center"
+                    className="w-11 h-11 md:w-14 md:h-14 rounded-xl mb-4 flex items-center justify-center"
                     style={{ backgroundColor: `${primaryColor}12` }}
                   >
-                    <Award size={28} style={{ color: primaryColor }} />
+                    <Award size={24} style={{ color: primaryColor }} />
                   </div>
-                  <h3 className="text-lg font-bold mb-2 text-gray-800">
+                  <h3 className="text-base md:text-lg font-bold mb-1.5 text-gray-800">
                     {facility.title}
                   </h3>
-                  <p className="text-gray-500 text-sm leading-relaxed">
+                  <p className="text-gray-500 text-xs md:text-sm leading-relaxed">
                     {facility.description}
                   </p>
                 </div>
@@ -925,11 +927,11 @@ function Home() {
       )}
 
       {/* ── TEAM ── */}
-      {/* ── TEAM ── */}
+
       {settings.SECTION_TEAM_ENABLED !== "false" && team.length > 0 && (
         <section
           id="team"
-          className="py-10 md:py-14 px-4"
+          className="py-8 md:py-14 px-4"
           style={{ backgroundColor: `${primaryColor}06` }}
         >
           <div className="max-w-6xl mx-auto">
@@ -938,11 +940,13 @@ function Home() {
               subtitle="Expert coaches dedicated to your cricket development"
               primaryColor={primaryColor}
             />
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
+
+            {/* Mobile: horizontal scroll  |  Desktop: 3-col grid */}
+            <div className="flex md:grid md:grid-cols-3 gap-4 overflow-x-auto pb-2 md:overflow-visible md:pb-0 -mx-4 px-4 md:mx-0 md:px-0 snap-x snap-mandatory scroll-smooth">
               {team.map((member) => (
                 <div
                   key={member.id}
-                  className={`bg-white text-center p-6 hover:shadow-xl transition-shadow relative group ${getShadowClass()}`}
+                  className={`bg-white text-center p-5 hover:shadow-xl transition-shadow relative group ${getShadowClass()} flex-shrink-0 w-[56vw] md:w-auto snap-start`}
                   style={getCardStyle()}
                   onClick={() =>
                     setExpandedMemberId(
@@ -951,7 +955,7 @@ function Home() {
                   }
                 >
                   <div
-                    className="w-20 h-20 rounded-full overflow-hidden mx-auto mb-4 ring-4"
+                    className="w-16 h-16 md:w-20 md:h-20 rounded-full overflow-hidden mx-auto mb-3 ring-4"
                     style={{ ringColor: `${primaryColor}30` }}
                   >
                     {member.photoUrl ? (
@@ -962,7 +966,7 @@ function Home() {
                       />
                     ) : (
                       <div
-                        className="w-full h-full flex items-center justify-center text-white text-2xl font-bold"
+                        className="w-full h-full flex items-center justify-center text-white text-xl font-bold"
                         style={{ backgroundColor: primaryColor }}
                       >
                         {member.name.charAt(0)}
@@ -970,21 +974,22 @@ function Home() {
                     )}
                   </div>
 
-                  <h3 className="font-bold text-gray-800">{member.name}</h3>
+                  <h3 className="font-bold text-gray-800 text-sm md:text-base">
+                    {member.name}
+                  </h3>
                   <p
-                    className="text-sm font-medium mt-0.5"
+                    className="text-xs md:text-sm font-medium mt-0.5"
                     style={{ color: primaryColor }}
                   >
                     {member.role}
                   </p>
 
                   {member.bio && (
-                    <p className="text-xs text-gray-400 mt-2 leading-relaxed line-clamp-3">
+                    <p className="text-xs text-gray-400 mt-2 leading-relaxed line-clamp-2 md:line-clamp-3">
                       {member.bio}
                     </p>
                   )}
 
-                  {/* Tap hint — mobile only */}
                   {member.bio && (
                     <p
                       className="sm:hidden text-xs mt-2 font-medium"
@@ -996,7 +1001,6 @@ function Home() {
                     </p>
                   )}
 
-                  {/* Mobile expanded bio */}
                   {member.bio && expandedMemberId === member.id && (
                     <div
                       className="sm:hidden mt-3 p-3 rounded-xl text-xs text-left leading-relaxed text-white"
@@ -1006,7 +1010,6 @@ function Home() {
                     </div>
                   )}
 
-                  {/* Desktop hover tooltip */}
                   {member.bio && (
                     <div
                       className="hidden sm:block absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-64 p-4 bg-gray-900 text-white text-xs leading-relaxed rounded-xl shadow-xl
@@ -1409,27 +1412,6 @@ function Home() {
           © 2026 {academyName}. All rights reserved.
         </p>
       </footer>
-
-      {/* ── FLOATING MOBILE CTA ── */}
-      <div
-        className="fixed bottom-0 left-0 right-0 z-40 sm:hidden px-4 pb-4 pt-2"
-        style={{
-          background:
-            "linear-gradient(to top, rgba(255,255,255,0.98) 70%, transparent)",
-        }}
-      >
-        <button
-          onClick={() => navigate("/book-slot")}
-          style={{
-            backgroundColor: primaryColor,
-            borderRadius: `${buttonRadius}px`,
-          }}
-          className="w-full py-4 text-white font-bold text-base shadow-xl flex items-center justify-center gap-2 active:opacity-90"
-        >
-          🏏 Book a Training Slot
-          <ArrowRight size={18} />
-        </button>
-      </div>
 
       {/* ── LOGIN MODAL ── */}
       <LoginPromptModal

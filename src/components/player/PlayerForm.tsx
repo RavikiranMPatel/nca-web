@@ -32,15 +32,70 @@ type Props = {
   batchIds?: string[];
   onBatchChange?: (batchIds: string[]) => void;
   invalidFields?: Record<string, boolean>;
-  // Fee plan props (optional — only used in RegisterPlayer)
   feePlans?: FeePlanOption[];
   selectedFeePlan?: string;
   onFeePlanChange?: (planPublicId: string) => void;
-  // Branch props (optional — only shown to super admin in RegisterPlayer)
   branches?: Branch[];
   selectedBranchId?: string;
   onBranchChange?: (branchId: string) => void;
 };
+
+// ── Reusable field wrapper ──────────────────────────────────────
+function Field({
+  label,
+  required,
+  error,
+  children,
+  colSpan2 = false,
+}: {
+  label: string;
+  required?: boolean;
+  error?: boolean;
+  children: React.ReactNode;
+  colSpan2?: boolean;
+}) {
+  return (
+    <div className={colSpan2 ? "md:col-span-2" : ""}>
+      <label className="block text-sm font-medium text-gray-700 mb-1">
+        {label}
+        {required && <span className="text-red-500 ml-0.5">*</span>}
+      </label>
+      {children}
+      {error && (
+        <p className="text-xs text-red-500 mt-1">This field is required</p>
+      )}
+    </div>
+  );
+}
+
+// ── Shared input class builder ──────────────────────────────────
+function inputCls(error?: boolean) {
+  return `w-full px-3 py-2.5 border rounded-lg text-sm focus:outline-none focus:ring-2 transition ${
+    error
+      ? "border-red-400 focus:ring-red-300"
+      : "border-gray-300 focus:ring-blue-300 focus:border-blue-400"
+  }`;
+}
+
+// ── Section card ────────────────────────────────────────────────
+function Section({
+  title,
+  children,
+}: {
+  title: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+      <div className="px-4 py-3 border-b border-gray-100 bg-gray-50">
+        <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wide">
+          {title}
+        </h2>
+      </div>
+      <div className="p-4 space-y-4">{children}</div>
+    </div>
+  );
+}
 
 function PlayerForm({
   formData,
@@ -77,7 +132,7 @@ function PlayerForm({
           selectedBranchId || undefined,
         );
         setAvailableBatches(data);
-      } catch (error) {
+      } catch {
         setAvailableBatches([]);
       } finally {
         setLoadingBatches(false);
@@ -89,64 +144,57 @@ function PlayerForm({
   const handlePhotoSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-
     if (file.size > 5 * 1024 * 1024) {
       alert("Photo size must be less than 5MB");
       return;
     }
-
     onPhotoChange?.(file);
   };
 
-  const removePhoto = () => {
-    onPhotoChange?.(null);
-  };
+  const removePhoto = () => onPhotoChange?.(null);
 
   const toggleBatch = (batchId: string) => {
     if (!onBatchChange) return;
-
     const newBatchIds = batchIds.includes(batchId)
       ? batchIds.filter((id) => id !== batchId)
       : [...batchIds, batchId];
-
     onBatchChange(newBatchIds);
   };
 
   return (
-    <div className="space-y-6">
-      {/* PHOTO UPLOAD */}
+    <div className="space-y-4">
+      {/* ── PHOTO UPLOAD ── */}
       {onPhotoChange && (
-        <div className="bg-white p-6 rounded-lg shadow">
-          <h2 className="text-lg font-semibold mb-4">Player Photo</h2>
-
-          <div className="flex flex-col md:flex-row items-center gap-6">
-            <div className="relative">
+        <Section title="Player Photo">
+          <div className="flex items-center gap-4">
+            {/* Avatar */}
+            <div className="relative flex-shrink-0">
               {photoPreview ? (
                 <>
                   <img
                     src={photoPreview}
                     alt="Preview"
-                    className="w-32 h-32 md:w-40 md:h-40 rounded-full object-cover border-4 border-blue-500"
+                    className="w-20 h-20 md:w-24 md:h-24 rounded-full object-cover border-4 border-blue-400"
                   />
                   <button
                     type="button"
                     onClick={removePhoto}
-                    className="absolute top-0 right-0 bg-red-500 text-white p-1 rounded-full hover:bg-red-600 transition"
+                    className="absolute -top-1 -right-1 w-6 h-6 bg-red-500 text-white rounded-full flex items-center justify-center hover:bg-red-600 transition"
                   >
-                    <X size={16} />
+                    <X size={12} />
                   </button>
                 </>
               ) : (
-                <div className="w-32 h-32 md:w-40 md:h-40 rounded-full bg-gray-200 flex items-center justify-center border-4 border-dashed border-gray-300">
-                  <Camera className="text-gray-400" size={32} />
+                <div className="w-20 h-20 md:w-24 md:h-24 rounded-full bg-gray-100 flex items-center justify-center border-2 border-dashed border-gray-300">
+                  <Camera className="text-gray-400" size={28} />
                 </div>
               )}
             </div>
-
-            <div className="flex-1 text-center md:text-left">
-              <label className="cursor-pointer inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition">
-                <Upload size={18} />
-                <span>Upload Photo</span>
+            {/* Upload button */}
+            <div>
+              <label className="cursor-pointer inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 transition">
+                <Upload size={15} />
+                <span>{photoPreview ? "Change Photo" : "Upload Photo"}</span>
                 <input
                   type="file"
                   accept="image/*"
@@ -154,207 +202,161 @@ function PlayerForm({
                   className="hidden"
                 />
               </label>
-              <p className="text-xs text-gray-500 mt-2">
-                JPG, PNG or JPEG. Max 5MB.
+              <p className="text-xs text-gray-400 mt-1.5">
+                JPG, PNG or JPEG · Max 5MB
               </p>
             </div>
           </div>
-        </div>
+        </Section>
       )}
 
-      {/* PERSONAL INFO */}
-      <div className="bg-white p-6 rounded-lg shadow space-y-4">
-        <h2 className="text-lg font-semibold">Personal Information</h2>
-
+      {/* ── PERSONAL INFO ── */}
+      <Section title="Personal Information">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="md:col-span-2">
-            <label className="block text-sm font-medium mb-1">
-              Full Name <span className="text-red-500">*</span>
-            </label>
+          <Field
+            label="Full Name"
+            required
+            error={invalidFields.displayName}
+            colSpan2
+          >
             <input
               type="text"
               name="displayName"
               value={formData.displayName}
               onChange={onChange}
-              className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 ${
-                invalidFields.displayName
-                  ? "border-red-500 focus:ring-red-500"
-                  : "focus:ring-blue-500"
-              }`}
-              placeholder="Enter name as per Aadhar card"
+              className={inputCls(invalidFields.displayName)}
+              placeholder="Name as per Aadhar card"
             />
-          </div>
+          </Field>
 
-          <div>
-            <label className="block text-sm font-medium mb-1">
-              Aadhar Number
-            </label>
+          <Field label="Aadhar Number">
             <input
               type="text"
               name="aadharNumber"
               value={formData.aadharNumber}
               onChange={onChange}
               maxLength={12}
-              className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className={inputCls()}
               placeholder="XXXX XXXX XXXX"
             />
-          </div>
+          </Field>
 
-          <div>
-            <label className="block text-sm font-medium mb-1">
-              Date of Birth <span className="text-red-500">*</span>
-            </label>
+          <Field label="Date of Birth" required error={invalidFields.dob}>
             <input
               type="date"
               name="dob"
               value={formData.dob}
               onChange={onChange}
-              className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 ${
-                invalidFields.dob
-                  ? "border-red-500 focus:ring-red-500"
-                  : "focus:ring-blue-500"
-              }`}
+              className={inputCls(invalidFields.dob)}
             />
-          </div>
+          </Field>
 
-          <div>
-            <label className="block text-sm font-medium mb-1">
-              Gender <span className="text-red-500">*</span>
-            </label>
+          <Field label="Gender" required error={invalidFields.gender}>
             <select
               name="gender"
               value={formData.gender}
               onChange={onChange}
-              className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 ${
-                invalidFields.gender
-                  ? "border-red-500 focus:ring-red-500"
-                  : "focus:ring-blue-500"
-              }`}
+              className={inputCls(invalidFields.gender)}
             >
               <option value="">Select Gender</option>
               <option value="MALE">Male</option>
               <option value="FEMALE">Female</option>
               <option value="OTHER">Other</option>
             </select>
-          </div>
+          </Field>
 
-          <div>
-            <label className="block text-sm font-medium mb-1">
-              Father's Name
-            </label>
+          <Field label="Father's Name">
             <input
               type="text"
               name="fatherName"
               value={formData.fatherName}
               onChange={onChange}
-              className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className={inputCls()}
               placeholder="Father's name"
             />
-          </div>
+          </Field>
 
-          <div>
-            <label className="block text-sm font-medium mb-1">
-              Mother's Name
-            </label>
+          <Field label="Mother's Name">
             <input
               type="text"
               name="motherName"
               value={formData.motherName}
               onChange={onChange}
-              className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className={inputCls()}
               placeholder="Mother's name"
             />
-          </div>
+          </Field>
 
-          <div>
-            <label className="block text-sm font-medium mb-1">
-              Player Phone
-            </label>
+          <Field label="Player Phone">
             <input
               type="tel"
               name="phone"
               value={formData.phone}
               onChange={onChange}
-              className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              placeholder="+91 XXXXX XXXXX"
+              className={inputCls()}
+              placeholder="10-digit mobile number"
             />
-          </div>
+          </Field>
 
-          <div>
-            <label className="block text-sm font-medium mb-1">
-              Parents Phone <span className="text-red-500">*</span>
-            </label>
+          <Field
+            label="Parents Phone"
+            required
+            error={invalidFields.parentsPhone}
+          >
             <input
               type="tel"
               name="parentsPhone"
               value={formData.parentsPhone}
               onChange={onChange}
-              className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 ${
-                invalidFields.parentsPhone
-                  ? "border-red-500 focus:ring-red-500"
-                  : "focus:ring-blue-500"
-              }`}
-              placeholder="+91 XXXXX XXXXX"
+              className={inputCls(invalidFields.parentsPhone)}
+              placeholder="10-digit mobile number"
             />
-          </div>
+          </Field>
 
-          <div>
-            <label className="block text-sm font-medium mb-1">
-              Email <span className="text-red-500">*</span>
-            </label>
+          <Field label="Email" required error={invalidFields.email} colSpan2>
             <input
               type="email"
               name="email"
               value={formData.email}
               onChange={onChange}
-              className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 ${
-                invalidFields.email
-                  ? "border-red-500 focus:ring-red-500"
-                  : "focus:ring-blue-500"
-              }`}
+              className={inputCls(invalidFields.email)}
               placeholder="player@example.com"
             />
-          </div>
+          </Field>
 
-          <div className="md:col-span-2">
-            <label className="block text-sm font-medium mb-1">
-              Address <span className="text-red-500">*</span>
-            </label>
+          <Field
+            label="Address"
+            required
+            error={invalidFields.address}
+            colSpan2
+          >
             <textarea
               name="address"
               value={formData.address}
               onChange={onChange}
               rows={2}
-              className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 ${
-                invalidFields.address
-                  ? "border-red-500 focus:ring-red-500"
-                  : "focus:ring-blue-500"
-              }`}
+              className={inputCls(invalidFields.address)}
               placeholder="Full address"
             />
-          </div>
+          </Field>
         </div>
-      </div>
+      </Section>
 
-      {/* ACADEMY INFO */}
-      <div className="bg-white p-6 rounded-lg shadow space-y-4">
-        <h2 className="text-lg font-semibold">Academy Information</h2>
-
+      {/* ── ACADEMY INFO ── */}
+      <Section title="Academy Information">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {/* BRANCH DROPDOWN — only shown to super admin */}
+          {/* Branch — super admin only */}
           {onBranchChange && (
-            <div className="md:col-span-2">
-              <label className="block text-sm font-medium mb-1">
-                Branch <span className="text-red-500">*</span>
-              </label>
+            <Field
+              label="Branch"
+              required
+              error={invalidFields.branchId}
+              colSpan2
+            >
               <select
                 value={selectedBranchId}
                 onChange={(e) => onBranchChange(e.target.value)}
-                className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 ${
-                  invalidFields.branchId
-                    ? "border-red-500 focus:ring-red-500"
-                    : "focus:ring-blue-500"
-                }`}
+                className={inputCls(invalidFields.branchId)}
               >
                 <option value="">Select Branch</option>
                 {branches
@@ -366,72 +368,53 @@ function PlayerForm({
                     </option>
                   ))}
               </select>
-              {invalidFields.branchId && (
-                <p className="text-red-500 text-xs mt-1">Branch is required</p>
-              )}
-              <p className="text-xs text-gray-500 mt-1">
+              <p className="text-xs text-gray-400 mt-1">
                 Player will be assigned to this branch
               </p>
-            </div>
+            </Field>
           )}
 
-          <div>
-            <label className="block text-sm font-medium mb-1">
-              Profession <span className="text-red-500">*</span>
-            </label>
+          <Field label="Profession" required error={invalidFields.profession}>
             <select
               name="profession"
               value={formData.profession}
               onChange={onChange}
-              className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 ${
-                invalidFields.profession
-                  ? "border-red-500 focus:ring-red-500"
-                  : "focus:ring-blue-500"
-              }`}
+              className={inputCls(invalidFields.profession)}
             >
               <option value="">Select Profession</option>
               <option value="STUDENT">Student</option>
               <option value="WORKING">Working Professional</option>
             </select>
-          </div>
+          </Field>
 
-          <div>
-            <label className="block text-sm font-medium mb-1">
-              School/College
-            </label>
+          <Field label="School / College">
             <input
               type="text"
               name="schoolOrCollege"
               value={formData.schoolOrCollege}
               onChange={onChange}
-              className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className={inputCls()}
               placeholder="Institution name"
             />
-          </div>
+          </Field>
 
-          <div>
-            <label className="block text-sm font-medium mb-1">
-              Joining Date
-            </label>
+          <Field label="Joining Date">
             <input
               type="date"
               name="joiningDate"
               value={formData.joiningDate}
               onChange={onChange}
-              className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className={inputCls()}
             />
-          </div>
+          </Field>
 
-          {/* FEE PLAN DROPDOWN — only shown if props are passed */}
+          {/* Fee Plan — optional */}
           {onFeePlanChange && (
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Fee Plan
-              </label>
+            <Field label="Fee Plan">
               <select
                 value={selectedFeePlan}
                 onChange={(e) => onFeePlanChange(e.target.value)}
-                className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className={inputCls()}
               >
                 <option value="">Select Fee Plan (Optional)</option>
                 {feePlans.map((plan) => {
@@ -446,25 +429,23 @@ function PlayerForm({
                   );
                 })}
               </select>
-              <p className="text-xs text-gray-500 mt-1">
-                Can also be assigned later from the Fees tab
+              <p className="text-xs text-gray-400 mt-1">
+                Can be assigned later from the Fees tab
               </p>
-            </div>
+            </Field>
           )}
 
-          {/* BATCH SELECTION */}
+          {/* Batch selection */}
           <div
             id="batch-section"
             className={`md:col-span-2 ${
-              invalidFields.batchIds
-                ? "border-2 border-red-500 p-3 rounded-md"
-                : ""
+              invalidFields.batchIds ? "ring-2 ring-red-400 rounded-xl p-3" : ""
             }`}
           >
-            <label className="block text-sm font-medium mb-2">
-              Select Batches <span className="text-red-500">*</span>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Batches <span className="text-red-500">*</span>
             </label>
-            <p className="text-xs text-gray-500 mb-3">
+            <p className="text-xs text-gray-400 mb-3">
               Player can be assigned to multiple batches
             </p>
 
@@ -475,8 +456,8 @@ function PlayerForm({
                 </p>
               </div>
             ) : loadingBatches ? (
-              <div className="text-sm text-gray-500 py-4 text-center">
-                Loading batches...
+              <div className="text-sm text-gray-400 py-4 text-center">
+                Loading batches…
               </div>
             ) : availableBatches.length === 0 ? (
               <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 text-center">
@@ -488,13 +469,12 @@ function PlayerForm({
               <div className="space-y-2">
                 {availableBatches.map((batch) => {
                   const isSelected = batchIds.includes(batch.id);
-
                   return (
                     <button
                       key={batch.id}
                       type="button"
                       onClick={() => toggleBatch(batch.id)}
-                      className={`w-full p-3 rounded-lg border-2 transition-all text-left ${
+                      className={`w-full p-3 rounded-xl border-2 transition-all text-left active:scale-[0.99] ${
                         isSelected
                           ? "border-blue-500 bg-blue-50"
                           : "border-gray-200 hover:border-gray-300 bg-white"
@@ -512,20 +492,19 @@ function PlayerForm({
                             <div className="font-medium text-sm">
                               {batch.name}
                             </div>
-                            <div className="text-xs text-gray-600">
+                            <div className="text-xs text-gray-500">
                               {formatBatchTimeRange(batch)}
                             </div>
                           </div>
                         </div>
-
                         <div
-                          className={`w-5 h-5 rounded flex items-center justify-center text-xs font-bold ${
+                          className={`w-5 h-5 rounded flex items-center justify-center text-xs font-bold flex-shrink-0 ${
                             isSelected
                               ? "bg-blue-600 text-white"
-                              : "bg-gray-200 text-gray-400"
+                              : "bg-gray-100 text-gray-400"
                           }`}
                         >
-                          {isSelected && "✓"}
+                          {isSelected ? "✓" : ""}
                         </div>
                       </div>
                     </button>
@@ -535,40 +514,34 @@ function PlayerForm({
             )}
 
             {invalidFields.batchIds && (
-              <p className="text-sm text-red-500 mt-2">
+              <p className="text-xs text-red-500 mt-2">
                 ⚠️ Please select at least one batch
               </p>
             )}
           </div>
         </div>
-      </div>
+      </Section>
 
-      {/* CRICKET INFO */}
-      <div className="bg-white p-6 rounded-lg shadow space-y-4">
-        <h2 className="text-lg font-semibold">Cricket Profile</h2>
-
+      {/* ── CRICKET PROFILE ── */}
+      <Section title="Cricket Profile">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div>
-            <label className="block text-sm font-medium mb-1">KSCA ID</label>
+          <Field label="KSCA ID">
             <input
               type="text"
               name="kscaId"
               value={formData.kscaId}
               onChange={onChange}
-              className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className={inputCls()}
               placeholder="Enter KSCA ID"
             />
-          </div>
+          </Field>
 
-          <div>
-            <label className="block text-sm font-medium mb-1">
-              Skill Level
-            </label>
+          <Field label="Skill Level">
             <select
               name="skillLevel"
               value={formData.skillLevel}
               onChange={onChange}
-              className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className={inputCls()}
             >
               <option value="">Select Level</option>
               <option value="BEGINNER">Beginner</option>
@@ -576,33 +549,27 @@ function PlayerForm({
               <option value="ADVANCED">Advanced</option>
               <option value="PROFESSIONAL">Professional</option>
             </select>
-          </div>
+          </Field>
 
-          <div>
-            <label className="block text-sm font-medium mb-1">
-              Batting Style
-            </label>
+          <Field label="Batting Style">
             <select
               name="battingStyle"
               value={formData.battingStyle}
               onChange={onChange}
-              className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className={inputCls()}
             >
               <option value="">Select Style</option>
               <option value="RIGHT_HAND">Right-handed</option>
               <option value="LEFT_HAND">Left-handed</option>
             </select>
-          </div>
+          </Field>
 
-          <div>
-            <label className="block text-sm font-medium mb-1">
-              Bowling Style
-            </label>
+          <Field label="Bowling Style">
             <select
               name="bowlingStyle"
               value={formData.bowlingStyle}
               onChange={onChange}
-              className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className={inputCls()}
             >
               <option value="">Select Style</option>
               <option value="RIGHT_ARM_FAST">Right-arm Fast</option>
@@ -611,41 +578,35 @@ function PlayerForm({
               <option value="LEFT_ARM_SPIN">Left-arm Spin</option>
               <option value="NONE">Not a Bowler</option>
             </select>
-          </div>
+          </Field>
 
-          <div className="md:col-span-2">
-            <label className="block text-sm font-medium mb-1">
-              Previous Representation
-            </label>
+          <Field label="Previous Representation" colSpan2>
             <textarea
               name="previousRepresentation"
               value={formData.previousRepresentation}
               onChange={onChange}
               rows={2}
-              className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              placeholder="E.g., District U-19, School Team, Club Cricket..."
+              className={inputCls()}
+              placeholder="E.g., District U-19, School Team, Club Cricket…"
             />
-          </div>
+          </Field>
         </div>
-      </div>
+      </Section>
 
-      {/* NOTES */}
-      <div className="bg-white p-6 rounded-lg shadow">
-        <label className="block text-sm font-medium mb-2">
-          Additional Notes
-        </label>
+      {/* ── NOTES ── */}
+      <Section title="Additional Notes">
         <textarea
           name="notes"
           value={formData.notes}
           onChange={onChange}
-          rows={4}
-          className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-          placeholder="Any additional information about the player..."
+          rows={3}
+          className={inputCls()}
+          placeholder="Any additional information about the player…"
         />
-      </div>
+      </Section>
 
-      {/* SUBMIT BUTTONS */}
-      <div className="flex flex-col md:flex-row gap-3 md:justify-end">
+      {/* ── SUBMIT — sticky on mobile ── */}
+      <div className="sticky bottom-16 sm:bottom-0 z-10 bg-white border-t border-gray-100 px-0 py-3 -mx-0 flex flex-col-reverse sm:flex-row gap-2 sm:justify-end sm:static sm:border-none sm:bg-transparent sm:py-0 sm:px-0">
         {onCancel && (
           <Button type="button" variant="secondary" onClick={onCancel}>
             Cancel
@@ -654,8 +615,11 @@ function PlayerForm({
         <button
           type="submit"
           disabled={loading}
-          className={`w-full md:w-auto px-6 py-2 bg-blue-600 text-white rounded-md font-medium transition
-    ${loading ? "opacity-50 cursor-not-allowed" : "hover:bg-blue-700"}`}
+          className={`flex-1 sm:flex-none px-6 py-3 sm:py-2 bg-blue-600 text-white rounded-xl sm:rounded-lg text-sm font-semibold transition ${
+            loading
+              ? "opacity-50 cursor-not-allowed"
+              : "hover:bg-blue-700 active:scale-[0.98]"
+          }`}
         >
           {loading ? (
             <span className="flex items-center justify-center gap-2">
@@ -678,7 +642,7 @@ function PlayerForm({
                   d="M4 12a8 8 0 018-8v8z"
                 />
               </svg>
-              Registering...
+              Saving…
             </span>
           ) : (
             submitLabel

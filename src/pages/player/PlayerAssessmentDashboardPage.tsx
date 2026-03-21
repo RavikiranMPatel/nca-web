@@ -47,7 +47,7 @@ function PlayerAssessmentDashboardPage() {
   );
 
   return (
-    <div className="max-w-3xl mx-auto space-y-6">
+    <div className="max-w-3xl mx-auto space-y-4">
       {/* Header */}
       <div className="flex items-center gap-3">
         <button
@@ -57,7 +57,7 @@ function PlayerAssessmentDashboardPage() {
           <ArrowLeft size={20} className="text-slate-600" />
         </button>
         <div>
-          <h1 className="text-xl font-bold text-slate-900">
+          <h1 className="text-lg md:text-xl font-bold text-slate-900">
             Performance Analysis
           </h1>
           <p className="text-sm text-slate-500">
@@ -67,18 +67,18 @@ function PlayerAssessmentDashboardPage() {
       </div>
 
       {/* Player Selector Card */}
-      <div className="bg-white rounded-lg shadow p-6">
-        <div className="flex items-center gap-2 mb-4">
-          <Users size={18} className="text-blue-600" />
-          <h2 className="text-base font-semibold text-slate-800">
+      <div className="bg-white rounded-xl border border-slate-200 p-4 md:p-6">
+        <div className="flex items-center gap-2 mb-3">
+          <Users size={17} className="text-blue-600" />
+          <h2 className="text-sm md:text-base font-semibold text-slate-800">
             Select Player
           </h2>
         </div>
 
         {/* Search */}
-        <div className="relative mb-4">
+        <div className="relative mb-3">
           <Search
-            size={16}
+            size={15}
             className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
           />
           <input
@@ -110,7 +110,7 @@ function PlayerAssessmentDashboardPage() {
               <button
                 key={player.publicId}
                 onClick={() => handleSelectPlayer(player.publicId)}
-                className="w-full flex items-center justify-between px-4 py-3 rounded-lg text-left hover:bg-blue-50 transition group"
+                className="w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-left hover:bg-blue-50 active:bg-blue-100 transition group"
               >
                 <div className="flex items-center gap-3">
                   <div className="w-9 h-9 rounded-full bg-blue-100 flex items-center justify-center text-blue-700 font-bold text-sm flex-shrink-0">
@@ -126,7 +126,7 @@ function PlayerAssessmentDashboardPage() {
                   </div>
                 </div>
                 <ClipboardList
-                  size={16}
+                  size={15}
                   className="text-slate-300 group-hover:text-blue-500 transition flex-shrink-0"
                 />
               </button>

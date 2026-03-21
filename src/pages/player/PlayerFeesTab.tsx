@@ -52,11 +52,7 @@ type FeePayment = {
 
 const PAYMENT_MODES = [
   { value: "PHONE_PE", label: "PhonePe", refLabel: "PhonePe UTR / Txn ID" },
-  {
-    value: "GOOGLE_PAY",
-    label: "Google Pay",
-    refLabel: "GPay Transaction ID",
-  },
+  { value: "GOOGLE_PAY", label: "Google Pay", refLabel: "GPay Transaction ID" },
   { value: "CASH", label: "Cash", refLabel: "Receipt Number" },
   {
     value: "ONLINE",
@@ -108,13 +104,11 @@ function PlayerFeesTab() {
           .catch(() => ({ data: [] })),
         api.get("/admin/fees/plans/active"),
       ]);
-
       if (accountRes && accountRes.status === 200 && accountRes.data) {
         setAccount(accountRes.data);
       } else {
         setAccount(null);
       }
-
       setPayments(paymentsRes.data || []);
       setPlans(plansRes.data || []);
     } catch {
@@ -127,17 +121,14 @@ function PlayerFeesTab() {
   const handleReceiptSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-
     if (file.size > 5 * 1024 * 1024) {
       toast.error("Image must be less than 5MB");
       return;
     }
-
     if (!file.type.match(/^image\/(jpeg|jpg|png|webp)$/)) {
       toast.error("Only JPG, PNG, and WebP images are supported");
       return;
     }
-
     setReceiptFile(file);
     setReceiptPreview(URL.createObjectURL(file));
   };
@@ -162,21 +153,15 @@ function PlayerFeesTab() {
       const formData = new FormData();
       formData.append("feeAccountPublicId", account.publicId);
       formData.append("paymentMode", paymentMode);
-
-      if (paymentMode === "OTHER" && otherModeText) {
+      if (paymentMode === "OTHER" && otherModeText)
         formData.append("otherModeText", otherModeText);
-      }
-      if (referenceNumber.trim()) {
+      if (referenceNumber.trim())
         formData.append("referenceNumber", referenceNumber.trim());
-      }
-      if (receiptFile) {
-        formData.append("receiptImage", receiptFile);
-      }
+      if (receiptFile) formData.append("receiptImage", receiptFile);
 
       await api.post("/admin/fees/pay", formData, {
         headers: { "Content-Type": "multipart/form-data" },
       });
-
       toast.success("Payment recorded successfully!");
       setShowPayModal(false);
       resetPayForm();
@@ -228,7 +213,6 @@ function PlayerFeesTab() {
   const handleReverse = async (paymentId: string) => {
     const reason = prompt("Reason for reversal:");
     if (!reason) return;
-
     try {
       await api.post(
         `/admin/fees/reverse?paymentId=${paymentId}&reason=${encodeURIComponent(reason)}`,
@@ -242,11 +226,9 @@ function PlayerFeesTab() {
 
   const getFinalAmount = (plan: FeePlan) =>
     plan.amount - (plan.discountAmount || 0);
-
-  const getRefLabel = () => {
-    const mode = PAYMENT_MODES.find((m) => m.value === paymentMode);
-    return mode?.refLabel || "Reference Number";
-  };
+  const getRefLabel = () =>
+    PAYMENT_MODES.find((m) => m.value === paymentMode)?.refLabel ||
+    "Reference Number";
 
   const getStatusConfig = (status: string) => {
     switch (status) {
@@ -302,7 +284,7 @@ function PlayerFeesTab() {
     );
   }
 
-  // ==================== NO ACCOUNT STATE ====================
+  // ==================== NO ACCOUNT ====================
   if (!account) {
     return (
       <div className="space-y-6">
@@ -322,11 +304,9 @@ function PlayerFeesTab() {
             }}
             className="inline-flex items-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition"
           >
-            <CreditCard size={18} />
-            Assign Fee Plan
+            <CreditCard size={18} /> Assign Fee Plan
           </button>
         </div>
-
         {showAssignModal && (
           <PlanSelectorModal
             title="Assign Fee Plan"
@@ -350,134 +330,126 @@ function PlayerFeesTab() {
   const plan = account.feePlan;
 
   return (
-    <div className="space-y-6">
-      {/* ==================== FEE STATUS CARD ==================== */}
-      <div className={`rounded-xl border-2 p-5 sm:p-6 ${statusConfig.bg}`}>
-        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
-          <div className="space-y-3 flex-1">
-            <div className="flex items-center gap-2.5">
-              {statusConfig.icon}
-              <h3 className="text-lg font-bold text-slate-900">{plan.name}</h3>
-              <span
-                className={`px-2.5 py-0.5 text-xs font-bold rounded-full ${statusConfig.badgeBg}`}
-              >
-                {statusConfig.label}
-              </span>
-            </div>
+    <div className="space-y-4">
+      {/* ── FEE STATUS CARD ── */}
+      <div className={`rounded-xl border-2 p-4 sm:p-6 ${statusConfig.bg}`}>
+        {/* Plan name + status badge */}
+        <div className="flex items-center gap-2 mb-3">
+          {statusConfig.icon}
+          <h3 className="text-base font-bold text-slate-900">{plan.name}</h3>
+          <span
+            className={`px-2.5 py-0.5 text-xs font-bold rounded-full ${statusConfig.badgeBg}`}
+          >
+            {statusConfig.label}
+          </span>
+        </div>
 
-            <div className="flex items-center gap-3">
-              {plan.discountAmount > 0 ? (
-                <>
-                  <span className="text-sm text-slate-400 line-through">
-                    ₹{plan.amount.toLocaleString("en-IN")}
-                  </span>
-                  <span className="text-2xl font-bold text-slate-900">
-                    ₹{getFinalAmount(plan).toLocaleString("en-IN")}
-                  </span>
-                  <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-semibold">
-                    ₹{plan.discountAmount.toLocaleString("en-IN")} off
-                  </span>
-                </>
-              ) : (
-                <span className="text-2xl font-bold text-slate-900">
-                  ₹{plan.amount.toLocaleString("en-IN")}
+        {/* Amount */}
+        <div className="flex items-center gap-3 mb-3">
+          {plan.discountAmount > 0 ? (
+            <>
+              <span className="text-sm text-slate-400 line-through">
+                ₹{plan.amount.toLocaleString("en-IN")}
+              </span>
+              <span className="text-2xl font-bold text-slate-900">
+                ₹{getFinalAmount(plan).toLocaleString("en-IN")}
+              </span>
+              <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-semibold">
+                ₹{plan.discountAmount.toLocaleString("en-IN")} off
+              </span>
+            </>
+          ) : (
+            <span className="text-2xl font-bold text-slate-900">
+              ₹{plan.amount.toLocaleString("en-IN")}
+            </span>
+          )}
+        </div>
+
+        {/* Info grid — always 3 cols, compact */}
+        <div className="grid grid-cols-3 gap-2 mb-4">
+          <div>
+            <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide">
+              Duration
+            </p>
+            <p className="text-xs font-medium text-slate-800 mt-0.5">
+              {plan.durationLabel || `${plan.durationDays}d`}
+            </p>
+          </div>
+          <div>
+            <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide">
+              Last Paid
+            </p>
+            <p className="text-xs font-medium text-slate-800 mt-0.5">
+              {formatDate(account.lastPaidOn)}
+            </p>
+          </div>
+          <div>
+            <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide">
+              Next Due
+            </p>
+            <p
+              className={`text-xs font-medium mt-0.5 ${account.status === "OVERDUE" ? "text-red-600" : "text-slate-800"}`}
+            >
+              {formatDate(account.nextDueOn)}
+              {daysUntilDue > 0 && account.status !== "OVERDUE" && (
+                <span className="text-[10px] text-slate-400 ml-1">
+                  ({daysUntilDue}d)
                 </span>
               )}
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-3">
-              <div>
-                <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">
-                  Duration
-                </p>
-                <p className="text-sm font-medium text-slate-800 mt-0.5">
-                  {plan.durationLabel || `${plan.durationDays} days`}
-                </p>
-              </div>
-              <div>
-                <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">
-                  Last Paid
-                </p>
-                <p className="text-sm font-medium text-slate-800 mt-0.5">
-                  {formatDate(account.lastPaidOn)}
-                </p>
-              </div>
-              <div>
-                <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">
-                  Next Due
-                </p>
-                <p
-                  className={`text-sm font-medium mt-0.5 ${
-                    account.status === "OVERDUE"
-                      ? "text-red-600"
-                      : "text-slate-800"
-                  }`}
-                >
-                  {formatDate(account.nextDueOn)}
-                  {daysUntilDue > 0 && account.status !== "OVERDUE" && (
-                    <span className="text-xs text-slate-400 ml-1">
-                      ({daysUntilDue}d left)
-                    </span>
-                  )}
-                  {daysUntilDue < 0 && (
-                    <span className="text-xs text-red-500 ml-1">
-                      ({Math.abs(daysUntilDue)}d overdue)
-                    </span>
-                  )}
-                </p>
-              </div>
-            </div>
+              {daysUntilDue < 0 && (
+                <span className="text-[10px] text-red-500 ml-1">
+                  ({Math.abs(daysUntilDue)}d overdue)
+                </span>
+              )}
+            </p>
           </div>
+        </div>
 
-          <div className="flex flex-row sm:flex-col gap-2 sm:items-end flex-shrink-0">
-            {account.status !== "PAID" ? (
-              <button
-                onClick={() => {
-                  resetPayForm();
-                  setShowPayModal(true);
-                }}
-                className="flex-1 sm:flex-none inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition text-sm"
-              >
-                <CheckCircle2 size={16} />
-                Mark as Paid
-              </button>
-            ) : (
-              <div className="text-right bg-emerald-50 border border-emerald-200 rounded-lg px-4 py-2.5">
-                <p className="text-xs text-emerald-600 font-medium">
-                  Next payment cycle opens
-                </p>
-                <p className="text-sm font-bold text-emerald-800">
-                  {formatDate(account.nextDueOn)}
-                </p>
-              </div>
-            )}
+        {/* Action buttons — stacked on mobile */}
+        <div className="flex flex-col sm:flex-row gap-2">
+          {account.status !== "PAID" ? (
             <button
               onClick={() => {
-                setSelectedPlanId("");
-                setShowChangePlanModal(true);
+                resetPayForm();
+                setShowPayModal(true);
               }}
-              className="flex-1 sm:flex-none inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-white text-slate-700 border border-slate-200 rounded-lg font-medium hover:bg-slate-50 transition text-sm"
+              className="flex-1 inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition text-sm"
             >
-              <ArrowRightLeft size={15} />
-              Change Plan
+              <CheckCircle2 size={16} /> Mark as Paid
             </button>
-          </div>
+          ) : (
+            <div className="flex-1 bg-emerald-50 border border-emerald-200 rounded-lg px-4 py-2.5 text-center">
+              <p className="text-xs text-emerald-600 font-medium">
+                Next payment opens
+              </p>
+              <p className="text-sm font-bold text-emerald-800">
+                {formatDate(account.nextDueOn)}
+              </p>
+            </div>
+          )}
+          <button
+            onClick={() => {
+              setSelectedPlanId("");
+              setShowChangePlanModal(true);
+            }}
+            className="flex-1 sm:flex-none inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-white text-slate-700 border border-slate-200 rounded-lg font-medium hover:bg-slate-50 transition text-sm"
+          >
+            <ArrowRightLeft size={15} /> Change Plan
+          </button>
         </div>
       </div>
 
-      {/* ==================== PAYMENT HISTORY ==================== */}
+      {/* ── PAYMENT HISTORY ── */}
       <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-        <div className="flex items-center gap-2 px-5 py-4 border-b border-slate-100 bg-slate-50">
-          <History size={18} className="text-slate-500" />
-          <h3 className="font-bold text-slate-800">Payment History</h3>
-          <span className="text-xs text-slate-400 ml-1">
-            ({payments.length})
-          </span>
+        <div className="flex items-center gap-2 px-4 py-3 border-b border-slate-100 bg-slate-50">
+          <History size={17} className="text-slate-500" />
+          <h3 className="font-bold text-slate-800 text-sm">Payment History</h3>
+          <span className="text-xs text-slate-400">({payments.length})</span>
         </div>
 
         {payments.length === 0 ? (
           <div className="text-center py-10">
-            <History size={36} className="mx-auto text-slate-200 mb-3" />
+            <History size={32} className="mx-auto text-slate-200 mb-3" />
             <p className="text-sm text-slate-500">No payments recorded yet</p>
           </div>
         ) : (
@@ -502,9 +474,7 @@ function PlayerFeesTab() {
                   {payments.map((p) => (
                     <tr
                       key={p.publicId}
-                      className={`hover:bg-slate-50 transition ${
-                        p.type === "REVERSAL" ? "bg-red-50/30" : ""
-                      }`}
+                      className={`hover:bg-slate-50 transition ${p.type === "REVERSAL" ? "bg-red-50/30" : ""}`}
                     >
                       <td className="px-5 py-3 text-sm text-slate-700">
                         {formatDate(p.paidOn)}
@@ -543,11 +513,7 @@ function PlayerFeesTab() {
                       </td>
                       <td className="px-5 py-3">
                         <span
-                          className={`text-xs font-semibold px-2.5 py-1 rounded-full ${
-                            p.type === "REVERSAL"
-                              ? "bg-red-100 text-red-600"
-                              : "bg-emerald-100 text-emerald-700"
-                          }`}
+                          className={`text-xs font-semibold px-2.5 py-1 rounded-full ${p.type === "REVERSAL" ? "bg-red-100 text-red-600" : "bg-emerald-100 text-emerald-700"}`}
                         >
                           {p.type === "REVERSAL" ? "Reversed" : "Paid"}
                         </span>
@@ -578,20 +544,16 @@ function PlayerFeesTab() {
                   className={`p-4 ${p.type === "REVERSAL" ? "bg-red-50/30" : ""}`}
                 >
                   <div className="flex items-center justify-between mb-2">
-                    <span className="text-sm font-medium text-slate-800">
+                    <span className="text-sm font-medium text-slate-700">
                       {formatDate(p.paidOn)}
                     </span>
                     <span
-                      className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
-                        p.type === "REVERSAL"
-                          ? "bg-red-100 text-red-600"
-                          : "bg-emerald-100 text-emerald-700"
-                      }`}
+                      className={`text-xs font-semibold px-2 py-0.5 rounded-full ${p.type === "REVERSAL" ? "bg-red-100 text-red-600" : "bg-emerald-100 text-emerald-700"}`}
                     >
                       {p.type === "REVERSAL" ? "Reversed" : "Paid"}
                     </span>
                   </div>
-                  <div className="flex items-center justify-between mb-1">
+                  <div className="flex items-center justify-between mb-1.5">
                     <span className="text-lg font-bold text-slate-900">
                       ₹{p.amount?.toLocaleString("en-IN")}
                     </span>
@@ -599,26 +561,29 @@ function PlayerFeesTab() {
                       {formatPaymentMode(p.paymentMode)}
                     </span>
                   </div>
-                  {/* Ref & Receipt row */}
-                  <div className="flex items-center gap-2 mb-1">
-                    {p.referenceNumber && (
-                      <span className="text-[11px] font-mono text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded">
-                        Ref: {p.referenceNumber}
-                      </span>
-                    )}
-                    {p.receiptImageUrl && (
-                      <button
-                        onClick={() => setShowReceiptViewer(p.receiptImageUrl)}
-                        className="text-[11px] text-blue-600 flex items-center gap-1"
-                      >
-                        <ImageIcon size={12} />
-                        Receipt
-                      </button>
-                    )}
-                  </div>
+                  {/* Ref & Receipt */}
+                  {(p.referenceNumber || p.receiptImageUrl) && (
+                    <div className="flex items-center gap-2 mb-1.5">
+                      {p.referenceNumber && (
+                        <span className="text-[11px] font-mono text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded">
+                          Ref: {p.referenceNumber}
+                        </span>
+                      )}
+                      {p.receiptImageUrl && (
+                        <button
+                          onClick={() =>
+                            setShowReceiptViewer(p.receiptImageUrl)
+                          }
+                          className="text-[11px] text-blue-600 flex items-center gap-1"
+                        >
+                          <ImageIcon size={12} /> Receipt
+                        </button>
+                      )}
+                    </div>
+                  )}
                   <div className="flex items-center justify-between">
                     <span className="text-xs text-slate-400">
-                      {p.feePlan?.name} • by {p.markedByPublicId}
+                      {p.feePlan?.name}
                     </span>
                     {isSuperAdmin && p.type !== "REVERSAL" && (
                       <button
@@ -636,17 +601,30 @@ function PlayerFeesTab() {
         )}
       </div>
 
-      {/* ==================== MARK AS PAID MODAL ==================== */}
+      {/* ── MARK AS PAID MODAL ── */}
       {showPayModal && account && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-md max-h-[90vh] overflow-y-auto">
-            <div className="px-5 py-4 border-b bg-gradient-to-r from-blue-600 to-blue-700 rounded-t-xl">
-              <h3 className="text-white font-bold text-lg">Record Payment</h3>
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center">
+          <div className="bg-white rounded-t-2xl sm:rounded-xl shadow-xl w-full sm:max-w-md max-h-[92vh] overflow-y-auto">
+            <div className="px-5 py-4 border-b bg-gradient-to-r from-blue-600 to-blue-700 rounded-t-2xl sm:rounded-t-xl sticky top-0">
+              <div className="flex items-center justify-between">
+                <h3 className="text-white font-bold text-base">
+                  Record Payment
+                </h3>
+                <button
+                  onClick={() => {
+                    setShowPayModal(false);
+                    resetPayForm();
+                  }}
+                  className="text-white/70 hover:text-white"
+                >
+                  <X size={18} />
+                </button>
+              </div>
             </div>
 
             <div className="p-5 space-y-4">
-              {/* Amount display */}
-              <div className="bg-blue-50 rounded-lg p-4 text-center">
+              {/* Amount */}
+              <div className="bg-blue-50 rounded-xl p-4 text-center">
                 {plan.discountAmount > 0 && (
                   <p className="text-sm text-slate-400 line-through mb-0.5">
                     ₹{plan.amount.toLocaleString("en-IN")}
@@ -704,8 +682,7 @@ function PlayerFeesTab() {
               <div>
                 <label className="text-xs font-semibold text-slate-600 block mb-1.5">
                   <span className="flex items-center gap-1.5">
-                    <FileText size={12} />
-                    {getRefLabel()}
+                    <FileText size={12} /> {getRefLabel()}
                     <span className="text-slate-400 font-normal">
                       (optional)
                     </span>
@@ -724,16 +701,14 @@ function PlayerFeesTab() {
               <div>
                 <label className="text-xs font-semibold text-slate-600 block mb-1.5">
                   <span className="flex items-center gap-1.5">
-                    <ImageIcon size={12} />
-                    Payment Screenshot
+                    <ImageIcon size={12} /> Payment Screenshot
                     <span className="text-slate-400 font-normal">
                       (optional)
                     </span>
                   </span>
                 </label>
-
                 {receiptPreview ? (
-                  <div className="relative border-2 border-blue-200 rounded-lg overflow-hidden bg-slate-50">
+                  <div className="relative border-2 border-blue-200 rounded-xl overflow-hidden bg-slate-50">
                     <img
                       src={receiptPreview}
                       alt="Receipt preview"
@@ -747,12 +722,11 @@ function PlayerFeesTab() {
                       <X size={14} />
                     </button>
                     <div className="px-3 py-1.5 bg-blue-50 text-xs text-blue-700 flex items-center gap-1.5">
-                      <CheckCircle2 size={12} />
-                      {receiptFile?.name}
+                      <CheckCircle2 size={12} /> {receiptFile?.name}
                     </div>
                   </div>
                 ) : (
-                  <label className="cursor-pointer block border-2 border-dashed border-slate-200 rounded-lg p-4 text-center hover:border-blue-300 hover:bg-blue-50/30 transition">
+                  <label className="cursor-pointer block border-2 border-dashed border-slate-200 rounded-xl p-4 text-center hover:border-blue-300 hover:bg-blue-50/30 transition">
                     <Upload
                       size={20}
                       className="mx-auto text-slate-400 mb-1.5"
@@ -773,10 +747,10 @@ function PlayerFeesTab() {
                 )}
               </div>
 
-              {/* Next due date preview */}
+              {/* Next due preview */}
               <div className="bg-slate-50 rounded-lg p-3 text-sm">
                 <p className="text-slate-600">
-                  Next due date will be:{" "}
+                  Next due date:{" "}
                   <span className="font-semibold text-slate-800">
                     {formatDate(
                       new Date(
@@ -787,7 +761,7 @@ function PlayerFeesTab() {
                 </p>
               </div>
 
-              <div className="flex gap-2 pt-1">
+              <div className="flex gap-2 pt-1 pb-2">
                 <button
                   onClick={() => {
                     setShowPayModal(false);
@@ -815,7 +789,7 @@ function PlayerFeesTab() {
         </div>
       )}
 
-      {/* ==================== RECEIPT IMAGE VIEWER ==================== */}
+      {/* ── RECEIPT VIEWER ── */}
       {showReceiptViewer && (
         <div
           className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4"
@@ -827,8 +801,7 @@ function PlayerFeesTab() {
           >
             <div className="flex items-center justify-between px-4 py-3 border-b bg-slate-50">
               <h4 className="font-semibold text-sm text-slate-800 flex items-center gap-2">
-                <ImageIcon size={16} />
-                Payment Receipt
+                <ImageIcon size={16} /> Payment Receipt
               </h4>
               <button
                 onClick={() => setShowReceiptViewer(null)}
@@ -848,7 +821,7 @@ function PlayerFeesTab() {
         </div>
       )}
 
-      {/* ==================== CHANGE PLAN MODAL ==================== */}
+      {/* ── CHANGE PLAN MODAL ── */}
       {showChangePlanModal && (
         <PlanSelectorModal
           title="Change Fee Plan"
@@ -907,13 +880,12 @@ function PlanSelectorModal({
   note?: string;
 }) {
   return (
-    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-xl shadow-xl w-full max-w-lg max-h-[85vh] overflow-y-auto">
-        <div className="px-5 py-4 border-b bg-slate-50 rounded-t-xl">
-          <h3 className="font-bold text-lg">{title}</h3>
+    <div className="fixed inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center">
+      <div className="bg-white rounded-t-2xl sm:rounded-xl shadow-xl w-full sm:max-w-lg max-h-[85vh] overflow-y-auto">
+        <div className="px-5 py-4 border-b bg-slate-50 rounded-t-2xl sm:rounded-t-xl sticky top-0">
+          <h3 className="font-bold text-base">{title}</h3>
         </div>
-
-        <div className="p-5 space-y-3">
+        <div className="p-4 space-y-3">
           {plans.map((plan) => (
             <button
               key={plan.publicId}
@@ -932,13 +904,13 @@ function PlanSelectorModal({
                     {plan.campType === "SUMMER_CAMP" && " • Summer Camp"}
                   </p>
                 </div>
-                <div className="text-right">
+                <div className="text-right flex-shrink-0 ml-3">
                   {plan.discountAmount > 0 && (
                     <p className="text-xs text-slate-400 line-through">
                       ₹{plan.amount.toLocaleString("en-IN")}
                     </p>
                   )}
-                  <p className="text-lg font-bold text-blue-700">
+                  <p className="text-base font-bold text-blue-700">
                     ₹{getFinalAmount(plan).toLocaleString("en-IN")}
                   </p>
                   {plan.discountAmount > 0 && (
@@ -950,20 +922,17 @@ function PlanSelectorModal({
               </div>
             </button>
           ))}
-
           {plans.length === 0 && (
             <p className="text-center py-6 text-slate-500 text-sm">
               No plans available
             </p>
           )}
-
           {note && (
             <p className="text-xs text-amber-600 bg-amber-50 rounded-lg px-3 py-2">
               {note}
             </p>
           )}
-
-          <div className="flex gap-2 pt-2">
+          <div className="flex gap-2 pt-2 pb-2">
             <button
               onClick={onClose}
               className="flex-1 py-2.5 text-sm font-medium text-slate-600 bg-slate-100 rounded-lg hover:bg-slate-200 transition"

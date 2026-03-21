@@ -43,6 +43,96 @@ type DashboardSummary = {
   overdueFees: number;
 };
 
+// ─── Action card — full-color on mobile, same on desktop ───────
+function ActionCard({
+  icon: Icon,
+  title,
+  description,
+  onClick,
+  gradient,
+  textLight,
+}: {
+  icon: any;
+  title: string;
+  description: string;
+  onClick: () => void;
+  gradient: string;
+  textLight: string;
+}) {
+  return (
+    <div
+      onClick={onClick}
+      className={`${gradient} p-4 md:p-6 rounded-xl cursor-pointer active:scale-95 md:hover:scale-105 transition-transform shadow-sm md:shadow-lg`}
+    >
+      <div className="flex items-center gap-3 mb-1.5 md:mb-3">
+        <Icon size={22} className="text-white flex-shrink-0" />
+        <h3 className="text-sm md:text-base font-semibold text-white leading-tight">
+          {title}
+        </h3>
+      </div>
+      <p className={`text-xs ${textLight} leading-relaxed hidden md:block`}>
+        {description}
+      </p>
+      {/* Mobile: show shorter description inline */}
+      <p className={`text-xs ${textLight} leading-relaxed md:hidden`}>
+        {description.length > 48 ? description.slice(0, 48) + "…" : description}
+      </p>
+    </div>
+  );
+}
+
+// ─── Plain card (white bg, used in Other Management) ───────────
+function PlainCard({
+  icon: Icon,
+  title,
+  description,
+  onClick,
+  iconColor = "text-blue-600",
+}: {
+  icon: any;
+  title: string;
+  description: string;
+  onClick: () => void;
+  iconColor?: string;
+}) {
+  return (
+    <div
+      onClick={onClick}
+      className="bg-white p-4 md:p-6 rounded-xl shadow-sm hover:shadow-md cursor-pointer active:scale-95 transition-all border border-gray-100"
+    >
+      <div className="flex items-center gap-3 mb-1">
+        <Icon size={20} className={`${iconColor} flex-shrink-0`} />
+        <h3 className="text-sm md:text-base font-semibold text-gray-800">
+          {title}
+        </h3>
+      </div>
+      <p className="text-xs text-gray-500 leading-relaxed ml-8">
+        {description}
+      </p>
+    </div>
+  );
+}
+
+// ─── Section header ─────────────────────────────────────────────
+function SectionHeader({
+  icon: Icon,
+  title,
+  iconColor = "text-blue-600",
+}: {
+  icon?: any;
+  title: string;
+  iconColor?: string;
+}) {
+  return (
+    <div className="flex items-center gap-2 mb-3">
+      {Icon && <Icon size={18} className={iconColor} />}
+      <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wide">
+        {title}
+      </h2>
+    </div>
+  );
+}
+
 function AdminDashboard() {
   const navigate = useNavigate();
 
@@ -61,7 +151,6 @@ function AdminDashboard() {
         setError(null);
       })
       .catch((err) => {
-        console.error("Dashboard error:", err);
         if (err.response?.status === 403) {
           setError("Access denied. Please log in as an admin.");
         } else {
@@ -74,10 +163,10 @@ function AdminDashboard() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
+      <div className="flex items-center justify-center min-h-[60vh]">
         <div className="text-center">
-          <div className="w-12 h-12 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin mx-auto mb-4" />
-          <p className="text-slate-600">Loading dashboard...</p>
+          <div className="w-10 h-10 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin mx-auto mb-3" />
+          <p className="text-sm text-slate-500">Loading dashboard…</p>
         </div>
       </div>
     );
@@ -85,27 +174,31 @@ function AdminDashboard() {
 
   if (error) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="text-center max-w-md">
-          <div className="bg-red-50 border border-red-200 rounded-lg p-6 mb-4">
-            <AlertTriangle className="w-12 h-12 text-red-600 mx-auto mb-3" />
-            <h2 className="text-lg font-semibold text-red-900 mb-2">{error}</h2>
-            <p className="text-sm text-red-700 mb-4">
+      <div className="flex items-center justify-center min-h-[60vh] px-4">
+        <div className="text-center max-w-sm w-full">
+          <div className="bg-red-50 border border-red-200 rounded-xl p-6 mb-4">
+            <AlertTriangle className="w-10 h-10 text-red-500 mx-auto mb-3" />
+            <h2 className="text-base font-semibold text-red-900 mb-1">
+              {error}
+            </h2>
+            <p className="text-xs text-red-600">
               Please check your login status and permissions.
             </p>
           </div>
-          <button
-            onClick={() => window.location.reload()}
-            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition mr-2"
-          >
-            Retry
-          </button>
-          <button
-            onClick={() => navigate("/login")}
-            className="px-4 py-2 bg-slate-600 text-white rounded-lg hover:bg-slate-700 transition"
-          >
-            Go to Login
-          </button>
+          <div className="flex gap-2 justify-center">
+            <button
+              onClick={() => window.location.reload()}
+              className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700 transition"
+            >
+              Retry
+            </button>
+            <button
+              onClick={() => navigate("/login")}
+              className="px-4 py-2 bg-slate-600 text-white rounded-lg text-sm hover:bg-slate-700 transition"
+            >
+              Login
+            </button>
+          </div>
         </div>
       </div>
     );
@@ -113,22 +206,25 @@ function AdminDashboard() {
 
   if (!summary) {
     return (
-      <div className="text-center py-12">
-        <p className="text-slate-600">No dashboard data available</p>
+      <div className="text-center py-12 text-sm text-slate-500">
+        No dashboard data available
       </div>
     );
   }
 
   return (
-    <div className="space-y-8">
-      {/* TITLE */}
-      <h1 className="text-2xl font-bold">Admin Dashboard</h1>
+    <div className="space-y-6 pb-4">
+      {/* ── PAGE TITLE — mobile compact, desktop full ── */}
+      <div className="flex items-center justify-between">
+        <h1 className="text-xl md:text-2xl font-bold text-gray-900">
+          Admin Dashboard
+        </h1>
+      </div>
 
-      {/* ================= OVERVIEW ================= */}
-      <section className="space-y-4">
-        <h2 className="text-lg font-semibold">Overview</h2>
-
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+      {/* ═══════════════ OVERVIEW ═══════════════ */}
+      <section>
+        <SectionHeader title="Overview" />
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
           <StatCard
             label="Total Players"
             value={summary.totalPlayers}
@@ -141,7 +237,7 @@ function AdminDashboard() {
             color="green"
           />
           <StatCard
-            label="Inactive Players"
+            label="Inactive"
             value={summary.inactivePlayers}
             icon={UserX}
             color="red"
@@ -177,7 +273,7 @@ function AdminDashboard() {
             color="red"
           />
           <StatCard
-            label="Fees Due Today"
+            label="Fees Due"
             value={summary.feesDueToday}
             icon={Clock}
             color="orange"
@@ -191,297 +287,175 @@ function AdminDashboard() {
         </div>
       </section>
 
-      {/* ================= CRICKET MANAGEMENT ================= */}
-      <section className="space-y-4">
-        <div className="flex items-center gap-2">
-          <Trophy size={24} className="text-blue-600" />
-          <h2 className="text-lg font-semibold">Cricket Management</h2>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          {/* REGISTER NEW PLAYER */}
-          <div
+      {/* ═══════════════ CRICKET MANAGEMENT ═══════════════ */}
+      <section>
+        <SectionHeader
+          icon={Trophy}
+          title="Cricket Management"
+          iconColor="text-blue-600"
+        />
+        {/* Mobile: 2-col compact grid | Desktop: 4-col */}
+        <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-4 gap-3">
+          <ActionCard
+            icon={UserPlus}
+            title="Register Player"
+            description="Add a new player with complete profile and photo"
             onClick={() => navigate("/admin/players/register")}
-            className="bg-gradient-to-br from-blue-500 to-blue-600 p-6 rounded-lg shadow-lg hover:shadow-xl cursor-pointer transition transform hover:scale-105"
-          >
-            <div className="flex items-center gap-3 mb-3">
-              <UserPlus size={28} className="text-white" />
-              <h3 className="text-lg font-bold text-white">
-                Register New Player
-              </h3>
-            </div>
-            <p className="text-sm text-blue-100">
-              Add a new player with complete profile and photo
-            </p>
-          </div>
-
-          {/* VIEW ALL PLAYERS */}
-          <div
+            gradient="bg-gradient-to-br from-blue-500 to-blue-600"
+            textLight="text-blue-100"
+          />
+          <ActionCard
+            icon={List}
+            title="View Players"
+            description="Browse, search, and manage player profiles"
             onClick={() => navigate("/admin/players")}
-            className="bg-gradient-to-br from-green-500 to-green-600 p-6 rounded-lg shadow-lg hover:shadow-xl cursor-pointer transition transform hover:scale-105"
-          >
-            <div className="flex items-center gap-3 mb-3">
-              <List size={28} className="text-white" />
-              <h3 className="text-lg font-bold text-white">View All Players</h3>
-            </div>
-            <p className="text-sm text-green-100">
-              Browse, search, and manage player profiles
-            </p>
-          </div>
-
-          {/* PERFORMANCE ANALYSIS */}
-          <div
+            gradient="bg-gradient-to-br from-green-500 to-green-600"
+            textLight="text-green-100"
+          />
+          <ActionCard
+            icon={ClipboardList}
+            title="Performance"
+            description="Assess player skills, fitness, diet & mental performance"
             onClick={() => navigate("/admin/player-assessment")}
-            className="bg-gradient-to-br from-teal-500 to-teal-600 p-6 rounded-lg shadow-lg hover:shadow-xl cursor-pointer transition transform hover:scale-105"
-          >
-            <div className="flex items-center gap-3 mb-3">
-              <ClipboardList size={28} className="text-white" />
-              <h3 className="text-lg font-bold text-white">
-                Performance Analysis
-              </h3>
-            </div>
-            <p className="text-sm text-teal-100">
-              Assess player skills, fitness, diet & mental performance
-            </p>
-          </div>
-
-          {/* ADD CRICKET STATS */}
-          <div
+            gradient="bg-gradient-to-br from-teal-500 to-teal-600"
+            textLight="text-teal-100"
+          />
+          <ActionCard
+            icon={BarChart}
+            title="Cricket Stats"
+            description="Record match performance for players"
             onClick={() => navigate("/admin/cricket-stats/add")}
-            className="bg-gradient-to-br from-orange-500 to-orange-600 p-6 rounded-lg shadow-lg hover:shadow-xl cursor-pointer transition transform hover:scale-105"
-          >
-            <div className="flex items-center gap-3 mb-3">
-              <BarChart size={28} className="text-white" />
-              <h3 className="text-lg font-bold text-white">
-                Add Cricket Stats
-              </h3>
-            </div>
-            <p className="text-sm text-orange-100">
-              Record match performance for players
-            </p>
-          </div>
-
-          {/* BATCH MANAGEMENT */}
-          <div
+            gradient="bg-gradient-to-br from-orange-500 to-orange-600"
+            textLight="text-orange-100"
+          />
+          <ActionCard
+            icon={Clock}
+            title="Batches"
+            description="Create and manage training batches with custom timings"
             onClick={() => navigate("/admin/batches")}
-            className="bg-gradient-to-br from-purple-500 to-purple-600 p-6 rounded-lg shadow-lg hover:shadow-xl cursor-pointer transition transform hover:scale-105"
-          >
-            <div className="flex items-center gap-3 mb-3">
-              <Clock size={28} className="text-white" />
-              <h3 className="text-lg font-bold text-white">Batch Management</h3>
-            </div>
-            <p className="text-sm text-purple-100">
-              Create and manage training batches with custom timings
-            </p>
-          </div>
-
-          {/* ✅ NEW: ENQUIRY MANAGEMENT */}
-          <div
+            gradient="bg-gradient-to-br from-purple-500 to-purple-600"
+            textLight="text-purple-100"
+          />
+          <ActionCard
+            icon={MessageCircle}
+            title="Enquiries"
+            description="Track and manage player enquiries and follow-ups"
             onClick={() => navigate("/admin/enquiries")}
-            className="bg-gradient-to-br from-pink-500 to-pink-600 p-6 rounded-lg shadow-lg hover:shadow-xl cursor-pointer transition transform hover:scale-105"
-          >
-            <div className="flex items-center gap-3 mb-3">
-              <MessageCircle size={28} className="text-white" />
-              <h3 className="text-lg font-bold text-white">
-                Enquiry Management
-              </h3>
-            </div>
-            <p className="text-sm text-pink-100">
-              Track and manage player enquiries and follow-ups
-            </p>
-          </div>
-
-          {/* 1-ON-1 COACHING */}
-          <div
+            gradient="bg-gradient-to-br from-pink-500 to-pink-600"
+            textLight="text-pink-100"
+          />
+          <ActionCard
+            icon={UserCheck}
+            title="1-on-1 Coaching"
+            description="Track practice, goals & match performance for individual players"
             onClick={() => navigate("/admin/coaching")}
-            className="bg-gradient-to-br from-indigo-500 to-indigo-600 p-6 rounded-lg shadow-lg hover:shadow-xl cursor-pointer transition transform hover:scale-105"
-          >
-            <div className="flex items-center gap-3 mb-3">
-              <UserCheck size={28} className="text-white" />
-              <h3 className="text-lg font-bold text-white">1-on-1 Coaching</h3>
-            </div>
-            <p className="text-sm text-indigo-100">
-              Track practice, goals & match performance for individual players
-            </p>
-          </div>
+            gradient="bg-gradient-to-br from-indigo-500 to-indigo-600"
+            textLight="text-indigo-100"
+          />
         </div>
       </section>
 
-      {/* ================= SLOT & BOOKING MANAGEMENT ================= */}
-      <section className="space-y-4">
-        <div className="flex items-center gap-2">
-          <Calendar size={24} className="text-purple-600" />
-          <h2 className="text-lg font-semibold">Slot & Booking Management</h2>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          {/* MANAGE SLOT TEMPLATES */}
-          <div
+      {/* ═══════════════ SLOT & BOOKING ═══════════════ */}
+      <section>
+        <SectionHeader
+          icon={Calendar}
+          title="Slot & Booking Management"
+          iconColor="text-purple-600"
+        />
+        <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-4 gap-3">
+          <ActionCard
+            icon={Clock}
+            title="Slot Templates"
+            description="Configure slot timings and pricing for different schedules"
             onClick={() => navigate("/admin/slot-templates")}
-            className="bg-gradient-to-br from-purple-500 to-purple-600 p-6 rounded-lg shadow-lg hover:shadow-xl cursor-pointer transition transform hover:scale-105"
-          >
-            <div className="flex items-center gap-3 mb-3">
-              <Clock size={28} className="text-white" />
-              <h3 className="text-lg font-bold text-white">
-                Manage Slot Templates
-              </h3>
-            </div>
-            <p className="text-sm text-purple-100">
-              Configure slot timings and pricing for different schedules
-            </p>
-          </div>
-
-          {/* VIEW ALL BOOKINGS */}
-          <div
+            gradient="bg-gradient-to-br from-purple-500 to-purple-600"
+            textLight="text-purple-100"
+          />
+          <ActionCard
+            icon={List}
+            title="All Bookings"
+            description="See all user bookings and payments"
             onClick={() => navigate("/admin/bookings")}
-            className="bg-gradient-to-br from-green-500 to-green-600 p-6 rounded-lg shadow-lg hover:shadow-xl cursor-pointer transition transform hover:scale-105"
-          >
-            <div className="flex items-center gap-3 mb-3">
-              <List size={28} className="text-white" />
-              <h3 className="text-lg font-bold text-white">
-                View All Bookings
-              </h3>
-            </div>
-            <p className="text-sm text-green-100">
-              See all user bookings and payments
-            </p>
-          </div>
-
-          {/* BM MEMBERS */}
-          <div
+            gradient="bg-gradient-to-br from-green-500 to-green-600"
+            textLight="text-green-100"
+          />
+          <ActionCard
+            icon={UserCheck}
+            title="BM Members"
+            description="Manage bowling machine subscribers, logged-in users and guests"
             onClick={() => navigate("/admin/members")}
-            className="bg-gradient-to-br from-teal-500 to-teal-600 p-6 rounded-lg shadow-lg hover:shadow-xl cursor-pointer transition transform hover:scale-105"
-          >
-            <div className="flex items-center gap-3 mb-3">
-              <UserCheck size={28} className="text-white" />
-              <h3 className="text-lg font-bold text-white">BM Members</h3>
-            </div>
-            <p className="text-sm text-teal-100">
-              Manage bowling machine subscribers, logged-in users and guests
-            </p>
-          </div>
-
-          {/* CALENDAR VIEW */}
-          <div
+            gradient="bg-gradient-to-br from-teal-500 to-teal-600"
+            textLight="text-teal-100"
+          />
+          <ActionCard
+            icon={Calendar}
+            title="Calendar View"
+            description="Override specific dates for holidays and events"
             onClick={() => navigate("/admin/date-overrides")}
-            className="bg-gradient-to-br from-orange-500 to-orange-600 p-6 rounded-lg shadow-lg hover:shadow-xl cursor-pointer transition transform hover:scale-105"
-          >
-            <div className="flex items-center gap-3 mb-3">
-              <Calendar size={28} className="text-white" />
-              <h3 className="text-lg font-bold text-white">Calendar View</h3>
-            </div>
-            <p className="text-sm text-orange-100">
-              Override specific dates for holidays and events
-            </p>
-          </div>
-
-          {/* MANAGE RESOURCES */}
-          <div
+            gradient="bg-gradient-to-br from-orange-500 to-orange-600"
+            textLight="text-orange-100"
+          />
+          <ActionCard
+            icon={Power}
+            title="Resources"
+            description="Enable/disable wickets and courts"
             onClick={() => navigate("/admin/resources")}
-            className="bg-gradient-to-br from-blue-500 to-blue-600 p-6 rounded-lg shadow-lg hover:shadow-xl cursor-pointer transition transform hover:scale-105"
-          >
-            <div className="flex items-center gap-3 mb-3">
-              <Power size={28} className="text-white" />
-              <h3 className="text-lg font-bold text-white">Manage Resources</h3>
-            </div>
-            <p className="text-sm text-blue-100">
-              Enable/disable wickets and courts
-            </p>
-          </div>
+            gradient="bg-gradient-to-br from-blue-500 to-blue-600"
+            textLight="text-blue-100"
+          />
         </div>
       </section>
 
-      {/* ================= OTHER MANAGEMENT ================= */}
-      <section className="space-y-4">
-        <h2 className="text-lg font-semibold">Other Management</h2>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          {/* HOME SLIDER */}
-          <div
+      {/* ═══════════════ OTHER MANAGEMENT ═══════════════ */}
+      <section>
+        <SectionHeader title="Other Management" />
+        {/* Plain white cards — 2-col on mobile */}
+        <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-4 gap-3">
+          <PlainCard
+            icon={Image}
+            title="Home Slider"
+            description="Manage homepage banners and announcements"
             onClick={() => navigate("/admin/slider")}
-            className="bg-white p-6 rounded-lg shadow hover:shadow-lg cursor-pointer transition"
-          >
-            <div className="flex items-center gap-3 mb-3">
-              <Image size={24} className="text-blue-600" />
-              <h3 className="text-lg font-semibold">Home Slider</h3>
-            </div>
-            <p className="text-sm text-gray-600">
-              Manage homepage banners and announcements
-            </p>
-          </div>
-
-          {/* USERS */}
-          <div
+            iconColor="text-blue-600"
+          />
+          <PlainCard
+            icon={Users}
+            title="Users"
+            description="Manage players, parents and admins"
             onClick={() => navigate("/admin/users")}
-            className="bg-white p-6 rounded-lg shadow hover:shadow-lg cursor-pointer transition"
-          >
-            <div className="flex items-center gap-3 mb-3">
-              <Users size={24} className="text-blue-600" />
-              <h3 className="text-lg font-semibold">Users</h3>
-            </div>
-            <p className="text-sm text-gray-600">
-              Manage players, parents and admins
-            </p>
-          </div>
-
-          {/* ATTENDANCE */}
-          <div
+            iconColor="text-blue-600"
+          />
+          <PlainCard
+            icon={CheckCircle}
+            title="Attendance"
+            description="Take and manage daily attendance"
             onClick={() => navigate("/admin/attendance")}
-            className="bg-white p-6 rounded-lg shadow hover:shadow-lg cursor-pointer transition"
-          >
-            <div className="flex items-center gap-3 mb-3">
-              <CheckCircle size={24} className="text-green-600" />
-              <h3 className="text-lg font-semibold">Attendance</h3>
-            </div>
-            <p className="text-sm text-gray-600">
-              Take and manage daily attendance
-            </p>
-          </div>
-
-          {/* SUMMER CAMP MANAGEMENT */}
-          <div
+            iconColor="text-green-600"
+          />
+          <ActionCard
+            icon={Calendar}
+            title="Camps"
+            description="Manage camp programs and enrollments"
             onClick={() => navigate("/admin/summer-camps")}
-            className="bg-gradient-to-br from-orange-500 to-orange-600 p-6 rounded-lg shadow-lg hover:shadow-xl cursor-pointer transition transform hover:scale-105"
-          >
-            <div className="flex items-center gap-3 mb-3">
-              <Calendar size={28} className="text-white" />
-              <h3 className="text-lg font-bold text-white">Camps</h3>
-            </div>
-            <p className="text-sm text-orange-100">
-              Manage camp programs and enrollments
-            </p>
-          </div>
-
-          {/* ACADEMY SETTINGS */}
-          <div
+            gradient="bg-gradient-to-br from-orange-500 to-orange-600"
+            textLight="text-orange-100"
+          />
+          <PlainCard
+            icon={Settings}
+            title="Academy Settings"
+            description="Configure academy info, branding, and home page"
             onClick={() => navigate("/admin/settings")}
-            className="bg-white p-6 rounded-lg shadow hover:shadow-lg cursor-pointer transition"
-          >
-            <div className="flex items-center gap-3 mb-3">
-              <Settings size={24} className="text-indigo-600" />
-              <h3 className="text-lg font-semibold">Academy Settings</h3>
-            </div>
-            <p className="text-sm text-gray-600">
-              Configure academy info, branding, and home page
-            </p>
-          </div>
-
-          {/* REVENUE DASHBOARD — Super Admin only */}
+            iconColor="text-indigo-600"
+          />
           {isSuperAdmin && (
-            <div
+            <ActionCard
+              icon={TrendingUp}
+              title="Revenue"
+              description="View combined fees & booking payments"
               onClick={() => navigate("/admin/revenue")}
-              className="bg-gradient-to-br from-emerald-500 to-teal-600 p-6 rounded-lg shadow-lg hover:shadow-xl cursor-pointer transition transform hover:scale-105"
-            >
-              <div className="flex items-center gap-3 mb-3">
-                <TrendingUp size={28} className="text-white" />
-                <h3 className="text-lg font-bold text-white">
-                  Revenue Dashboard
-                </h3>
-              </div>
-              <p className="text-sm text-emerald-100">
-                View combined fees &amp; booking payments
-              </p>
-            </div>
+              gradient="bg-gradient-to-br from-emerald-500 to-teal-600"
+              textLight="text-emerald-100"
+            />
           )}
         </div>
       </section>

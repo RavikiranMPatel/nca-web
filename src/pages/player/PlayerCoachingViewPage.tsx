@@ -27,11 +27,11 @@ import {
 // ── Constants ──────────────────────────────────────────────────────
 
 const SUB_TABS = [
-  { key: "practice", label: "Practice", icon: <Calendar size={16} /> },
-  { key: "drills", label: "Drills", icon: <Dumbbell size={16} /> },
-  { key: "goals", label: "Goals", icon: <Target size={16} /> },
-  { key: "matches", label: "Matches", icon: <Trophy size={16} /> },
-  { key: "progress", label: "Progress", icon: <TrendingUp size={16} /> },
+  { key: "practice", label: "Practice", icon: <Calendar size={15} /> },
+  { key: "drills", label: "Drills", icon: <Dumbbell size={15} /> },
+  { key: "goals", label: "Goals", icon: <Target size={15} /> },
+  { key: "matches", label: "Matches", icon: <Trophy size={15} /> },
+  { key: "progress", label: "Progress", icon: <TrendingUp size={15} /> },
 ] as const;
 
 type SubTab = (typeof SUB_TABS)[number]["key"];
@@ -138,8 +138,6 @@ export default function PlayerCoachingViewPage() {
     }
   };
 
-  // ── Not linked state ───────────────────────────────────────────
-
   if (!loading && notLinked) {
     return (
       <div className="max-w-2xl mx-auto px-4 py-10 text-center space-y-4">
@@ -197,46 +195,48 @@ export default function PlayerCoachingViewPage() {
         </div>
       </div>
 
-      {/* ── Sub-tab bar ───────────────────────────────────────── */}
-      <div className="flex gap-1 bg-white rounded-2xl border border-gray-200 p-1 shadow-sm">
-        {SUB_TABS.map((tab) => {
-          const badge =
-            tab.key === "practice"
-              ? practiceDays.length
-              : tab.key === "goals"
-                ? activeGoals.length
-                : tab.key === "drills"
-                  ? pendingDrills.length
-                  : tab.key === "matches"
-                    ? matches.length
-                    : 0; // progress tab has no badge
+      {/* ── Sub-tab bar — scrollable on very small screens ─────── */}
+      <div className="bg-white rounded-2xl border border-gray-200 p-1 shadow-sm overflow-x-auto">
+        <div className="flex gap-1 min-w-max sm:min-w-0">
+          {SUB_TABS.map((tab) => {
+            const badge =
+              tab.key === "practice"
+                ? practiceDays.length
+                : tab.key === "goals"
+                  ? activeGoals.length
+                  : tab.key === "drills"
+                    ? pendingDrills.length
+                    : tab.key === "matches"
+                      ? matches.length
+                      : 0;
 
-          return (
-            <button
-              key={tab.key}
-              onClick={() => setActiveTab(tab.key)}
-              className={`flex-1 flex flex-col items-center gap-0.5 px-2 py-2.5 rounded-xl text-xs font-semibold transition-all ${
-                activeTab === tab.key
-                  ? "bg-blue-600 text-white shadow-sm"
-                  : "text-gray-500 hover:bg-gray-50"
-              }`}
-            >
-              {tab.icon}
-              <span>{tab.label}</span>
-              {badge > 0 && (
-                <span
-                  className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${
-                    activeTab === tab.key
-                      ? "bg-white/20 text-white"
-                      : "bg-slate-100 text-slate-500"
-                  }`}
-                >
-                  {badge}
-                </span>
-              )}
-            </button>
-          );
-        })}
+            return (
+              <button
+                key={tab.key}
+                onClick={() => setActiveTab(tab.key)}
+                className={`flex flex-col items-center gap-0.5 px-3 py-2 rounded-xl text-xs font-semibold transition-all flex-shrink-0 sm:flex-1 ${
+                  activeTab === tab.key
+                    ? "bg-blue-600 text-white shadow-sm"
+                    : "text-gray-500 hover:bg-gray-50"
+                }`}
+              >
+                {tab.icon}
+                <span>{tab.label}</span>
+                {badge > 0 && (
+                  <span
+                    className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${
+                      activeTab === tab.key
+                        ? "bg-white/20 text-white"
+                        : "bg-slate-100 text-slate-500"
+                    }`}
+                  >
+                    {badge}
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </div>
       </div>
 
       {/* ── Loading ───────────────────────────────────────────── */}
@@ -249,24 +249,17 @@ export default function PlayerCoachingViewPage() {
         </div>
       )}
 
-      {/* ── Practice Days ─────────────────────────────────────── */}
+      {/* ── Tab content ───────────────────────────────────────── */}
       {!loading && activeTab === "practice" && (
         <PracticeSection practiceDays={practiceDays} />
       )}
-
-      {/* ── Drills ────────────────────────────────────────────── */}
       {!loading && activeTab === "drills" && (
         <DrillsSection drills={drills} onUpdated={loadAll} />
       )}
-
-      {/* ── Goals ─────────────────────────────────────────────── */}
       {!loading && activeTab === "goals" && <GoalsSection goals={goals} />}
-
-      {/* ── Matches ───────────────────────────────────────────── */}
       {!loading && activeTab === "matches" && (
         <MatchesSection matches={matches} />
       )}
-
       {!loading && activeTab === "progress" && (
         <ProgressSection progress={progress} />
       )}
@@ -296,7 +289,6 @@ function PracticeSection({
             key={day.publicId}
             className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden"
           >
-            {/* Header */}
             <div
               className="p-4 cursor-pointer"
               onClick={() => setExpandedId(isExpanded ? null : day.publicId)}
@@ -332,7 +324,6 @@ function PracticeSection({
               </div>
             </div>
 
-            {/* Expanded */}
             {isExpanded && (
               <div className="px-4 pb-4 border-t border-gray-100 pt-3 space-y-3">
                 {day.overallPlayerSummary && (
@@ -340,7 +331,6 @@ function PracticeSection({
                     {day.overallPlayerSummary}
                   </p>
                 )}
-
                 {day.slots && day.slots.length > 0 && (
                   <div className="space-y-2">
                     {day.slots.map((slot) => (
@@ -483,11 +473,6 @@ function DrillCard({
 
   const handleSubmit = async () => {
     setSaving(true);
-    console.log("🏏 Submitting drill completion:", {
-      drillPublicId: drill.publicId,
-      status,
-      note,
-    });
     try {
       await coachingService.completeDrill(drill.publicId, status, note);
       toast.success(
@@ -507,7 +492,6 @@ function DrillCard({
 
   return (
     <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-4 space-y-3">
-      {/* ── Drill info ── */}
       <div className="flex items-start justify-between gap-2">
         <div className="flex-1 min-w-0">
           <p className="font-semibold text-gray-900 text-sm">{drill.name}</p>
@@ -535,16 +519,12 @@ function DrillCard({
           </div>
         </div>
         <span
-          className={`text-[10px] font-bold px-2 py-1 rounded-xl flex-shrink-0 ${
-            DRILL_STATUS_STYLES[drill.completionStatus] ||
-            "bg-slate-100 text-slate-500"
-          }`}
+          className={`text-[10px] font-bold px-2 py-1 rounded-xl flex-shrink-0 ${DRILL_STATUS_STYLES[drill.completionStatus] || "bg-slate-100 text-slate-500"}`}
         >
           {drill.completionStatus.replace(/_/g, " ")}
         </span>
       </div>
 
-      {/* ── Completion note if already done ── */}
       {drill.completionNotes && !isPending && (
         <div className="bg-gray-50 rounded-xl px-3 py-2 border border-gray-100">
           <p className="text-xs text-gray-500 font-medium mb-0.5">Your note:</p>
@@ -552,7 +532,6 @@ function DrillCard({
         </div>
       )}
 
-      {/* ── Mark complete button — only for pending ── */}
       {isPending && !showComplete && (
         <button
           onClick={() => setShowComplete(true)}
@@ -562,14 +541,11 @@ function DrillCard({
         </button>
       )}
 
-      {/* ── Inline completion form ── */}
       {isPending && showComplete && (
         <div className="space-y-3 bg-green-50 rounded-xl p-3 border border-green-100">
           <p className="text-xs font-bold text-green-800">
             Update Drill Status
           </p>
-
-          {/* Status toggle */}
           <div className="flex gap-2">
             {(["COMPLETED", "SKIPPED"] as const).map((s) => (
               <button
@@ -587,8 +563,6 @@ function DrillCard({
               </button>
             ))}
           </div>
-
-          {/* Note */}
           <textarea
             value={note}
             onChange={(e) => setNote(e.target.value)}
@@ -600,8 +574,6 @@ function DrillCard({
             rows={2}
             className="w-full px-3 py-2 border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-green-500 resize-none bg-white"
           />
-
-          {/* Action buttons */}
           <div className="flex gap-2">
             <button
               onClick={handleSubmit}
@@ -755,7 +727,6 @@ function MatchesSection({ matches }: { matches: MatchPerformanceResponse[] }) {
             key={match.publicId}
             className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden"
           >
-            {/* Header */}
             <div
               className="p-4 cursor-pointer"
               onClick={() => setExpandedId(isExpanded ? null : match.publicId)}
@@ -782,7 +753,6 @@ function MatchesSection({ matches }: { matches: MatchPerformanceResponse[] }) {
                       vs {match.oppositionTeam}
                     </p>
                   )}
-                  {/* Quick stat pills */}
                   <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
                     {batting?.runs != null && (
                       <span className="text-[10px] font-semibold bg-blue-50 text-blue-700 px-2 py-0.5 rounded-full">
@@ -816,7 +786,6 @@ function MatchesSection({ matches }: { matches: MatchPerformanceResponse[] }) {
               </div>
             </div>
 
-            {/* Expanded */}
             {isExpanded && (
               <div className="px-4 pb-4 border-t border-gray-100 pt-3 space-y-3">
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
@@ -890,7 +859,6 @@ function MatchesSection({ matches }: { matches: MatchPerformanceResponse[] }) {
                     </div>
                   )}
                 </div>
-
                 {match.playerReflection && (
                   <div className="bg-gray-50 rounded-xl p-3 border border-gray-100">
                     <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">
@@ -927,9 +895,7 @@ function ProgressSection({ progress }: { progress: any }) {
 
   return (
     <div className="space-y-4">
-      {/* ── Summary Cards ── */}
       <div className="grid grid-cols-2 gap-3">
-        {/* Goal completion */}
         <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-4">
           <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">
             Goals
@@ -948,7 +914,6 @@ function ProgressSection({ progress }: { progress: any }) {
           </div>
         </div>
 
-        {/* Drill completion */}
         <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-4">
           <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">
             Drills
@@ -967,7 +932,6 @@ function ProgressSection({ progress }: { progress: any }) {
           </div>
         </div>
 
-        {/* Practice sessions */}
         <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-4">
           <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">
             Sessions
@@ -985,7 +949,6 @@ function ProgressSection({ progress }: { progress: any }) {
           </p>
         </div>
 
-        {/* Matches */}
         <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-4">
           <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">
             Matches
@@ -1004,7 +967,6 @@ function ProgressSection({ progress }: { progress: any }) {
         </div>
       </div>
 
-      {/* ── Match Performance Timeline ── */}
       {matchTrends && matchTrends.length > 0 && (
         <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-4">
           <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">
@@ -1038,7 +1000,6 @@ function ProgressSection({ progress }: { progress: any }) {
         </div>
       )}
 
-      {/* ── Assessment Skill Ratings ── */}
       {assessmentTrends && assessmentTrends.length > 0 && (
         <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-4">
           <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">
@@ -1060,7 +1021,6 @@ function ProgressSection({ progress }: { progress: any }) {
               },
               { label: "Mental", data: latest.mental, color: "bg-purple-500" },
             ];
-
             return (
               <div className="space-y-3">
                 <p className="text-[10px] text-gray-400">
@@ -1074,7 +1034,6 @@ function ProgressSection({ progress }: { progress: any }) {
                     GOOD: 3,
                     EXCELLENT: 4,
                   };
-
                   const extractRatings = (obj: any): number[] => {
                     if (!obj || typeof obj !== "object") return [];
                     const results: number[] = [];
@@ -1093,7 +1052,6 @@ function ProgressSection({ progress }: { progress: any }) {
                     }
                     return results;
                   };
-
                   const scores = extractRatings(cat.data);
                   const avg = scores.length
                     ? Math.round(
@@ -1101,8 +1059,7 @@ function ProgressSection({ progress }: { progress: any }) {
                           10,
                       ) / 10
                     : 0;
-                  const pct = (avg / 4) * 100; // ← max is 4 (EXCELLENT), not 5
-
+                  const pct = (avg / 4) * 100;
                   return (
                     <div key={cat.label}>
                       <div className="flex justify-between text-xs mb-1">
@@ -1120,8 +1077,6 @@ function ProgressSection({ progress }: { progress: any }) {
                     </div>
                   );
                 })}
-
-                {/* Trend if multiple assessments */}
                 {assessmentTrends.length > 1 && (
                   <p className="text-[10px] text-gray-400 mt-2">
                     📈 {assessmentTrends.length} assessments recorded —
@@ -1134,7 +1089,6 @@ function ProgressSection({ progress }: { progress: any }) {
         </div>
       )}
 
-      {/* ── Practice Timeline ── */}
       {practiceFrequency && practiceFrequency.length > 0 && (
         <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-4">
           <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">

@@ -99,7 +99,6 @@ function PlayerAnalysisPage() {
   const handleDelete = async (publicId: string) => {
     if (!playerPublicId) return;
     if (!confirm("Are you sure you want to delete this assessment?")) return;
-
     try {
       await playerAssessmentService.delete(playerPublicId, publicId);
       toast.success("Assessment deleted");
@@ -196,7 +195,6 @@ function PlayerAnalysisPage() {
   const completed = assessments.filter((a) => a.status === "COMPLETED");
   const drafts = assessments.filter((a) => a.status === "DRAFT");
 
-  // Mini progress data
   const ratingToNum: Record<string, number> = {
     NEEDS_WORK: 1,
     DEVELOPING: 2,
@@ -209,48 +207,52 @@ function PlayerAnalysisPage() {
     .reverse();
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       {/* ─── HEADER & ACTIONS ─────────────────────────── */}
-      <div className="bg-white rounded-lg shadow p-6">
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-          <div>
-            <h2 className="text-lg font-bold text-slate-900">
-              Performance Analysis
-            </h2>
-            <p className="text-sm text-slate-500 mt-1">
-              {assessments.length} assessment
-              {assessments.length !== 1 ? "s" : ""} recorded
-              {drafts.length > 0 && (
-                <span className="ml-2 text-yellow-600 font-medium">
-                  ({drafts.length} draft{drafts.length !== 1 ? "s" : ""})
-                </span>
-              )}
-            </p>
+      <div className="bg-white rounded-xl border border-slate-200 p-4 md:p-6">
+        <div className="flex flex-col gap-3">
+          {/* Title row */}
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <h2 className="text-base md:text-lg font-bold text-slate-900">
+                Performance Analysis
+              </h2>
+              <p className="text-xs md:text-sm text-slate-500 mt-0.5">
+                {assessments.length} assessment
+                {assessments.length !== 1 ? "s" : ""}
+                {drafts.length > 0 && (
+                  <span className="ml-2 text-yellow-600 font-medium">
+                    ({drafts.length} draft{drafts.length !== 1 ? "s" : ""})
+                  </span>
+                )}
+              </p>
+            </div>
           </div>
 
-          <div className="flex flex-wrap gap-2">
+          {/* Action buttons — scrollable row on mobile */}
+          <div className="flex gap-2 overflow-x-auto pb-0.5 -mx-1 px-1">
             <button
               onClick={() => setView({ type: "new" })}
-              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg font-medium text-sm hover:bg-blue-700 transition-all shadow-sm"
+              className="flex items-center gap-1.5 px-3 py-2 bg-blue-600 text-white rounded-lg font-medium text-xs md:text-sm hover:bg-blue-700 transition shadow-sm flex-shrink-0"
             >
-              <Plus size={16} /> New Assessment
+              <Plus size={15} /> New Assessment
             </button>
 
             {completed.length > 0 && (
               <button
                 onClick={() => setView({ type: "followup" })}
-                className="flex items-center gap-2 px-4 py-2 border-2 border-blue-600 text-blue-600 rounded-lg font-medium text-sm hover:bg-blue-50 transition-all"
+                className="flex items-center gap-1.5 px-3 py-2 border-2 border-blue-600 text-blue-600 rounded-lg font-medium text-xs md:text-sm hover:bg-blue-50 transition flex-shrink-0"
               >
-                <ClipboardList size={16} /> Quick Follow-up
+                <ClipboardList size={15} /> Follow-up
               </button>
             )}
 
             {completed.length >= 2 && (
               <button
                 onClick={() => setView({ type: "compare" })}
-                className="flex items-center gap-2 px-4 py-2 border border-slate-300 text-slate-700 rounded-lg font-medium text-sm hover:bg-slate-50 transition-all"
+                className="flex items-center gap-1.5 px-3 py-2 border border-slate-300 text-slate-700 rounded-lg font-medium text-xs md:text-sm hover:bg-slate-50 transition flex-shrink-0"
               >
-                <BarChart3 size={16} /> Compare
+                <BarChart3 size={15} /> Compare
               </button>
             )}
           </div>
@@ -258,12 +260,12 @@ function PlayerAnalysisPage() {
 
         {/* ─── MINI PROGRESS CHART ────────────────────── */}
         {progressData.length > 1 && (
-          <div className="mt-6 bg-gradient-to-r from-blue-600 to-blue-700 rounded-xl p-5">
+          <div className="mt-4 bg-gradient-to-r from-blue-600 to-blue-700 rounded-xl p-4">
             <p className="text-xs font-semibold text-blue-200 uppercase tracking-wider mb-3">
               Progress Trend
             </p>
-            <div className="flex items-end gap-1" style={{ height: 64 }}>
-              {progressData.map((a, i) => {
+            <div className="flex items-end gap-1" style={{ height: 56 }}>
+              {progressData.map((a) => {
                 const val = ratingToNum[a.overallRating || ""] || 0;
                 return (
                   <div
@@ -271,20 +273,20 @@ function PlayerAnalysisPage() {
                     className="flex-1 flex flex-col items-center gap-1"
                   >
                     <div
-                      className="w-full max-w-[36px] rounded-t-md transition-all"
+                      className="w-full max-w-[32px] rounded-t-md transition-all"
                       style={{
-                        height: val * 14,
+                        height: val * 12,
                         backgroundColor: `rgba(255,255,255,${0.2 + val * 0.15})`,
                       }}
                     />
-                    <span className="text-[9px] text-blue-200">
+                    <span className="text-[9px] text-blue-200 truncate w-full text-center">
                       {a.assessmentDate?.slice(5)}
                     </span>
                   </div>
                 );
               })}
             </div>
-            <div className="flex justify-between mt-2 text-[9px] text-blue-300">
+            <div className="flex justify-between mt-1 text-[9px] text-blue-300">
               <span>Needs Work</span>
               <span>Excellent</span>
             </div>
@@ -302,20 +304,20 @@ function PlayerAnalysisPage() {
 
       {/* ─── EMPTY STATE ──────────────────────────────── */}
       {!loading && assessments.length === 0 && (
-        <div className="bg-white rounded-lg shadow p-12 text-center">
-          <div className="text-5xl mb-4">📋</div>
-          <h3 className="text-lg font-semibold text-slate-700 mb-2">
+        <div className="bg-white rounded-xl border border-slate-200 p-10 text-center">
+          <div className="text-4xl mb-3">📋</div>
+          <h3 className="text-base font-semibold text-slate-700 mb-2">
             No Assessments Yet
           </h3>
-          <p className="text-sm text-slate-500 mb-6">
+          <p className="text-sm text-slate-500 mb-5">
             Create the first assessment to start tracking this player's
             progress.
           </p>
           <button
             onClick={() => setView({ type: "new" })}
-            className="inline-flex items-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 transition-all shadow-sm"
+            className="inline-flex items-center gap-2 px-5 py-2.5 bg-blue-600 text-white rounded-lg font-semibold text-sm hover:bg-blue-700 transition shadow-sm"
           >
-            <Plus size={18} /> Create First Assessment
+            <Plus size={16} /> Create First Assessment
           </button>
         </div>
       )}
@@ -333,7 +335,7 @@ function PlayerAnalysisPage() {
             const isExpanded = expandedId === assessment.publicId;
 
             return (
-              <div key={assessment.publicId} className="flex gap-3 md:gap-4">
+              <div key={assessment.publicId} className="flex gap-3">
                 {/* Timeline connector */}
                 <div className="flex flex-col items-center w-5 flex-shrink-0">
                   <div
@@ -348,7 +350,7 @@ function PlayerAnalysisPage() {
 
                 {/* Card */}
                 <div
-                  className={`flex-1 mb-3 rounded-lg border transition-all ${
+                  className={`flex-1 mb-3 rounded-xl border transition-all ${
                     isDraft
                       ? "bg-yellow-50 border-yellow-200"
                       : "bg-white border-slate-200 shadow-sm"
@@ -356,12 +358,12 @@ function PlayerAnalysisPage() {
                 >
                   {/* Card Header */}
                   <div
-                    className="p-4 cursor-pointer"
+                    className="p-3 md:p-4 cursor-pointer"
                     onClick={() =>
                       setExpandedId(isExpanded ? null : assessment.publicId)
                     }
                   >
-                    <div className="flex items-start justify-between gap-3">
+                    <div className="flex items-start justify-between gap-2">
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 flex-wrap">
                           <span className="font-bold text-sm text-slate-900">
@@ -384,24 +386,24 @@ function PlayerAnalysisPage() {
                           </span>
                         </div>
                         {assessment.createdBy && (
-                          <p className="text-xs text-slate-400 mt-1">
+                          <p className="text-xs text-slate-400 mt-0.5">
                             by {assessment.createdBy}
                           </p>
                         )}
                       </div>
 
-                      <div className="flex items-center gap-2 flex-shrink-0">
+                      <div className="flex items-center gap-1.5 flex-shrink-0">
                         {rs && (
                           <span
-                            className={`text-[11px] font-semibold px-3 py-1 rounded-lg ${rs.bg} ${rs.text}`}
+                            className={`text-[11px] font-semibold px-2 py-0.5 rounded-lg ${rs.bg} ${rs.text}`}
                           >
                             {formatRating(assessment.overallRating)}
                           </span>
                         )}
                         {isExpanded ? (
-                          <ChevronUp size={16} className="text-slate-400" />
+                          <ChevronUp size={15} className="text-slate-400" />
                         ) : (
-                          <ChevronDown size={16} className="text-slate-400" />
+                          <ChevronDown size={15} className="text-slate-400" />
                         )}
                       </div>
                     </div>
@@ -409,7 +411,7 @@ function PlayerAnalysisPage() {
 
                   {/* Expanded Content */}
                   {isExpanded && (
-                    <div className="px-4 pb-4 border-t border-slate-100 pt-3 space-y-3">
+                    <div className="px-3 md:px-4 pb-3 md:pb-4 border-t border-slate-100 pt-3 space-y-3">
                       {assessment.overallSummary && (
                         <p className="text-sm text-slate-600 leading-relaxed">
                           {assessment.overallSummary}
@@ -432,7 +434,7 @@ function PlayerAnalysisPage() {
                       )}
 
                       {/* Actions */}
-                      <div className="flex gap-2 pt-2">
+                      <div className="flex gap-2 pt-1">
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
@@ -441,7 +443,7 @@ function PlayerAnalysisPage() {
                               assessmentPublicId: assessment.publicId,
                             });
                           }}
-                          className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-blue-600 bg-blue-50 rounded-lg hover:bg-blue-100 transition-all"
+                          className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-blue-600 bg-blue-50 rounded-lg hover:bg-blue-100 transition"
                         >
                           <Pencil size={13} />
                           {isDraft ? "Continue Editing" : "Edit"}
@@ -453,7 +455,7 @@ function PlayerAnalysisPage() {
                               e.stopPropagation();
                               handleDelete(assessment.publicId);
                             }}
-                            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-red-600 bg-red-50 rounded-lg hover:bg-red-100 transition-all"
+                            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-red-600 bg-red-50 rounded-lg hover:bg-red-100 transition"
                           >
                             <Trash2 size={13} /> Delete
                           </button>

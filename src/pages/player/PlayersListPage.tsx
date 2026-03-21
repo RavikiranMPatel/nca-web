@@ -15,6 +15,7 @@ import {
   X,
   Info,
   Building2,
+  UserPlus,
 } from "lucide-react";
 import { getImageUrl } from "../../utils/imageUrl";
 import { toast } from "react-hot-toast";
@@ -34,7 +35,7 @@ type Player = {
   dob?: string;
   active: boolean;
   photoUrl?: string;
-  branchId?: string; // ✅ NEW
+  branchId?: string;
 };
 
 const ITEMS_PER_PAGE = 10;
@@ -59,7 +60,6 @@ function getPlayerAgeGroup(dob?: string): string | null {
   const dobDate = new Date(dob);
   if (isNaN(dobDate.getTime())) return null;
   const seasonYear = getSeasonYear();
-
   for (const group of AGE_GROUPS) {
     const cutoff = new Date(seasonYear - group.age, 8, 1);
     if (dobDate >= cutoff) return group.value;
@@ -81,7 +81,7 @@ function isEligibleForGroup(
   return dobDate >= cutoff;
 }
 
-// ─── SHARE MODAL COMPONENT ──────────────────────────────
+// ─── SHARE MODAL ────────────────────────────────────────
 
 type ShareModalProps = {
   isOpen: boolean;
@@ -102,20 +102,15 @@ function ShareModal({
 }: ShareModalProps) {
   const [recipient, setRecipient] = useState("");
   const [sending, setSending] = useState(false);
-
   if (!isOpen) return null;
 
   const isWhatsApp = channel === "WHATSAPP";
-  const placeholder = isWhatsApp
-    ? "Enter WhatsApp number (e.g., 9876543210)"
-    : "Enter email address";
 
   const handleSend = async () => {
     if (!recipient.trim()) {
       toast.error(isWhatsApp ? "Enter phone number" : "Enter email address");
       return;
     }
-
     setSending(true);
     try {
       const res = await api.post("/admin/players/share-list", {
@@ -125,10 +120,9 @@ function ShareModal({
         recipientPhone: isWhatsApp ? recipient.trim() : null,
         recipientEmail: !isWhatsApp ? recipient.trim() : null,
       });
-
       if (res.data.sent) {
         toast.success(
-          `Player list sent to ${playerCount} players via ${isWhatsApp ? "WhatsApp" : "Email"}`,
+          `Player list sent via ${isWhatsApp ? "WhatsApp" : "Email"}`,
         );
         onClose();
       } else {
@@ -146,7 +140,6 @@ function ShareModal({
   return (
     <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
       <div className="bg-white rounded-xl shadow-xl w-full max-w-md">
-        {/* Header */}
         <div
           className={`flex items-center justify-between px-5 py-4 rounded-t-xl ${
             isWhatsApp
@@ -167,8 +160,6 @@ function ShareModal({
             <X size={20} />
           </button>
         </div>
-
-        {/* Body */}
         <div className="p-5 space-y-4">
           <div className="bg-slate-50 rounded-lg p-3 text-sm">
             <p className="text-slate-600">
@@ -181,7 +172,6 @@ function ShareModal({
               )}
             </p>
           </div>
-
           <div>
             <label className="text-xs font-semibold text-slate-600 block mb-1.5">
               {isWhatsApp ? "WhatsApp Number" : "Email Address"}
@@ -190,18 +180,18 @@ function ShareModal({
               type={isWhatsApp ? "tel" : "email"}
               value={recipient}
               onChange={(e) => setRecipient(e.target.value)}
-              placeholder={placeholder}
-              className="w-full px-4 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              placeholder={
+                isWhatsApp ? "e.g. 9876543210" : "Enter email address"
+              }
+              className="w-full px-4 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
               autoFocus
             />
             {isWhatsApp && (
               <p className="text-[11px] text-slate-400 mt-1">
                 Indian numbers: 10 digits. International: include country code
-                (e.g., +44...)
               </p>
             )}
           </div>
-
           <div className="flex gap-2 pt-1">
             <button
               onClick={onClose}
@@ -236,8 +226,6 @@ function ShareModal({
 
 function PlayersListPage() {
   const navigate = useNavigate();
-
-  // ✅ NEW — role & branch data
   const { userRole } = useAuth();
   const isSuperAdmin = userRole === "ROLE_SUPER_ADMIN";
   const [branches, setBranches] = useState<Branch[]>([]);
@@ -263,7 +251,6 @@ function PlayersListPage() {
 
   useEffect(() => {
     loadPlayers();
-    // ✅ NEW — load branches for super admin filter
     if (isSuperAdmin) {
       getAdminBranches()
         .then(setBranches)
@@ -282,13 +269,11 @@ function PlayersListPage() {
     }
   };
 
-  // ✅ NEW — helper to resolve branch name from id
   const getBranchName = (branchId?: string) =>
     branches.find((b) => b.id === branchId)?.name ?? "—";
 
   const professions = Array.from(new Set(players.map((p) => p.profession)));
 
-  // Apply filters
   const filteredPlayers = players.filter((p) => {
     const matchesSearch =
       p.displayName.toLowerCase().includes(search.toLowerCase()) ||
@@ -301,10 +286,8 @@ function PlayersListPage() {
       professionFilter === "all" || p.profession === professionFilter;
     const matchesAgeGroup =
       ageGroupFilter === "all" || isEligibleForGroup(p.dob, ageGroupFilter);
-    // ✅ NEW — branch filter only applies to super admin
     const matchesBranch =
       !isSuperAdmin || branchFilter === "all" || p.branchId === branchFilter;
-
     return (
       matchesSearch &&
       matchesStatus &&
@@ -314,7 +297,6 @@ function PlayersListPage() {
     );
   });
 
-  // Pagination
   const totalPages = Math.ceil(filteredPlayers.length / ITEMS_PER_PAGE);
   const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
   const paginatedPlayers = filteredPlayers.slice(
@@ -331,10 +313,8 @@ function PlayersListPage() {
     count: players.filter((p) => isEligibleForGroup(p.dob, g.value)).length,
   }));
 
-  // Build filter label for exports
   const getFilterLabel = (): string => {
     const parts: string[] = [];
-    // ✅ NEW
     if (isSuperAdmin && branchFilter !== "all") {
       const b = branches.find((b) => b.id === branchFilter);
       if (b) parts.push(b.name);
@@ -353,7 +333,6 @@ function PlayersListPage() {
   const getFilteredPublicIds = (): string[] =>
     filteredPlayers.map((p) => p.publicId);
 
-  // Export handlers
   const handleExportExcel = async () => {
     setExportingExcel(true);
     setShowExportMenu(false);
@@ -366,7 +345,6 @@ function PlayersListPage() {
         },
         { responseType: "blob" },
       );
-
       const url = window.URL.createObjectURL(new Blob([res.data]));
       const link = document.createElement("a");
       link.href = url;
@@ -393,7 +371,6 @@ function PlayersListPage() {
         },
         { responseType: "blob" },
       );
-
       const url = window.URL.createObjectURL(new Blob([res.data]));
       const link = document.createElement("a");
       link.href = url;
@@ -408,15 +385,28 @@ function PlayersListPage() {
     }
   };
 
-  // Season year info for tooltip
   const seasonYear = getSeasonYear();
+  const hasActiveFilters =
+    search ||
+    statusFilter !== "all" ||
+    professionFilter !== "all" ||
+    ageGroupFilter !== "all" ||
+    (isSuperAdmin && branchFilter !== "all");
+
+  const resetFilters = () => {
+    setSearch("");
+    setStatusFilter("all");
+    setProfessionFilter("all");
+    setAgeGroupFilter("all");
+    setBranchFilter("all");
+  };
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
+      <div className="flex items-center justify-center min-h-[60vh]">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p className="text-gray-500">Loading players...</p>
+          <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600 mx-auto mb-3" />
+          <p className="text-sm text-gray-500">Loading players…</p>
         </div>
       </div>
     );
@@ -424,115 +414,122 @@ function PlayersListPage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-50">
-      <div className="max-w-7xl mx-auto px-4 py-6 space-y-6">
-        {/* HEADER */}
-        <div className="flex items-center justify-between flex-wrap gap-3">
-          <div className="flex items-center gap-3">
-            <button
-              onClick={() => navigate("/admin")}
-              className="p-2 hover:bg-gray-100 rounded-full transition"
-            >
-              <ArrowLeft size={20} />
-            </button>
-            <div>
-              <h1 className="text-2xl sm:text-3xl font-bold text-slate-900">
-                Players Management
-              </h1>
-              <p className="text-sm text-slate-600 mt-1">
-                {filteredPlayers.length} player
-                {filteredPlayers.length !== 1 ? "s" : ""} found
-              </p>
-            </div>
+      <div className="max-w-7xl mx-auto px-4 py-4 md:py-6 space-y-4">
+        {/* ── HEADER ── */}
+        <div className="flex items-center gap-3">
+          {/* Back + title */}
+          <button
+            onClick={() => navigate("/admin")}
+            className="p-2 hover:bg-gray-100 rounded-full transition flex-shrink-0"
+          >
+            <ArrowLeft size={20} />
+          </button>
+          <div className="flex-1 min-w-0">
+            <h1 className="text-lg md:text-2xl font-bold text-slate-900 truncate">
+              Players
+            </h1>
+            <p className="text-xs text-slate-500">
+              {filteredPlayers.length} player
+              {filteredPlayers.length !== 1 ? "s" : ""}
+            </p>
           </div>
 
-          {/* EXPORT & SHARE ACTIONS */}
-          <div className="flex items-center gap-2 flex-wrap">
-            {/* Export dropdown */}
+          {/* Action buttons — icon-only on mobile, labeled on desktop */}
+          <div className="flex items-center gap-1.5 flex-shrink-0">
+            {/* Register — prominent */}
+            <button
+              onClick={() => navigate("/admin/players/register")}
+              className="flex items-center gap-1.5 px-2.5 py-2 text-xs font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition shadow-sm"
+            >
+              <UserPlus size={15} />
+              <span className="hidden sm:inline">Register</span>
+            </button>
+
+            {/* Export */}
             <div className="relative">
               <button
                 onClick={() => setShowExportMenu(!showExportMenu)}
-                className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 transition shadow-sm"
+                className="flex items-center gap-1.5 px-2.5 py-2 text-xs font-medium text-slate-700 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 transition shadow-sm"
               >
-                <Download size={16} />
+                <Download size={15} />
                 <span className="hidden sm:inline">Export</span>
               </button>
-
               {showExportMenu && (
                 <>
                   <div
                     className="fixed inset-0 z-10"
                     onClick={() => setShowExportMenu(false)}
                   />
-                  <div className="absolute right-0 mt-1 w-48 bg-white rounded-lg shadow-lg border border-slate-200 z-20 py-1">
+                  <div className="absolute right-0 mt-1 w-44 bg-white rounded-lg shadow-lg border border-slate-200 z-20 py-1">
                     <button
                       onClick={handleExportExcel}
                       disabled={exportingExcel}
                       className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50 transition"
                     >
-                      <FileSpreadsheet size={16} className="text-green-600" />
-                      {exportingExcel ? "Exporting..." : "Export as Excel"}
+                      <FileSpreadsheet size={15} className="text-green-600" />
+                      {exportingExcel ? "Exporting..." : "Excel"}
                     </button>
                     <button
                       onClick={handleExportPdf}
                       disabled={exportingPdf}
                       className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50 transition"
                     >
-                      <FileText size={16} className="text-red-600" />
-                      {exportingPdf ? "Exporting..." : "Export as PDF"}
+                      <FileText size={15} className="text-red-600" />
+                      {exportingPdf ? "Exporting..." : "PDF"}
                     </button>
                   </div>
                 </>
               )}
             </div>
 
-            {/* WhatsApp share */}
+            {/* WhatsApp */}
             <button
               onClick={() => setShareModal({ open: true, channel: "WHATSAPP" })}
-              className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-white bg-green-600 rounded-lg hover:bg-green-700 transition shadow-sm"
+              className="flex items-center gap-1.5 px-2.5 py-2 text-xs font-medium text-white bg-green-600 rounded-lg hover:bg-green-700 transition shadow-sm"
             >
-              <MessageCircle size={16} />
+              <MessageCircle size={15} />
               <span className="hidden sm:inline">WhatsApp</span>
             </button>
 
-            {/* Email share */}
+            {/* Email */}
             <button
               onClick={() => setShareModal({ open: true, channel: "EMAIL" })}
-              className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition shadow-sm"
+              className="flex items-center gap-1.5 px-2.5 py-2 text-xs font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 transition shadow-sm"
             >
-              <Mail size={16} />
+              <Mail size={15} />
               <span className="hidden sm:inline">Email</span>
             </button>
           </div>
         </div>
 
-        {/* FILTERS & SEARCH */}
-        <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-4 space-y-4">
+        {/* ── FILTERS ── */}
+        <div className="bg-white rounded-xl border border-slate-200 p-3 md:p-4 space-y-3">
           {/* Search */}
           <div className="relative">
             <Search
-              className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"
-              size={20}
+              className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
+              size={16}
             />
             <input
-              className="w-full pl-12 pr-4 py-3 rounded-lg border border-slate-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all"
-              placeholder="Search by name or ID..."
+              className="w-full pl-9 pr-4 py-2.5 rounded-lg border border-slate-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition text-sm"
+              placeholder="Search by name or ID…"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
             />
           </div>
 
-          {/* Filters Row */}
-          <div className="flex flex-wrap gap-3">
-            {/* ✅ NEW — Branch Filter (super admin only) */}
+          {/* Filters — 2-col on mobile, 4-col on desktop */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-2 md:gap-3">
+            {/* Branch — super admin only, spans 2 cols on mobile */}
             {isSuperAdmin && branches.length > 0 && (
-              <div className="flex-1 min-w-[140px]">
-                <label className="text-xs font-medium text-slate-600 mb-1.5 block">
+              <div className="col-span-2 md:col-span-1">
+                <label className="text-[10px] font-semibold text-slate-500 uppercase mb-1 block">
                   Branch
                 </label>
                 <select
                   value={branchFilter}
                   onChange={(e) => setBranchFilter(e.target.value)}
-                  className="w-full px-3 py-2 rounded-lg border border-slate-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all text-sm"
+                  className="w-full px-2.5 py-2 rounded-lg border border-slate-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-100 text-xs"
                 >
                   <option value="all">All Branches</option>
                   {branches.map((b) => (
@@ -544,31 +541,31 @@ function PlayersListPage() {
               </div>
             )}
 
-            {/* Status Filter */}
-            <div className="flex-1 min-w-[140px]">
-              <label className="text-xs font-medium text-slate-600 mb-1.5 block">
+            {/* Status */}
+            <div>
+              <label className="text-[10px] font-semibold text-slate-500 uppercase mb-1 block">
                 Status
               </label>
               <select
                 value={statusFilter}
                 onChange={(e) => setStatusFilter(e.target.value as any)}
-                className="w-full px-3 py-2 rounded-lg border border-slate-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all text-sm"
+                className="w-full px-2.5 py-2 rounded-lg border border-slate-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-100 text-xs"
               >
-                <option value="all">All Status</option>
-                <option value="active">Active Only</option>
-                <option value="inactive">Inactive Only</option>
+                <option value="all">All</option>
+                <option value="active">Active</option>
+                <option value="inactive">Inactive</option>
               </select>
             </div>
 
-            {/* Profession Filter */}
-            <div className="flex-1 min-w-[140px]">
-              <label className="text-xs font-medium text-slate-600 mb-1.5 block">
+            {/* Profession */}
+            <div>
+              <label className="text-[10px] font-semibold text-slate-500 uppercase mb-1 block">
                 Type
               </label>
               <select
                 value={professionFilter}
                 onChange={(e) => setProfessionFilter(e.target.value)}
-                className="w-full px-3 py-2 rounded-lg border border-slate-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all text-sm"
+                className="w-full px-2.5 py-2 rounded-lg border border-slate-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-100 text-xs"
               >
                 <option value="all">All Types</option>
                 {professions.map((prof) => (
@@ -579,10 +576,10 @@ function PlayersListPage() {
               </select>
             </div>
 
-            {/* Age Group Filter with Info tooltip */}
-            <div className="flex-1 min-w-[140px]">
-              <div className="flex items-center gap-1 mb-1.5">
-                <label className="text-xs font-medium text-slate-600">
+            {/* Age Group */}
+            <div>
+              <div className="flex items-center gap-1 mb-1">
+                <label className="text-[10px] font-semibold text-slate-500 uppercase">
                   Age Group
                 </label>
                 <div className="relative">
@@ -591,16 +588,15 @@ function PlayersListPage() {
                     onClick={() => setShowAgeGroupTooltip(!showAgeGroupTooltip)}
                     className="text-slate-400 hover:text-blue-600 transition"
                   >
-                    <Info size={13} />
+                    <Info size={11} />
                   </button>
-
                   {showAgeGroupTooltip && (
                     <>
                       <div
                         className="fixed inset-0 z-10"
                         onClick={() => setShowAgeGroupTooltip(false)}
                       />
-                      <div className="absolute left-0 bottom-full mb-2 w-72 bg-slate-800 text-white text-xs rounded-lg p-3 shadow-xl z-20">
+                      <div className="absolute left-0 bottom-full mb-2 w-64 bg-slate-800 text-white text-xs rounded-lg p-3 shadow-xl z-20">
                         <p className="font-bold mb-1.5">
                           🏏 Age Group Calculation
                         </p>
@@ -620,17 +616,14 @@ function PlayersListPage() {
                           </span>
                         </p>
                         <div className="space-y-1 border-t border-slate-600 pt-2 mt-2">
-                          {AGE_GROUPS.map((g) => {
-                            const cutoffYear = seasonYear - g.age;
-                            return (
-                              <p key={g.value} className="flex justify-between">
-                                <span className="font-medium">{g.label}:</span>
-                                <span className="text-slate-300">
-                                  Born on/after 1 Sep {cutoffYear}
-                                </span>
-                              </p>
-                            );
-                          })}
+                          {AGE_GROUPS.map((g) => (
+                            <p key={g.value} className="flex justify-between">
+                              <span className="font-medium">{g.label}:</span>
+                              <span className="text-slate-300">
+                                Born on/after 1 Sep {seasonYear - g.age}
+                              </span>
+                            </p>
+                          ))}
                         </div>
                         <div className="w-2 h-2 bg-slate-800 rotate-45 absolute -bottom-1 left-3" />
                       </div>
@@ -641,9 +634,9 @@ function PlayersListPage() {
               <select
                 value={ageGroupFilter}
                 onChange={(e) => setAgeGroupFilter(e.target.value)}
-                className="w-full px-3 py-2 rounded-lg border border-slate-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all text-sm"
+                className="w-full px-2.5 py-2 rounded-lg border border-slate-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-100 text-xs"
               >
-                <option value="all">All Age Groups</option>
+                <option value="all">All Groups</option>
                 {ageGroupCounts.map((g) => (
                   <option key={g.value} value={g.value}>
                     {g.label} ({g.count})
@@ -651,138 +644,106 @@ function PlayersListPage() {
                 ))}
               </select>
             </div>
-
-            {/* Reset Filters */}
-            {(search ||
-              statusFilter !== "all" ||
-              professionFilter !== "all" ||
-              ageGroupFilter !== "all" ||
-              (isSuperAdmin && branchFilter !== "all")) && (
-              <button
-                onClick={() => {
-                  setSearch("");
-                  setStatusFilter("all");
-                  setProfessionFilter("all");
-                  setAgeGroupFilter("all");
-                  setBranchFilter("all"); // ✅ NEW
-                }}
-                className="self-end px-4 py-2 text-sm text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-lg transition-all"
-              >
-                Reset Filters
-              </button>
-            )}
           </div>
+
+          {/* Reset */}
+          {hasActiveFilters && (
+            <button
+              onClick={resetFilters}
+              className="text-xs text-slate-500 hover:text-slate-800 hover:bg-slate-100 px-3 py-1.5 rounded-lg transition"
+            >
+              ✕ Reset Filters
+            </button>
+          )}
         </div>
 
-        {/* MOBILE CARDS */}
-        <div className="md:hidden space-y-3">
+        {/* ── MOBILE CARDS ── */}
+        <div className="md:hidden space-y-2">
           {paginatedPlayers.map((p) => {
             const ageGroup = getPlayerAgeGroup(p.dob);
             return (
               <div
                 key={p.publicId}
-                className="bg-white rounded-xl shadow-sm border border-slate-200 p-4 hover:shadow-md transition-shadow"
+                onClick={() => navigate(`/admin/players/${p.publicId}`)}
+                className="bg-white rounded-xl border border-slate-200 p-3 active:bg-slate-50 transition cursor-pointer"
               >
-                <div className="flex gap-3 mb-3">
+                <div className="flex gap-3 items-center">
+                  {/* Avatar */}
                   <div className="flex-shrink-0">
                     {p.photoUrl ? (
                       <img
                         src={getImageUrl(p.photoUrl) || undefined}
                         alt={p.displayName}
-                        className="w-16 h-16 rounded-full object-cover border-2 border-slate-200"
+                        className="w-12 h-12 rounded-full object-cover border-2 border-slate-200"
                         onError={(e) => {
                           e.currentTarget.style.display = "none";
-                          e.currentTarget.nextElementSibling?.classList.remove(
-                            "hidden",
-                          );
+                          (
+                            e.currentTarget.nextElementSibling as HTMLElement
+                          )?.classList.remove("hidden");
                         }}
                       />
                     ) : null}
                     <div
-                      className={`w-16 h-16 rounded-full bg-gradient-to-br from-blue-100 to-blue-200 flex items-center justify-center border-2 border-slate-200 ${
-                        p.photoUrl ? "hidden" : ""
-                      }`}
+                      className={`w-12 h-12 rounded-full bg-gradient-to-br from-blue-100 to-blue-200 flex items-center justify-center border-2 border-slate-200 ${p.photoUrl ? "hidden" : ""}`}
                     >
-                      <span className="text-xl font-bold text-blue-600">
+                      <span className="text-base font-bold text-blue-600">
                         {p.displayName.charAt(0)}
                       </span>
                     </div>
                   </div>
+
+                  {/* Info */}
                   <div className="flex-1 min-w-0">
-                    <div className="flex justify-between items-start">
-                      <div className="flex-1 min-w-0">
-                        <p className="font-semibold text-slate-900 text-lg truncate">
-                          {p.displayName}
-                        </p>
-                        <p className="text-xs text-slate-500 font-mono mt-1">
-                          {p.publicId}
-                        </p>
-                      </div>
-                      <div className="flex flex-col items-end gap-1 ml-2 flex-shrink-0">
-                        <span
-                          className={`px-3 py-1 rounded-full text-xs font-medium ${
-                            p.active
-                              ? "bg-emerald-100 text-emerald-700"
-                              : "bg-slate-200 text-slate-600"
-                          }`}
-                        >
-                          {p.active ? "Active" : "Inactive"}
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="font-semibold text-slate-900 text-sm truncate">
+                        {p.displayName}
+                      </p>
+                      <span
+                        className={`flex-shrink-0 px-2 py-0.5 rounded-full text-[10px] font-semibold ${
+                          p.active
+                            ? "bg-emerald-100 text-emerald-700"
+                            : "bg-slate-200 text-slate-600"
+                        }`}
+                      >
+                        {p.active ? "Active" : "Inactive"}
+                      </span>
+                    </div>
+
+                    <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                      <p className="text-[10px] text-slate-400 font-mono">
+                        {p.publicId}
+                      </p>
+                      {ageGroup && ageGroup !== "Senior" && (
+                        <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-blue-50 text-blue-700">
+                          {ageGroup}
                         </span>
-                        {ageGroup && ageGroup !== "Senior" && (
-                          <span className="px-2 py-0.5 rounded-md text-[10px] font-semibold bg-blue-50 text-blue-700">
-                            {ageGroup}
-                          </span>
-                        )}
-                      </div>
+                      )}
+                    </div>
+
+                    <div className="flex items-center gap-3 mt-1 text-xs text-slate-500 flex-wrap">
+                      <span>{p.profession}</span>
+                      {p.phone && <span>{p.phone}</span>}
+                      {isSuperAdmin && p.branchId && (
+                        <span className="flex items-center gap-0.5">
+                          <Building2 size={10} />
+                          {getBranchName(p.branchId)}
+                        </span>
+                      )}
                     </div>
                   </div>
+
+                  {/* Chevron hint */}
+                  <ChevronRight
+                    size={16}
+                    className="text-slate-300 flex-shrink-0"
+                  />
                 </div>
-                <div className="space-y-2 mb-4">
-                  {/* ✅ NEW — branch row for super admin */}
-                  {isSuperAdmin && p.branchId && (
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="text-slate-600">Branch:</span>
-                      <span className="font-medium text-slate-900 flex items-center gap-1">
-                        <Building2 size={12} className="text-slate-400" />
-                        {getBranchName(p.branchId)}
-                      </span>
-                    </div>
-                  )}
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="text-slate-600">Type:</span>
-                    <span className="font-medium text-slate-900">
-                      {p.profession}
-                    </span>
-                  </div>
-                  {p.phone && (
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="text-slate-600">Phone:</span>
-                      <span className="font-medium text-slate-900">
-                        {p.phone}
-                      </span>
-                    </div>
-                  )}
-                  {p.joiningDate && (
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="text-slate-600">Joined:</span>
-                      <span className="font-medium text-slate-900">
-                        {new Date(p.joiningDate).toLocaleDateString("en-GB")}
-                      </span>
-                    </div>
-                  )}
-                </div>
-                <button
-                  onClick={() => navigate(`/admin/players/${p.publicId}`)}
-                  className="w-full py-2.5 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white rounded-lg font-medium transition-all shadow-sm"
-                >
-                  View Details
-                </button>
               </div>
             );
           })}
         </div>
 
-        {/* DESKTOP TABLE */}
+        {/* ── DESKTOP TABLE — unchanged ── */}
         <div className="hidden md:block bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full">
@@ -797,7 +758,6 @@ function PlayersListPage() {
                   <th className="px-6 py-4 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">
                     Name
                   </th>
-                  {/* ✅ NEW — branch column for super admin */}
                   {isSuperAdmin && (
                     <th className="px-6 py-4 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">
                       Branch
@@ -839,16 +799,15 @@ function PlayersListPage() {
                             className="w-10 h-10 rounded-full object-cover border-2 border-slate-200"
                             onError={(e) => {
                               e.currentTarget.style.display = "none";
-                              e.currentTarget.nextElementSibling?.classList.remove(
-                                "hidden",
-                              );
+                              (
+                                e.currentTarget
+                                  .nextElementSibling as HTMLElement
+                              )?.classList.remove("hidden");
                             }}
                           />
                         ) : null}
                         <div
-                          className={`w-10 h-10 rounded-full bg-gradient-to-br from-blue-100 to-blue-200 flex items-center justify-center border-2 border-slate-200 ${
-                            p.photoUrl ? "hidden" : ""
-                          }`}
+                          className={`w-10 h-10 rounded-full bg-gradient-to-br from-blue-100 to-blue-200 flex items-center justify-center border-2 border-slate-200 ${p.photoUrl ? "hidden" : ""}`}
                         >
                           <span className="text-sm font-bold text-blue-600">
                             {p.displayName.charAt(0)}
@@ -865,7 +824,6 @@ function PlayersListPage() {
                           {p.displayName}
                         </span>
                       </td>
-                      {/* ✅ NEW — branch cell for super admin */}
                       {isSuperAdmin && (
                         <td className="px-6 py-4">
                           <div className="flex items-center gap-1.5 text-sm text-slate-600">
@@ -920,7 +878,7 @@ function PlayersListPage() {
                           onClick={() =>
                             navigate(`/admin/players/${p.publicId}`)
                           }
-                          className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-all shadow-sm"
+                          className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition shadow-sm"
                         >
                           View
                         </button>
@@ -933,79 +891,71 @@ function PlayersListPage() {
           </div>
         </div>
 
-        {/* PAGINATION */}
+        {/* ── PAGINATION ── */}
         {totalPages > 1 && (
-          <div className="flex flex-col sm:flex-row items-center justify-between bg-white rounded-xl shadow-sm border border-slate-200 px-4 sm:px-6 py-4 gap-3">
-            <p className="text-sm text-slate-600">
-              Showing {startIndex + 1} to{" "}
+          <div className="flex items-center justify-between bg-white rounded-xl border border-slate-200 px-4 py-3 gap-3">
+            <p className="text-xs text-slate-500">
+              {startIndex + 1}–
               {Math.min(startIndex + ITEMS_PER_PAGE, filteredPlayers.length)} of{" "}
-              {filteredPlayers.length} players
+              {filteredPlayers.length}
             </p>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1">
               <button
                 onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
                 disabled={currentPage === 1}
-                className="p-2 rounded-lg border border-slate-200 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                className="p-1.5 rounded-lg border border-slate-200 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition"
               >
-                <ChevronLeft size={20} />
+                <ChevronLeft size={16} />
               </button>
-              <div className="flex items-center gap-1">
-                {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
-                  let pageNum;
-                  if (totalPages <= 5) {
-                    pageNum = i + 1;
-                  } else if (currentPage <= 3) {
-                    pageNum = i + 1;
-                  } else if (currentPage >= totalPages - 2) {
-                    pageNum = totalPages - 4 + i;
-                  } else {
-                    pageNum = currentPage - 2 + i;
-                  }
-                  return (
-                    <button
-                      key={pageNum}
-                      onClick={() => setCurrentPage(pageNum)}
-                      className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-                        currentPage === pageNum
-                          ? "bg-blue-600 text-white"
-                          : "text-slate-600 hover:bg-slate-100"
-                      }`}
-                    >
-                      {pageNum}
-                    </button>
-                  );
-                })}
-              </div>
+              {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                let pageNum: number;
+                if (totalPages <= 5) pageNum = i + 1;
+                else if (currentPage <= 3) pageNum = i + 1;
+                else if (currentPage >= totalPages - 2)
+                  pageNum = totalPages - 4 + i;
+                else pageNum = currentPage - 2 + i;
+                return (
+                  <button
+                    key={pageNum}
+                    onClick={() => setCurrentPage(pageNum)}
+                    className={`w-8 h-8 rounded-lg text-xs font-medium transition ${
+                      currentPage === pageNum
+                        ? "bg-blue-600 text-white"
+                        : "text-slate-600 hover:bg-slate-100"
+                    }`}
+                  >
+                    {pageNum}
+                  </button>
+                );
+              })}
               <button
                 onClick={() =>
                   setCurrentPage((p) => Math.min(totalPages, p + 1))
                 }
                 disabled={currentPage === totalPages}
-                className="p-2 rounded-lg border border-slate-200 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                className="p-1.5 rounded-lg border border-slate-200 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition"
               >
-                <ChevronRight size={20} />
+                <ChevronRight size={16} />
               </button>
             </div>
           </div>
         )}
 
-        {/* EMPTY STATE */}
+        {/* ── EMPTY STATE ── */}
         {filteredPlayers.length === 0 && (
-          <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-12 text-center">
-            <div className="text-slate-400 mb-4">
-              <Search size={48} className="mx-auto" />
-            </div>
-            <h3 className="text-lg font-semibold text-slate-700 mb-2">
+          <div className="bg-white rounded-xl border border-slate-200 p-12 text-center">
+            <Search size={40} className="mx-auto text-slate-300 mb-3" />
+            <h3 className="text-base font-semibold text-slate-700 mb-1">
               No players found
             </h3>
-            <p className="text-slate-500 text-sm">
+            <p className="text-sm text-slate-400">
               Try adjusting your search or filters
             </p>
           </div>
         )}
       </div>
 
-      {/* SHARE MODAL */}
+      {/* ── SHARE MODAL ── */}
       <ShareModal
         isOpen={shareModal.open}
         onClose={() => setShareModal({ ...shareModal, open: false })}

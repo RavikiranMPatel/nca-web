@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useParams } from "react-router-dom";
-import { Plus, Target, Calendar, Trophy } from "lucide-react";
+import { Target, Calendar, Trophy } from "lucide-react";
 import { toast } from "react-hot-toast";
 import { coachingService } from "../../api/playerService/coachingService";
 import type {
@@ -271,7 +271,7 @@ function PlayerCoachingPage() {
   return (
     <div className="space-y-4">
       {/* ── Sub-tab bar ──────────────────────────────────────── */}
-      <div className="flex gap-1 bg-white rounded-lg shadow p-1">
+      <div className="flex gap-1 bg-white rounded-xl border border-gray-200 p-1">
         {SUB_TABS.map((tab) => {
           const badge =
             tab.key === "practice"
@@ -284,7 +284,7 @@ function PlayerCoachingPage() {
             <button
               key={tab.key}
               onClick={() => setActiveSubTab(tab.key)}
-              className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-md text-xs font-semibold transition-all ${
+              className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-lg text-xs font-semibold transition-all ${
                 activeSubTab === tab.key
                   ? "bg-blue-600 text-white shadow-sm"
                   : "text-slate-500 hover:bg-slate-50"
