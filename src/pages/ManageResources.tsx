@@ -64,7 +64,6 @@ function ManageResources() {
   const handleSaveEdit = async () => {
     if (!editingResource) return;
     if (!editForm.name.trim()) return setEditError("Name is required.");
-
     setEditSaving(true);
     try {
       await api.put(`/admin/resources/${editingResource.id}`, editForm);
@@ -99,7 +98,6 @@ function ManageResources() {
   const toggleActive = async (id: string, currentActive: boolean) => {
     const action = currentActive ? "disable" : "enable";
     if (!confirm(`Are you sure you want to ${action} this resource?`)) return;
-
     try {
       await api.patch(`/admin/resources/${id}/toggle-active`);
       loadResources();
@@ -111,10 +109,8 @@ function ManageResources() {
 
   const handleAddResource = async () => {
     setError(null);
-
     if (!form.code.trim()) return setError("Code is required.");
     if (!form.name.trim()) return setError("Name is required.");
-
     setSaving(true);
     try {
       await api.post("/admin/resources", form);
@@ -140,8 +136,8 @@ function ManageResources() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <p className="text-gray-500">Loading resources...</p>
+      <div className="flex items-center justify-center min-h-[60vh]">
+        <div className="w-8 h-8 border-4 border-slate-200 border-t-blue-600 rounded-full animate-spin" />
       </div>
     );
   }
@@ -150,115 +146,78 @@ function ManageResources() {
   const astroResources = resources.filter((r) => r.type === "ASTRO");
   const bowlingResources = resources.filter(
     (r) => r.type === "BOWLING_MACHINE",
-  ); // add this
+  );
+
+  // ── Shared input class ──
+  const inputCls =
+    "w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500";
 
   return (
-    <div className="max-w-6xl mx-auto space-y-6">
-      {/* HEADER */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-4">
-          <button
-            onClick={() => navigate("/admin")}
-            className="p-2 hover:bg-gray-100 rounded transition"
-            title="Back to Admin Dashboard"
-          >
-            <ArrowLeft size={20} />
-          </button>
-          <div>
-            <h1 className="text-2xl font-bold">Manage Resources</h1>
-            <p className="text-gray-600 text-sm mt-1">
-              Enable or disable resources for booking
-            </p>
-          </div>
+    <div className="max-w-6xl mx-auto space-y-4">
+      {/* ── HEADER ── */}
+      <div className="flex items-center gap-3">
+        <button
+          onClick={() => navigate("/admin")}
+          className="p-2 hover:bg-gray-100 rounded-lg transition flex-shrink-0"
+        >
+          <ArrowLeft size={20} />
+        </button>
+        <div className="flex-1 min-w-0">
+          <h1 className="text-lg md:text-2xl font-bold">Manage Resources</h1>
+          <p className="text-xs text-gray-500">
+            Enable or disable resources for booking
+          </p>
         </div>
-
         <button
           onClick={() => setShowModal(true)}
-          className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-medium"
+          className="flex items-center gap-1.5 px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition text-sm font-medium flex-shrink-0"
         >
-          <Plus size={18} />
-          Add Resource
+          <Plus size={16} />
+          <span className="hidden sm:inline">Add Resource</span>
+          <span className="sm:hidden">Add</span>
         </button>
       </div>
 
-      {/* TURF RESOURCES */}
-      <div className="bg-white rounded-lg shadow">
-        <div className="p-6 border-b">
-          <h2 className="text-lg font-semibold">
-            Turf Wickets ({turfResources.length})
-          </h2>
+      {/* ── RESOURCE SECTIONS ── */}
+      {[
+        { label: "Turf Wickets", items: turfResources },
+        { label: "Astro Turf", items: astroResources },
+        { label: "Bowling Machines", items: bowlingResources },
+      ].map(({ label, items }) => (
+        <div
+          key={label}
+          className="bg-white rounded-xl border border-gray-200 overflow-hidden"
+        >
+          <div className="px-4 py-3 border-b bg-gray-50">
+            <h2 className="text-sm font-semibold text-gray-700">
+              {label} ({items.length})
+            </h2>
+          </div>
+          <div className="p-4 space-y-3">
+            {items.length === 0 ? (
+              <p className="text-gray-400 text-sm">
+                No {label.toLowerCase()} added yet.
+              </p>
+            ) : (
+              items.map((resource) => (
+                <ResourceCard
+                  key={resource.id}
+                  resource={resource}
+                  onToggle={toggleActive}
+                  onEdit={handleOpenEdit}
+                />
+              ))
+            )}
+          </div>
         </div>
-        <div className="p-6 space-y-4">
-          {turfResources.length === 0 ? (
-            <p className="text-gray-400 text-sm">
-              No turf resources added yet.
-            </p>
-          ) : (
-            turfResources.map((resource) => (
-              <ResourceCard
-                key={resource.id}
-                resource={resource}
-                onToggle={toggleActive}
-                onEdit={handleOpenEdit}
-              />
-            ))
-          )}
-        </div>
-      </div>
+      ))}
 
-      {/* ASTRO RESOURCES */}
-      <div className="bg-white rounded-lg shadow">
-        <div className="p-6 border-b">
-          <h2 className="text-lg font-semibold">
-            Astro Turf ({astroResources.length})
-          </h2>
-        </div>
-        <div className="p-6 space-y-4">
-          {astroResources.length === 0 ? (
-            <p className="text-gray-400 text-sm">
-              No astro resources added yet.
-            </p>
-          ) : (
-            astroResources.map((resource) => (
-              <ResourceCard
-                key={resource.id}
-                resource={resource}
-                onToggle={toggleActive}
-                onEdit={handleOpenEdit}
-              />
-            ))
-          )}
-        </div>
-      </div>
-
-      <div className="bg-white rounded-lg shadow">
-        <div className="p-6 border-b">
-          <h2 className="text-lg font-semibold">
-            Bowling Machines ({bowlingResources.length})
-          </h2>
-        </div>
-        <div className="p-6 space-y-4">
-          {bowlingResources.length === 0 ? (
-            <p className="text-gray-400 text-sm">
-              No bowling machine resources added yet.
-            </p>
-          ) : (
-            bowlingResources.map((resource) => (
-              <ResourceCard
-                key={resource.id}
-                resource={resource}
-                onToggle={toggleActive}
-                onEdit={handleOpenEdit}
-              />
-            ))
-          )}
-        </div>
-      </div>
-
-      {/* INFO BOX */}
-      <div className="bg-blue-50 border border-blue-200 rounded-lg p-6">
-        <h3 className="font-semibold text-blue-900 mb-2">ℹ️ How it works:</h3>
-        <ul className="text-sm text-blue-800 space-y-1">
+      {/* ── INFO BOX ── */}
+      <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
+        <h3 className="font-semibold text-blue-900 mb-2 text-sm">
+          ℹ️ How it works:
+        </h3>
+        <ul className="text-xs text-blue-800 space-y-1">
           <li>
             • Users see time slots (e.g., 08:00 - 09:00) without specific
             resource names
@@ -272,13 +231,12 @@ function ManageResources() {
         </ul>
       </div>
 
-      {/* ADD RESOURCE MODAL */}
+      {/* ── ADD RESOURCE MODAL ── */}
       {showModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-md mx-4">
-            {/* Modal Header */}
-            <div className="flex items-center justify-between p-6 border-b">
-              <h2 className="text-lg font-bold">Add New Resource</h2>
+        <div className="fixed inset-0 bg-black/40 flex items-end sm:items-center justify-center z-50">
+          <div className="bg-white rounded-t-2xl sm:rounded-xl shadow-xl w-full sm:max-w-md max-h-[92vh] overflow-y-auto">
+            <div className="flex items-center justify-between px-5 py-4 border-b sticky top-0 bg-white rounded-t-2xl sm:rounded-t-xl">
+              <h2 className="text-base font-bold">Add New Resource</h2>
               <button
                 onClick={handleCloseModal}
                 className="p-1 hover:bg-gray-100 rounded transition"
@@ -286,25 +244,20 @@ function ManageResources() {
                 <X size={20} />
               </button>
             </div>
-
-            {/* Modal Body */}
-            <div className="p-6 space-y-4">
-              {/* Error Banner */}
+            <div className="p-5 space-y-4">
               {error && (
                 <div className="bg-red-50 border border-red-200 text-red-700 text-sm px-4 py-3 rounded-lg">
                   {error}
                 </div>
               )}
-
-              {/* Type */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-xs font-semibold text-gray-600 mb-1.5">
                   Type <span className="text-red-500">*</span>
                 </label>
                 <select
                   value={form.type}
                   onChange={(e) => setForm({ ...form, type: e.target.value })}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className={inputCls}
                 >
                   <option value="TURF">TURF (Turf Wicket)</option>
                   <option value="ASTRO">ASTRO (Astro Turf)</option>
@@ -313,10 +266,8 @@ function ManageResources() {
                   </option>
                 </select>
               </div>
-
-              {/* Code */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-xs font-semibold text-gray-600 mb-1.5">
                   Code <span className="text-red-500">*</span>
                 </label>
                 <input
@@ -326,13 +277,11 @@ function ManageResources() {
                   onChange={(e) =>
                     setForm({ ...form, code: e.target.value.toUpperCase() })
                   }
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className={inputCls}
                 />
               </div>
-
-              {/* Name */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-xs font-semibold text-gray-600 mb-1.5">
                   Name <span className="text-red-500">*</span>
                 </label>
                 <input
@@ -340,15 +289,13 @@ function ManageResources() {
                   placeholder="e.g. Turf Wicket 1"
                   value={form.name}
                   onChange={(e) => setForm({ ...form, name: e.target.value })}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className={inputCls}
                 />
               </div>
-
-              {/* Description */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-xs font-semibold text-gray-600 mb-1.5">
                   Description{" "}
-                  <span className="text-gray-400 text-xs">(optional)</span>
+                  <span className="text-gray-400 font-normal">(optional)</span>
                 </label>
                 <input
                   type="text"
@@ -357,13 +304,11 @@ function ManageResources() {
                   onChange={(e) =>
                     setForm({ ...form, description: e.target.value })
                   }
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className={inputCls}
                 />
               </div>
-
-              {/* Display Order */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-xs font-semibold text-gray-600 mb-1.5">
                   Display Order
                 </label>
                 <input
@@ -373,23 +318,21 @@ function ManageResources() {
                   onChange={(e) =>
                     setForm({ ...form, displayOrder: Number(e.target.value) })
                   }
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className={inputCls}
                 />
               </div>
             </div>
-
-            {/* Modal Footer */}
-            <div className="flex justify-end gap-3 p-6 border-t">
+            <div className="flex gap-3 p-5 border-t pb-6">
               <button
                 onClick={handleCloseModal}
-                className="px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-lg transition"
+                className="flex-1 py-2.5 text-sm text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-lg transition"
               >
                 Cancel
               </button>
               <button
                 onClick={handleAddResource}
                 disabled={saving}
-                className="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-medium disabled:opacity-50"
+                className="flex-1 py-2.5 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-medium disabled:opacity-50"
               >
                 {saving ? "Saving..." : "Add Resource"}
               </button>
@@ -398,13 +341,13 @@ function ManageResources() {
         </div>
       )}
 
-      {/* EDIT RESOURCE MODAL — ✅ sibling to add modal, not nested inside it */}
+      {/* ── EDIT RESOURCE MODAL ── */}
       {editingResource && (
-        <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-md mx-4">
-            <div className="flex items-center justify-between p-6 border-b">
-              <h2 className="text-lg font-bold">
-                Edit Resource — {editingResource.code}
+        <div className="fixed inset-0 bg-black/40 flex items-end sm:items-center justify-center z-50">
+          <div className="bg-white rounded-t-2xl sm:rounded-xl shadow-xl w-full sm:max-w-md max-h-[92vh] overflow-y-auto">
+            <div className="flex items-center justify-between px-5 py-4 border-b sticky top-0 bg-white rounded-t-2xl sm:rounded-t-xl">
+              <h2 className="text-base font-bold">
+                Edit — {editingResource.code}
               </h2>
               <button
                 onClick={handleCloseEdit}
@@ -413,16 +356,14 @@ function ManageResources() {
                 <X size={20} />
               </button>
             </div>
-
-            <div className="p-6 space-y-4">
+            <div className="p-5 space-y-4">
               {editError && (
                 <div className="bg-red-50 border border-red-200 text-red-700 text-sm px-4 py-3 rounded-lg">
                   {editError}
                 </div>
               )}
-
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-xs font-semibold text-gray-600 mb-1.5">
                   Name <span className="text-red-500">*</span>
                 </label>
                 <input
@@ -431,30 +372,25 @@ function ManageResources() {
                   onChange={(e) =>
                     setEditForm({ ...editForm, name: e.target.value })
                   }
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className={inputCls}
                 />
               </div>
-
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-xs font-semibold text-gray-600 mb-1.5">
                   Description{" "}
-                  <span className="text-gray-400 text-xs">(optional)</span>
+                  <span className="text-gray-400 font-normal">(optional)</span>
                 </label>
                 <input
                   type="text"
                   value={editForm.description}
                   onChange={(e) =>
-                    setEditForm({
-                      ...editForm,
-                      description: e.target.value,
-                    })
+                    setEditForm({ ...editForm, description: e.target.value })
                   }
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className={inputCls}
                 />
               </div>
-
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-xs font-semibold text-gray-600 mb-1.5">
                   Display Order
                 </label>
                 <input
@@ -467,22 +403,21 @@ function ManageResources() {
                       displayOrder: Number(e.target.value),
                     })
                   }
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className={inputCls}
                 />
               </div>
             </div>
-
-            <div className="flex justify-end gap-3 p-6 border-t">
+            <div className="flex gap-3 p-5 border-t pb-6">
               <button
                 onClick={handleCloseEdit}
-                className="px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-lg transition"
+                className="flex-1 py-2.5 text-sm text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-lg transition"
               >
                 Cancel
               </button>
               <button
                 onClick={handleSaveEdit}
                 disabled={editSaving}
-                className="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-medium disabled:opacity-50"
+                className="flex-1 py-2.5 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-medium disabled:opacity-50"
               >
                 {editSaving ? "Saving..." : "Save Changes"}
               </button>
@@ -494,73 +429,77 @@ function ManageResources() {
   );
 }
 
+// ── Resource Card ─────────────────────────────────────────────────
+
 type ResourceCardProps = {
   resource: Resource;
   onToggle: (id: string, currentActive: boolean) => void;
   onEdit: (resource: Resource) => void;
 };
 
-// ✅ Fixed: onEdit now destructured from props
 function ResourceCard({ resource, onToggle, onEdit }: ResourceCardProps) {
   return (
     <div
-      className={`border rounded-lg p-4 flex items-center justify-between transition-all ${
+      className={`border rounded-xl p-4 transition-all ${
         resource.active
           ? "bg-white border-green-200"
-          : "bg-gray-50 border-gray-300"
+          : "bg-gray-50 border-gray-200"
       }`}
     >
-      <div className="flex-1">
-        <div className="flex items-center gap-3">
-          <h3 className="text-lg font-semibold">{resource.name}</h3>
-          <span className="text-sm text-gray-500">({resource.code})</span>
-          {resource.active ? (
-            <span className="px-2 py-1 bg-green-100 text-green-800 text-xs rounded-full font-medium">
-              ● Active
-            </span>
-          ) : (
-            <span className="px-2 py-1 bg-red-100 text-red-800 text-xs rounded-full font-medium">
-              ○ Disabled
-            </span>
+      {/* Top row: name + badges */}
+      <div className="flex items-start justify-between gap-2 mb-2">
+        <div className="min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <h3 className="font-semibold text-gray-900 text-sm">
+              {resource.name}
+            </h3>
+            <span className="text-xs text-gray-400">({resource.code})</span>
+          </div>
+          {resource.description && (
+            <p className="text-xs text-gray-500 mt-0.5">
+              {resource.description}
+            </p>
           )}
-        </div>
-        {resource.description && (
-          <p className="text-sm text-gray-600 mt-1">{resource.description}</p>
-        )}
-        <div className="flex items-center gap-4 mt-1">
-          <p className="text-xs text-gray-500">
-            Display Order: {resource.displayOrder}
+          <p className="text-[10px] text-gray-400 mt-1">
+            Order: {resource.displayOrder}
           </p>
         </div>
+        {resource.active ? (
+          <span className="flex-shrink-0 px-2 py-0.5 bg-green-100 text-green-700 text-[10px] font-semibold rounded-full">
+            Active
+          </span>
+        ) : (
+          <span className="flex-shrink-0 px-2 py-0.5 bg-red-100 text-red-700 text-[10px] font-semibold rounded-full">
+            Disabled
+          </span>
+        )}
       </div>
 
-      <div className="flex items-center gap-2">
+      {/* Action buttons — full width on mobile */}
+      <div className="flex gap-2 mt-3">
         <button
           onClick={() => onToggle(resource.id, resource.active)}
-          className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors ${
+          className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-semibold transition ${
             resource.active
-              ? "bg-red-100 text-red-700 hover:bg-red-200"
-              : "bg-green-100 text-green-700 hover:bg-green-200"
+              ? "bg-red-50 text-red-700 hover:bg-red-100 border border-red-200"
+              : "bg-green-50 text-green-700 hover:bg-green-100 border border-green-200"
           }`}
         >
           {resource.active ? (
             <>
-              <PowerOff size={18} />
-              <span>Disable</span>
+              <PowerOff size={14} /> Disable
             </>
           ) : (
             <>
-              <Power size={18} />
-              <span>Enable</span>
+              <Power size={14} /> Enable
             </>
           )}
         </button>
-
         <button
           onClick={() => onEdit(resource)}
-          className="p-2 text-gray-600 hover:bg-gray-100 rounded"
+          className="px-3 py-2 text-gray-600 hover:bg-gray-100 rounded-lg border border-gray-200 transition"
         >
-          <Edit size={18} />
+          <Edit size={15} />
         </button>
       </div>
     </div>

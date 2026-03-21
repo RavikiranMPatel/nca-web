@@ -44,6 +44,27 @@ type TabType =
   | "instagram"
   | "subscription";
 
+// ── Tab definitions ────────────────────────────────────────────────
+const TABS: { key: TabType; label: string }[] = [
+  { key: "general", label: "General" },
+  { key: "branches", label: "Branches" },
+  { key: "branding", label: "Branding & Theme" },
+  { key: "batch", label: "Camp Settings" },
+  { key: "fees", label: "Fees" },
+  { key: "subscription", label: "🏏 Subscriptions" },
+  { key: "media", label: "📸 Media" },
+  { key: "content", label: "Content & Social" },
+  { key: "contact", label: "Contact Info" },
+  { key: "facilities", label: "Facilities" },
+  { key: "testimonials", label: "Testimonials" },
+  { key: "news", label: "News" },
+  { key: "youtube", label: "▶️ YouTube" },
+  { key: "instagram", label: "📸 Instagram" },
+  { key: "gallery", label: "Gallery" },
+  { key: "team", label: "Team Members" },
+  { key: "starperformer", label: "Star Performer" },
+];
+
 function AcademySettings() {
   const navigate = useNavigate();
   const { academyId } = useAuth();
@@ -99,8 +120,6 @@ function AcademySettings() {
   const loadSettings = async () => {
     try {
       const response = await api.get<SettingsMap>("/admin/settings");
-
-      // Populate form fields
       setAcademyName(response.data.ACADEMY_NAME || "");
       setAcademyCode(response.data.ACADEMY_CODE || "");
       setAdminPhone(response.data.ADMIN_PHONE || "");
@@ -116,20 +135,13 @@ function AcademySettings() {
       setUpiId(response.data.UPI_ID || "");
       setUpiQrUrl(response.data.UPI_QR_URL || "");
       setBookingPhone(response.data.BOOKING_PHONE || "");
-
-      // Theme settings
       setButtonRadius(response.data.BUTTON_RADIUS || "8");
       setCardRadius(response.data.CARD_RADIUS || "8");
       setShadowIntensity(response.data.SHADOW_INTENSITY || "md");
-
-      // Slider settings
       setSliderHeight(response.data.SLIDER_HEIGHT || "standard");
       setKenBurnsEnabled(response.data.KEN_BURNS_ENABLED !== "false");
       setSlideDuration(response.data.SLIDE_DURATION || "5000");
       setSliderImageFit(response.data.SLIDER_IMAGE_FIT || "cover");
-
-      // Section toggles
-
       setSliderEnabled(response.data.SECTION_SLIDER_ENABLED !== "false");
       setStatsEnabled(response.data.SECTION_STATS_ENABLED !== "false");
       setFacilitiesEnabled(
@@ -141,15 +153,13 @@ function AcademySettings() {
       setNewsEnabled(response.data.SECTION_NEWS_ENABLED !== "false");
       setGalleryEnabled(response.data.SECTION_GALLERY_ENABLED !== "false");
       setTeamEnabled(response.data.SECTION_TEAM_ENABLED !== "false");
-
       const moduleTypes = response.data.BATCH_MODULE_TYPES || "";
-
-      const modulesArray = moduleTypes
-        .split(",")
-        .map((m) => m.trim())
-        .filter(Boolean);
-
-      setSelectedModules(modulesArray);
+      setSelectedModules(
+        moduleTypes
+          .split(",")
+          .map((m) => m.trim())
+          .filter(Boolean),
+      );
     } catch (error) {
       console.error("Failed to load settings:", error);
       alert("Failed to load settings");
@@ -178,7 +188,6 @@ function AcademySettings() {
 
   const handleSave = async () => {
     setSaving(true);
-
     try {
       const updates: SettingsMap = {
         ACADEMY_NAME: academyName,
@@ -195,26 +204,19 @@ function AcademySettings() {
         SECONDARY_COLOR: secondaryColor,
         LOGO_URL: logoUrl,
         CONTACT_EMAIL: contactEmail,
-
-        // Theme settings
         BUTTON_RADIUS: buttonRadius,
         CARD_RADIUS: cardRadius,
         SHADOW_INTENSITY: shadowIntensity,
-
-        // Slider settings
         SLIDER_HEIGHT: sliderHeight,
         KEN_BURNS_ENABLED: String(kenBurnsEnabled),
         SLIDE_DURATION: slideDuration,
         SLIDER_IMAGE_FIT: sliderImageFit,
-
         BATCH_MODULE_TYPES: [
           "REGULAR",
           ...selectedModules.filter((m) => m !== "REGULAR"),
         ].join(","),
       };
-
       await api.put("/admin/settings", updates);
-
       await loadSettings();
       toast.success("Settings updated successfully");
       previewNextPlayerId();
@@ -228,234 +230,70 @@ function AcademySettings() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
+      <div className="flex items-center justify-center min-h-[60vh]">
         <div className="w-8 h-8 border-4 border-slate-200 border-t-blue-600 rounded-full animate-spin" />
       </div>
     );
   }
 
+  const showSaveButton = activeTab === "general" || activeTab === "branding";
+
   return (
-    <div className="max-w-5xl mx-auto space-y-6">
-      {/* HEADER */}
-      <div className="flex items-center gap-4">
+    <div className="max-w-5xl mx-auto space-y-4 pb-24">
+      {/* ── HEADER ── */}
+      <div className="flex items-center gap-3">
         <button
           onClick={() => navigate("/admin")}
-          className="p-2 hover:bg-gray-100 rounded transition"
-          title="Back to Admin Dashboard"
+          className="p-2 hover:bg-gray-100 rounded-lg transition flex-shrink-0"
         >
           <ArrowLeft size={20} />
         </button>
-
-        <div>
-          <h1 className="text-2xl font-bold">Academy Settings</h1>
-          <p className="text-gray-600 text-sm mt-1">
+        <div className="flex-1 min-w-0">
+          <h1 className="text-lg md:text-2xl font-bold">Academy Settings</h1>
+          <p className="text-xs text-gray-500">
             Configure your academy information and content
           </p>
         </div>
       </div>
 
-      {/* TABS */}
-      <div className="bg-white rounded-lg shadow">
-        <div className="border-b px-4">
-          <nav className="flex gap-4 overflow-x-auto">
-            <button
-              onClick={() => setActiveTab("general")}
-              className={`py-3 px-4 text-sm font-medium border-b-2 transition whitespace-nowrap ${
-                activeTab === "general"
-                  ? "border-blue-600 text-blue-600"
-                  : "border-transparent text-gray-600 hover:text-blue-600"
-              }`}
-            >
-              General
-            </button>
-
-            <button
-              onClick={() => setActiveTab("branches")}
-              className={`py-3 px-4 text-sm font-medium border-b-2 transition whitespace-nowrap ${
-                activeTab === "branches"
-                  ? "border-blue-600 text-blue-600"
-                  : "border-transparent text-gray-600 hover:text-blue-600"
-              }`}
-            >
-              Branches
-            </button>
-
-            <button
-              onClick={() => setActiveTab("branding")}
-              className={`py-3 px-4 text-sm font-medium border-b-2 transition whitespace-nowrap ${
-                activeTab === "branding"
-                  ? "border-blue-600 text-blue-600"
-                  : "border-transparent text-gray-600 hover:text-blue-600"
-              }`}
-            >
-              Branding & Theme
-            </button>
-
-            <button
-              onClick={() => setActiveTab("batch")}
-              className={`py-3 px-4 text-sm font-medium border-b-2 transition whitespace-nowrap ${
-                activeTab === "batch"
-                  ? "border-blue-600 text-blue-600"
-                  : "border-transparent text-gray-600 hover:text-blue-600"
-              }`}
-            >
-              Camp Settings
-            </button>
-
-            <button
-              onClick={() => setActiveTab("fees")}
-              className={`py-3 px-4 text-sm font-medium border-b-2 transition whitespace-nowrap ${
-                activeTab === "fees"
-                  ? "border-blue-600 text-blue-600"
-                  : "border-transparent text-gray-600 hover:text-blue-600"
-              }`}
-            >
-              Fees
-            </button>
-
-            <button
-              onClick={() => setActiveTab("subscription")}
-              className={`py-3 px-4 text-sm font-medium border-b-2 transition whitespace-nowrap ${
-                activeTab === "subscription"
-                  ? "border-blue-600 text-blue-600"
-                  : "border-transparent text-gray-600 hover:text-blue-600"
-              }`}
-            >
-              🏏 Subscriptions
-            </button>
-
-            <button
-              onClick={() => setActiveTab("media")}
-              className={`py-3 px-4 text-sm font-medium border-b-2 transition whitespace-nowrap ${
-                activeTab === "media"
-                  ? "border-blue-600 text-blue-600"
-                  : "border-transparent text-gray-600 hover:text-blue-600"
-              }`}
-            >
-              📸 Media
-            </button>
-
-            <button
-              onClick={() => setActiveTab("content")}
-              className={`py-3 px-4 text-sm font-medium border-b-2 transition whitespace-nowrap ${
-                activeTab === "content"
-                  ? "border-blue-600 text-blue-600"
-                  : "border-transparent text-gray-600 hover:text-blue-600"
-              }`}
-            >
-              Content & Social
-            </button>
-            <button
-              onClick={() => setActiveTab("contact")}
-              className={`py-3 px-4 text-sm font-medium border-b-2 transition whitespace-nowrap ${
-                activeTab === "contact"
-                  ? "border-blue-600 text-blue-600"
-                  : "border-transparent text-gray-600 hover:text-blue-600"
-              }`}
-            >
-              Contact Info
-            </button>
-            <button
-              onClick={() => setActiveTab("facilities")}
-              className={`py-3 px-4 text-sm font-medium border-b-2 transition whitespace-nowrap ${
-                activeTab === "facilities"
-                  ? "border-blue-600 text-blue-600"
-                  : "border-transparent text-gray-600 hover:text-blue-600"
-              }`}
-            >
-              Facilities
-            </button>
-            <button
-              onClick={() => setActiveTab("testimonials")}
-              className={`py-3 px-4 text-sm font-medium border-b-2 transition whitespace-nowrap ${
-                activeTab === "testimonials"
-                  ? "border-blue-600 text-blue-600"
-                  : "border-transparent text-gray-600 hover:text-blue-600"
-              }`}
-            >
-              Testimonials
-            </button>
-            <button
-              onClick={() => setActiveTab("news")}
-              className={`py-3 px-4 text-sm font-medium border-b-2 transition whitespace-nowrap ${
-                activeTab === "news"
-                  ? "border-blue-600 text-blue-600"
-                  : "border-transparent text-gray-600 hover:text-blue-600"
-              }`}
-            >
-              News
-            </button>
-
-            <button
-              onClick={() => setActiveTab("youtube")}
-              className={`py-3 px-4 text-sm font-medium border-b-2 transition whitespace-nowrap ${
-                activeTab === "youtube"
-                  ? "border-blue-600 text-blue-600"
-                  : "border-transparent text-gray-600 hover:text-blue-600"
-              }`}
-            >
-              ▶️ YouTube
-            </button>
-
-            <button
-              onClick={() => setActiveTab("instagram")}
-              className={`py-3 px-4 text-sm font-medium border-b-2 transition whitespace-nowrap ${
-                activeTab === "instagram"
-                  ? "border-blue-600 text-blue-600"
-                  : "border-transparent text-gray-600 hover:text-blue-600"
-              }`}
-            >
-              📸 Instagram
-            </button>
-
-            <button
-              onClick={() => setActiveTab("gallery")}
-              className={`py-3 px-4 text-sm font-medium border-b-2 transition whitespace-nowrap ${
-                activeTab === "gallery"
-                  ? "border-blue-600 text-blue-600"
-                  : "border-transparent text-gray-600 hover:text-blue-600"
-              }`}
-            >
-              Gallery
-            </button>
-
-            <button
-              onClick={() => setActiveTab("team")}
-              className={`py-3 px-4 text-sm font-medium border-b-2 transition whitespace-nowrap ${
-                activeTab === "team"
-                  ? "border-blue-600 text-blue-600"
-                  : "border-transparent text-gray-600 hover:text-blue-600"
-              }`}
-            >
-              Team Members
-            </button>
-
-            <button
-              onClick={() => setActiveTab("starperformer")}
-              className={`py-3 px-4 text-sm font-medium border-b-2 transition whitespace-nowrap ${
-                activeTab === "starperformer"
-                  ? "border-blue-600 text-blue-600"
-                  : "border-transparent text-gray-600 hover:text-blue-600"
-              }`}
-            >
-              Star Performer
-            </button>
+      {/* ── TABS + CONTENT ── */}
+      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+        {/* Tab bar — scrollable, compact on mobile */}
+        <div className="border-b overflow-x-auto">
+          <nav className="flex min-w-max">
+            {TABS.map(({ key, label }) => (
+              <button
+                key={key}
+                onClick={() => setActiveTab(key)}
+                className={`py-2.5 px-3 md:px-4 text-xs md:text-sm font-medium border-b-2 transition whitespace-nowrap ${
+                  activeTab === key
+                    ? "border-blue-600 text-blue-600"
+                    : "border-transparent text-gray-500 hover:text-blue-600"
+                }`}
+              >
+                {label}
+              </button>
+            ))}
           </nav>
         </div>
 
-        <div className="p-6">
+        {/* Tab content */}
+        <div className="p-4 md:p-6">
           {/* GENERAL TAB */}
           {activeTab === "general" && (
             <div className="space-y-6">
-              <h2 className="text-lg font-semibold mb-4">General Settings</h2>
+              <h2 className="text-base md:text-lg font-semibold">
+                General Settings
+              </h2>
               <PresenceBanner
-                entity={`academy-general`}
+                entity="academy-general"
                 id={academyId ?? undefined}
               />
+
               <label className="flex items-center justify-between p-4 border rounded-lg bg-gray-50 cursor-pointer">
                 <div>
-                  <span className="font-medium">Section Enabled</span>
-                  <p className="text-sm text-gray-500">
+                  <span className="font-medium text-sm">Section Enabled</span>
+                  <p className="text-xs text-gray-500">
                     Stats & Numbers section is visible on home page
                   </p>
                 </div>
@@ -473,7 +311,6 @@ function AcademySettings() {
                 />
               </label>
 
-              {/* Academy Name */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Academy Name
@@ -483,11 +320,10 @@ function AcademySettings() {
                   value={academyName}
                   onChange={(e) => setAcademyName(e.target.value)}
                   placeholder="NCA Cricket Academy"
-                  className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  className="w-full px-4 py-2.5 border rounded-lg focus:ring-2 focus:ring-blue-500 text-sm"
                 />
               </div>
 
-              {/* Academy Code */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Academy Short Code
@@ -498,7 +334,7 @@ function AcademySettings() {
                   onChange={(e) => setAcademyCode(e.target.value.toUpperCase())}
                   placeholder="NCA"
                   maxLength={10}
-                  className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  className="w-full px-4 py-2.5 border rounded-lg focus:ring-2 focus:ring-blue-500 text-sm"
                 />
                 <p className="text-xs text-gray-500 mt-1">
                   Short code for your academy (max 10 characters)
@@ -514,7 +350,7 @@ function AcademySettings() {
                   value={contactEmail}
                   onChange={(e) => setContactEmail(e.target.value)}
                   placeholder="academy@example.com"
-                  className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  className="w-full px-4 py-2.5 border rounded-lg focus:ring-2 focus:ring-blue-500 text-sm"
                 />
                 <p className="text-xs text-gray-500 mt-1">
                   Used as the sender address for all outgoing emails
@@ -529,21 +365,18 @@ function AcademySettings() {
                   type="tel"
                   value={adminPhone}
                   onChange={(e) => setAdminPhone(e.target.value)}
-                  placeholder=""
-                  className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  className="w-full px-4 py-2.5 border rounded-lg focus:ring-2 focus:ring-blue-500 text-sm"
                 />
                 <p className="text-xs text-gray-500 mt-1">
-                  Used to receive WhatsApp notifications (e.g. contact form
-                  submissions). Include country code.
+                  Used to receive WhatsApp notifications. Include country code.
                 </p>
               </div>
 
-              {/* UPI / Payment Settings */}
+              {/* Payment Settings */}
               <div className="border-t pt-6">
                 <h3 className="text-base font-semibold mb-4">
                   💳 Payment Settings
                 </h3>
-
                 <div className="space-y-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -554,13 +387,12 @@ function AcademySettings() {
                       value={upiId}
                       onChange={(e) => setUpiId(e.target.value)}
                       placeholder="yourname@ybl"
-                      className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      className="w-full px-4 py-2.5 border rounded-lg focus:ring-2 focus:ring-blue-500 text-sm"
                     />
                     <p className="text-xs text-gray-500 mt-1">
                       Shown to users on the payment page
                     </p>
                   </div>
-
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
                       Booking Contact Phone
@@ -569,15 +401,12 @@ function AcademySettings() {
                       type="text"
                       value={bookingPhone}
                       onChange={(e) => setBookingPhone(e.target.value)}
-                      placeholder=""
-                      className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      className="w-full px-4 py-2.5 border rounded-lg focus:ring-2 focus:ring-blue-500 text-sm"
                     />
                     <p className="text-xs text-gray-500 mt-1">
                       Phone number users call after paying
                     </p>
                   </div>
-
-                  {/* QR Upload */}
                   <ImageUpload
                     currentUrl={upiQrUrl}
                     uploadType="qr"
@@ -597,11 +426,12 @@ function AcademySettings() {
                 <h3 className="text-base font-semibold mb-4">
                   📢 Announcement Bar
                 </h3>
-
                 <label className="flex items-center justify-between p-4 border rounded-lg bg-gray-50 mb-4 cursor-pointer">
                   <div>
-                    <span className="font-medium">Show Announcement Bar</span>
-                    <p className="text-sm text-gray-500">
+                    <span className="font-medium text-sm">
+                      Show Announcement Bar
+                    </span>
+                    <p className="text-xs text-gray-500">
                       Display a banner on the home page
                     </p>
                   </div>
@@ -612,7 +442,6 @@ function AcademySettings() {
                     className="w-5 h-5 text-blue-600 rounded"
                   />
                 </label>
-
                 <div className="mb-4">
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     Message{" "}
@@ -627,13 +456,12 @@ function AcademySettings() {
                       setAnnouncementText(e.target.value.slice(0, 120))
                     }
                     placeholder="🏏 Summer Camp starts March 30! — Limited seats."
-                    className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-4 py-2.5 border rounded-lg focus:ring-2 focus:ring-blue-500 text-sm"
                   />
                   <p className="text-xs text-gray-400 mt-1">
                     Max 120 characters. Keep it short for mobile.
                   </p>
                 </div>
-
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     Auto-hide after date
@@ -642,7 +470,7 @@ function AcademySettings() {
                     type="date"
                     value={announcementExpiry}
                     onChange={(e) => setAnnouncementExpiry(e.target.value)}
-                    className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-4 py-2.5 border rounded-lg focus:ring-2 focus:ring-blue-500 text-sm"
                   />
                   <p className="text-xs text-gray-400 mt-1">
                     Bar disappears automatically after this date. Leave empty to
@@ -651,14 +479,12 @@ function AcademySettings() {
                 </div>
               </div>
 
-              {/* Player ID Configuration */}
+              {/* Player ID */}
               <div className="border-t pt-6">
                 <h3 className="text-base font-semibold mb-4">
                   Player ID Format
                 </h3>
-
                 <div className="space-y-4">
-                  {/* Prefix */}
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
                       Player ID Prefix
@@ -670,14 +496,12 @@ function AcademySettings() {
                         setPlayerIdPrefix(e.target.value.toUpperCase())
                       }
                       placeholder="PLY-NCA"
-                      className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      className="w-full px-4 py-2.5 border rounded-lg focus:ring-2 focus:ring-blue-500 text-sm"
                     />
                     <p className="text-xs text-gray-500 mt-1">
                       This will be used as the prefix for all player IDs
                     </p>
                   </div>
-
-                  {/* Counter */}
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
                       Current Counter
@@ -686,15 +510,13 @@ function AcademySettings() {
                       type="number"
                       value={playerIdCounter}
                       onChange={(e) => setPlayerIdCounter(e.target.value)}
-                      className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      className="w-full px-4 py-2.5 border rounded-lg focus:ring-2 focus:ring-blue-500 text-sm"
                     />
                     <p className="text-xs text-gray-500 mt-1">
                       Next player will get ID number:{" "}
                       {parseInt(playerIdCounter) + 1}
                     </p>
                   </div>
-
-                  {/* Preview */}
                   <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
                     <p className="text-sm font-medium text-blue-900 mb-2">
                       Preview Next Player ID:
@@ -708,21 +530,24 @@ function AcademySettings() {
               </div>
             </div>
           )}
+
           {activeTab === "branches" && <BranchesTab />}
+
           {/* BRANDING & THEME TAB */}
           {activeTab === "branding" && (
             <div className="space-y-8">
-              <h2 className="text-lg font-semibold mb-4">
+              <h2 className="text-base md:text-lg font-semibold">
                 Branding & Theme Customization
               </h2>
               <PresenceBanner
-                entity={`academy-branding`}
+                entity="academy-branding"
                 id={academyId ?? undefined}
               />
+
               <label className="flex items-center justify-between p-4 border rounded-lg bg-gray-50 cursor-pointer">
                 <div>
-                  <span className="font-medium">Section Enabled</span>
-                  <p className="text-sm text-gray-500">
+                  <span className="font-medium text-sm">Section Enabled</span>
+                  <p className="text-xs text-gray-500">
                     Image slider is visible on home page
                   </p>
                 </div>
@@ -740,25 +565,21 @@ function AcademySettings() {
                 />
               </label>
 
-              {/* Logo Upload */}
               <ImageUpload
                 currentUrl={logoUrl}
                 uploadType="logo"
                 onUploadSuccess={(url) => {
                   setLogoUrl(url);
-                  // Auto-save to settings
                   api.put("/admin/settings/LOGO_URL", { value: url });
                 }}
                 label="Academy Logo"
                 helpText="Square image, will be resized to 200x200px. Max 5MB."
               />
 
-              {/* COLORS SECTION */}
+              {/* Colors */}
               <div className="border-t pt-6">
                 <h3 className="text-base font-semibold mb-4">🎨 Colors</h3>
-
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  {/* Primary Color */}
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
                       Primary Color
@@ -768,22 +589,20 @@ function AcademySettings() {
                         type="color"
                         value={primaryColor}
                         onChange={(e) => setPrimaryColor(e.target.value)}
-                        className="h-12 w-20 border rounded cursor-pointer"
+                        className="h-10 w-16 border rounded cursor-pointer"
                       />
                       <input
                         type="text"
                         value={primaryColor}
                         onChange={(e) => setPrimaryColor(e.target.value)}
                         placeholder="#2563eb"
-                        className="flex-1 px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        className="flex-1 px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 text-sm"
                       />
                     </div>
                     <p className="text-xs text-gray-500 mt-1">
                       Main brand color for buttons, links, and key elements
                     </p>
                   </div>
-
-                  {/* Secondary Color */}
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
                       Secondary Color
@@ -793,14 +612,14 @@ function AcademySettings() {
                         type="color"
                         value={secondaryColor}
                         onChange={(e) => setSecondaryColor(e.target.value)}
-                        className="h-12 w-20 border rounded cursor-pointer"
+                        className="h-10 w-16 border rounded cursor-pointer"
                       />
                       <input
                         type="text"
                         value={secondaryColor}
                         onChange={(e) => setSecondaryColor(e.target.value)}
                         placeholder="#10b981"
-                        className="flex-1 px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        className="flex-1 px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 text-sm"
                       />
                     </div>
                     <p className="text-xs text-gray-500 mt-1">
@@ -810,163 +629,106 @@ function AcademySettings() {
                 </div>
               </div>
 
-              {/* BUTTON STYLE SECTION */}
+              {/* Button Style */}
               <div className="border-t pt-6">
                 <h3 className="text-base font-semibold mb-4">
                   🔘 Button Style
                 </h3>
                 <div className="space-y-3">
-                  <label className="flex items-center gap-3 p-4 border rounded-lg hover:bg-gray-50 cursor-pointer">
-                    <input
-                      type="radio"
-                      name="buttonRadius"
-                      value="0"
-                      checked={buttonRadius === "0"}
-                      onChange={(e) => setButtonRadius(e.target.value)}
-                      className="w-4 h-4"
-                    />
-                    <div className="flex-1">
-                      <span className="font-medium">Sharp Corners</span>
-                      <p className="text-sm text-gray-500">
-                        Modern, flat design (0px radius)
-                      </p>
-                    </div>
-                    <button
-                      className="px-4 py-2 bg-blue-600 text-white text-sm"
-                      style={{ borderRadius: "0px" }}
+                  {[
+                    {
+                      value: "0",
+                      label: "Sharp Corners",
+                      desc: "Modern, flat design (0px radius)",
+                    },
+                    {
+                      value: "8",
+                      label: "Rounded",
+                      desc: "Balanced, professional (8px radius) - Recommended",
+                    },
+                    {
+                      value: "16",
+                      label: "Extra Rounded",
+                      desc: "Soft, friendly (16px radius)",
+                    },
+                    {
+                      value: "24",
+                      label: "Pill Shape",
+                      desc: "Very friendly, playful (24px radius)",
+                    },
+                  ].map(({ value, label, desc }) => (
+                    <label
+                      key={value}
+                      className="flex items-center gap-3 p-4 border rounded-lg hover:bg-gray-50 cursor-pointer"
                     >
-                      Sample
-                    </button>
-                  </label>
-
-                  <label className="flex items-center gap-3 p-4 border rounded-lg hover:bg-gray-50 cursor-pointer">
-                    <input
-                      type="radio"
-                      name="buttonRadius"
-                      value="8"
-                      checked={buttonRadius === "8"}
-                      onChange={(e) => setButtonRadius(e.target.value)}
-                      className="w-4 h-4"
-                    />
-                    <div className="flex-1">
-                      <span className="font-medium">Rounded</span>
-                      <p className="text-sm text-gray-500">
-                        Balanced, professional (8px radius) - Recommended
-                      </p>
-                    </div>
-                    <button className="px-4 py-2 bg-blue-600 text-white text-sm rounded-lg">
-                      Sample
-                    </button>
-                  </label>
-
-                  <label className="flex items-center gap-3 p-4 border rounded-lg hover:bg-gray-50 cursor-pointer">
-                    <input
-                      type="radio"
-                      name="buttonRadius"
-                      value="16"
-                      checked={buttonRadius === "16"}
-                      onChange={(e) => setButtonRadius(e.target.value)}
-                      className="w-4 h-4"
-                    />
-                    <div className="flex-1">
-                      <span className="font-medium">Extra Rounded</span>
-                      <p className="text-sm text-gray-500">
-                        Soft, friendly (16px radius)
-                      </p>
-                    </div>
-                    <button
-                      className="px-4 py-2 bg-blue-600 text-white text-sm"
-                      style={{ borderRadius: "16px" }}
-                    >
-                      Sample
-                    </button>
-                  </label>
-
-                  <label className="flex items-center gap-3 p-4 border rounded-lg hover:bg-gray-50 cursor-pointer">
-                    <input
-                      type="radio"
-                      name="buttonRadius"
-                      value="24"
-                      checked={buttonRadius === "24"}
-                      onChange={(e) => setButtonRadius(e.target.value)}
-                      className="w-4 h-4"
-                    />
-                    <div className="flex-1">
-                      <span className="font-medium">Pill Shape</span>
-                      <p className="text-sm text-gray-500">
-                        Very friendly, playful (24px radius)
-                      </p>
-                    </div>
-                    <button
-                      className="px-4 py-2 bg-blue-600 text-white text-sm"
-                      style={{ borderRadius: "24px" }}
-                    >
-                      Sample
-                    </button>
-                  </label>
+                      <input
+                        type="radio"
+                        name="buttonRadius"
+                        value={value}
+                        checked={buttonRadius === value}
+                        onChange={(e) => setButtonRadius(e.target.value)}
+                        className="w-4 h-4"
+                      />
+                      <div className="flex-1 min-w-0">
+                        <span className="font-medium text-sm">{label}</span>
+                        <p className="text-xs text-gray-500">{desc}</p>
+                      </div>
+                      <button
+                        className="px-3 py-1.5 bg-blue-600 text-white text-xs flex-shrink-0"
+                        style={{ borderRadius: `${value}px` }}
+                      >
+                        Sample
+                      </button>
+                    </label>
+                  ))}
                 </div>
               </div>
 
-              {/* CARD STYLE SECTION */}
+              {/* Card Corners */}
               <div className="border-t pt-6">
                 <h3 className="text-base font-semibold mb-4">
                   📐 Card Corners
                 </h3>
                 <div className="space-y-3">
-                  <label className="flex items-center gap-3 p-4 border rounded-lg hover:bg-gray-50 cursor-pointer">
-                    <input
-                      type="radio"
-                      name="cardRadius"
-                      value="0"
-                      checked={cardRadius === "0"}
-                      onChange={(e) => setCardRadius(e.target.value)}
-                      className="w-4 h-4"
-                    />
-                    <div className="flex-1">
-                      <span className="font-medium">Sharp Corners</span>
-                      <p className="text-sm text-gray-500">
-                        Clean, modern (0px)
-                      </p>
-                    </div>
-                  </label>
-
-                  <label className="flex items-center gap-3 p-4 border rounded-lg hover:bg-gray-50 cursor-pointer">
-                    <input
-                      type="radio"
-                      name="cardRadius"
-                      value="8"
-                      checked={cardRadius === "8"}
-                      onChange={(e) => setCardRadius(e.target.value)}
-                      className="w-4 h-4"
-                    />
-                    <div className="flex-1">
-                      <span className="font-medium">Rounded</span>
-                      <p className="text-sm text-gray-500">
-                        Standard (8px) - Recommended
-                      </p>
-                    </div>
-                  </label>
-
-                  <label className="flex items-center gap-3 p-4 border rounded-lg hover:bg-gray-50 cursor-pointer">
-                    <input
-                      type="radio"
-                      name="cardRadius"
-                      value="16"
-                      checked={cardRadius === "16"}
-                      onChange={(e) => setCardRadius(e.target.value)}
-                      className="w-4 h-4"
-                    />
-                    <div className="flex-1">
-                      <span className="font-medium">Extra Rounded</span>
-                      <p className="text-sm text-gray-500">
-                        Soft, premium (16px)
-                      </p>
-                    </div>
-                  </label>
+                  {[
+                    {
+                      value: "0",
+                      label: "Sharp Corners",
+                      desc: "Clean, modern (0px)",
+                    },
+                    {
+                      value: "8",
+                      label: "Rounded",
+                      desc: "Standard (8px) - Recommended",
+                    },
+                    {
+                      value: "16",
+                      label: "Extra Rounded",
+                      desc: "Soft, premium (16px)",
+                    },
+                  ].map(({ value, label, desc }) => (
+                    <label
+                      key={value}
+                      className="flex items-center gap-3 p-4 border rounded-lg hover:bg-gray-50 cursor-pointer"
+                    >
+                      <input
+                        type="radio"
+                        name="cardRadius"
+                        value={value}
+                        checked={cardRadius === value}
+                        onChange={(e) => setCardRadius(e.target.value)}
+                        className="w-4 h-4"
+                      />
+                      <div>
+                        <span className="font-medium text-sm">{label}</span>
+                        <p className="text-xs text-gray-500">{desc}</p>
+                      </div>
+                    </label>
+                  ))}
                 </div>
               </div>
 
-              {/* SHADOW SECTION */}
+              {/* Shadow */}
               <div className="border-t pt-6">
                 <h3 className="text-base font-semibold mb-4">
                   🌑 Shadow Intensity
@@ -1017,24 +779,22 @@ function AcademySettings() {
                         className="w-4 h-4"
                       />
                       <div className="flex-1">
-                        <span className="font-medium">{label}</span>
-                        <p className="text-sm text-gray-500">{desc}</p>
+                        <span className="font-medium text-sm">{label}</span>
+                        <p className="text-xs text-gray-500">{desc}</p>
                       </div>
                       <div
-                        className={`w-20 h-12 bg-white rounded-lg ${shadow}`}
-                      ></div>
+                        className={`w-16 h-10 bg-white rounded-lg ${shadow} flex-shrink-0`}
+                      />
                     </label>
                   ))}
                 </div>
               </div>
 
-              {/* SLIDER CUSTOMIZATION SECTION */}
+              {/* Slider Settings */}
               <div className="border-t pt-6">
                 <h3 className="text-base font-semibold mb-4">
                   📏 Home Slider Settings
                 </h3>
-
-                {/* Slider Height */}
                 <div className="mb-6">
                   <label className="block text-sm font-medium text-gray-700 mb-3">
                     Slider Height
@@ -1075,15 +835,14 @@ function AcademySettings() {
                           className="w-4 h-4"
                         />
                         <div>
-                          <span className="font-medium">{label}</span>
-                          <p className="text-sm text-gray-500">{desc}</p>
+                          <span className="font-medium text-sm">{label}</span>
+                          <p className="text-xs text-gray-500">{desc}</p>
                         </div>
                       </label>
                     ))}
                   </div>
                 </div>
 
-                {/* Ken Burns Effect */}
                 <div className="mb-6">
                   <label className="flex items-center gap-3 p-4 border rounded-lg hover:bg-gray-50 cursor-pointer">
                     <input
@@ -1093,18 +852,17 @@ function AcademySettings() {
                       className="w-5 h-5 text-blue-600 rounded"
                     />
                     <div>
-                      <span className="font-medium">
+                      <span className="font-medium text-sm">
                         Enable Ken Burns Effect
                       </span>
-                      <p className="text-sm text-gray-500">
+                      <p className="text-xs text-gray-500">
                         Subtle zoom animation on slider images (Recommended)
                       </p>
                     </div>
                   </label>
                 </div>
 
-                {/* Slide Duration */}
-                <div>
+                <div className="mb-6">
                   <label className="block text-sm font-medium text-gray-700 mb-3">
                     Slide Duration (seconds)
                   </label>
@@ -1118,7 +876,7 @@ function AcademySettings() {
                       onChange={(e) => setSlideDuration(e.target.value)}
                       className="flex-1"
                     />
-                    <span className="text-sm font-medium w-16 text-center">
+                    <span className="text-sm font-medium w-12 text-center">
                       {parseInt(slideDuration) / 1000}s
                     </span>
                   </div>
@@ -1128,7 +886,6 @@ function AcademySettings() {
                   </p>
                 </div>
 
-                {/* Image Fit */}
                 <div className="border-t pt-6">
                   <label className="block text-sm font-medium text-gray-700 mb-3">
                     Image Fit Style
@@ -1137,59 +894,41 @@ function AcademySettings() {
                     How should full (non-cropped) images display in the slider?
                   </p>
                   <div className="space-y-3">
-                    <label className="flex items-center gap-3 p-3 border rounded-lg hover:bg-gray-50 cursor-pointer">
-                      <input
-                        type="radio"
-                        name="sliderImageFit"
-                        value="cover"
-                        checked={sliderImageFit === "cover"}
-                        onChange={(e) => setSliderImageFit(e.target.value)}
-                        className="w-4 h-4"
-                      />
-                      <div>
-                        <span className="font-medium">Cover (Fill Space)</span>
-                        <p className="text-sm text-gray-500">
-                          Image fills the entire slider, may crop edges -
-                          Recommended
-                        </p>
-                      </div>
-                    </label>
-
-                    <label className="flex items-center gap-3 p-3 border rounded-lg hover:bg-gray-50 cursor-pointer">
-                      <input
-                        type="radio"
-                        name="sliderImageFit"
-                        value="contain"
-                        checked={sliderImageFit === "contain"}
-                        onChange={(e) => setSliderImageFit(e.target.value)}
-                        className="w-4 h-4"
-                      />
-                      <div>
-                        <span className="font-medium">
-                          Contain (Show Full Image)
-                        </span>
-                        <p className="text-sm text-gray-500">
-                          Entire image is visible, may have black bars on sides
-                        </p>
-                      </div>
-                    </label>
-
-                    <label className="flex items-center gap-3 p-3 border rounded-lg hover:bg-gray-50 cursor-pointer">
-                      <input
-                        type="radio"
-                        name="sliderImageFit"
-                        value="fill"
-                        checked={sliderImageFit === "fill"}
-                        onChange={(e) => setSliderImageFit(e.target.value)}
-                        className="w-4 h-4"
-                      />
-                      <div>
-                        <span className="font-medium">Fill (Stretch)</span>
-                        <p className="text-sm text-gray-500">
-                          Stretches image to fill space (may distort)
-                        </p>
-                      </div>
-                    </label>
+                    {[
+                      {
+                        value: "cover",
+                        label: "Cover (Fill Space)",
+                        desc: "Image fills the entire slider, may crop edges - Recommended",
+                      },
+                      {
+                        value: "contain",
+                        label: "Contain (Show Full Image)",
+                        desc: "Entire image is visible, may have black bars on sides",
+                      },
+                      {
+                        value: "fill",
+                        label: "Fill (Stretch)",
+                        desc: "Stretches image to fill space (may distort)",
+                      },
+                    ].map(({ value, label, desc }) => (
+                      <label
+                        key={value}
+                        className="flex items-center gap-3 p-3 border rounded-lg hover:bg-gray-50 cursor-pointer"
+                      >
+                        <input
+                          type="radio"
+                          name="sliderImageFit"
+                          value={value}
+                          checked={sliderImageFit === value}
+                          onChange={(e) => setSliderImageFit(e.target.value)}
+                          className="w-4 h-4"
+                        />
+                        <div>
+                          <span className="font-medium text-sm">{label}</span>
+                          <p className="text-xs text-gray-500">{desc}</p>
+                        </div>
+                      </label>
+                    ))}
                   </div>
                 </div>
               </div>
@@ -1197,24 +936,24 @@ function AcademySettings() {
               {/* Preview */}
               <div className="border-t pt-6">
                 <h3 className="text-sm font-semibold mb-3">Live Preview</h3>
-                <div className="space-y-3 bg-gray-50 p-6 rounded-lg">
+                <div className="space-y-3 bg-gray-50 p-4 md:p-6 rounded-lg">
                   {logoUrl && (
                     <div>
                       <p className="text-xs text-gray-600 mb-2">Logo:</p>
                       <img
                         src={getImageUrl(logoUrl) || ""}
                         alt="Logo"
-                        className="h-20 object-contain"
+                        className="h-16 object-contain"
                       />
                     </div>
                   )}
-                  <div className="flex gap-3">
+                  <div className="flex flex-wrap gap-3">
                     <button
                       style={{
                         backgroundColor: primaryColor,
                         borderRadius: `${buttonRadius}px`,
                       }}
-                      className="px-6 py-2 text-white"
+                      className="px-5 py-2 text-white text-sm"
                     >
                       Primary Button
                     </button>
@@ -1223,17 +962,17 @@ function AcademySettings() {
                         backgroundColor: secondaryColor,
                         borderRadius: `${buttonRadius}px`,
                       }}
-                      className="px-6 py-2 text-white"
+                      className="px-5 py-2 text-white text-sm"
                     >
                       Secondary Button
                     </button>
                   </div>
                   <div
-                    className={`p-6 bg-white ${shadowIntensity === "none" ? "border border-gray-200" : `shadow-${shadowIntensity}`}`}
+                    className={`p-4 bg-white ${shadowIntensity === "none" ? "border border-gray-200" : `shadow-${shadowIntensity}`}`}
                     style={{ borderRadius: `${cardRadius}px` }}
                   >
-                    <h4 className="font-semibold mb-2">Sample Card</h4>
-                    <p className="text-sm text-gray-600">
+                    <h4 className="font-semibold text-sm mb-1">Sample Card</h4>
+                    <p className="text-xs text-gray-600">
                       This is how your cards will look with the current
                       settings.
                     </p>
@@ -1242,23 +981,24 @@ function AcademySettings() {
               </div>
             </div>
           )}
+
           {activeTab === "batch" && (
             <div className="space-y-8">
               <CampTypeSettings />
-
               <div className="border-t border-slate-300 pt-8">
                 <div className="mb-4">
-                  <h3 className="text-lg font-semibold text-slate-900 mb-1">
+                  <h3 className="text-base font-semibold text-slate-900 mb-1">
                     Regular Batch Types
                   </h3>
                   <p className="text-sm text-slate-500">
                     Default batch type for all regular training batches.
                   </p>
                 </div>
-
                 <div className="bg-white rounded-xl border border-slate-200 p-4">
                   <div className="flex items-center justify-between p-3 bg-slate-50 rounded-lg border border-slate-200">
-                    <span className="font-medium text-slate-900">REGULAR</span>
+                    <span className="font-medium text-slate-900 text-sm">
+                      REGULAR
+                    </span>
                     <span className="text-xs text-slate-400 bg-slate-100 px-2 py-1 rounded-full">
                       Default · Cannot be changed
                     </span>
@@ -1267,17 +1007,16 @@ function AcademySettings() {
               </div>
             </div>
           )}
-          {/* CONTENT & SOCIAL TAB */}
+
           {activeTab === "content" && <ContentSettings />}
-          {/* CONTACT INFO TAB */}
           {activeTab === "contact" && <ContactInfoSettings />}
-          {/* FACILITIES TAB */}
+
           {activeTab === "facilities" && (
             <div>
               <label className="flex items-center justify-between p-4 border rounded-lg bg-gray-50 mb-6 cursor-pointer">
                 <div>
-                  <span className="font-medium">Section Enabled</span>
-                  <p className="text-sm text-gray-500">
+                  <span className="font-medium text-sm">Section Enabled</span>
+                  <p className="text-xs text-gray-500">
                     Facilities section is visible on home page
                   </p>
                 </div>
@@ -1297,13 +1036,13 @@ function AcademySettings() {
               <FacilitiesManager />
             </div>
           )}
-          {/* TESTIMONIALS TAB */}
+
           {activeTab === "testimonials" && (
             <div>
               <label className="flex items-center justify-between p-4 border rounded-lg bg-gray-50 mb-6 cursor-pointer">
                 <div>
-                  <span className="font-medium">Section Enabled</span>
-                  <p className="text-sm text-gray-500">
+                  <span className="font-medium text-sm">Section Enabled</span>
+                  <p className="text-xs text-gray-500">
                     Testimonials section is visible on home page
                   </p>
                 </div>
@@ -1323,13 +1062,13 @@ function AcademySettings() {
               <TestimonialsManager />
             </div>
           )}
-          {/* NEWS TAB */}
+
           {activeTab === "news" && (
             <div>
               <label className="flex items-center justify-between p-4 border rounded-lg bg-gray-50 mb-6 cursor-pointer">
                 <div>
-                  <span className="font-medium">Section Enabled</span>
-                  <p className="text-sm text-gray-500">
+                  <span className="font-medium text-sm">Section Enabled</span>
+                  <p className="text-xs text-gray-500">
                     News section is visible on home page
                   </p>
                 </div>
@@ -1349,17 +1088,16 @@ function AcademySettings() {
               <NewsManager />
             </div>
           )}
-          {/* GALLERY TAB */}
-          {activeTab === "youtube" && <YouTubeSettings />}
 
+          {activeTab === "youtube" && <YouTubeSettings />}
           {activeTab === "instagram" && <InstagramSettings />}
-          {/* GALLERY TAB */}
+
           {activeTab === "gallery" && (
             <div>
               <label className="flex items-center justify-between p-4 border rounded-lg bg-gray-50 mb-6 cursor-pointer">
                 <div>
-                  <span className="font-medium">Section Enabled</span>
-                  <p className="text-sm text-gray-500">
+                  <span className="font-medium text-sm">Section Enabled</span>
+                  <p className="text-xs text-gray-500">
                     Gallery section is visible on home page
                   </p>
                 </div>
@@ -1379,12 +1117,13 @@ function AcademySettings() {
               <GalleryManager />
             </div>
           )}
+
           {activeTab === "team" && (
             <div>
               <label className="flex items-center justify-between p-4 border rounded-lg bg-gray-50 mb-6 cursor-pointer">
                 <div>
-                  <span className="font-medium">Section Enabled</span>
-                  <p className="text-sm text-gray-500">
+                  <span className="font-medium text-sm">Section Enabled</span>
+                  <p className="text-xs text-gray-500">
                     Team Members section is visible on home page
                   </p>
                 </div>
@@ -1404,33 +1143,30 @@ function AcademySettings() {
               <TeamMembersAdmin />
             </div>
           )}
-          {/* STAR PERFORMER TAB */}
+
           {activeTab === "starperformer" && <StarPerformerSettings />}
-          {/* FEES TAB */}
           {activeTab === "fees" && <FeeSettingsManager />}
-
           {activeTab === "subscription" && <SubscriptionPricingManager />}
-
-          {/* MEDIA TAB */}
           {activeTab === "media" && <MediaSettingsManager />}
         </div>
       </div>
 
-      {/* SAVE BUTTON - Only show for general/branding tabs */}
-      {(activeTab === "general" || activeTab === "branding") && (
-        <div className="flex gap-3 justify-end">
-          <Button variant="secondary" onClick={() => navigate("/admin")}>
-            Cancel
-          </Button>
-
-          <button
-            onClick={handleSave}
-            disabled={saving}
-            className="flex items-center gap-2 bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            <Save size={18} />
-            {saving ? "Saving..." : "Save Settings"}
-          </button>
+      {/* ── SAVE BUTTON — sticky on mobile ── */}
+      {showSaveButton && (
+        <div className="fixed bottom-16 sm:bottom-4 left-0 right-0 z-20 px-4 sm:static sm:px-0 sm:flex sm:justify-end sm:gap-3">
+          <div className="flex gap-2 sm:gap-3 bg-white sm:bg-transparent p-3 sm:p-0 rounded-2xl sm:rounded-none shadow-lg sm:shadow-none border sm:border-none border-gray-200">
+            <Button variant="secondary" onClick={() => navigate("/admin")}>
+              Cancel
+            </Button>
+            <button
+              onClick={handleSave}
+              disabled={saving}
+              className="flex-1 sm:flex-none flex items-center justify-center gap-2 bg-blue-600 text-white px-6 py-2.5 rounded-lg hover:bg-blue-700 transition disabled:opacity-50 text-sm font-medium"
+            >
+              <Save size={16} />
+              {saving ? "Saving..." : "Save Settings"}
+            </button>
+          </div>
         </div>
       )}
     </div>
