@@ -701,7 +701,7 @@ function Navbar() {
         </div>
 
         {/* Drawer footer — login/logout */}
-        <div className="border-t border-gray-100 p-3">
+        <div className="border-t border-gray-100 p-3 pb-16 sm:pb-0">
           {isAuthenticated ? (
             <button
               onClick={requestLogout}
