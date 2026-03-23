@@ -18,6 +18,8 @@ type Booking = {
   paymentMode: string | null;
   notifyPhone: string | null;
   isGuest: boolean;
+  ballCount: number | null;
+  sessionsRemaining: number | null;
 };
 
 function ViewAllBookings() {
@@ -44,6 +46,47 @@ function ViewAllBookings() {
       );
     } catch (e: any) {
       alert(e?.response?.data?.message || "Failed to mark as paid");
+    } finally {
+      setMarking(null);
+    }
+  };
+
+  const [playedModal, setPlayedModal] = useState<{
+    publicId: string;
+    playerName: string;
+    bookedBallCount: number;
+    sessionsRemaining: number | null;
+  } | null>(null);
+  const [actualBalls, setActualBalls] = useState<number>(60);
+
+  const openPlayedModal = (booking: Booking) => {
+    const booked = booking.ballCount ?? 60;
+    setActualBalls(booked);
+    setPlayedModal({
+      publicId: booking.bookingPublicId,
+      playerName: booking.playerName,
+      bookedBallCount: booked,
+      sessionsRemaining: booking.sessionsRemaining,
+    });
+  };
+
+  const confirmMarkAsPlayed = async () => {
+    if (!playedModal) return;
+    setMarking(playedModal.publicId);
+    try {
+      await api.post(`/bookings/${playedModal.publicId}/mark-played`, {
+        actualBallCount: actualBalls,
+      });
+      setBookings((prev) =>
+        prev.map((b) =>
+          b.bookingPublicId === playedModal.publicId
+            ? { ...b, status: "CONFIRMED" }
+            : b,
+        ),
+      );
+      setPlayedModal(null);
+    } catch (e: any) {
+      alert(e?.response?.data?.message || "Failed to mark as played");
     } finally {
       setMarking(null);
     }
@@ -107,6 +150,12 @@ function ViewAllBookings() {
         return (
           <span className="px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded-full font-medium">
             ✓ Completed
+          </span>
+        );
+      case "PENDING_CONFIRMATION":
+        return (
+          <span className="px-2 py-1 bg-purple-100 text-purple-800 text-xs rounded-full font-medium">
+            🏏 Pending Play
           </span>
         );
       default:
@@ -315,6 +364,7 @@ function ViewAllBookings() {
             <option value="ALL">All Status</option>
             <option value="CONFIRMED">Confirmed</option>
             <option value="PENDING_PAYMENT">Pending</option>
+            <option value="PENDING_CONFIRMATION">Pending Play</option>
             <option value="CANCELLED">Cancelled</option>
             <option value="COMPLETED">Completed</option>
           </select>
@@ -451,6 +501,17 @@ function ViewAllBookings() {
                               )}
                             </>
                           )}
+                          {booking.status === "PENDING_CONFIRMATION" && (
+                            <button
+                              onClick={() => openPlayedModal(booking)}
+                              disabled={marking === booking.bookingPublicId}
+                              className="flex items-center gap-1 bg-purple-600 text-white px-3 py-1.5 rounded-lg text-xs font-semibold hover:bg-purple-700 transition disabled:opacity-50"
+                            >
+                              {marking === booking.bookingPublicId
+                                ? "..."
+                                : "🏏 Mark as Played"}
+                            </button>
+                          )}
                           {booking.status === "CONFIRMED" && (
                             <button
                               onClick={() =>
@@ -507,6 +568,17 @@ function ViewAllBookings() {
                             : "✓ Mark Paid"}
                         </button>
                       )}
+                      {booking.status === "PENDING_CONFIRMATION" && (
+                        <button
+                          onClick={() => openPlayedModal(booking)}
+                          disabled={marking === booking.bookingPublicId}
+                          className="bg-purple-600 text-white px-3 py-1.5 rounded-lg text-xs font-semibold hover:bg-purple-700 disabled:opacity-50 transition"
+                        >
+                          {marking === booking.bookingPublicId
+                            ? "..."
+                            : "🏏 Played"}
+                        </button>
+                      )}
                       {booking.status === "CONFIRMED" && (
                         <button
                           onClick={() =>
@@ -525,6 +597,91 @@ function ViewAllBookings() {
           </>
         )}
       </div>
+
+      {playedModal && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center px-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6 space-y-4">
+            <h3 className="font-bold text-gray-900 text-lg">Mark as Played</h3>
+
+            <div className="bg-gray-50 rounded-xl p-3 text-sm space-y-1">
+              <p>
+                <span className="text-gray-500">Player:</span>{" "}
+                <strong>{playedModal.playerName}</strong>
+              </p>
+              <p>
+                <span className="text-gray-500">Booked:</span>{" "}
+                <strong>{playedModal.bookedBallCount} balls</strong>
+              </p>
+              {playedModal.sessionsRemaining !== null && (
+                <p>
+                  <span className="text-gray-500">Sessions remaining:</span>{" "}
+                  <strong>{playedModal.sessionsRemaining}</strong>
+                </p>
+              )}
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                Actual balls played
+              </label>
+              <select
+                value={actualBalls}
+                onChange={(e) => setActualBalls(Number(e.target.value))}
+                className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-purple-500"
+              >
+                {[60, 120, 180, 240, 300].map((b) => (
+                  <option key={b} value={b}>
+                    {b} balls — {b / 60} session{b / 60 > 1 ? "s" : ""}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Sessions to deduct */}
+            <div className="bg-purple-50 border border-purple-200 rounded-xl px-4 py-3 text-sm text-purple-800">
+              Sessions to deduct: <strong>{actualBalls / 60}</strong>
+              {actualBalls > playedModal.bookedBallCount && (
+                <span className="text-purple-600 ml-2">
+                  (booked {playedModal.bookedBallCount / 60}, extra +
+                  {(actualBalls - playedModal.bookedBallCount) / 60})
+                </span>
+              )}
+              {actualBalls < playedModal.bookedBallCount && (
+                <span className="text-purple-600 ml-2">
+                  (booked {playedModal.bookedBallCount / 60}, played less)
+                </span>
+              )}
+            </div>
+
+            {/* Warning if not enough sessions */}
+            {playedModal.sessionsRemaining !== null &&
+              actualBalls / 60 > playedModal.sessionsRemaining && (
+                <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3 text-sm text-red-700">
+                  ⚠️ Member only has{" "}
+                  <strong>{playedModal.sessionsRemaining}</strong> session
+                  {playedModal.sessionsRemaining !== 1 ? "s" : ""} remaining.
+                  Confirming will make the balance negative.
+                </div>
+              )}
+
+            <div className="flex gap-3 pt-1">
+              <button
+                onClick={() => setPlayedModal(null)}
+                className="flex-1 border border-gray-200 text-gray-600 py-2.5 rounded-xl text-sm font-semibold hover:bg-gray-50 transition"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={confirmMarkAsPlayed}
+                disabled={!!marking}
+                className="flex-1 bg-purple-600 text-white py-2.5 rounded-xl text-sm font-semibold hover:bg-purple-700 transition disabled:opacity-50"
+              >
+                {marking ? "..." : "Confirm"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

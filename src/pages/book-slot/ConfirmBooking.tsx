@@ -98,10 +98,13 @@ function ConfirmBooking() {
         // Members: booking is already confirmed, skip payment
         // Members: no payment, go to pending approval screen
         if (isMember) {
-          localStorage.setItem("activeBookingId", bookingId);
-          navigate("/payment", {
+          // Go straight to success, don't wait on payment screen
+          navigate("/booking-success", {
             replace: true,
-            state: { isMemberBooking: true },
+            state: {
+              bookingPublicId: bookingId,
+              isMember: true,
+            },
           });
           return;
         }
@@ -212,9 +215,9 @@ function ConfirmBooking() {
                 <p className="text-sm text-green-700">
                   Valid till: <strong>{memberStatus?.expiresOn}</strong>
                 </p>
-                <div className="bg-green-100 rounded-xl px-3 py-2 mt-1">
-                  <p className="text-xs text-green-800 font-medium">
-                    ✅ Payment skipped — booking will be confirmed instantly!
+                <div className="bg-blue-50 rounded-xl px-3 py-2 mt-1">
+                  <p className="text-xs text-blue-800 font-medium">
+                    🏏 No payment needed — admin will confirm after you play
                   </p>
                 </div>
               </div>
@@ -365,11 +368,7 @@ function ConfirmBooking() {
               />
             </svg>
           )}
-          {loading
-            ? "Processing…"
-            : isMember
-              ? "Confirm Booking (Member) →"
-              : "Continue to Payment →"}
+          {loading ? "Processing…" : "Continue →"}
         </button>
       </div>
     </div>

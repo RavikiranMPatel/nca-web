@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { href, useLocation, useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import {
   CheckCircle,
   Calendar,
@@ -30,8 +30,6 @@ function BookingSuccess() {
       bookingPublicId?: string;
       isGuest?: boolean;
       isMember?: boolean;
-      sessionsDeducted?: number;
-      sessionsRemaining?: number;
     };
   };
 
@@ -41,8 +39,6 @@ function BookingSuccess() {
 
   // Add to BookingSuccess.tsx — member instant confirmation state
   const isMemberBooking = state?.isMember === true;
-  const sessionsDeducted = state?.sessionsDeducted;
-  const sessionsRemaining = state?.sessionsRemaining;
 
   const isGuest = state?.isGuest || false;
 
@@ -59,6 +55,18 @@ function BookingSuccess() {
 
     const poll = async () => {
       if (cancelled) return;
+
+      if (isMemberBooking) {
+        try {
+          const res = await api.get(`/bookings/${bookingId}/status`);
+          setBooking(res.data);
+        } catch {
+          setError("Unable to load booking details.");
+        } finally {
+          setLoading(false);
+        }
+        return;
+      }
 
       attempts++;
 
@@ -101,7 +109,7 @@ function BookingSuccess() {
     return () => {
       cancelled = true;
     };
-  }, [navigate, state?.bookingPublicId, isGuest]);
+  }, [navigate, state?.bookingPublicId, isGuest, isMemberBooking]);
 
   // Format date
   const formatDate = (dateStr: string) => {
@@ -247,15 +255,14 @@ function BookingSuccess() {
               </div>
 
               {/* Member Sessions Info */}
-              {isMemberBooking && sessionsDeducted && (
-                <div className="bg-green-50 border border-green-200 rounded-lg p-4 text-center">
-                  <p className="text-sm text-green-800 font-semibold">
-                    🏏 {sessionsDeducted} session
-                    {sessionsDeducted > 1 ? "s" : ""} deducted from your
-                    membership
+              {isMemberBooking && (
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-center">
+                  <p className="text-sm text-blue-800 font-semibold">
+                    🏏 Member Booking
                   </p>
-                  <p className="text-sm text-green-700 mt-1">
-                    Sessions remaining: <strong>{sessionsRemaining}</strong>
+                  <p className="text-sm text-blue-700 mt-1">
+                    Sessions will be deducted after the admin confirms you've
+                    played.
                   </p>
                 </div>
               )}
@@ -354,26 +361,30 @@ function BookingSuccess() {
 
             {/* Download Receipt — logged-in confirmed bookings only */}
 
-            {!booking.isGuest && booking.status === "CONFIRMED" && (
-              <a
-                href={`${import.meta.env.VITE_API_BASE_URL}/bookings/${booking.bookingPublicId}/receipt`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center justify-center gap-2 border-2 border-green-300
+            {!booking.isGuest &&
+              !isMemberBooking &&
+              booking.status === "CONFIRMED" && (
+                <a
+                  href={`${import.meta.env.VITE_API_BASE_URL}/bookings/${booking.bookingPublicId}/receipt`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center justify-center gap-2 border-2 border-green-300
                text-green-700 py-3 rounded-xl font-semibold hover:bg-green-50
                transition-colors text-sm"
-              >
-                <Download className="w-4 h-4" />
-                Download Receipt (PDF)
-              </a>
-            )}
+                >
+                  <Download className="w-4 h-4" />
+                  Download Receipt (PDF)
+                </a>
+              )}
 
             {/* Info Box */}
             <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-center">
               <p className="text-sm text-blue-900">
-                {booking.isGuest
-                  ? "SMS confirmation sent to your phone"
-                  : "A confirmation email has been sent to your registered email address"}
+                {isMemberBooking
+                  ? "Go play! Admin will mark your session after you're done."
+                  : booking.isGuest
+                    ? "SMS confirmation sent to your phone"
+                    : "A confirmation email has been sent to your registered email address"}
               </p>
             </div>
           </div>
