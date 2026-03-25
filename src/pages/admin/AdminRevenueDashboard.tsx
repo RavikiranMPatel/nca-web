@@ -912,7 +912,7 @@ export default function AdminRevenueDashboard() {
                 <X size={18} className="text-slate-500" />
               </button>
             </div>
-            <div className="px-4 py-4 space-y-3">
+            <div className="px-4 py-4 space-y-3 pb-20">
               <div className="flex gap-2 p-1 bg-slate-100 rounded-xl">
                 {(["EXPENSE", "INCOME"] as const).map((t) => (
                   <button
@@ -944,7 +944,7 @@ export default function AdminRevenueDashboard() {
                   className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-400 focus:outline-none"
                 />
               </div>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-semibold text-slate-600 mb-1.5 uppercase tracking-wide">
                     Amount (₹) *
@@ -972,7 +972,7 @@ export default function AdminRevenueDashboard() {
               </div>
               {expenseForm.transactionType === "EXPENSE" ? (
                 <>
-                  <div className="grid grid-cols-2 gap-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <AutocompleteInput
                       label="Area"
                       value={expenseForm.area}
@@ -988,7 +988,7 @@ export default function AdminRevenueDashboard() {
                       placeholder="e.g. Civil"
                     />
                   </div>
-                  <div className="grid grid-cols-2 gap-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <AutocompleteInput
                       label="Item"
                       value={expenseForm.item}
@@ -1004,7 +1004,7 @@ export default function AdminRevenueDashboard() {
                       placeholder="e.g. Material"
                     />
                   </div>
-                  <div className="grid grid-cols-2 gap-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <AutocompleteInput
                       label="Budget Head"
                       value={expenseForm.budgetHead}
@@ -1022,7 +1022,7 @@ export default function AdminRevenueDashboard() {
                   </div>
                 </>
               ) : (
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <AutocompleteInput
                     label="Source"
                     value={expenseForm.budgetHead}
@@ -1138,7 +1138,7 @@ export default function AdminRevenueDashboard() {
                 <X size={18} className="text-slate-500" />
               </button>
             </div>
-            <div className="px-4 py-4 space-y-3">
+            <div className="px-4 py-4 space-y-3 pb-20">
               <div>
                 <label className="block text-xs font-semibold text-slate-600 mb-1.5 uppercase tracking-wide">
                   Amount (₹) *
@@ -1219,7 +1219,7 @@ export default function AdminRevenueDashboard() {
                 <X size={18} className="text-slate-500" />
               </button>
             </div>
-            <div className="px-4 py-4 space-y-3">
+            <div className="px-4 py-4 space-y-3 pb-20">
               <div>
                 <label className="block text-xs font-semibold text-slate-600 mb-1.5 uppercase tracking-wide">
                   Name *
