@@ -894,7 +894,7 @@ export default function AdminRevenueDashboard() {
       {/* ── Add/Edit Expense Modal ── */}
       {showExpenseModal && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40">
-          <div className="bg-white w-full sm:max-w-lg sm:rounded-2xl rounded-t-2xl shadow-2xl max-h-[92vh] overflow-y-auto">
+          <div className="bg-white w-full sm:max-w-lg sm:rounded-2xl rounded-t-2xl shadow-2xl max-h-[92vh] flex flex-col">
             <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100 sticky top-0 bg-white z-10">
               <h2 className="font-bold text-slate-800 text-base">
                 {editingExpense
@@ -912,7 +912,7 @@ export default function AdminRevenueDashboard() {
                 <X size={18} className="text-slate-500" />
               </button>
             </div>
-            <div className="px-4 py-4 space-y-3 pb-20">
+            <div className="px-4 py-4 space-y-3 overflow-y-auto flex-1">
               <div className="flex gap-2 p-1 bg-slate-100 rounded-xl">
                 {(["EXPENSE", "INCOME"] as const).map((t) => (
                   <button
@@ -1122,7 +1122,7 @@ export default function AdminRevenueDashboard() {
       {/* ── Mark Paid Modal ── */}
       {payModal && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40">
-          <div className="bg-white w-full sm:max-w-sm sm:rounded-2xl rounded-t-2xl shadow-2xl">
+          <div className="bg-white w-full sm:max-w-sm sm:rounded-2xl rounded-t-2xl shadow-2xl max-h-[92vh] flex flex-col">
             <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100">
               <div>
                 <p className="font-bold text-slate-800">Mark as Paid</p>
@@ -1138,7 +1138,7 @@ export default function AdminRevenueDashboard() {
                 <X size={18} className="text-slate-500" />
               </button>
             </div>
-            <div className="px-4 py-4 space-y-3 pb-20">
+            <div className="px-4 py-4 space-y-3 overflow-y-auto flex-1">
               <div>
                 <label className="block text-xs font-semibold text-slate-600 mb-1.5 uppercase tracking-wide">
                   Amount (₹) *
@@ -1204,7 +1204,7 @@ export default function AdminRevenueDashboard() {
       {/* ── Add Recurring Item Modal ── */}
       {showRecurringModal && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40">
-          <div className="bg-white w-full sm:max-w-sm sm:rounded-2xl rounded-t-2xl shadow-2xl">
+          <div className="bg-white w-full sm:max-w-sm sm:rounded-2xl rounded-t-2xl shadow-2xl max-h-[92vh] flex flex-col">
             <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100">
               <div>
                 <p className="font-bold text-slate-800">Add Monthly Item</p>
@@ -1219,7 +1219,7 @@ export default function AdminRevenueDashboard() {
                 <X size={18} className="text-slate-500" />
               </button>
             </div>
-            <div className="px-4 py-4 space-y-3 pb-20">
+            <div className="px-4 py-4 space-y-3 overflow-y-auto flex-1">
               <div>
                 <label className="block text-xs font-semibold text-slate-600 mb-1.5 uppercase tracking-wide">
                   Name *
