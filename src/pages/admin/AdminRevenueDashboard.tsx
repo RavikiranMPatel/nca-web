@@ -21,6 +21,7 @@ import {
   Users,
   Check,
   RotateCcw,
+  SlidersHorizontal,
 } from "lucide-react";
 import api from "../../api/axios";
 
@@ -141,11 +142,18 @@ const fmtDate = (d: string | null) => {
     year: "numeric",
   });
 };
+const fmtDateShort = (d: string | null) => {
+  if (!d) return "—";
+  return new Date(d).toLocaleDateString("en-IN", {
+    day: "2-digit",
+    month: "short",
+  });
+};
 const modeLabel: Record<string, string> = {
   PHONE_PE: "PhonePe",
   PHONEPE: "PhonePe",
-  GOOGLE_PAY: "Google Pay",
-  GPAY: "Google Pay",
+  GOOGLE_PAY: "GPay",
+  GPAY: "GPay",
   CASH: "Cash",
   ONLINE: "Online",
   OTHER: "Other",
@@ -227,7 +235,7 @@ function AutocompleteInput({
         className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-400 focus:outline-none"
       />
       {open && filtered.length > 0 && (
-        <ul className="absolute z-30 w-full mt-1 bg-white border border-slate-200 rounded-lg shadow-lg max-h-44 overflow-y-auto">
+        <ul className="absolute z-[60] w-full mt-1 bg-white border border-slate-200 rounded-lg shadow-lg max-h-44 overflow-y-auto">
           {filtered.map((s) => (
             <li
               key={s}
@@ -235,7 +243,7 @@ function AutocompleteInput({
                 onChange(s);
                 setOpen(false);
               }}
-              className="px-3 py-2 text-sm text-slate-700 hover:bg-blue-50 cursor-pointer"
+              className="px-3 py-2.5 text-sm text-slate-700 hover:bg-blue-50 cursor-pointer"
             >
               {s}
             </li>
@@ -255,12 +263,9 @@ export default function AdminRevenueDashboard() {
     try {
       const token = localStorage.getItem("accessToken");
       if (!token) return false;
-
       const payload = JSON.parse(atob(token.split(".")[1]));
-
       const roles: string[] = payload.roles || payload.authorities || [];
       const role: string = payload.role || "";
-
       return roles.includes("ROLE_SUPER_ADMIN") || role === "ROLE_SUPER_ADMIN";
     } catch {
       return false;
@@ -276,12 +281,10 @@ export default function AdminRevenueDashboard() {
   });
   const [recurringSaving, setRecurringSaving] = useState(false);
 
-  // ── Data state ────────────────────────────────────────────────────────────
   const [feePayments, setFeePayments] = useState<FeePayment[]>([]);
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [expenses, setExpenses] = useState<OtherExpense[]>([]);
   const [partnerSpending, setPartnerSpending] = useState<PartnerSpending[]>([]);
-
   const [monthlyPayments, setMonthlyPayments] = useState<MonthlyPayment[]>([]);
   const [suggestions, setSuggestions] = useState<Suggestions>({
     area: [],
@@ -297,21 +300,19 @@ export default function AdminRevenueDashboard() {
   const [activeTab, setActiveTab] = useState<Tab>("overview");
   const [expenseSubTab, setExpenseSubTab] = useState<ExpenseSubTab>("summary");
 
-  // ── Date range ────────────────────────────────────────────────────────────
   const [dateRange, setDateRange] = useState<DateRange>("this_month");
   const [customFrom, setCustomFrom] = useState("");
   const [customTo, setCustomTo] = useState("");
   const [showRangeMenu, setShowRangeMenu] = useState(false);
+  const [showFilterSheet, setShowFilterSheet] = useState(false);
   const [expandedUser, setExpandedUser] = useState<string | null>(null);
 
-  // ── Monthly nav ───────────────────────────────────────────────────────────
   const now = new Date();
   const [monthYear, setMonthYear] = useState({
     year: now.getFullYear(),
     month: now.getMonth() + 1,
   });
 
-  // ── Expense CRUD modal ────────────────────────────────────────────────────
   const [showExpenseModal, setShowExpenseModal] = useState(false);
   const [editingExpense, setEditingExpense] = useState<OtherExpense | null>(
     null,
@@ -320,12 +321,10 @@ export default function AdminRevenueDashboard() {
   const [expenseSaving, setExpenseSaving] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
 
-  // ── Mark paid modal ───────────────────────────────────────────────────────
   const [payModal, setPayModal] = useState<MonthlyPayment | null>(null);
   const [payForm, setPayForm] = useState({ amount: "", paidBy: "", notes: "" });
   const [paySaving, setPaySaving] = useState(false);
 
-  // ── Load ──────────────────────────────────────────────────────────────────
   const load = async () => {
     setLoading(true);
     setError("");
@@ -344,7 +343,6 @@ export default function AdminRevenueDashboard() {
         ]);
         setExpenses(expRes.data || []);
         setPartnerSpending(partnerRes.data || []);
-
         setSuggestions(sugRes.data);
       }
     } catch {
@@ -397,7 +395,6 @@ export default function AdminRevenueDashboard() {
     loadMonthly(monthYear.year, monthYear.month);
   }, [monthYear, isSuperAdmin]);
 
-  // ── Filters ───────────────────────────────────────────────────────────────
   const { from, to } = getDateBounds(dateRange, customFrom, customTo);
   const inRange = (d: string) => {
     if (!from && !to) return true;
@@ -460,7 +457,6 @@ export default function AdminRevenueDashboard() {
     return Array.from(groups.values()).sort((a, b) => b.total - a.total);
   }, [filteredBookings]);
 
-  // ── Totals ────────────────────────────────────────────────────────────────
   const feesTotal = filteredFees.reduce((s, p) => s + (p.amount || 0), 0);
   const bookingsTotal = filteredBookings.reduce(
     (s, b) => s + (b.amount || 0),
@@ -476,16 +472,13 @@ export default function AdminRevenueDashboard() {
   );
   const grossRevenue = feesTotal + bookingsTotal + otherIncomeTotal;
   const netRevenue = grossRevenue - expensesTotal;
-
   const monthlyPaidTotal = monthlyPayments
     .filter((p) => p.status === "PAID")
     .reduce((s, p) => s + (p.amount || 0), 0);
-
   const pendingBookings = bookings.filter(
     (b) => b.status === "PENDING_PAYMENT",
   ).length;
 
-  // ── Category summary ──────────────────────────────────────────────────────
   const [summaryGroupBy, setSummaryGroupBy] = useState<
     "budgetHead" | "area" | "discipline" | "costType"
   >("budgetHead");
@@ -512,7 +505,6 @@ export default function AdminRevenueDashboard() {
     custom: customFrom && customTo ? `${customFrom} → ${customTo}` : "Custom",
   };
 
-  // ── Expense CRUD ──────────────────────────────────────────────────────────
   const setF = (k: keyof typeof EMPTY_EXPENSE_FORM) => (v: string) =>
     setExpenseForm((f) => ({ ...f, [k]: v }));
   const openAddExpense = () => {
@@ -575,7 +567,6 @@ export default function AdminRevenueDashboard() {
     }
   };
 
-  // ── Mark Paid ─────────────────────────────────────────────────────────────
   const openPayModal = (p: MonthlyPayment) => {
     setPayModal(p);
     setPayForm({
@@ -612,7 +603,6 @@ export default function AdminRevenueDashboard() {
       alert("Failed to unmark");
     }
   };
-
   const deleteRecurringItem = async (publicId: string) => {
     if (
       !confirm(
@@ -628,7 +618,6 @@ export default function AdminRevenueDashboard() {
     }
   };
 
-  // ── CSV ───────────────────────────────────────────────────────────────────
   const exportCSV = () => {
     const rows: string[][] = [
       [
@@ -713,7 +702,6 @@ export default function AdminRevenueDashboard() {
     a.download = `revenue-${dateRange}-${new Date().toISOString().split("T")[0]}.csv`;
     a.click();
   };
-
   const exportSummaryCSV = () => {
     const rows: string[][] = [["Rank", summaryGroupBy, "Entries", "Amount"]];
     categorySummary.forEach((row, idx) =>
@@ -731,7 +719,6 @@ export default function AdminRevenueDashboard() {
     a.download = `expense-summary-${summaryGroupBy}-${new Date().toISOString().split("T")[0]}.csv`;
     a.click();
   };
-
   const exportPartnerSpendingCSV = () => {
     const rows: string[][] = [["Partner", "Budget Head", "Entries", "Amount"]];
     partnerSpending.forEach((partner) => {
@@ -744,7 +731,7 @@ export default function AdminRevenueDashboard() {
         ]),
       );
       rows.push([partner.name, "TOTAL", "", String(partner.total)]);
-      rows.push(["", "", "", ""]); // blank row between partners
+      rows.push(["", "", "", ""]);
     });
     rows.push([
       "GRAND TOTAL",
@@ -758,7 +745,6 @@ export default function AdminRevenueDashboard() {
     a.download = `partner-spending-${new Date().toISOString().split("T")[0]}.csv`;
     a.click();
   };
-
   const exportMonthlyCSV = () => {
     const rows: string[][] = [
       ["Item", "Budget Head", "Status", "Amount", "Paid By", "Paid On"],
@@ -780,7 +766,6 @@ export default function AdminRevenueDashboard() {
     a.download = `monthly-expenses-${MONTHS[monthYear.month - 1]}-${monthYear.year}.csv`;
     a.click();
   };
-
   const exportAllExpensesCSV = () => {
     const rows: string[][] = [
       [
@@ -818,7 +803,6 @@ export default function AdminRevenueDashboard() {
     a.click();
   };
 
-  // ── Recent tx ─────────────────────────────────────────────────────────────
   type TxRow = {
     key: string;
     date: string;
@@ -880,7 +864,6 @@ export default function AdminRevenueDashboard() {
     isSuperAdmin,
   ]);
 
-  // ─── Loading / Error ───────────────────────────────────────────────────────
   if (loading)
     return (
       <div className="flex items-center justify-center min-h-[60vh]">
@@ -907,13 +890,13 @@ export default function AdminRevenueDashboard() {
     );
 
   return (
-    <div className="max-w-7xl mx-auto space-y-4 pb-16 px-3 sm:px-4 lg:px-0">
+    <div className="max-w-7xl mx-auto space-y-4 pb-20 px-3 sm:px-4 lg:px-0">
       {/* ── Add/Edit Expense Modal ── */}
       {showExpenseModal && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40">
-          <div className="bg-white w-full sm:max-w-lg sm:rounded-2xl rounded-t-2xl shadow-2xl max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 sticky top-0 bg-white z-10">
-              <h2 className="font-bold text-slate-800 text-lg">
+          <div className="bg-white w-full sm:max-w-lg sm:rounded-2xl rounded-t-2xl shadow-2xl max-h-[92vh] overflow-y-auto">
+            <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100 sticky top-0 bg-white z-10">
+              <h2 className="font-bold text-slate-800 text-base">
                 {editingExpense
                   ? expenseForm.transactionType === "INCOME"
                     ? "Edit Income"
@@ -929,8 +912,7 @@ export default function AdminRevenueDashboard() {
                 <X size={18} className="text-slate-500" />
               </button>
             </div>
-            <div className="px-5 py-4 space-y-4">
-              {/* Transaction Type Toggle */}
+            <div className="px-4 py-4 space-y-3">
               <div className="flex gap-2 p-1 bg-slate-100 rounded-xl">
                 {(["EXPENSE", "INCOME"] as const).map((t) => (
                   <button
@@ -944,20 +926,12 @@ export default function AdminRevenueDashboard() {
                           : {}),
                       }))
                     }
-                    className={`flex-1 py-2 rounded-lg text-sm font-semibold transition ${
-                      expenseForm.transactionType === t
-                        ? t === "EXPENSE"
-                          ? "bg-red-500 text-white shadow-sm"
-                          : "bg-violet-500 text-white shadow-sm"
-                        : "text-slate-500"
-                    }`}
+                    className={`flex-1 py-2.5 rounded-lg text-sm font-semibold transition ${expenseForm.transactionType === t ? (t === "EXPENSE" ? "bg-red-500 text-white shadow-sm" : "bg-violet-500 text-white shadow-sm") : "text-slate-500"}`}
                   >
                     {t === "EXPENSE" ? "− Expense" : "+ Income"}
                   </button>
                 ))}
               </div>
-
-              {/* Description */}
               <div>
                 <label className="block text-xs font-semibold text-slate-600 mb-1.5 uppercase tracking-wide">
                   Description *
@@ -970,8 +944,6 @@ export default function AdminRevenueDashboard() {
                   className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-400 focus:outline-none"
                 />
               </div>
-
-              {/* Amount + Date */}
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-semibold text-slate-600 mb-1.5 uppercase tracking-wide">
@@ -979,6 +951,7 @@ export default function AdminRevenueDashboard() {
                   </label>
                   <input
                     type="number"
+                    inputMode="numeric"
                     value={expenseForm.amount}
                     onChange={(e) => setF("amount")(e.target.value)}
                     placeholder="0"
@@ -997,8 +970,6 @@ export default function AdminRevenueDashboard() {
                   />
                 </div>
               </div>
-
-              {/* Conditional fields */}
               {expenseForm.transactionType === "EXPENSE" ? (
                 <>
                   <div className="grid grid-cols-2 gap-3">
@@ -1075,8 +1046,6 @@ export default function AdminRevenueDashboard() {
                   />
                 </div>
               )}
-
-              {/* Notes */}
               <div>
                 <label className="block text-xs font-semibold text-slate-600 mb-1.5 uppercase tracking-wide">
                   Notes
@@ -1090,8 +1059,7 @@ export default function AdminRevenueDashboard() {
                 />
               </div>
             </div>
-
-            <div className="flex gap-3 justify-end px-5 py-4 border-t border-slate-100 bg-slate-50 sticky bottom-0 rounded-b-2xl">
+            <div className="flex gap-3 justify-end px-4 py-3 border-t border-slate-100 bg-slate-50 sticky bottom-0 rounded-b-2xl">
               <button
                 onClick={() => setShowExpenseModal(false)}
                 className="px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-200 rounded-lg"
@@ -1105,11 +1073,7 @@ export default function AdminRevenueDashboard() {
                   !expenseForm.description.trim() ||
                   !expenseForm.amount
                 }
-                className={`px-5 py-2 text-white text-sm font-semibold rounded-lg disabled:opacity-50 ${
-                  expenseForm.transactionType === "INCOME"
-                    ? "bg-violet-600 hover:bg-violet-700"
-                    : "bg-red-500 hover:bg-red-600"
-                }`}
+                className={`px-5 py-2 text-white text-sm font-semibold rounded-lg disabled:opacity-50 ${expenseForm.transactionType === "INCOME" ? "bg-violet-600 hover:bg-violet-700" : "bg-red-500 hover:bg-red-600"}`}
               >
                 {expenseSaving
                   ? "Saving…"
@@ -1129,7 +1093,7 @@ export default function AdminRevenueDashboard() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 space-y-4">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center">
+              <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center flex-shrink-0">
                 <Trash2 size={18} className="text-red-600" />
               </div>
               <div>
@@ -1159,7 +1123,7 @@ export default function AdminRevenueDashboard() {
       {payModal && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40">
           <div className="bg-white w-full sm:max-w-sm sm:rounded-2xl rounded-t-2xl shadow-2xl">
-            <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
+            <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100">
               <div>
                 <p className="font-bold text-slate-800">Mark as Paid</p>
                 <p className="text-xs text-slate-500">
@@ -1174,13 +1138,14 @@ export default function AdminRevenueDashboard() {
                 <X size={18} className="text-slate-500" />
               </button>
             </div>
-            <div className="px-5 py-4 space-y-3">
+            <div className="px-4 py-4 space-y-3">
               <div>
                 <label className="block text-xs font-semibold text-slate-600 mb-1.5 uppercase tracking-wide">
                   Amount (₹) *
                 </label>
                 <input
                   type="number"
+                  inputMode="numeric"
                   value={payForm.amount}
                   onChange={(e) =>
                     setPayForm((f) => ({ ...f, amount: e.target.value }))
@@ -1217,7 +1182,7 @@ export default function AdminRevenueDashboard() {
                 />
               </div>
             </div>
-            <div className="flex gap-3 justify-end px-5 py-4 border-t border-slate-100 bg-slate-50 rounded-b-2xl">
+            <div className="flex gap-3 justify-end px-4 py-3 border-t border-slate-100 bg-slate-50 rounded-b-2xl">
               <button
                 onClick={() => setPayModal(null)}
                 className="px-4 py-2 text-sm text-slate-600 hover:bg-slate-200 rounded-lg"
@@ -1240,7 +1205,7 @@ export default function AdminRevenueDashboard() {
       {showRecurringModal && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40">
           <div className="bg-white w-full sm:max-w-sm sm:rounded-2xl rounded-t-2xl shadow-2xl">
-            <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
+            <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100">
               <div>
                 <p className="font-bold text-slate-800">Add Monthly Item</p>
                 <p className="text-xs text-slate-500">
@@ -1254,7 +1219,7 @@ export default function AdminRevenueDashboard() {
                 <X size={18} className="text-slate-500" />
               </button>
             </div>
-            <div className="px-5 py-4 space-y-3">
+            <div className="px-4 py-4 space-y-3">
               <div>
                 <label className="block text-xs font-semibold text-slate-600 mb-1.5 uppercase tracking-wide">
                   Name *
@@ -1275,6 +1240,7 @@ export default function AdminRevenueDashboard() {
                 </label>
                 <input
                   type="number"
+                  inputMode="numeric"
                   value={recurringForm.defaultAmount}
                   onChange={(e) =>
                     setRecurringForm((f) => ({
@@ -1304,7 +1270,7 @@ export default function AdminRevenueDashboard() {
                 />
               </div>
             </div>
-            <div className="flex gap-3 justify-end px-5 py-4 border-t border-slate-100 bg-slate-50 rounded-b-2xl">
+            <div className="flex gap-3 justify-end px-4 py-3 border-t border-slate-100 bg-slate-50 rounded-b-2xl">
               <button
                 onClick={() => setShowRecurringModal(false)}
                 className="px-4 py-2 text-sm text-slate-600 hover:bg-slate-200 rounded-lg"
@@ -1323,25 +1289,98 @@ export default function AdminRevenueDashboard() {
         </div>
       )}
 
+      {/* ── Mobile Filter Bottom Sheet ── */}
+      {showFilterSheet && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 sm:hidden">
+          <div className="bg-white w-full rounded-t-2xl shadow-2xl px-5 pt-5 pb-8 space-y-4">
+            <div className="flex items-center justify-between mb-1">
+              <p className="font-bold text-slate-800">Filter by Date</p>
+              <button
+                onClick={() => setShowFilterSheet(false)}
+                className="p-2 hover:bg-slate-100 rounded-lg"
+              >
+                <X size={18} />
+              </button>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              {(
+                [
+                  ["all", "All Time"],
+                  ["today", "Today"],
+                  ["this_week", "This Week"],
+                  ["this_month", "This Month"],
+                  ["custom", "Custom Range"],
+                ] as [DateRange, string][]
+              ).map(([val, label]) => (
+                <button
+                  key={val}
+                  onClick={() => {
+                    setDateRange(val);
+                    if (val !== "custom") setShowFilterSheet(false);
+                  }}
+                  className={`py-3 rounded-xl text-sm font-medium border-2 transition ${dateRange === val ? "bg-emerald-600 text-white border-emerald-600" : "border-slate-200 text-slate-700 bg-white"}`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+            {dateRange === "custom" && (
+              <div className="space-y-3 pt-1">
+                <div>
+                  <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide">
+                    From
+                  </label>
+                  <input
+                    type="date"
+                    value={customFrom}
+                    onChange={(e) => setCustomFrom(e.target.value)}
+                    className="w-full mt-1.5 px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-emerald-400 focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide">
+                    To
+                  </label>
+                  <input
+                    type="date"
+                    value={customTo}
+                    onChange={(e) => setCustomTo(e.target.value)}
+                    className="w-full mt-1.5 px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-emerald-400 focus:outline-none"
+                  />
+                </div>
+                <button
+                  onClick={() => setShowFilterSheet(false)}
+                  className="w-full py-3 bg-emerald-600 text-white text-sm font-semibold rounded-xl"
+                >
+                  Apply Filter
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* ── Header ── */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pt-2">
-        <div className="flex items-center gap-3">
+      <div className="flex items-center justify-between gap-2 pt-2">
+        <div className="flex items-center gap-2 min-w-0">
           <button
             onClick={() => navigate("/admin")}
-            className="p-2 hover:bg-slate-100 rounded-lg"
+            className="p-2 hover:bg-slate-100 rounded-lg flex-shrink-0"
           >
             <ArrowLeft size={20} />
           </button>
-          <div>
-            <h1 className="text-xl sm:text-2xl font-bold text-slate-900">
-              Revenue Dashboard
+          <div className="min-w-0">
+            <h1 className="text-lg sm:text-2xl font-bold text-slate-900 leading-tight">
+              Revenue
             </h1>
-            <p className="text-xs sm:text-sm text-slate-500">
+            <p className="text-xs text-slate-500 hidden sm:block">
               Fees + Bookings{isSuperAdmin ? " + Expenses" : ""}
             </p>
           </div>
         </div>
-        <div className="flex items-center gap-2 flex-wrap">
+
+        {/* Desktop controls */}
+        <div className="hidden sm:flex items-center gap-2 flex-wrap justify-end">
           <div className="relative">
             <button
               onClick={() => setShowRangeMenu((v) => !v)}
@@ -1416,37 +1455,71 @@ export default function AdminRevenueDashboard() {
             CSV
           </button>
         </div>
+
+        {/* Mobile controls */}
+        <div className="flex sm:hidden items-center gap-1.5 flex-shrink-0">
+          <button
+            onClick={() => setShowFilterSheet(true)}
+            className="flex items-center gap-1.5 px-2.5 py-2 bg-white border border-slate-200 rounded-lg text-xs font-medium text-slate-700"
+          >
+            <SlidersHorizontal size={13} className="text-slate-500" />
+            <span className="max-w-[56px] truncate text-slate-600">
+              {rangeLabels[dateRange]}
+            </span>
+          </button>
+          <button
+            onClick={load}
+            className="p-2 bg-white border border-slate-200 rounded-lg"
+          >
+            <RefreshCw size={14} className="text-slate-500" />
+          </button>
+          <button
+            onClick={exportCSV}
+            className="p-2 bg-emerald-600 text-white rounded-lg"
+          >
+            <Download size={14} />
+          </button>
+          {isSuperAdmin && (
+            <button
+              onClick={openAddExpense}
+              className="p-2 bg-red-500 text-white rounded-lg"
+            >
+              <Plus size={14} />
+            </button>
+          )}
+        </div>
       </div>
 
       {/* ── Summary Cards ── */}
       <div
-        className={`grid gap-3 ${isSuperAdmin ? "grid-cols-2 lg:grid-cols-6" : "grid-cols-2 lg:grid-cols-4"}`}
+        className={`grid gap-2 sm:gap-3 ${isSuperAdmin ? "grid-cols-2 sm:grid-cols-3 lg:grid-cols-6" : "grid-cols-2 lg:grid-cols-4"}`}
       >
         {isSuperAdmin && (
           <SummaryCard
             label="Net Revenue"
             value={fmt(netRevenue)}
             sub={`Gross ${fmt(grossRevenue)} − Exp ${fmt(expensesTotal)}`}
-            icon={<TrendingUp size={18} className="text-emerald-600" />}
+            icon={<TrendingUp size={15} className="text-emerald-600" />}
             bg="bg-gradient-to-br from-emerald-50 to-teal-50"
             border="border-emerald-200"
             valueClass={netRevenue >= 0 ? "text-emerald-700" : "text-red-600"}
+            spanFull
           />
         )}
         <SummaryCard
-          label="Fees Collected"
+          label="Fees"
           value={fmt(feesTotal)}
           sub={`${filteredFees.length} payments`}
-          icon={<IndianRupee size={18} className="text-blue-600" />}
+          icon={<IndianRupee size={15} className="text-blue-600" />}
           bg="bg-gradient-to-br from-blue-50 to-indigo-50"
           border="border-blue-200"
           valueClass="text-blue-700"
         />
         <SummaryCard
-          label="Booking Revenue"
+          label="Bookings"
           value={fmt(bookingsTotal)}
-          sub={`${filteredBookings.length} bookings`}
-          icon={<BookOpen size={18} className="text-orange-500" />}
+          sub={`${filteredBookings.length} paid`}
+          icon={<BookOpen size={15} className="text-orange-500" />}
           bg="bg-gradient-to-br from-orange-50 to-amber-50"
           border="border-orange-200"
           valueClass="text-orange-600"
@@ -1456,7 +1529,7 @@ export default function AdminRevenueDashboard() {
             label="Other Income"
             value={fmt(otherIncomeTotal)}
             sub={`${filteredIncomes.length} entries`}
-            icon={<TrendingUp size={18} className="text-violet-600" />}
+            icon={<TrendingUp size={15} className="text-violet-600" />}
             bg="bg-gradient-to-br from-violet-50 to-purple-50"
             border="border-violet-200"
             valueClass="text-violet-700"
@@ -1464,20 +1537,20 @@ export default function AdminRevenueDashboard() {
         )}
         {isSuperAdmin && (
           <SummaryCard
-            label="Total Expenses"
+            label="Expenses"
             value={fmt(expensesTotal)}
             sub={`${filteredExpenses.length} entries`}
-            icon={<TrendingDown size={18} className="text-red-500" />}
+            icon={<TrendingDown size={15} className="text-red-500" />}
             bg="bg-gradient-to-br from-red-50 to-rose-50"
             border="border-red-200"
             valueClass="text-red-600"
           />
         )}
         <SummaryCard
-          label="Pending Bookings"
+          label="Pending"
           value={String(pendingBookings)}
           sub="awaiting payment"
-          icon={<Clock size={18} className="text-rose-500" />}
+          icon={<Clock size={15} className="text-rose-500" />}
           bg="bg-gradient-to-br from-rose-50 to-pink-50"
           border="border-rose-200"
           valueClass="text-rose-600"
@@ -1485,7 +1558,10 @@ export default function AdminRevenueDashboard() {
       </div>
 
       {/* ── Main Tabs ── */}
-      <div className="flex gap-1 bg-slate-100 rounded-xl p-1 overflow-x-auto">
+      <div
+        className="flex gap-1 bg-slate-100 rounded-xl p-1 overflow-x-auto"
+        style={{ scrollbarWidth: "none" }}
+      >
         {(
           [
             ["overview", "Overview"],
@@ -1509,8 +1585,10 @@ export default function AdminRevenueDashboard() {
       {/* ── OVERVIEW ── */}
       {activeTab === "overview" && (
         <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-          <div className="px-5 py-4 border-b border-slate-100 bg-slate-50 flex items-center justify-between">
-            <h2 className="font-bold text-slate-800">Recent Transactions</h2>
+          <div className="px-4 py-3 border-b border-slate-100 bg-slate-50 flex items-center justify-between">
+            <h2 className="font-bold text-slate-800 text-sm sm:text-base">
+              Recent Transactions
+            </h2>
             <span className="text-xs text-slate-400">Latest 20</span>
           </div>
           {recentTx.length === 0 ? (
@@ -1520,48 +1598,34 @@ export default function AdminRevenueDashboard() {
               {recentTx.map((tx) => (
                 <div
                   key={tx.key}
-                  className="flex items-center justify-between px-4 sm:px-5 py-3 hover:bg-slate-50"
+                  className="flex items-center justify-between px-3 sm:px-5 py-3 hover:bg-slate-50"
                 >
-                  <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-2.5 min-w-0">
                     <div
-                      className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${
-                        tx.type === "fee"
-                          ? "bg-blue-100"
-                          : tx.type === "booking"
-                            ? "bg-orange-100"
-                            : tx.type === "income"
-                              ? "bg-violet-100"
-                              : "bg-red-100"
-                      }`}
+                      className={`w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 ${tx.type === "fee" ? "bg-blue-100" : tx.type === "booking" ? "bg-orange-100" : tx.type === "income" ? "bg-violet-100" : "bg-red-100"}`}
                     >
                       {tx.type === "fee" ? (
-                        <CreditCard size={13} className="text-blue-600" />
+                        <CreditCard size={12} className="text-blue-600" />
                       ) : tx.type === "booking" ? (
-                        <BookOpen size={13} className="text-orange-500" />
+                        <BookOpen size={12} className="text-orange-500" />
                       ) : tx.type === "income" ? (
-                        <TrendingUp size={13} className="text-violet-500" />
+                        <TrendingUp size={12} className="text-violet-500" />
                       ) : (
-                        <TrendingDown size={13} className="text-red-500" />
+                        <TrendingDown size={12} className="text-red-500" />
                       )}
                     </div>
-                    <div>
-                      <p className="text-sm font-medium text-slate-800">
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-slate-800 truncate">
                         {tx.name}
                       </p>
-                      <p className="text-xs text-slate-500 truncate max-w-[200px] sm:max-w-none">
+                      <p className="text-xs text-slate-500 truncate">
                         {tx.description}
                       </p>
                     </div>
                   </div>
-                  <div className="text-right flex-shrink-0 ml-3">
+                  <div className="text-right flex-shrink-0 ml-2">
                     <p
-                      className={`text-sm font-bold ${
-                        tx.type === "expense"
-                          ? "text-red-600"
-                          : tx.type === "income"
-                            ? "text-violet-600"
-                            : "text-slate-900"
-                      }`}
+                      className={`text-sm font-bold ${tx.type === "expense" ? "text-red-600" : tx.type === "income" ? "text-violet-600" : "text-slate-900"}`}
                     >
                       {tx.type === "expense"
                         ? "−"
@@ -1570,7 +1634,9 @@ export default function AdminRevenueDashboard() {
                           : ""}
                       {fmt(tx.amount)}
                     </p>
-                    <p className="text-xs text-slate-400">{fmtDate(tx.date)}</p>
+                    <p className="text-xs text-slate-400">
+                      {fmtDateShort(tx.date)}
+                    </p>
                   </div>
                 </div>
               ))}
@@ -1582,8 +1648,10 @@ export default function AdminRevenueDashboard() {
       {/* ── FEES ── */}
       {activeTab === "fees" && (
         <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-          <div className="px-5 py-4 border-b border-slate-100 bg-slate-50 flex items-center justify-between">
-            <h2 className="font-bold text-slate-800">Fee Payments</h2>
+          <div className="px-4 py-3 border-b border-slate-100 bg-slate-50 flex items-center justify-between">
+            <h2 className="font-bold text-slate-800 text-sm sm:text-base">
+              Fee Payments
+            </h2>
             <span className="text-sm font-semibold text-blue-600">
               {fmt(feesTotal)}
             </span>
@@ -1591,102 +1659,159 @@ export default function AdminRevenueDashboard() {
           {filteredFees.length === 0 ? (
             <EmptyState message="No fee payments in this period" />
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr className="text-xs text-slate-500 uppercase tracking-wide border-b bg-slate-50/50">
-                    {[
-                      "Date",
-                      "Player",
-                      "Plan",
-                      "Amount",
-                      "Mode",
-                      "Reference",
-                      "Status",
-                      "Next Due",
-                    ].map((h) => (
-                      <th
-                        key={h}
-                        className="text-left px-4 py-3 whitespace-nowrap"
-                      >
-                        {h}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {filteredFees.map((p) => (
-                    <tr key={p.publicId} className="hover:bg-slate-50">
-                      <td className="px-4 py-3 text-sm text-slate-600 whitespace-nowrap">
-                        {fmtDate(p.paidOn)}
-                      </td>
-                      <td className="px-4 py-3 text-sm font-medium text-slate-800">
-                        {p.player?.displayName || "—"}
-                      </td>
-                      <td className="px-4 py-3 text-sm text-slate-600">
-                        {p.feePlan?.name || "—"}
-                      </td>
-                      <td className="px-4 py-3 text-sm font-bold text-slate-900">
+            <>
+              {/* Mobile cards */}
+              <div className="sm:hidden divide-y divide-slate-100">
+                {filteredFees.map((p) => (
+                  <div key={p.publicId} className="px-4 py-3.5">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-semibold text-slate-800 truncate">
+                          {p.player?.displayName || "—"}
+                        </p>
+                        <p className="text-xs text-slate-500 mt-0.5">
+                          {p.feePlan?.name || "—"}
+                        </p>
+                      </div>
+                      <p className="text-sm font-bold text-slate-900 flex-shrink-0">
                         {fmt(p.amount)}
-                      </td>
-                      <td className="px-4 py-3 text-sm text-slate-600">
+                      </p>
+                    </div>
+                    <div className="flex items-center flex-wrap gap-x-3 gap-y-1 mt-2">
+                      <span className="text-xs text-slate-400">
+                        {fmtDate(p.paidOn)}
+                      </span>
+                      <span className="text-xs bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded">
                         {fmtMode(p.paymentMode)}
-                      </td>
-                      <td className="px-4 py-3">
-                        {p.referenceNumber ? (
-                          <span className="text-xs font-mono text-slate-600 bg-slate-100 px-2 py-0.5 rounded">
-                            {p.referenceNumber}
-                          </span>
-                        ) : (
-                          <span className="text-xs text-slate-400">—</span>
-                        )}
-                      </td>
-                      <td className="px-4 py-3">
-                        <span className="inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-700">
-                          <CheckCircle2 size={11} />
-                          Paid
+                      </span>
+                      <span className="inline-flex items-center gap-0.5 text-xs font-semibold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700">
+                        <CheckCircle2 size={10} />
+                        Paid
+                      </span>
+                      {p.nextDueOn && (
+                        <span
+                          className={`text-xs font-medium ${p.feeStatus === "OVERDUE" ? "text-red-600" : p.feeStatus === "DUE" ? "text-amber-600" : "text-slate-500"}`}
+                        >
+                          Due: {fmtDateShort(p.nextDueOn)}
+                          {p.feeStatus === "OVERDUE" && " ⚠"}
                         </span>
-                      </td>
-                      <td className="px-4 py-3 text-sm">
-                        {p.nextDueOn ? (
-                          <span
-                            className={`font-medium ${p.feeStatus === "OVERDUE" ? "text-red-600" : p.feeStatus === "DUE" ? "text-amber-600" : "text-slate-600"}`}
-                          >
-                            {fmtDate(p.nextDueOn)}
-                            {p.feeStatus === "OVERDUE" && (
-                              <span className="ml-1 text-xs bg-red-100 text-red-600 px-1.5 py-0.5 rounded-full">
-                                Overdue
-                              </span>
-                            )}
-                            {p.feeStatus === "DUE" && (
-                              <span className="ml-1 text-xs bg-amber-100 text-amber-600 px-1.5 py-0.5 rounded-full">
-                                Due Soon
-                              </span>
-                            )}
-                          </span>
-                        ) : (
-                          "—"
-                        )}
-                      </td>
+                      )}
+                    </div>
+                    {p.referenceNumber && (
+                      <p className="text-xs font-mono text-slate-500 bg-slate-50 px-2 py-0.5 rounded mt-1.5 w-fit">
+                        {p.referenceNumber}
+                      </p>
+                    )}
+                  </div>
+                ))}
+                <div className="flex items-center justify-between px-4 py-3 bg-slate-50 border-t-2 border-slate-200">
+                  <span className="text-sm font-semibold text-slate-700">
+                    Total · {filteredFees.length} payments
+                  </span>
+                  <span className="text-sm font-bold text-blue-700">
+                    {fmt(feesTotal)}
+                  </span>
+                </div>
+              </div>
+
+              {/* Desktop table */}
+              <div className="hidden sm:block overflow-x-auto">
+                <table className="w-full">
+                  <thead>
+                    <tr className="text-xs text-slate-500 uppercase tracking-wide border-b bg-slate-50/50">
+                      {[
+                        "Date",
+                        "Player",
+                        "Plan",
+                        "Amount",
+                        "Mode",
+                        "Reference",
+                        "Status",
+                        "Next Due",
+                      ].map((h) => (
+                        <th
+                          key={h}
+                          className="text-left px-4 py-3 whitespace-nowrap"
+                        >
+                          {h}
+                        </th>
+                      ))}
                     </tr>
-                  ))}
-                </tbody>
-                <tfoot>
-                  <tr className="border-t-2 border-slate-200 bg-slate-50">
-                    <td
-                      colSpan={3}
-                      className="px-4 py-3 text-sm font-semibold text-slate-700"
-                    >
-                      Total
-                    </td>
-                    <td className="px-4 py-3 text-sm font-bold text-blue-700">
-                      {fmt(feesTotal)}
-                    </td>
-                    <td colSpan={4} />
-                  </tr>
-                </tfoot>
-              </table>
-            </div>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {filteredFees.map((p) => (
+                      <tr key={p.publicId} className="hover:bg-slate-50">
+                        <td className="px-4 py-3 text-sm text-slate-600 whitespace-nowrap">
+                          {fmtDate(p.paidOn)}
+                        </td>
+                        <td className="px-4 py-3 text-sm font-medium text-slate-800">
+                          {p.player?.displayName || "—"}
+                        </td>
+                        <td className="px-4 py-3 text-sm text-slate-600">
+                          {p.feePlan?.name || "—"}
+                        </td>
+                        <td className="px-4 py-3 text-sm font-bold text-slate-900">
+                          {fmt(p.amount)}
+                        </td>
+                        <td className="px-4 py-3 text-sm text-slate-600">
+                          {fmtMode(p.paymentMode)}
+                        </td>
+                        <td className="px-4 py-3">
+                          {p.referenceNumber ? (
+                            <span className="text-xs font-mono text-slate-600 bg-slate-100 px-2 py-0.5 rounded">
+                              {p.referenceNumber}
+                            </span>
+                          ) : (
+                            <span className="text-xs text-slate-400">—</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-3">
+                          <span className="inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-700">
+                            <CheckCircle2 size={11} />
+                            Paid
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-sm">
+                          {p.nextDueOn ? (
+                            <span
+                              className={`font-medium ${p.feeStatus === "OVERDUE" ? "text-red-600" : p.feeStatus === "DUE" ? "text-amber-600" : "text-slate-600"}`}
+                            >
+                              {fmtDate(p.nextDueOn)}
+                              {p.feeStatus === "OVERDUE" && (
+                                <span className="ml-1 text-xs bg-red-100 text-red-600 px-1.5 py-0.5 rounded-full">
+                                  Overdue
+                                </span>
+                              )}
+                              {p.feeStatus === "DUE" && (
+                                <span className="ml-1 text-xs bg-amber-100 text-amber-600 px-1.5 py-0.5 rounded-full">
+                                  Due Soon
+                                </span>
+                              )}
+                            </span>
+                          ) : (
+                            "—"
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                  <tfoot>
+                    <tr className="border-t-2 border-slate-200 bg-slate-50">
+                      <td
+                        colSpan={3}
+                        className="px-4 py-3 text-sm font-semibold text-slate-700"
+                      >
+                        Total
+                      </td>
+                      <td className="px-4 py-3 text-sm font-bold text-blue-700">
+                        {fmt(feesTotal)}
+                      </td>
+                      <td colSpan={4} />
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+            </>
           )}
         </div>
       )}
@@ -1694,8 +1819,10 @@ export default function AdminRevenueDashboard() {
       {/* ── BOOKINGS ── */}
       {activeTab === "bookings" && (
         <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-          <div className="px-5 py-4 border-b border-slate-100 bg-slate-50 flex items-center justify-between">
-            <h2 className="font-bold text-slate-800">Booking Payments</h2>
+          <div className="px-4 py-3 border-b border-slate-100 bg-slate-50 flex items-center justify-between">
+            <h2 className="font-bold text-slate-800 text-sm sm:text-base">
+              Booking Payments
+            </h2>
             <span className="text-sm font-semibold text-orange-600">
               {fmt(bookingsTotal)}
             </span>
@@ -1712,94 +1839,120 @@ export default function AdminRevenueDashboard() {
                         expandedUser === group.key ? null : group.key,
                       )
                     }
-                    className="flex items-center justify-between px-4 sm:px-5 py-4 hover:bg-slate-50 cursor-pointer"
+                    className="flex items-center justify-between px-3 sm:px-5 py-3.5 hover:bg-slate-50 cursor-pointer active:bg-slate-100"
                   >
-                    <div className="flex items-center gap-3">
-                      <div className="w-9 h-9 rounded-full bg-orange-100 flex items-center justify-center flex-shrink-0">
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <div className="w-8 h-8 rounded-full bg-orange-100 flex items-center justify-center flex-shrink-0">
                         <span className="text-sm font-bold text-orange-600">
                           {group.name.charAt(0).toUpperCase()}
                         </span>
                       </div>
-                      <div>
-                        <p className="text-sm font-semibold text-slate-800">
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold text-slate-800 truncate">
                           {group.name}
                         </p>
                         <p className="text-xs text-slate-400">
-                          {group.contact}
+                          {group.bookings.length} booking
+                          {group.bookings.length !== 1 ? "s" : ""}
                         </p>
                       </div>
                     </div>
-                    <div className="flex items-center gap-4">
-                      <p className="text-xs text-slate-400 hidden sm:block">
-                        {group.bookings.length} bookings
-                      </p>
+                    <div className="flex items-center gap-2 flex-shrink-0 ml-2">
                       <p className="text-sm font-bold text-slate-900">
                         {fmt(group.total)}
                       </p>
-                      <span
-                        className={`text-slate-400 text-xs transition-transform ${expandedUser === group.key ? "rotate-180" : ""}`}
-                      >
-                        ▼
-                      </span>
+                      <ChevronDown
+                        size={15}
+                        className={`text-slate-400 transition-transform ${expandedUser === group.key ? "rotate-180" : ""}`}
+                      />
                     </div>
                   </div>
                   {expandedUser === group.key && (
-                    <div className="bg-slate-50 border-t border-slate-100 overflow-x-auto">
-                      <table className="w-full">
-                        <thead>
-                          <tr className="text-xs text-slate-400 uppercase tracking-wide border-b border-slate-200">
-                            {[
-                              "Date",
-                              "Slot",
-                              "Resource",
-                              "Amount",
-                              "Mode",
-                              "Status",
-                            ].map((h) => (
-                              <th key={h} className="text-left px-5 py-2">
-                                {h}
-                              </th>
-                            ))}
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-slate-100">
-                          {group.bookings
-                            .sort((a, b) => (b.slotDate > a.slotDate ? 1 : -1))
-                            .map((b) => (
-                              <tr
-                                key={b.bookingPublicId}
-                                className="hover:bg-white"
-                              >
-                                <td className="px-5 py-2.5 text-sm text-slate-600">
-                                  {fmtDate(b.slotDate)}
-                                </td>
-                                <td className="px-5 py-2.5 text-sm text-slate-600">
-                                  {b.startTime}–{b.endTime}
-                                </td>
-                                <td className="px-5 py-2.5 text-sm text-slate-600">
-                                  {b.resourceType}
-                                </td>
-                                <td className="px-5 py-2.5 text-sm font-bold text-slate-900">
-                                  {fmt(b.amount)}
-                                </td>
-                                <td className="px-5 py-2.5 text-sm text-slate-600">
-                                  {fmtMode(b.paymentMode)}
-                                </td>
-                                <td className="px-5 py-2.5">
-                                  <span className="inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-700">
-                                    <CheckCircle2 size={11} />
-                                    Paid
-                                  </span>
-                                </td>
-                              </tr>
-                            ))}
-                        </tbody>
-                      </table>
+                    <div className="bg-slate-50 border-t border-slate-100">
+                      {/* Mobile: simple list */}
+                      <div className="sm:hidden divide-y divide-slate-100">
+                        {group.bookings
+                          .sort((a, b) => (b.slotDate > a.slotDate ? 1 : -1))
+                          .map((b) => (
+                            <div
+                              key={b.bookingPublicId}
+                              className="flex items-center justify-between px-4 py-3"
+                            >
+                              <div>
+                                <p className="text-sm font-medium text-slate-800">
+                                  {fmtDateShort(b.slotDate)} · {b.startTime}–
+                                  {b.endTime}
+                                </p>
+                                <p className="text-xs text-slate-500">
+                                  {b.resourceType} · {fmtMode(b.paymentMode)}
+                                </p>
+                              </div>
+                              <p className="text-sm font-bold text-slate-900">
+                                {fmt(b.amount)}
+                              </p>
+                            </div>
+                          ))}
+                      </div>
+                      {/* Desktop: table */}
+                      <div className="hidden sm:block overflow-x-auto">
+                        <table className="w-full">
+                          <thead>
+                            <tr className="text-xs text-slate-400 uppercase tracking-wide border-b border-slate-200">
+                              {[
+                                "Date",
+                                "Slot",
+                                "Resource",
+                                "Amount",
+                                "Mode",
+                                "Status",
+                              ].map((h) => (
+                                <th key={h} className="text-left px-5 py-2">
+                                  {h}
+                                </th>
+                              ))}
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-100">
+                            {group.bookings
+                              .sort((a, b) =>
+                                b.slotDate > a.slotDate ? 1 : -1,
+                              )
+                              .map((b) => (
+                                <tr
+                                  key={b.bookingPublicId}
+                                  className="hover:bg-white"
+                                >
+                                  <td className="px-5 py-2.5 text-sm text-slate-600">
+                                    {fmtDate(b.slotDate)}
+                                  </td>
+                                  <td className="px-5 py-2.5 text-sm text-slate-600">
+                                    {b.startTime}–{b.endTime}
+                                  </td>
+                                  <td className="px-5 py-2.5 text-sm text-slate-600">
+                                    {b.resourceType}
+                                  </td>
+                                  <td className="px-5 py-2.5 text-sm font-bold text-slate-900">
+                                    {fmt(b.amount)}
+                                  </td>
+                                  <td className="px-5 py-2.5 text-sm text-slate-600">
+                                    {fmtMode(b.paymentMode)}
+                                  </td>
+                                  <td className="px-5 py-2.5">
+                                    <span className="inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-700">
+                                      <CheckCircle2 size={11} />
+                                      Paid
+                                    </span>
+                                  </td>
+                                </tr>
+                              ))}
+                          </tbody>
+                        </table>
+                      </div>
                     </div>
                   )}
                 </div>
               ))}
-              <div className="flex items-center justify-between px-5 py-4 bg-slate-50 border-t-2 border-slate-200">
+              <div className="flex items-center justify-between px-4 sm:px-5 py-3.5 bg-slate-50 border-t-2 border-slate-200">
                 <span className="text-sm font-semibold text-slate-700">
                   Total · {groupedBookings.length} users
                 </span>
@@ -1815,13 +1968,12 @@ export default function AdminRevenueDashboard() {
       {/* ── EXPENSES (SUPER ADMIN) ── */}
       {activeTab === "expenses" && isSuperAdmin && (
         <div className="space-y-4">
-          {/* Expense Sub-tabs */}
           <div className="flex gap-1 bg-slate-100 rounded-xl p-1 w-fit">
             {(
               [
                 ["summary", "Summary"],
                 ["monthly", "Monthly"],
-                ["all", "All Expenses"],
+                ["all", "All"],
               ] as [ExpenseSubTab, string][]
             ).map(([t, l]) => (
               <button
@@ -1834,19 +1986,20 @@ export default function AdminRevenueDashboard() {
             ))}
           </div>
 
-          {/* ── SUMMARY SUB-TAB ── */}
+          {/* SUMMARY */}
           {expenseSubTab === "summary" && (
             <div className="space-y-4">
-              {/* Partner Spending Cards */}
               <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-                <div className="px-5 py-4 border-b border-slate-100 bg-slate-50 flex items-center gap-2">
-                  <Users size={16} className="text-slate-500" />
-                  <h2 className="font-bold text-slate-800">Partner Spending</h2>
+                <div className="px-4 py-3 border-b border-slate-100 bg-slate-50 flex items-center gap-2">
+                  <Users size={15} className="text-slate-500" />
+                  <h2 className="font-bold text-slate-800 text-sm sm:text-base flex-1">
+                    Partner Spending
+                  </h2>
                   <button
                     onClick={exportPartnerSpendingCSV}
-                    className="flex items-center gap-1 px-2.5 py-1 bg-slate-100 text-slate-600 text-xs font-medium rounded-lg hover:bg-slate-200 ml-1"
+                    className="flex items-center gap-1 px-2.5 py-1 bg-slate-100 text-slate-600 text-xs font-medium rounded-lg hover:bg-slate-200"
                   >
-                    <Download size={12} />
+                    <Download size={11} />
                     CSV
                   </button>
                 </div>
@@ -1862,32 +2015,29 @@ export default function AdminRevenueDashboard() {
                   </div>
                 ) : (
                   <div className="divide-y divide-slate-100">
-                    <div className="divide-y divide-slate-100">
-                      {partnerSpending
-                        .sort((a, b) => b.total - a.total)
-                        .map((partner) => (
-                          <div
-                            key={partner.name}
-                            className="flex items-center justify-between px-5 py-4"
-                          >
-                            <div className="flex items-center gap-3">
-                              <div className="w-9 h-9 rounded-full bg-blue-100 flex items-center justify-center">
-                                <span className="text-sm font-bold text-blue-600">
-                                  {partner.name.charAt(0)}
-                                </span>
-                              </div>
-                              <span className="text-sm font-semibold text-slate-800">
-                                {partner.name}
+                    {partnerSpending
+                      .sort((a, b) => b.total - a.total)
+                      .map((partner) => (
+                        <div
+                          key={partner.name}
+                          className="flex items-center justify-between px-4 sm:px-5 py-3.5"
+                        >
+                          <div className="flex items-center gap-3">
+                            <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0">
+                              <span className="text-sm font-bold text-blue-600">
+                                {partner.name.charAt(0)}
                               </span>
                             </div>
-
-                            <span className="text-sm font-bold text-red-600">
-                              ₹{partner.total.toLocaleString("en-IN")}
+                            <span className="text-sm font-semibold text-slate-800">
+                              {partner.name}
                             </span>
                           </div>
-                        ))}
-                    </div>
-                    <div className="flex items-center justify-between px-5 py-3 bg-slate-50 border-t-2 border-slate-200">
+                          <span className="text-sm font-bold text-red-600">
+                            ₹{partner.total.toLocaleString("en-IN")}
+                          </span>
+                        </div>
+                      ))}
+                    <div className="flex items-center justify-between px-4 sm:px-5 py-3 bg-slate-50 border-t-2 border-slate-200">
                       <span className="text-sm font-semibold text-slate-700">
                         Grand Total
                       </span>
@@ -1899,36 +2049,42 @@ export default function AdminRevenueDashboard() {
                 )}
               </div>
 
-              {/* Category Summary */}
               <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-                <div className="px-5 py-4 border-b border-slate-100 bg-slate-50 flex items-center justify-between flex-wrap gap-2">
-                  <div className="flex items-center gap-3">
-                    <h2 className="font-bold text-slate-800">Breakdown by</h2>
-                    <button
-                      onClick={exportSummaryCSV}
-                      className="flex items-center gap-1 px-2.5 py-1 bg-slate-100 text-slate-600 text-xs font-medium rounded-lg hover:bg-slate-200"
-                    >
-                      <Download size={12} />
-                      CSV
-                    </button>
-                  </div>
-                  <div className="flex gap-1 bg-slate-100 rounded-lg p-1">
-                    {(
-                      [
-                        ["budgetHead", "Budget Head"],
-                        ["area", "Area"],
-                        ["discipline", "Discipline"],
-                        ["costType", "Cost Type"],
-                      ] as [typeof summaryGroupBy, string][]
-                    ).map(([key, label]) => (
+                <div className="px-4 py-3 border-b border-slate-100 bg-slate-50">
+                  <div className="flex items-center justify-between gap-2 flex-wrap">
+                    <div className="flex items-center gap-2">
+                      <h2 className="font-bold text-slate-800 text-sm sm:text-base">
+                        Breakdown
+                      </h2>
                       <button
-                        key={key}
-                        onClick={() => setSummaryGroupBy(key)}
-                        className={`px-2 sm:px-3 py-1 rounded-md text-xs font-medium transition ${summaryGroupBy === key ? "bg-white text-slate-900 shadow-sm" : "text-slate-500"}`}
+                        onClick={exportSummaryCSV}
+                        className="flex items-center gap-1 px-2.5 py-1 bg-slate-100 text-slate-600 text-xs font-medium rounded-lg hover:bg-slate-200"
                       >
-                        {label}
+                        <Download size={11} />
+                        CSV
                       </button>
-                    ))}
+                    </div>
+                    <div
+                      className="flex gap-1 bg-slate-100 rounded-lg p-0.5 overflow-x-auto"
+                      style={{ scrollbarWidth: "none" }}
+                    >
+                      {(
+                        [
+                          ["budgetHead", "Budget Head"],
+                          ["area", "Area"],
+                          ["discipline", "Discipline"],
+                          ["costType", "Cost"],
+                        ] as [typeof summaryGroupBy, string][]
+                      ).map(([key, label]) => (
+                        <button
+                          key={key}
+                          onClick={() => setSummaryGroupBy(key)}
+                          className={`px-2 py-1 rounded-md text-xs font-medium transition whitespace-nowrap ${summaryGroupBy === key ? "bg-white text-slate-900 shadow-sm" : "text-slate-500"}`}
+                        >
+                          {label}
+                        </button>
+                      ))}
+                    </div>
                   </div>
                 </div>
                 {categorySummary.length === 0 ? (
@@ -1936,23 +2092,25 @@ export default function AdminRevenueDashboard() {
                 ) : (
                   <div className="divide-y divide-slate-100">
                     {categorySummary.map((row, idx) => {
-                      const maxAmt = categorySummary[0].total;
-                      const pct = maxAmt > 0 ? (row.total / maxAmt) * 100 : 0;
+                      const pct =
+                        categorySummary[0].total > 0
+                          ? (row.total / categorySummary[0].total) * 100
+                          : 0;
                       return (
-                        <div key={row.key} className="px-5 py-3">
+                        <div key={row.key} className="px-4 sm:px-5 py-3">
                           <div className="flex items-center justify-between mb-1.5">
-                            <div className="flex items-center gap-2">
-                              <span className="text-xs font-bold text-slate-400 w-5">
+                            <div className="flex items-center gap-2 min-w-0">
+                              <span className="text-xs font-bold text-slate-400 w-5 flex-shrink-0">
                                 #{idx + 1}
                               </span>
-                              <span className="text-sm font-medium text-slate-800">
+                              <span className="text-sm font-medium text-slate-800 truncate">
                                 {row.key}
                               </span>
-                              <span className="text-xs text-slate-400">
-                                {row.count} entries
+                              <span className="text-xs text-slate-400 flex-shrink-0">
+                                {row.count}
                               </span>
                             </div>
-                            <span className="text-sm font-bold text-red-600">
+                            <span className="text-sm font-bold text-red-600 flex-shrink-0 ml-2">
                               −{fmt(row.total)}
                             </span>
                           </div>
@@ -1965,7 +2123,7 @@ export default function AdminRevenueDashboard() {
                         </div>
                       );
                     })}
-                    <div className="flex items-center justify-between px-5 py-3 bg-slate-50 border-t-2 border-slate-200">
+                    <div className="flex items-center justify-between px-4 sm:px-5 py-3 bg-slate-50 border-t-2 border-slate-200">
                       <span className="text-sm font-semibold text-slate-700">
                         Total
                       </span>
@@ -1979,11 +2137,10 @@ export default function AdminRevenueDashboard() {
             </div>
           )}
 
-          {/* ── MONTHLY SUB-TAB ── */}
+          {/* MONTHLY */}
           {expenseSubTab === "monthly" && (
-            <div className="space-y-4">
-              {/* Month navigator */}
-              <div className="relative flex items-center justify-between bg-white rounded-xl border border-slate-200 px-5 py-3 shadow-sm">
+            <div className="space-y-3">
+              <div className="relative flex items-center justify-between bg-white rounded-xl border border-slate-200 px-4 py-3 shadow-sm">
                 <button
                   onClick={() =>
                     setMonthYear((m) => {
@@ -1996,11 +2153,11 @@ export default function AdminRevenueDashboard() {
                   <ChevronDown size={18} className="rotate-90 text-slate-600" />
                 </button>
                 <div className="text-center">
-                  <p className="font-bold text-slate-800 text-lg">
+                  <p className="font-bold text-slate-800 text-base sm:text-lg">
                     {MONTHS[monthYear.month - 1]} {monthYear.year}
                   </p>
                   <p className="text-xs text-slate-400">
-                    {fmt(monthlyPaidTotal)} paid this month
+                    {fmt(monthlyPaidTotal)} paid
                   </p>
                 </div>
                 <button
@@ -2020,23 +2177,21 @@ export default function AdminRevenueDashboard() {
                 <div className="absolute right-2 top-2 flex items-center gap-1">
                   <button
                     onClick={exportMonthlyCSV}
-                    className="flex items-center gap-1 px-2.5 py-1.5 bg-slate-100 text-slate-600 text-xs font-medium rounded-lg hover:bg-slate-200"
-                    title="Export monthly CSV"
+                    className="p-1.5 hover:bg-slate-100 rounded-lg"
+                    title="Export CSV"
                   >
-                    <Download size={12} />
-                    CSV
+                    <Download size={13} className="text-slate-400" />
                   </button>
                   <button
                     onClick={() => setShowRecurringModal(true)}
                     className="p-1.5 hover:bg-slate-100 rounded-lg"
                     title="Add recurring item"
                   >
-                    <Plus size={16} className="text-slate-500" />
+                    <Plus size={15} className="text-slate-500" />
                   </button>
                 </div>
               </div>
 
-              {/* Checklist */}
               {monthlyPayments.length === 0 ? (
                 <div className="bg-white rounded-xl border border-slate-200 shadow-sm text-center py-12">
                   <IndianRupee
@@ -2053,13 +2208,13 @@ export default function AdminRevenueDashboard() {
                     onClick={() => setShowRecurringModal(true)}
                     className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700"
                   >
-                    <Plus size={14} /> Add Recurring Item
+                    <Plus size={14} />
+                    Add Recurring Item
                   </button>
                 </div>
               ) : (
                 <div className="space-y-2">
-                  {/* Stats row */}
-                  <div className="grid grid-cols-3 gap-3">
+                  <div className="grid grid-cols-3 gap-2">
                     <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3 text-center">
                       <p className="text-lg font-bold text-emerald-700">
                         {
@@ -2079,14 +2234,13 @@ export default function AdminRevenueDashboard() {
                       <p className="text-xs text-amber-600">Pending</p>
                     </div>
                     <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 text-center">
-                      <p className="text-lg font-bold text-slate-700">
+                      <p className="text-base sm:text-lg font-bold text-slate-700 truncate">
                         {fmt(monthlyPaidTotal)}
                       </p>
-                      <p className="text-xs text-slate-500">Total Paid</p>
+                      <p className="text-xs text-slate-500">Total</p>
                     </div>
                   </div>
 
-                  {/* Items */}
                   <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
                     <div className="divide-y divide-slate-100">
                       {monthlyPayments.map((payment) => {
@@ -2094,9 +2248,8 @@ export default function AdminRevenueDashboard() {
                         return (
                           <div
                             key={payment.item.publicId}
-                            className={`flex items-center gap-3 px-4 sm:px-5 py-4 ${isPaid ? "bg-emerald-50/40" : ""}`}
+                            className={`flex items-center gap-3 px-3 sm:px-5 py-3.5 ${isPaid ? "bg-emerald-50/40" : ""}`}
                           >
-                            {/* Checkbox */}
                             <button
                               onClick={() =>
                                 isPaid && payment.publicId
@@ -2109,34 +2262,25 @@ export default function AdminRevenueDashboard() {
                                 <Check size={13} className="text-white" />
                               )}
                             </button>
-
                             <div className="flex-1 min-w-0">
                               <p
-                                className={`text-sm font-semibold ${isPaid ? "text-slate-500 line-through" : "text-slate-800"}`}
+                                className={`text-sm font-semibold truncate ${isPaid ? "text-slate-400 line-through" : "text-slate-800"}`}
                               >
                                 {payment.item.name}
                               </p>
                               {isPaid && (
-                                <p className="text-xs text-emerald-600">
-                                  {payment.paidBy
-                                    ? `Paid by ${payment.paidBy} · `
-                                    : ""}
-                                  {fmtDate(payment.paidOn)}
-                                  {payment.notes && (
-                                    <span className="ml-1 text-slate-400">
-                                      · {payment.notes}
-                                    </span>
-                                  )}
+                                <p className="text-xs text-emerald-600 truncate">
+                                  {payment.paidBy ? `${payment.paidBy} · ` : ""}
+                                  {fmtDateShort(payment.paidOn)}
                                 </p>
                               )}
                               {!isPaid && payment.item.budgetHead && (
-                                <p className="text-xs text-slate-400">
+                                <p className="text-xs text-slate-400 truncate">
                                   {payment.item.budgetHead}
                                 </p>
                               )}
                             </div>
-
-                            <div className="flex items-center gap-2 flex-shrink-0">
+                            <div className="flex items-center gap-1.5 flex-shrink-0">
                               <span
                                 className={`text-sm font-bold ${isPaid ? "text-emerald-600" : "text-slate-700"}`}
                               >
@@ -2152,14 +2296,14 @@ export default function AdminRevenueDashboard() {
                                   title="Unmark"
                                 >
                                   <RotateCcw
-                                    size={13}
+                                    size={12}
                                     className="text-slate-400"
                                   />
                                 </button>
                               ) : (
                                 <button
                                   onClick={() => openPayModal(payment)}
-                                  className="px-3 py-1 bg-emerald-100 text-emerald-700 text-xs font-semibold rounded-lg hover:bg-emerald-200"
+                                  className="px-2.5 py-1 bg-emerald-100 text-emerald-700 text-xs font-semibold rounded-lg hover:bg-emerald-200"
                                 >
                                   Pay
                                 </button>
@@ -2169,9 +2313,9 @@ export default function AdminRevenueDashboard() {
                                   deleteRecurringItem(payment.item.publicId)
                                 }
                                 className="p-1.5 hover:bg-red-50 text-slate-300 hover:text-red-400 rounded-lg transition"
-                                title="Remove this recurring item"
+                                title="Remove"
                               >
-                                <Trash2 size={13} />
+                                <Trash2 size={12} />
                               </button>
                             </div>
                           </div>
@@ -2184,27 +2328,29 @@ export default function AdminRevenueDashboard() {
             </div>
           )}
 
-          {/* ── ALL EXPENSES SUB-TAB ── */}
+          {/* ALL EXPENSES */}
           {expenseSubTab === "all" && (
             <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-              <div className="px-5 py-4 border-b border-slate-100 bg-slate-50 flex items-center justify-between">
-                <h2 className="font-bold text-slate-800">All Expenses</h2>
+              <div className="px-4 py-3 border-b border-slate-100 bg-slate-50 flex items-center justify-between">
+                <h2 className="font-bold text-slate-800 text-sm sm:text-base">
+                  All Expenses
+                </h2>
                 <div className="flex items-center gap-2">
                   <span className="text-sm font-semibold text-red-600">
                     {fmt(expensesTotal)}
                   </span>
                   <button
                     onClick={exportAllExpensesCSV}
-                    className="flex items-center gap-1 px-2.5 py-1.5 bg-slate-100 text-slate-600 text-xs font-medium rounded-lg hover:bg-slate-200"
+                    className="flex items-center gap-1 px-2 py-1.5 bg-slate-100 text-slate-600 text-xs font-medium rounded-lg hover:bg-slate-200"
                   >
-                    <Download size={12} />
+                    <Download size={11} />
                     CSV
                   </button>
                   <button
                     onClick={openAddExpense}
-                    className="flex items-center gap-1.5 px-3 py-1.5 bg-red-500 text-white text-xs font-semibold rounded-lg hover:bg-red-600"
+                    className="flex items-center gap-1 px-2.5 py-1.5 bg-red-500 text-white text-xs font-semibold rounded-lg hover:bg-red-600"
                   >
-                    <Plus size={13} />
+                    <Plus size={12} />
                     Add
                   </button>
                 </div>
@@ -2231,13 +2377,13 @@ export default function AdminRevenueDashboard() {
                   {/* Mobile cards */}
                   <div className="sm:hidden divide-y divide-slate-100">
                     {filteredExpenses.map((e) => (
-                      <div key={e.publicId} className="px-4 py-4">
-                        <div className="flex items-start justify-between gap-2 mb-2">
+                      <div key={e.publicId} className="px-4 py-3.5">
+                        <div className="flex items-start justify-between gap-2 mb-1.5">
                           <div className="flex-1 min-w-0">
                             <p className="text-sm font-semibold text-slate-800 truncate">
                               {e.description}
                             </p>
-                            <p className="text-xs text-slate-500">
+                            <p className="text-xs text-slate-500 mt-0.5">
                               {fmtDate(e.expenseDate)}
                               {e.paidBy ? ` · ${e.paidBy}` : ""}
                             </p>
@@ -2246,7 +2392,7 @@ export default function AdminRevenueDashboard() {
                             −{fmt(e.amount)}
                           </p>
                         </div>
-                        <div className="flex flex-wrap gap-1.5 mb-2">
+                        <div className="flex flex-wrap gap-1 mb-2">
                           {[e.area, e.discipline, e.costType, e.budgetHead]
                             .filter(Boolean)
                             .map((tag, i) => (
@@ -2259,7 +2405,7 @@ export default function AdminRevenueDashboard() {
                             ))}
                         </div>
                         {e.notes && (
-                          <p className="text-xs text-slate-400 mb-2 italic">
+                          <p className="text-xs text-slate-400 mb-2 italic truncate">
                             {e.notes}
                           </p>
                         )}
@@ -2390,7 +2536,7 @@ export default function AdminRevenueDashboard() {
                           <td className="px-4 py-3 text-sm font-bold text-red-600">
                             −{fmt(expensesTotal)}
                           </td>
-                          <td />
+                          <td colSpan={2} />
                         </tr>
                       </tfoot>
                     </table>
@@ -2415,6 +2561,7 @@ function SummaryCard({
   bg,
   border,
   valueClass,
+  spanFull,
 }: {
   label: string;
   value: string;
@@ -2423,19 +2570,24 @@ function SummaryCard({
   bg: string;
   border: string;
   valueClass: string;
+  spanFull?: boolean;
 }) {
   return (
-    <div className={`rounded-xl border p-3 sm:p-4 ${bg} ${border} shadow-sm`}>
-      <div className="flex items-center justify-between mb-2">
+    <div
+      className={`rounded-xl border p-3 sm:p-4 ${bg} ${border} shadow-sm ${spanFull ? "col-span-2 sm:col-span-1" : ""}`}
+    >
+      <div className="flex items-center justify-between mb-1.5">
         <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide leading-tight">
           {label}
         </p>
-        <div className="w-7 h-7 rounded-lg bg-white/60 flex items-center justify-center flex-shrink-0">
+        <div className="w-6 h-6 rounded-lg bg-white/60 flex items-center justify-center flex-shrink-0">
           {icon}
         </div>
       </div>
-      <p className={`text-xl sm:text-2xl font-bold ${valueClass}`}>{value}</p>
-      <p className="text-xs text-slate-400 mt-1 truncate">{sub}</p>
+      <p className={`text-lg sm:text-2xl font-bold ${valueClass} truncate`}>
+        {value}
+      </p>
+      <p className="text-xs text-slate-400 mt-0.5 truncate">{sub}</p>
     </div>
   );
 }
