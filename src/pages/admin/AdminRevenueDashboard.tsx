@@ -97,7 +97,7 @@ type Suggestions = {
   budgetHead: string[];
   paidBy: string[];
 };
-type Tab = "overview" | "fees" | "bookings" | "expenses";
+type Tab = "overview" | "fees" | "bookings" | "expenses" | "income";
 type ExpenseSubTab = "summary" | "monthly" | "all";
 type DateRange = "all" | "today" | "this_week" | "this_month" | "custom";
 
@@ -303,10 +303,16 @@ export default function AdminRevenueDashboard() {
   const [dateRange, setDateRange] = useState<DateRange>("this_month");
   const [customFrom, setCustomFrom] = useState("");
   const [customTo, setCustomTo] = useState("");
+  const loadRef = useRef(0);
   const [showRangeMenu, setShowRangeMenu] = useState(false);
   const [showFilterSheet, setShowFilterSheet] = useState(false);
   const [expandedUser, setExpandedUser] = useState<string | null>(null);
-
+  const [expenseSearch, setExpenseSearch] = useState("");
+  const [expenseFilterBudgetHead, setExpenseFilterBudgetHead] = useState("");
+  const [expenseFilterPaidBy, setExpenseFilterPaidBy] = useState("");
+  const [incomeSearch, setIncomeSearch] = useState("");
+  const [incomeFilterBudgetHead, setIncomeFilterBudgetHead] = useState("");
+  const [incomeFilterPaidBy, setIncomeFilterPaidBy] = useState("");
   const now = new Date();
   const [monthYear, setMonthYear] = useState({
     year: now.getFullYear(),
@@ -328,27 +334,50 @@ export default function AdminRevenueDashboard() {
   const load = async () => {
     setLoading(true);
     setError("");
+    const thisLoad = ++loadRef.current;
     try {
       const [feesRes, bookingsRes] = await Promise.all([
         api.get("/admin/fees/payments"),
         api.get("/admin/bookings"),
       ]);
-      setFeePayments(feesRes.data || []);
-      setBookings(bookingsRes.data || []);
+
+      if (thisLoad !== loadRef.current) return;
+
+      let newExpenses: OtherExpense[] = [];
+      let newPartnerSpending: PartnerSpending[] = [];
+      let newSuggestions: Suggestions = {
+        area: [],
+        discipline: [],
+        item: [],
+        costType: [],
+        budgetHead: [],
+        paidBy: [],
+      };
+
       if (isSuperAdmin) {
         const [expRes, partnerRes, sugRes] = await Promise.all([
           api.get("/admin/expenses"),
           api.get("/admin/expenses/partner-spending"),
           api.get("/admin/expenses/suggestions"),
         ]);
-        setExpenses(expRes.data || []);
-        setPartnerSpending(partnerRes.data || []);
-        setSuggestions(sugRes.data);
+
+        if (thisLoad !== loadRef.current) return;
+
+        newExpenses = expRes.data || [];
+        newPartnerSpending = partnerRes.data || [];
+        newSuggestions = sugRes.data;
       }
+
+      setFeePayments(feesRes.data || []);
+      setBookings(bookingsRes.data || []);
+      setExpenses(newExpenses);
+      setPartnerSpending(newPartnerSpending);
+      setSuggestions(newSuggestions);
     } catch {
+      if (thisLoad !== loadRef.current) return;
       setError("Failed to load revenue data");
     } finally {
-      setLoading(false);
+      if (thisLoad === loadRef.current) setLoading(false);
     }
   };
 
@@ -457,6 +486,48 @@ export default function AdminRevenueDashboard() {
     return Array.from(groups.values()).sort((a, b) => b.total - a.total);
   }, [filteredBookings]);
 
+  const searchedExpenses = useMemo(() => {
+    return filteredExpenses.filter((e) => {
+      const q = expenseSearch.toLowerCase();
+      const matchSearch =
+        !q ||
+        e.description.toLowerCase().includes(q) ||
+        (e.paidBy || "").toLowerCase().includes(q) ||
+        (e.budgetHead || "").toLowerCase().includes(q);
+      const matchBudgetHead =
+        !expenseFilterBudgetHead || e.budgetHead === expenseFilterBudgetHead;
+      const matchPaidBy =
+        !expenseFilterPaidBy || e.paidBy === expenseFilterPaidBy;
+      return matchSearch && matchBudgetHead && matchPaidBy;
+    });
+  }, [
+    filteredExpenses,
+    expenseSearch,
+    expenseFilterBudgetHead,
+    expenseFilterPaidBy,
+  ]);
+
+  const searchedIncomes = useMemo(() => {
+    return filteredIncomes.filter((e) => {
+      const q = incomeSearch.toLowerCase();
+      const matchSearch =
+        !q ||
+        e.description.toLowerCase().includes(q) ||
+        (e.paidBy || "").toLowerCase().includes(q) ||
+        (e.budgetHead || "").toLowerCase().includes(q);
+      const matchBudgetHead =
+        !incomeFilterBudgetHead || e.budgetHead === incomeFilterBudgetHead;
+      const matchPaidBy =
+        !incomeFilterPaidBy || e.paidBy === incomeFilterPaidBy;
+      return matchSearch && matchBudgetHead && matchPaidBy;
+    });
+  }, [
+    filteredIncomes,
+    incomeSearch,
+    incomeFilterBudgetHead,
+    incomeFilterPaidBy,
+  ]);
+
   const feesTotal = filteredFees.reduce((s, p) => s + (p.amount || 0), 0);
   const bookingsTotal = filteredBookings.reduce(
     (s, b) => s + (b.amount || 0),
@@ -478,24 +549,6 @@ export default function AdminRevenueDashboard() {
   const pendingBookings = bookings.filter(
     (b) => b.status === "PENDING_PAYMENT",
   ).length;
-
-  const [summaryGroupBy, setSummaryGroupBy] = useState<
-    "budgetHead" | "area" | "discipline" | "costType"
-  >("budgetHead");
-  const categorySummary = useMemo(() => {
-    const map = new Map<string, { total: number; count: number }>();
-    filteredExpenses.forEach((e) => {
-      const key = (e[summaryGroupBy] || "Uncategorized") as string;
-      const existing = map.get(key) || { total: 0, count: 0 };
-      map.set(key, {
-        total: existing.total + e.amount,
-        count: existing.count + 1,
-      });
-    });
-    return Array.from(map.entries())
-      .map(([key, val]) => ({ key, ...val }))
-      .sort((a, b) => b.total - a.total);
-  }, [filteredExpenses, summaryGroupBy]);
 
   const rangeLabels: Record<DateRange, string> = {
     all: "All Time",
@@ -702,23 +755,7 @@ export default function AdminRevenueDashboard() {
     a.download = `revenue-${dateRange}-${new Date().toISOString().split("T")[0]}.csv`;
     a.click();
   };
-  const exportSummaryCSV = () => {
-    const rows: string[][] = [["Rank", summaryGroupBy, "Entries", "Amount"]];
-    categorySummary.forEach((row, idx) =>
-      rows.push([
-        String(idx + 1),
-        row.key,
-        String(row.count),
-        String(row.total),
-      ]),
-    );
-    rows.push(["", "Total", "", String(expensesTotal)]);
-    const csv = rows.map((r) => r.join(",")).join("\n");
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));
-    a.download = `expense-summary-${summaryGroupBy}-${new Date().toISOString().split("T")[0]}.csv`;
-    a.click();
-  };
+
   const exportPartnerSpendingCSV = () => {
     const rows: string[][] = [["Partner", "Budget Head", "Entries", "Amount"]];
     partnerSpending.forEach((partner) => {
@@ -1480,12 +1517,29 @@ export default function AdminRevenueDashboard() {
             <Download size={14} />
           </button>
           {isSuperAdmin && (
-            <button
-              onClick={openAddExpense}
-              className="p-2 bg-red-500 text-white rounded-lg"
-            >
-              <Plus size={14} />
-            </button>
+            <>
+              <button
+                onClick={openAddExpense}
+                className="flex items-center gap-1 px-2.5 py-2 bg-red-500 text-white rounded-lg text-xs font-semibold"
+              >
+                <Plus size={13} />
+                Exp
+              </button>
+              <button
+                onClick={() => {
+                  setEditingExpense(null);
+                  setExpenseForm({
+                    ...EMPTY_EXPENSE_FORM,
+                    transactionType: "INCOME",
+                  });
+                  setShowExpenseModal(true);
+                }}
+                className="flex items-center gap-1 px-2.5 py-2 bg-violet-500 text-white rounded-lg text-xs font-semibold"
+              >
+                <Plus size={13} />
+                Inc
+              </button>
+            </>
           )}
         </div>
       </div>
@@ -1568,7 +1622,10 @@ export default function AdminRevenueDashboard() {
             ["fees", `Fees (${filteredFees.length})`],
             ["bookings", `Bookings (${filteredBookings.length})`],
             ...(isSuperAdmin
-              ? [["expenses", `Expenses (${filteredExpenses.length})`]]
+              ? [
+                  ["expenses", `Expenses (${filteredExpenses.length})`],
+                  ["income", `Income (${filteredIncomes.length})`],
+                ]
               : []),
           ] as [Tab, string][]
         ).map(([tab, label]) => (
@@ -2048,92 +2105,6 @@ export default function AdminRevenueDashboard() {
                   </div>
                 )}
               </div>
-
-              <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-                <div className="px-4 py-3 border-b border-slate-100 bg-slate-50">
-                  <div className="flex items-center justify-between gap-2 flex-wrap">
-                    <div className="flex items-center gap-2">
-                      <h2 className="font-bold text-slate-800 text-sm sm:text-base">
-                        Breakdown
-                      </h2>
-                      <button
-                        onClick={exportSummaryCSV}
-                        className="flex items-center gap-1 px-2.5 py-1 bg-slate-100 text-slate-600 text-xs font-medium rounded-lg hover:bg-slate-200"
-                      >
-                        <Download size={11} />
-                        CSV
-                      </button>
-                    </div>
-                    <div
-                      className="flex gap-1 bg-slate-100 rounded-lg p-0.5 overflow-x-auto"
-                      style={{ scrollbarWidth: "none" }}
-                    >
-                      {(
-                        [
-                          ["budgetHead", "Budget Head"],
-                          ["area", "Area"],
-                          ["discipline", "Discipline"],
-                          ["costType", "Cost"],
-                        ] as [typeof summaryGroupBy, string][]
-                      ).map(([key, label]) => (
-                        <button
-                          key={key}
-                          onClick={() => setSummaryGroupBy(key)}
-                          className={`px-2 py-1 rounded-md text-xs font-medium transition whitespace-nowrap ${summaryGroupBy === key ? "bg-white text-slate-900 shadow-sm" : "text-slate-500"}`}
-                        >
-                          {label}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-                {categorySummary.length === 0 ? (
-                  <EmptyState message="No data in this period" />
-                ) : (
-                  <div className="divide-y divide-slate-100">
-                    {categorySummary.map((row, idx) => {
-                      const pct =
-                        categorySummary[0].total > 0
-                          ? (row.total / categorySummary[0].total) * 100
-                          : 0;
-                      return (
-                        <div key={row.key} className="px-4 sm:px-5 py-3">
-                          <div className="flex items-center justify-between mb-1.5">
-                            <div className="flex items-center gap-2 min-w-0">
-                              <span className="text-xs font-bold text-slate-400 w-5 flex-shrink-0">
-                                #{idx + 1}
-                              </span>
-                              <span className="text-sm font-medium text-slate-800 truncate">
-                                {row.key}
-                              </span>
-                              <span className="text-xs text-slate-400 flex-shrink-0">
-                                {row.count}
-                              </span>
-                            </div>
-                            <span className="text-sm font-bold text-red-600 flex-shrink-0 ml-2">
-                              −{fmt(row.total)}
-                            </span>
-                          </div>
-                          <div className="w-full bg-slate-100 rounded-full h-1.5 ml-7">
-                            <div
-                              className="h-1.5 rounded-full bg-red-400"
-                              style={{ width: `${pct}%` }}
-                            />
-                          </div>
-                        </div>
-                      );
-                    })}
-                    <div className="flex items-center justify-between px-4 sm:px-5 py-3 bg-slate-50 border-t-2 border-slate-200">
-                      <span className="text-sm font-semibold text-slate-700">
-                        Total
-                      </span>
-                      <span className="text-sm font-bold text-red-600">
-                        −{fmt(expensesTotal)}
-                      </span>
-                    </div>
-                  </div>
-                )}
-              </div>
             </div>
           )}
 
@@ -2331,52 +2302,129 @@ export default function AdminRevenueDashboard() {
           {/* ALL EXPENSES */}
           {expenseSubTab === "all" && (
             <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-              <div className="px-4 py-3 border-b border-slate-100 bg-slate-50 flex items-center justify-between">
-                <h2 className="font-bold text-slate-800 text-sm sm:text-base">
-                  All Expenses
-                </h2>
-                <div className="flex items-center gap-2">
-                  <span className="text-sm font-semibold text-red-600">
-                    {fmt(expensesTotal)}
-                  </span>
-                  <button
-                    onClick={exportAllExpensesCSV}
-                    className="flex items-center gap-1 px-2 py-1.5 bg-slate-100 text-slate-600 text-xs font-medium rounded-lg hover:bg-slate-200"
+              <div className="border-b border-slate-100">
+                <div className="px-4 py-3 bg-slate-50 flex items-center justify-between">
+                  <h2 className="font-bold text-slate-800 text-sm sm:text-base">
+                    All Expenses
+                  </h2>
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-semibold text-red-600">
+                      {fmt(searchedExpenses.reduce((s, e) => s + e.amount, 0))}
+                    </span>
+                    <button
+                      onClick={exportAllExpensesCSV}
+                      className="flex items-center gap-1 px-2 py-1.5 bg-slate-100 text-slate-600 text-xs font-medium rounded-lg hover:bg-slate-200"
+                    >
+                      <Download size={11} />
+                      CSV
+                    </button>
+                    <button
+                      onClick={openAddExpense}
+                      className="flex items-center gap-1 px-2.5 py-1.5 bg-red-500 text-white text-xs font-semibold rounded-lg hover:bg-red-600"
+                    >
+                      <Plus size={12} />
+                      Add
+                    </button>
+                  </div>
+                </div>
+                <div className="px-4 py-2.5 bg-white flex flex-wrap gap-2 border-t border-slate-100">
+                  <input
+                    type="text"
+                    value={expenseSearch}
+                    onChange={(e) => setExpenseSearch(e.target.value)}
+                    placeholder="Search description, paid by…"
+                    className="flex-1 min-w-[160px] px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-red-300 focus:outline-none"
+                  />
+                  <select
+                    value={expenseFilterBudgetHead}
+                    onChange={(e) => setExpenseFilterBudgetHead(e.target.value)}
+                    className="px-3 py-2 border border-slate-200 rounded-lg text-sm text-slate-600 focus:ring-2 focus:ring-red-300 focus:outline-none bg-white"
                   >
-                    <Download size={11} />
-                    CSV
-                  </button>
-                  <button
-                    onClick={openAddExpense}
-                    className="flex items-center gap-1 px-2.5 py-1.5 bg-red-500 text-white text-xs font-semibold rounded-lg hover:bg-red-600"
+                    <option value="">All Budget Heads</option>
+                    {[
+                      ...new Set(
+                        filteredExpenses
+                          .map((e) => e.budgetHead)
+                          .filter(Boolean),
+                      ),
+                    ].map((b) => (
+                      <option key={b!} value={b!}>
+                        {b}
+                      </option>
+                    ))}
+                  </select>
+                  <select
+                    value={expenseFilterPaidBy}
+                    onChange={(e) => setExpenseFilterPaidBy(e.target.value)}
+                    className="px-3 py-2 border border-slate-200 rounded-lg text-sm text-slate-600 focus:ring-2 focus:ring-red-300 focus:outline-none bg-white"
                   >
-                    <Plus size={12} />
-                    Add
-                  </button>
+                    <option value="">All Partners</option>
+                    {[
+                      ...new Set(
+                        filteredExpenses.map((e) => e.paidBy).filter(Boolean),
+                      ),
+                    ].map((p) => (
+                      <option key={p!} value={p!}>
+                        {p}
+                      </option>
+                    ))}
+                  </select>
+                  {(expenseSearch ||
+                    expenseFilterBudgetHead ||
+                    expenseFilterPaidBy) && (
+                    <button
+                      onClick={() => {
+                        setExpenseSearch("");
+                        setExpenseFilterBudgetHead("");
+                        setExpenseFilterPaidBy("");
+                      }}
+                      className="px-3 py-2 bg-slate-100 text-slate-500 text-xs font-medium rounded-lg hover:bg-slate-200"
+                    >
+                      Clear
+                    </button>
+                  )}
+                  {(expenseSearch ||
+                    expenseFilterBudgetHead ||
+                    expenseFilterPaidBy) && (
+                    <span className="self-center text-xs text-slate-400">
+                      {searchedExpenses.length} of {filteredExpenses.length}{" "}
+                      results
+                    </span>
+                  )}
                 </div>
               </div>
-              {filteredExpenses.length === 0 ? (
+              {searchedExpenses.length === 0 ? (
                 <div className="text-center py-12">
                   <TrendingDown
                     className="mx-auto text-slate-200 mb-3"
                     size={36}
                   />
-                  <p className="text-slate-500 text-sm mb-3">
-                    No expenses in this period
-                  </p>
-                  <button
-                    onClick={openAddExpense}
-                    className="inline-flex items-center gap-2 px-4 py-2 bg-red-500 text-white text-sm font-semibold rounded-lg hover:bg-red-600"
-                  >
-                    <Plus size={14} />
-                    Add Expense
-                  </button>
+                  {expenseSearch ||
+                  expenseFilterBudgetHead ||
+                  expenseFilterPaidBy ? (
+                    <p className="text-slate-500 text-sm">
+                      No expenses match your search
+                    </p>
+                  ) : (
+                    <>
+                      <p className="text-slate-500 text-sm mb-3">
+                        No expenses in this period
+                      </p>
+                      <button
+                        onClick={openAddExpense}
+                        className="inline-flex items-center gap-2 px-4 py-2 bg-red-500 text-white text-sm font-semibold rounded-lg hover:bg-red-600"
+                      >
+                        <Plus size={14} />
+                        Add Expense
+                      </button>
+                    </>
+                  )}
                 </div>
               ) : (
                 <>
                   {/* Mobile cards */}
                   <div className="sm:hidden divide-y divide-slate-100">
-                    {filteredExpenses.map((e) => (
+                    {searchedExpenses.map((e) => (
                       <div key={e.publicId} className="px-4 py-3.5">
                         <div className="flex items-start justify-between gap-2 mb-1.5">
                           <div className="flex-1 min-w-0">
@@ -2432,7 +2480,10 @@ export default function AdminRevenueDashboard() {
                         Total
                       </span>
                       <span className="text-sm font-bold text-red-600">
-                        −{fmt(expensesTotal)}
+                        −
+                        {fmt(
+                          searchedExpenses.reduce((s, e) => s + e.amount, 0),
+                        )}
                       </span>
                     </div>
                   </div>
@@ -2465,7 +2516,7 @@ export default function AdminRevenueDashboard() {
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100">
-                        {filteredExpenses.map((e) => (
+                        {searchedExpenses.map((e) => (
                           <tr key={e.publicId} className="hover:bg-slate-50">
                             <td className="px-4 py-3 text-sm text-slate-600 whitespace-nowrap">
                               {fmtDate(e.expenseDate)}
@@ -2534,7 +2585,13 @@ export default function AdminRevenueDashboard() {
                             Total
                           </td>
                           <td className="px-4 py-3 text-sm font-bold text-red-600">
-                            −{fmt(expensesTotal)}
+                            −
+                            {fmt(
+                              searchedExpenses.reduce(
+                                (s, e) => s + e.amount,
+                                0,
+                              ),
+                            )}
                           </td>
                           <td colSpan={2} />
                         </tr>
@@ -2544,6 +2601,286 @@ export default function AdminRevenueDashboard() {
                 </>
               )}
             </div>
+          )}
+        </div>
+      )}
+
+      {/* ── INCOME (SUPER ADMIN) ── */}
+      {activeTab === "income" && isSuperAdmin && (
+        <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+          <div className="border-b border-slate-100">
+            <div className="px-4 py-3 bg-slate-50 flex items-center justify-between">
+              <h2 className="font-bold text-slate-800 text-sm sm:text-base">
+                Other Income
+              </h2>
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-semibold text-violet-600">
+                  {fmt(searchedIncomes.reduce((s, e) => s + e.amount, 0))}
+                </span>
+                <button
+                  onClick={() => {
+                    setEditingExpense(null);
+                    setExpenseForm({
+                      ...EMPTY_EXPENSE_FORM,
+                      transactionType: "INCOME",
+                    });
+                    setShowExpenseModal(true);
+                  }}
+                  className="flex items-center gap-1 px-2.5 py-1.5 bg-violet-500 text-white text-xs font-semibold rounded-lg hover:bg-violet-600"
+                >
+                  <Plus size={12} />
+                  Add
+                </button>
+              </div>
+            </div>
+            <div className="px-4 py-2.5 bg-white flex flex-wrap gap-2 border-t border-slate-100">
+              <input
+                type="text"
+                value={incomeSearch}
+                onChange={(e) => setIncomeSearch(e.target.value)}
+                placeholder="Search description, received from…"
+                className="flex-1 min-w-[160px] px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-violet-300 focus:outline-none"
+              />
+              <select
+                value={incomeFilterBudgetHead}
+                onChange={(e) => setIncomeFilterBudgetHead(e.target.value)}
+                className="px-3 py-2 border border-slate-200 rounded-lg text-sm text-slate-600 focus:ring-2 focus:ring-violet-300 focus:outline-none bg-white"
+              >
+                <option value="">All Sources</option>
+                {[
+                  ...new Set(
+                    filteredIncomes.map((e) => e.budgetHead).filter(Boolean),
+                  ),
+                ].map((b) => (
+                  <option key={b!} value={b!}>
+                    {b}
+                  </option>
+                ))}
+              </select>
+              <select
+                value={incomeFilterPaidBy}
+                onChange={(e) => setIncomeFilterPaidBy(e.target.value)}
+                className="px-3 py-2 border border-slate-200 rounded-lg text-sm text-slate-600 focus:ring-2 focus:ring-violet-300 focus:outline-none bg-white"
+              >
+                <option value="">All Received From</option>
+                {[
+                  ...new Set(
+                    filteredIncomes.map((e) => e.paidBy).filter(Boolean),
+                  ),
+                ].map((p) => (
+                  <option key={p!} value={p!}>
+                    {p}
+                  </option>
+                ))}
+              </select>
+              {(incomeSearch ||
+                incomeFilterBudgetHead ||
+                incomeFilterPaidBy) && (
+                <button
+                  onClick={() => {
+                    setIncomeSearch("");
+                    setIncomeFilterBudgetHead("");
+                    setIncomeFilterPaidBy("");
+                  }}
+                  className="px-3 py-2 bg-slate-100 text-slate-500 text-xs font-medium rounded-lg hover:bg-slate-200"
+                >
+                  Clear
+                </button>
+              )}
+              {(incomeSearch ||
+                incomeFilterBudgetHead ||
+                incomeFilterPaidBy) && (
+                <span className="self-center text-xs text-slate-400">
+                  {searchedIncomes.length} of {filteredIncomes.length} results
+                </span>
+              )}
+            </div>
+          </div>
+
+          {searchedIncomes.length === 0 ? (
+            <div className="text-center py-12">
+              <TrendingUp className="mx-auto text-slate-200 mb-3" size={36} />
+              {incomeSearch || incomeFilterBudgetHead || incomeFilterPaidBy ? (
+                <p className="text-slate-500 text-sm">
+                  No income entries match your search
+                </p>
+              ) : (
+                <>
+                  <p className="text-slate-500 text-sm mb-3">
+                    No income entries in this period
+                  </p>
+                  <button
+                    onClick={() => {
+                      setEditingExpense(null);
+                      setExpenseForm({
+                        ...EMPTY_EXPENSE_FORM,
+                        transactionType: "INCOME",
+                      });
+                      setShowExpenseModal(true);
+                    }}
+                    className="inline-flex items-center gap-2 px-4 py-2 bg-violet-500 text-white text-sm font-semibold rounded-lg hover:bg-violet-600"
+                  >
+                    <Plus size={14} />
+                    Add Income
+                  </button>
+                </>
+              )}
+            </div>
+          ) : (
+            <>
+              {/* Mobile cards */}
+              <div className="sm:hidden divide-y divide-slate-100">
+                {searchedIncomes.map((e) => (
+                  <div key={e.publicId} className="px-4 py-3.5">
+                    <div className="flex items-start justify-between gap-2 mb-1.5">
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-semibold text-slate-800 truncate">
+                          {e.description}
+                        </p>
+                        <p className="text-xs text-slate-500 mt-0.5">
+                          {fmtDate(e.expenseDate)}
+                          {e.paidBy ? ` · ${e.paidBy}` : ""}
+                        </p>
+                      </div>
+                      <p className="text-sm font-bold text-violet-600 flex-shrink-0">
+                        +{fmt(e.amount)}
+                      </p>
+                    </div>
+                    <div className="flex flex-wrap gap-1 mb-2">
+                      {[e.budgetHead, e.paidBy]
+                        .filter(Boolean)
+                        .map((tag, i) => (
+                          <span
+                            key={i}
+                            className="text-xs bg-violet-50 text-violet-600 px-2 py-0.5 rounded-full"
+                          >
+                            {tag}
+                          </span>
+                        ))}
+                    </div>
+                    {e.notes && (
+                      <p className="text-xs text-slate-400 mb-2 italic truncate">
+                        {e.notes}
+                      </p>
+                    )}
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => openEditExpense(e)}
+                        className="flex items-center gap-1 px-2.5 py-1 bg-blue-50 text-blue-600 text-xs font-medium rounded-lg"
+                      >
+                        <Pencil size={11} />
+                        Edit
+                      </button>
+                      <button
+                        onClick={() => setDeleteConfirm(e.publicId)}
+                        className="flex items-center gap-1 px-2.5 py-1 bg-red-50 text-red-500 text-xs font-medium rounded-lg"
+                      >
+                        <Trash2 size={11} />
+                        Delete
+                      </button>
+                    </div>
+                  </div>
+                ))}
+                <div className="flex items-center justify-between px-4 py-3 bg-slate-50 border-t-2 border-slate-200">
+                  <span className="text-sm font-semibold text-slate-700">
+                    Total · {filteredIncomes.length} entries
+                  </span>
+                  <span className="text-sm font-bold text-violet-600">
+                    +{fmt(searchedIncomes.reduce((s, e) => s + e.amount, 0))}
+                  </span>
+                </div>
+              </div>
+
+              {/* Desktop table */}
+              <div className="hidden sm:block overflow-x-auto">
+                <table className="w-full">
+                  <thead>
+                    <tr className="text-xs text-slate-500 uppercase tracking-wide border-b bg-slate-50/50">
+                      {[
+                        "Date",
+                        "Description",
+                        "Source",
+                        "Received From",
+                        "Amount",
+                        "Notes",
+                        "Actions",
+                      ].map((h) => (
+                        <th
+                          key={h}
+                          className="text-left px-4 py-3 whitespace-nowrap"
+                        >
+                          {h}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {searchedIncomes.map((e) => (
+                      <tr key={e.publicId} className="hover:bg-slate-50">
+                        <td className="px-4 py-3 text-sm text-slate-600 whitespace-nowrap">
+                          {fmtDate(e.expenseDate)}
+                        </td>
+                        <td className="px-4 py-3 text-sm font-medium text-slate-800 max-w-[180px] truncate">
+                          {e.description}
+                        </td>
+                        <td className="px-4 py-3 text-sm text-slate-600">
+                          {e.budgetHead || <Dash />}
+                        </td>
+                        <td className="px-4 py-3 text-sm text-slate-600">
+                          {e.paidBy || <Dash />}
+                        </td>
+                        <td className="px-4 py-3 text-sm font-bold text-violet-600 whitespace-nowrap">
+                          +{fmt(e.amount)}
+                        </td>
+                        <td className="px-4 py-3 text-sm text-slate-400 max-w-[140px]">
+                          {e.notes ? (
+                            <span
+                              title={e.notes}
+                              className="truncate block cursor-help"
+                            >
+                              {e.notes}
+                            </span>
+                          ) : (
+                            <Dash />
+                          )}
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="flex items-center gap-1">
+                            <button
+                              onClick={() => openEditExpense(e)}
+                              className="p-1.5 hover:bg-blue-50 text-blue-600 rounded-lg"
+                            >
+                              <Pencil size={13} />
+                            </button>
+                            <button
+                              onClick={() => setDeleteConfirm(e.publicId)}
+                              className="p-1.5 hover:bg-red-50 text-red-500 rounded-lg"
+                            >
+                              <Trash2 size={13} />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                  <tfoot>
+                    <tr className="border-t-2 border-slate-200 bg-slate-50">
+                      <td
+                        colSpan={4}
+                        className="px-4 py-3 text-sm font-semibold text-slate-700"
+                      >
+                        Total · {filteredIncomes.length} entries
+                      </td>
+                      <td className="px-4 py-3 text-sm font-bold text-violet-600">
+                        +
+                        {fmt(searchedIncomes.reduce((s, e) => s + e.amount, 0))}
+                      </td>
+                      <td colSpan={2} />
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+            </>
           )}
         </div>
       )}
