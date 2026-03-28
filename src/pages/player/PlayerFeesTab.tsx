@@ -238,39 +238,34 @@ function PlayerFeesTab() {
     }
   };
 
-  const handleDownloadReceipt = async (publicId: string) => {
-    try {
-      const token = localStorage.getItem("accessToken");
+  const handleDownloadReceipt = (publicId: string) => {
+    const token = localStorage.getItem("accessToken");
 
-      // Use native fetch — completely bypasses axios interceptors
-      const response = await fetch(
-        `/api/admin/fees/payments/${publicId}/receipt-pdf`,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        },
-      );
+    const xhr = new XMLHttpRequest();
+    xhr.open("GET", `/api/admin/fees/payments/${publicId}/receipt-pdf`, true);
+    xhr.setRequestHeader("Authorization", `Bearer ${token}`);
+    xhr.responseType = "blob";
 
-      if (!response.ok) {
+    xhr.onload = () => {
+      if (xhr.status === 200) {
+        const blobUrl = window.URL.createObjectURL(xhr.response);
+        const link = document.createElement("a");
+        link.href = blobUrl;
+        link.download = `receipt-${publicId}.pdf`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        setTimeout(() => window.URL.revokeObjectURL(blobUrl), 10000);
+      } else {
         toast.error("Failed to generate receipt. Please try again.");
-        return;
       }
+    };
 
-      const blob = await response.blob();
-      const blobUrl = window.URL.createObjectURL(blob);
-
-      const link = document.createElement("a");
-      link.href = blobUrl;
-      link.download = `receipt-${publicId}.pdf`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-
-      setTimeout(() => window.URL.revokeObjectURL(blobUrl), 10000);
-    } catch {
+    xhr.onerror = () => {
       toast.error("Failed to download receipt");
-    }
+    };
+
+    xhr.send();
   };
 
   const handleReverse = async (paymentId: string) => {
