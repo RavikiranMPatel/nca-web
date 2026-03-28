@@ -23,6 +23,12 @@ api.interceptors.response.use(
     if (error.response?.status === 401) {
       const token = localStorage.getItem("accessToken");
 
+      // ✅ Skip logout for blob requests (PDF/file downloads)
+      const isFileDownload = error.config?.responseType === "blob";
+      if (isFileDownload) {
+        return Promise.reject(error); // caught in handleDownloadReceipt's catch block
+      }
+
       // ✅ Redirect ONLY if user was logged in
       if (token) {
         const message = error.response?.data?.message || "";

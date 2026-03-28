@@ -266,8 +266,11 @@ function PlayerFeesTab() {
 
       setTimeout(() => window.URL.revokeObjectURL(blobUrl), 10000);
     } catch (err: any) {
-      // Prevent 401 blob errors from bubbling to interceptor
-      if (err?.response?.status === 401) return; // interceptor handles it
+      // 401 on blob = interceptor skips logout, we just silently return
+      if (err?.response?.status === 401) {
+        toast.error("Session expired. Please refresh.");
+        return;
+      }
       toast.error("Failed to download receipt");
     }
   };
