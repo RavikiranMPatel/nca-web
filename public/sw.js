@@ -1,4 +1,5 @@
-const CACHE_NAME = "nca-mysuru-v1";
+const CACHE_NAME = "nca-mysuru-v2"; // ← bumped version
+
 const STATIC_ASSETS = [
   "/",
   "/index.html",
@@ -33,13 +34,26 @@ self.addEventListener("activate", (event) => {
 // Fetch — network first, fallback to cache
 self.addEventListener("fetch", (event) => {
   if (event.request.method !== "GET") return;
+
+  // ✅ Never intercept API or upload requests
+  const url = new URL(event.request.url);
+  if (
+    url.pathname.startsWith("/api/") ||
+    url.pathname.startsWith("/uploads/")
+  ) {
+    return;
+  }
+
   event.respondWith(
     fetch(event.request)
       .then((res) => {
-        const clone = res.clone();
-        caches
-          .open(CACHE_NAME)
-          .then((cache) => cache.put(event.request, clone));
+        // ✅ Only cache successful responses
+        if (res.ok) {
+          const clone = res.clone();
+          caches
+            .open(CACHE_NAME)
+            .then((cache) => cache.put(event.request, clone));
+        }
         return res;
       })
       .catch(() => caches.match(event.request)),
