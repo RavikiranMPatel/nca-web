@@ -238,34 +238,41 @@ function PlayerFeesTab() {
     }
   };
 
-  const handleDownloadReceipt = (publicId: string) => {
-    const token = localStorage.getItem("accessToken");
+  const handleDownloadReceipt = async (publicId: string) => {
+    try {
+      const response = await api.get(
+        `/admin/fees/payments/${publicId}/receipt-pdf`,
+        { responseType: "blob" },
+      );
 
-    const xhr = new XMLHttpRequest();
-    xhr.open("GET", `/api/admin/fees/payments/${publicId}/receipt-pdf`, true);
-    xhr.setRequestHeader("Authorization", `Bearer ${token}`);
-    xhr.responseType = "blob";
-
-    xhr.onload = () => {
-      if (xhr.status === 200) {
-        const blobUrl = window.URL.createObjectURL(xhr.response);
-        const link = document.createElement("a");
-        link.href = blobUrl;
-        link.download = `receipt-${publicId}.pdf`;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        setTimeout(() => window.URL.revokeObjectURL(blobUrl), 10000);
-      } else {
-        toast.error("Failed to generate receipt. Please try again.");
+      // Check if response is actually a PDF (not an error HTML/JSON blob)
+      if (response.data.type !== "application/pdf") {
+        toast.error("Failed to generate receipt");
+        return;
       }
-    };
 
-    xhr.onerror = () => {
+      const blobUrl = window.URL.createObjectURL(
+        new Blob([response.data], { type: "application/pdf" }),
+      );
+
+      // Mobile-safe download — always use anchor, always append to DOM
+      const link = document.createElement("a");
+      link.href = blobUrl;
+      link.download = `receipt-${publicId}.pdf`;
+      link.target = "_blank";
+      document.body.appendChild(link); // ← critical for mobile
+      link.click();
+      document.body.removeChild(link);
+
+      setTimeout(() => window.URL.revokeObjectURL(blobUrl), 10000);
+    } catch (err: any) {
+      // 401 on blob = interceptor skips logout, we just silently return
+      if (err?.response?.status === 401) {
+        toast.error("Session expired. Please refresh.");
+        return;
+      }
       toast.error("Failed to download receipt");
-    };
-
-    xhr.send();
+    }
   };
 
   const handleReverse = async (paymentId: string) => {
