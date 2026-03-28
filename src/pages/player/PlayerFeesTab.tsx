@@ -244,16 +244,18 @@ function PlayerFeesTab() {
         `/admin/fees/payments/${publicId}/receipt-pdf`,
         { responseType: "blob" },
       );
-      const url = window.URL.createObjectURL(
+      const blobUrl = window.URL.createObjectURL(
         new Blob([response.data], { type: "application/pdf" }),
       );
-      const link = document.createElement("a");
-      link.href = url;
-      link.setAttribute("download", `receipt-${publicId}.pdf`);
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      window.URL.revokeObjectURL(url);
+      const newTab = window.open(blobUrl, "_blank");
+      if (!newTab) {
+        const link = document.createElement("a");
+        link.href = blobUrl;
+        link.setAttribute("download", `receipt-${publicId}.pdf`);
+        link.setAttribute("target", "_blank");
+        link.click();
+      }
+      setTimeout(() => window.URL.revokeObjectURL(blobUrl), 10000);
     } catch {
       toast.error("Failed to download receipt");
     }
@@ -700,7 +702,12 @@ function PlayerFeesTab() {
 
                           {/* PDF */}
                           <button
-                            onClick={() => handleDownloadReceipt(p.publicId)}
+                            type="button"
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              handleDownloadReceipt(p.publicId);
+                            }}
                             className="text-[11px] text-blue-600 font-medium flex items-center gap-1"
                           >
                             <FileText size={12} />
