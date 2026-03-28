@@ -241,6 +241,12 @@ function PlayerFeesTab() {
   const handleDownloadReceipt = (publicId: string) => {
     const token = localStorage.getItem("accessToken");
 
+    // ✅ Guard — don't proceed if no token
+    if (!token) {
+      toast.error("Session expired. Please log in again.");
+      return;
+    }
+
     const xhr = new XMLHttpRequest();
     xhr.open("GET", `/api/admin/fees/payments/${publicId}/receipt-pdf`, true);
     xhr.setRequestHeader("Authorization", `Bearer ${token}`);
@@ -256,6 +262,8 @@ function PlayerFeesTab() {
         link.click();
         document.body.removeChild(link);
         setTimeout(() => window.URL.revokeObjectURL(blobUrl), 10000);
+      } else if (xhr.status === 401) {
+        toast.error("Session expired. Please log in again.");
       } else {
         toast.error("Failed to generate receipt. Please try again.");
       }
@@ -267,7 +275,6 @@ function PlayerFeesTab() {
 
     xhr.send();
   };
-
   const handleReverse = async (paymentId: string) => {
     const reason = prompt("Reason for reversal:");
     if (!reason) return;
