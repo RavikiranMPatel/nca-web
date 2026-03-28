@@ -936,8 +936,8 @@ function Home() {
         >
           <div className="max-w-6xl mx-auto">
             <SectionHeading
-              title="Meet Our Coaches"
-              subtitle="Expert coaches dedicated to your cricket development"
+              title="Meet Our Team"
+              subtitle="The coaches and management team behind NextGen Cricket Academy"
               primaryColor={primaryColor}
             />
 
