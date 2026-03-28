@@ -238,27 +238,34 @@ function PlayerFeesTab() {
     }
   };
 
-  const handleDownloadReceipt = async (publicId: string) => {
-    try {
-      const response = await api.get(
-        `/admin/fees/payments/${publicId}/receipt-pdf`,
-        { responseType: "blob" },
-      );
-      const blobUrl = window.URL.createObjectURL(
-        new Blob([response.data], { type: "application/pdf" }),
-      );
-      const newTab = window.open(blobUrl, "_blank");
-      if (!newTab) {
+  const handleDownloadReceipt = (publicId: string) => {
+    const token = localStorage.getItem("accessToken");
+
+    const xhr = new XMLHttpRequest();
+    xhr.open("GET", `/api/admin/fees/payments/${publicId}/receipt-pdf`, true);
+    xhr.setRequestHeader("Authorization", `Bearer ${token}`);
+    xhr.responseType = "blob";
+
+    xhr.onload = () => {
+      if (xhr.status === 200) {
+        const blobUrl = window.URL.createObjectURL(xhr.response);
         const link = document.createElement("a");
         link.href = blobUrl;
-        link.setAttribute("download", `receipt-${publicId}.pdf`);
-        link.setAttribute("target", "_blank");
+        link.download = `receipt-${publicId}.pdf`;
+        document.body.appendChild(link);
         link.click();
+        document.body.removeChild(link);
+        setTimeout(() => window.URL.revokeObjectURL(blobUrl), 10000);
+      } else {
+        toast.error("Failed to generate receipt. Please try again.");
       }
-      setTimeout(() => window.URL.revokeObjectURL(blobUrl), 10000);
-    } catch {
+    };
+
+    xhr.onerror = () => {
       toast.error("Failed to download receipt");
-    }
+    };
+
+    xhr.send();
   };
 
   const handleReverse = async (paymentId: string) => {
