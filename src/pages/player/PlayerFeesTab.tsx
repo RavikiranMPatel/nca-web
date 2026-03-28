@@ -244,19 +244,30 @@ function PlayerFeesTab() {
         `/admin/fees/payments/${publicId}/receipt-pdf`,
         { responseType: "blob" },
       );
+
+      // Check if response is actually a PDF (not an error HTML/JSON blob)
+      if (response.data.type !== "application/pdf") {
+        toast.error("Failed to generate receipt");
+        return;
+      }
+
       const blobUrl = window.URL.createObjectURL(
         new Blob([response.data], { type: "application/pdf" }),
       );
-      const newTab = window.open(blobUrl, "_blank");
-      if (!newTab) {
-        const link = document.createElement("a");
-        link.href = blobUrl;
-        link.setAttribute("download", `receipt-${publicId}.pdf`);
-        link.setAttribute("target", "_blank");
-        link.click();
-      }
+
+      // Mobile-safe download — always use anchor, always append to DOM
+      const link = document.createElement("a");
+      link.href = blobUrl;
+      link.download = `receipt-${publicId}.pdf`;
+      link.target = "_blank";
+      document.body.appendChild(link); // ← critical for mobile
+      link.click();
+      document.body.removeChild(link);
+
       setTimeout(() => window.URL.revokeObjectURL(blobUrl), 10000);
-    } catch {
+    } catch (err: any) {
+      // Prevent 401 blob errors from bubbling to interceptor
+      if (err?.response?.status === 401) return; // interceptor handles it
       toast.error("Failed to download receipt");
     }
   };
