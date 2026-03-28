@@ -1,4 +1,4 @@
-const CACHE_NAME = "nca-mysuru-v2"; // ← bumped version
+const CACHE_NAME = "nca-mysuru-v3"; // ← bump again to force replacement
 
 const STATIC_ASSETS = [
   "/",
@@ -9,7 +9,7 @@ const STATIC_ASSETS = [
   "/og-image.png",
 ];
 
-// Install — cache static assets
+// Install
 self.addEventListener("install", (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => cache.addAll(STATIC_ASSETS)),
@@ -17,7 +17,7 @@ self.addEventListener("install", (event) => {
   self.skipWaiting();
 });
 
-// Activate — clean old caches
+// Activate
 self.addEventListener("activate", (event) => {
   event.waitUntil(
     caches
@@ -26,16 +26,15 @@ self.addEventListener("activate", (event) => {
         Promise.all(
           keys.filter((k) => k !== CACHE_NAME).map((k) => caches.delete(k)),
         ),
-      ),
+      )
+      .then(() => self.clients.claim()),
   );
-  self.clients.claim();
 });
 
-// Fetch — network first, fallback to cache
+// Fetch
 self.addEventListener("fetch", (event) => {
   if (event.request.method !== "GET") return;
 
-  // ✅ Never intercept API or upload requests
   const url = new URL(event.request.url);
   if (
     url.pathname.startsWith("/api/") ||
@@ -47,7 +46,6 @@ self.addEventListener("fetch", (event) => {
   event.respondWith(
     fetch(event.request)
       .then((res) => {
-        // ✅ Only cache successful responses
         if (res.ok) {
           const clone = res.clone();
           caches
