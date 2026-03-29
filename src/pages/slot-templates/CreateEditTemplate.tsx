@@ -610,7 +610,7 @@ function CreateEditTemplate() {
                         formData.slots[0]?.price60Balls ?? 300,
                       )}
                       min="0"
-                      step="50"
+                      step="any"
                     />
                   </div>
                   <div className="flex items-center gap-1.5">
@@ -626,7 +626,7 @@ function CreateEditTemplate() {
                         formData.slots[0]?.price120Balls ?? 500,
                       )}
                       min="0"
-                      step="50"
+                      step="any"
                     />
                   </div>
                 </>
@@ -836,7 +836,7 @@ function SlotRow({ slot, index, isBowling, onUpdate, onRemove }: SlotRowProps) {
               }
               className="border rounded px-2 py-1 text-sm w-20"
               min="0"
-              step="50"
+              step="any"
               placeholder="300"
             />
           </div>
@@ -852,7 +852,7 @@ function SlotRow({ slot, index, isBowling, onUpdate, onRemove }: SlotRowProps) {
               }
               className="border rounded px-2 py-1 text-sm w-20"
               min="0"
-              step="50"
+              step="any"
               placeholder="500"
             />
           </div>
