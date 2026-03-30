@@ -440,13 +440,15 @@ function AdminDashboard() {
             gradient="bg-gradient-to-br from-orange-500 to-orange-600"
             textLight="text-orange-100"
           />
-          <PlainCard
-            icon={Settings}
-            title="Academy Settings"
-            description="Configure academy info, branding, and home page"
-            onClick={() => navigate("/admin/settings")}
-            iconColor="text-indigo-600"
-          />
+          {isSuperAdmin && (
+            <PlainCard
+              icon={Settings}
+              title="Academy Settings"
+              description="Configure academy info, branding, and home page"
+              onClick={() => navigate("/admin/settings")}
+              iconColor="text-indigo-600"
+            />
+          )}
           {isSuperAdmin && (
             <ActionCard
               icon={TrendingUp}

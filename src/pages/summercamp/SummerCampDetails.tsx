@@ -50,9 +50,8 @@ function SummerCampDetails() {
       const [campData, feeRulesData, branchesData] = await Promise.all([
         summerCampService.getCampById(campId!),
         summerCampService.getFeeRules(campId!),
-        getAdminBranches(),
+        getAdminBranches().catch(() => []),
       ]);
-
       setCamp(campData);
       setFeeRules(feeRulesData);
 
