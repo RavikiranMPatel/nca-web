@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
+// Add to imports at the top
+import { toast } from "react-hot-toast";
 import {
   ArrowLeft,
   Zap,
@@ -27,6 +29,16 @@ type Subscription = {
   expiresOn: string;
   pricePaid: number;
   registrationFeePaid: boolean;
+};
+
+type SubscriptionPlan = {
+  publicId: string;
+  sessionsPerMonth: number;
+  months: number;
+  totalSessions: number;
+  price: number;
+  registrationFee: number;
+  description: string;
 };
 
 type SubscriptionResponse = {
@@ -58,18 +70,24 @@ function MySubscription() {
   const [loading, setLoading] = useState(true);
   const [showHistory, setShowHistory] = useState(false);
 
+  const [plans, setPlans] = useState<SubscriptionPlan[]>([]);
+  const [requesting, setRequesting] = useState<string | null>(null);
+
   useEffect(() => {
     loadData();
   }, []);
 
   const loadData = async () => {
     try {
-      const [subRes, histRes] = await Promise.all([
+      // inside loadData(), add plans fetch:
+      const [subRes, histRes, plansRes] = await Promise.all([
         api.get("/subscriptions/my"),
         api.get("/subscriptions/my/history"),
+        api.get("/subscriptions/plans"), // ← add this
       ]);
       setSubInfo(subRes.data);
       setHistory(histRes.data);
+      setPlans(plansRes.data); // ← add this
     } catch {
       // silently fail
     } finally {
@@ -87,6 +105,27 @@ function MySubscription() {
       </div>
     );
   }
+
+  const handleRequestPlan = async (planPublicId: string) => {
+    if (
+      !confirm(
+        "Queue this plan? It will activate when your current plan expires.",
+      )
+    )
+      return;
+    setRequesting(planPublicId);
+    try {
+      await api.post("/subscriptions/request", { planPublicId });
+      toast.success(
+        "Plan queued! It will auto-activate when your current plan expires.",
+      );
+      loadData(); // refresh to show queued banner
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message || "Failed to queue plan");
+    } finally {
+      setRequesting(null);
+    }
+  };
 
   const active = subInfo?.subscription;
   const queued = subInfo?.queued;
@@ -251,6 +290,65 @@ function MySubscription() {
             <span className="text-sm font-bold text-amber-800">
               ₹{queued.pricePaid?.toLocaleString("en-IN")}
             </span>
+          </div>
+        </div>
+      )}
+
+      {/* ── AVAILABLE PLANS (to queue) ─────────────────────────── */}
+      {active && !queued && plans.length > 0 && (
+        <div className="bg-white rounded-2xl border border-slate-200 p-4 space-y-3">
+          <div>
+            <p className="text-sm font-semibold text-slate-700">
+              Queue Next Plan
+            </p>
+            <p className="text-xs text-slate-500 mt-0.5">
+              Lock in today's price — activates automatically when your current
+              plan expires.
+            </p>
+          </div>
+          <div className="space-y-2">
+            {plans
+              .filter((p) => p.sessionsPerMonth === active.sessionsPerMonth) // show same tier by default
+              .map((plan) => (
+                <div
+                  key={plan.publicId}
+                  className="flex items-center justify-between border border-slate-200
+                       rounded-xl px-4 py-3"
+                >
+                  <div>
+                    <p className="text-sm font-semibold text-slate-800">
+                      {plan.months === 12
+                        ? "1 Year"
+                        : plan.months === 1
+                          ? "1 Month"
+                          : `${plan.months} Months`}
+                    </p>
+                    <p className="text-xs text-slate-500">
+                      {plan.totalSessions} total sessions
+                    </p>
+                    {plan.description && (
+                      <p className="text-xs text-blue-600 mt-0.5">
+                        {plan.description}
+                      </p>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <div className="text-right">
+                      <p className="text-base font-bold text-blue-700">
+                        ₹{plan.price.toLocaleString("en-IN")}
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => handleRequestPlan(plan.publicId)}
+                      disabled={requesting === plan.publicId}
+                      className="text-xs bg-blue-600 text-white px-3 py-2 rounded-lg
+                           hover:bg-blue-700 transition disabled:opacity-50 font-medium"
+                    >
+                      {requesting === plan.publicId ? "..." : "Queue"}
+                    </button>
+                  </div>
+                </div>
+              ))}
           </div>
         </div>
       )}
