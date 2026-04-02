@@ -1012,9 +1012,10 @@ function AssignPlanModal({
       className="fixed inset-0 bg-black/50 z-50 flex items-end sm:items-center
                     justify-center p-0 sm:p-4"
     >
+      // Replace with:
       <div
         className="bg-white w-full sm:max-w-md sm:rounded-2xl rounded-t-2xl
-                      shadow-xl overflow-hidden"
+                shadow-xl overflow-hidden flex flex-col max-h-[90vh]"
       >
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b bg-slate-50">
@@ -1030,7 +1031,7 @@ function AssignPlanModal({
           </button>
         </div>
 
-        <div className="p-5 space-y-4 max-h-[70vh] overflow-y-auto">
+        <div className="p-5 space-y-4 overflow-y-auto flex-1 min-h-0">
           {/* Queued warning */}
           {modal.hasActiveSub && (
             <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">
@@ -1123,7 +1124,6 @@ function AssignPlanModal({
             />
           </div>
         </div>
-
         {/* Footer buttons */}
         <div className="flex gap-3 px-5 py-4 border-t bg-slate-50">
           <button

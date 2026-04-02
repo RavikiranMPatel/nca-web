@@ -406,10 +406,14 @@ export default function AdminRevenueDashboard() {
 
   const loadMonthly = async (year: number, month: number) => {
     if (!isSuperAdmin) return;
-    const res = await api.get(
-      `/admin/expenses/monthly?year=${year}&month=${month}`,
-    );
-    setMonthlyPayments(res.data || []);
+    try {
+      const res = await api.get(
+        `/admin/expenses/monthly?year=${year}&month=${month}`,
+      );
+      setMonthlyPayments(res.data || []);
+    } catch {
+      // silently fail, don't trigger logout
+    }
   };
 
   const saveRecurringItem = async () => {
