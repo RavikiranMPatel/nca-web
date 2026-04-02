@@ -365,7 +365,7 @@ function AdminMembersPage() {
 
                       <div className="flex items-center gap-4">
                         {/* Sessions pill */}
-                        <div className="text-right hidden sm:block">
+                        <div className="text-right">
                           <p className="text-sm font-bold text-slate-900">
                             {sub.sessionsRemaining}
                             <span className="text-slate-400 font-normal">

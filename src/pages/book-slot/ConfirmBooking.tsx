@@ -250,7 +250,7 @@ function ConfirmBooking() {
                 type="tel"
                 inputMode="numeric"
                 maxLength={10}
-                placeholder=""
+                placeholder="e.g. 9876543210"
                 value={guestPhone}
                 onChange={(e) =>
                   setGuestPhone(e.target.value.replace(/\D/g, ""))
