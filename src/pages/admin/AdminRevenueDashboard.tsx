@@ -66,6 +66,16 @@ type OtherExpense = {
   notes: string | null;
   transactionType: "EXPENSE" | "INCOME";
 };
+
+type CampPayment = {
+  publicId: string;
+  campName: string;
+  playerName: string;
+  amount: number;
+  paidAt: string | null;
+  paymentMode: string | null;
+  enrolledBatchCount: number;
+};
 type PartnerSpending = {
   name: string;
   total: number;
@@ -97,7 +107,14 @@ type Suggestions = {
   budgetHead: string[];
   paidBy: string[];
 };
-type Tab = "overview" | "fees" | "bookings" | "expenses" | "income";
+
+type Tab =
+  | "overview"
+  | "fees"
+  | "bookings"
+  | "campfees"
+  | "expenses"
+  | "income";
 type ExpenseSubTab = "summary" | "monthly" | "all";
 type DateRange = "all" | "today" | "this_week" | "this_month" | "custom";
 
@@ -286,6 +303,8 @@ export default function AdminRevenueDashboard() {
   const [expenses, setExpenses] = useState<OtherExpense[]>([]);
   const [partnerSpending, setPartnerSpending] = useState<PartnerSpending[]>([]);
   const [monthlyPayments, setMonthlyPayments] = useState<MonthlyPayment[]>([]);
+
+  const [campPayments, setCampPayments] = useState<CampPayment[]>([]);
   const [suggestions, setSuggestions] = useState<Suggestions>({
     area: [],
     discipline: [],
@@ -300,7 +319,7 @@ export default function AdminRevenueDashboard() {
   const [activeTab, setActiveTab] = useState<Tab>("overview");
   const [expenseSubTab, setExpenseSubTab] = useState<ExpenseSubTab>("summary");
 
-  const [dateRange, setDateRange] = useState<DateRange>("this_month");
+  const [dateRange, setDateRange] = useState<DateRange>("all");
   const [customFrom, setCustomFrom] = useState("");
   const [customTo, setCustomTo] = useState("");
   const loadRef = useRef(0);
@@ -336,9 +355,12 @@ export default function AdminRevenueDashboard() {
     setError("");
     const thisLoad = ++loadRef.current;
     try {
-      const [feesRes, bookingsRes] = await Promise.all([
+      const [feesRes, bookingsRes, campPaymentsRes] = await Promise.all([
         api.get("/admin/fees/payments"),
         api.get("/admin/bookings"),
+        api
+          .get("/admin/summer-camps/revenue/payments")
+          .catch(() => ({ data: [] })),
       ]);
 
       if (thisLoad !== loadRef.current) return;
@@ -370,6 +392,7 @@ export default function AdminRevenueDashboard() {
 
       setFeePayments(feesRes.data || []);
       setBookings(bookingsRes.data || []);
+      setCampPayments(campPaymentsRes.data || []);
       setExpenses(newExpenses);
       setPartnerSpending(newPartnerSpending);
       setSuggestions(newSuggestions);
@@ -457,6 +480,11 @@ export default function AdminRevenueDashboard() {
     [expenses, from, to],
   );
 
+  const filteredCampFees = useMemo(
+    () => campPayments.filter((p) => p.paidAt && inRange(p.paidAt)),
+    [campPayments, from, to],
+  );
+
   const groupedBookings = useMemo(() => {
     const groups = new Map<
       string,
@@ -533,6 +561,10 @@ export default function AdminRevenueDashboard() {
     (s, b) => s + (b.amount || 0),
     0,
   );
+  const campFeesTotal = filteredCampFees.reduce(
+    (s, p) => s + (p.amount || 0),
+    0,
+  );
   const expensesTotal = filteredExpenses.reduce(
     (s, e) => s + (e.amount || 0),
     0,
@@ -541,7 +573,8 @@ export default function AdminRevenueDashboard() {
     (s, e) => s + (e.amount || 0),
     0,
   );
-  const grossRevenue = feesTotal + bookingsTotal + otherIncomeTotal;
+  const grossRevenue =
+    feesTotal + bookingsTotal + campFeesTotal + otherIncomeTotal;
   const netRevenue = grossRevenue - expensesTotal;
   const monthlyPaidTotal = monthlyPayments
     .filter((p) => p.status === "PAID")
@@ -687,6 +720,21 @@ export default function AdminRevenueDashboard() {
         "Mode",
       ],
     ];
+    filteredCampFees.forEach((p) =>
+      rows.push([
+        "Camp Fee",
+        fmtDate(p.paidAt),
+        `${p.campName} (${p.enrolledBatchCount} sessions)`,
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        String(p.amount),
+        fmtMode(p.paymentMode),
+      ]),
+    );
     filteredFees.forEach((p) =>
       rows.push([
         "Fee",
@@ -859,6 +907,15 @@ export default function AdminRevenueDashboard() {
       amount: p.amount,
       mode: fmtMode(p.paymentMode),
     }));
+    const camps: TxRow[] = filteredCampFees.map((p) => ({
+      key: "c-" + p.publicId,
+      date: p.paidAt || "",
+      type: "fee" as const,
+      name: p.playerName,
+      description: `${p.campName} · ${p.enrolledBatchCount} session${p.enrolledBatchCount !== 1 ? "s" : ""}`,
+      amount: p.amount,
+      mode: fmtMode(p.paymentMode),
+    }));
     const bks: TxRow[] = filteredBookings.map((b) => ({
       key: "b-" + b.bookingPublicId,
       date: b.slotDate,
@@ -890,11 +947,12 @@ export default function AdminRevenueDashboard() {
           mode: "—",
         }))
       : [];
-    return [...fees, ...bks, ...exps, ...incs]
+    return [...fees, ...camps, ...bks, ...exps, ...incs]
       .sort((a, b) => (b.date > a.date ? 1 : -1))
       .slice(0, 20);
   }, [
     filteredFees,
+    filteredCampFees,
     filteredBookings,
     filteredExpenses,
     filteredIncomes,
@@ -1411,7 +1469,7 @@ export default function AdminRevenueDashboard() {
               Revenue
             </h1>
             <p className="text-xs text-slate-500 hidden sm:block">
-              Fees + Bookings{isSuperAdmin ? " + Expenses" : ""}
+              Fees + Camp Fees + Bookings{isSuperAdmin ? " + Expenses" : ""}
             </p>
           </div>
         </div>
@@ -1546,7 +1604,7 @@ export default function AdminRevenueDashboard() {
 
       {/* ── Summary Cards ── */}
       <div
-        className={`grid gap-2 sm:gap-3 ${isSuperAdmin ? "grid-cols-2 sm:grid-cols-3 lg:grid-cols-6" : "grid-cols-2 lg:grid-cols-4"}`}
+        className={`grid gap-2 sm:gap-3 ${isSuperAdmin ? "grid-cols-2 sm:grid-cols-3 lg:grid-cols-7" : "grid-cols-2 lg:grid-cols-4"}`}
       >
         {isSuperAdmin && (
           <SummaryCard
@@ -1568,6 +1626,15 @@ export default function AdminRevenueDashboard() {
           bg="bg-gradient-to-br from-blue-50 to-indigo-50"
           border="border-blue-200"
           valueClass="text-blue-700"
+        />
+        <SummaryCard
+          label="Camp Fees"
+          value={fmt(campFeesTotal)}
+          sub={`${filteredCampFees.length} paid`}
+          icon={<Users size={15} className="text-teal-600" />}
+          bg="bg-gradient-to-br from-teal-50 to-cyan-50"
+          border="border-teal-200"
+          valueClass="text-teal-700"
         />
         <SummaryCard
           label="Bookings"
@@ -1621,6 +1688,7 @@ export default function AdminRevenueDashboard() {
             ["overview", "Overview"],
             ["fees", `Fees (${filteredFees.length})`],
             ["bookings", `Bookings (${filteredBookings.length})`],
+            ["campfees", `Camp Fees (${filteredCampFees.length})`],
             ...(isSuperAdmin
               ? [
                   ["expenses", `Expenses (${filteredExpenses.length})`],
@@ -2018,6 +2086,139 @@ export default function AdminRevenueDashboard() {
                 </span>
               </div>
             </div>
+          )}
+        </div>
+      )}
+
+      {/* ── CAMP FEES ── */}
+      {activeTab === "campfees" && (
+        <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+          <div className="px-4 py-3 border-b border-slate-100 bg-slate-50 flex items-center justify-between">
+            <h2 className="font-bold text-slate-800 text-sm sm:text-base">
+              Camp Fee Payments
+            </h2>
+            <span className="text-sm font-semibold text-teal-600">
+              {fmt(campFeesTotal)}
+            </span>
+          </div>
+          {filteredCampFees.length === 0 ? (
+            <EmptyState message="No camp fee payments in this period" />
+          ) : (
+            <>
+              {/* Mobile */}
+              <div className="sm:hidden divide-y divide-slate-100">
+                {filteredCampFees.map((p) => (
+                  <div key={p.publicId} className="px-4 py-3.5">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-semibold text-slate-800 truncate">
+                          {p.playerName}
+                        </p>
+                        <p className="text-xs text-slate-500 mt-0.5">
+                          {p.campName}
+                        </p>
+                      </div>
+                      <p className="text-sm font-bold text-teal-700 flex-shrink-0">
+                        {fmt(p.amount)}
+                      </p>
+                    </div>
+                    <div className="flex items-center flex-wrap gap-x-3 gap-y-1 mt-2">
+                      <span className="text-xs text-slate-400">
+                        {fmtDate(p.paidAt)}
+                      </span>
+                      <span className="text-xs bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded">
+                        {p.enrolledBatchCount} session
+                        {p.enrolledBatchCount !== 1 ? "s" : ""}
+                      </span>
+                      {p.paymentMode && (
+                        <span className="text-xs bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded">
+                          {fmtMode(p.paymentMode)}
+                        </span>
+                      )}
+                      <span className="inline-flex items-center gap-0.5 text-xs font-semibold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700">
+                        <CheckCircle2 size={10} /> Paid
+                      </span>
+                    </div>
+                  </div>
+                ))}
+                <div className="flex items-center justify-between px-4 py-3 bg-slate-50 border-t-2 border-slate-200">
+                  <span className="text-sm font-semibold text-slate-700">
+                    Total · {filteredCampFees.length} payments
+                  </span>
+                  <span className="text-sm font-bold text-teal-700">
+                    {fmt(campFeesTotal)}
+                  </span>
+                </div>
+              </div>
+              {/* Desktop */}
+              <div className="hidden sm:block overflow-x-auto">
+                <table className="w-full">
+                  <thead>
+                    <tr className="text-xs text-slate-500 uppercase tracking-wide border-b bg-slate-50/50">
+                      {[
+                        "Date",
+                        "Student",
+                        "Camp",
+                        "Sessions",
+                        "Amount",
+                        "Mode",
+                        "Status",
+                      ].map((h) => (
+                        <th
+                          key={h}
+                          className="text-left px-4 py-3 whitespace-nowrap"
+                        >
+                          {h}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {filteredCampFees.map((p) => (
+                      <tr key={p.publicId} className="hover:bg-slate-50">
+                        <td className="px-4 py-3 text-sm text-slate-600 whitespace-nowrap">
+                          {fmtDate(p.paidAt)}
+                        </td>
+                        <td className="px-4 py-3 text-sm font-medium text-slate-800">
+                          {p.playerName}
+                        </td>
+                        <td className="px-4 py-3 text-sm text-slate-600">
+                          {p.campName}
+                        </td>
+                        <td className="px-4 py-3 text-sm text-slate-600">
+                          {p.enrolledBatchCount}
+                        </td>
+                        <td className="px-4 py-3 text-sm font-bold text-teal-700">
+                          {fmt(p.amount)}
+                        </td>
+                        <td className="px-4 py-3 text-sm text-slate-600">
+                          {fmtMode(p.paymentMode)}
+                        </td>
+                        <td className="px-4 py-3">
+                          <span className="inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-700">
+                            <CheckCircle2 size={11} /> Paid
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                  <tfoot>
+                    <tr className="border-t-2 border-slate-200 bg-slate-50">
+                      <td
+                        colSpan={4}
+                        className="px-4 py-3 text-sm font-semibold text-slate-700"
+                      >
+                        Total
+                      </td>
+                      <td className="px-4 py-3 text-sm font-bold text-teal-700">
+                        {fmt(campFeesTotal)}
+                      </td>
+                      <td colSpan={2} />
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+            </>
           )}
         </div>
       )}
