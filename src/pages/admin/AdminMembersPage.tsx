@@ -14,6 +14,7 @@ import {
   ChevronDown,
   ChevronUp,
   Clock,
+  X,
 } from "lucide-react";
 import PresenceBanner from "../../components/PresenceBanner";
 import { useAuth } from "../../auth/useAuth";
@@ -37,6 +38,7 @@ type ActiveSubscriber = {
   activatedBy: string;
   notes: string;
   status: string;
+  userPublicId: string;
 };
 
 type NonSubscriber = {
@@ -58,6 +60,31 @@ type GuestBooker = {
   totalSpent: number;
 };
 
+// ADD after existing types:
+type AssignModal = {
+  userId: string;
+  userName: string;
+  hasActiveSub: boolean;
+};
+
+type UserSearchResult = {
+  publicId: string;
+  name: string;
+  phone: string;
+  email: string;
+};
+
+type SubscriptionPlan = {
+  publicId: string;
+  sessionsPerMonth: number;
+  months: number;
+  totalSessions: number;
+  price: number;
+  registrationFee: number;
+  active: boolean;
+  description: string;
+};
+
 type Tab = "ACTIVE" | "QUEUED" | "NON_SUBSCRIBERS" | "GUESTS";
 
 // ── Main Component ────────────────────────────────────────────────────────
@@ -77,6 +104,16 @@ function AdminMembersPage() {
   >([]);
   const [loadingQueued, setLoadingQueued] = useState(false);
 
+  // ADD after existing useState declarations:
+  const [assignModal, setAssignModal] = useState<AssignModal | null>(null);
+  const [plans, setPlans] = useState<SubscriptionPlan[]>([]);
+
+  const [userSearch, setUserSearch] = useState("");
+  const [userSearchResults, setUserSearchResults] = useState<
+    UserSearchResult[]
+  >([]);
+  const [searchingUsers, setSearchingUsers] = useState(false);
+
   const [loadingActive, setLoadingActive] = useState(true);
   const [loadingNonSub, setLoadingNonSub] = useState(false);
   const [loadingGuests, setLoadingGuests] = useState(false);
@@ -88,6 +125,7 @@ function AdminMembersPage() {
   useEffect(() => {
     fetchActive();
     fetchQueued();
+    fetchPlans();
   }, []);
 
   const [deductModal, setDeductModal] = useState<{
@@ -129,6 +167,34 @@ function AdminMembersPage() {
       toast.error("Failed to load queued subscriptions");
     } finally {
       setLoadingQueued(false);
+    }
+  };
+
+  const fetchPlans = async () => {
+    try {
+      const res = await api.get("/admin/subscriptions/plans");
+      setPlans(res.data.filter((p: SubscriptionPlan) => p.active));
+    } catch {
+      toast.error("Failed to load plans");
+    }
+  };
+
+  const handleUserSearch = async (q: string) => {
+    setUserSearch(q);
+    if (q.trim().length < 2) {
+      setUserSearchResults([]);
+      return;
+    }
+    setSearchingUsers(true);
+    try {
+      const res = await api.get(
+        `/admin/users/search?q=${encodeURIComponent(q)}`,
+      );
+      setUserSearchResults(res.data);
+    } catch {
+      // silently fail
+    } finally {
+      setSearchingUsers(false);
     }
   };
 
@@ -218,6 +284,7 @@ function AdminMembersPage() {
       );
       setDeductModal(null);
       fetchActive();
+      fetchQueued();
     } catch (err: any) {
       toast.error(err?.response?.data?.message || "Failed");
     } finally {
@@ -278,6 +345,64 @@ function AdminMembersPage() {
         <p className="text-sm text-slate-500 mt-1">
           Manage subscribers, logged-in users, and guest bookers
         </p>
+      </div>
+
+      {/* User Search */}
+      <div className="relative">
+        <input
+          type="text"
+          value={userSearch}
+          onChange={(e) => handleUserSearch(e.target.value)}
+          placeholder="Search any user by name or phone..."
+          className="w-full px-4 py-2.5 border border-slate-200 rounded-xl text-sm
+               focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+        />
+        {searchingUsers && (
+          <div className="absolute right-3 top-3">
+            <div
+              className="w-4 h-4 border-2 border-slate-300 border-t-blue-500
+                      rounded-full animate-spin"
+            />
+          </div>
+        )}
+        {userSearchResults.length > 0 && (
+          <div
+            className="absolute z-20 top-full mt-1 w-full bg-white border
+                    border-slate-200 rounded-xl shadow-lg overflow-hidden"
+          >
+            {userSearchResults.map((u) => (
+              <div
+                key={u.publicId}
+                className="flex items-center justify-between px-4 py-3
+                     hover:bg-slate-50 border-b border-slate-100 last:border-0"
+              >
+                <div>
+                  <p className="text-sm font-semibold text-slate-800">
+                    {u.name}
+                  </p>
+                  <p className="text-xs text-slate-500">
+                    {u.phone} · {u.email}
+                  </p>
+                </div>
+                <button
+                  onClick={() => {
+                    setAssignModal({
+                      userId: u.publicId,
+                      userName: u.name,
+                      hasActiveSub: false,
+                    });
+                    setUserSearch("");
+                    setUserSearchResults([]);
+                  }}
+                  className="text-xs bg-blue-600 text-white px-3 py-1.5
+                       rounded-lg hover:bg-blue-700 transition font-medium shrink-0 ml-2"
+                >
+                  Assign Plan
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Tab Bar */}
@@ -453,6 +578,19 @@ function AdminMembersPage() {
                         <div className="flex gap-2 pt-1 flex-wrap">
                           <button
                             onClick={() =>
+                              setAssignModal({
+                                userId: sub.userPublicId,
+                                userName: sub.userName,
+                                hasActiveSub: true,
+                              })
+                            }
+                            className="text-xs px-3 py-1.5 border border-blue-300
+             text-blue-700 rounded-lg hover:bg-blue-50 transition"
+                          >
+                            + Assign Next Plan
+                          </button>
+                          <button
+                            onClick={() =>
                               setDeductModal({
                                 publicId: sub.publicId,
                                 userName: sub.userName,
@@ -552,15 +690,31 @@ function AdminMembersPage() {
                     </div>
                   </div>
 
-                  <button
-                    onClick={() => handleActivate(sub.publicId, sub.userName)}
-                    className="shrink-0 flex items-center gap-1.5 text-xs bg-green-600
+                  <div className="flex items-center gap-2 shrink-0">
+                    <button
+                      onClick={() =>
+                        setAssignModal({
+                          userId: sub.userPublicId,
+                          userName: sub.userName,
+                          hasActiveSub: false,
+                        })
+                      }
+                      className="shrink-0 flex items-center gap-1.5 text-xs border border-blue-300
+             text-blue-700 px-3 py-2 rounded-lg hover:bg-blue-50
+             transition font-medium"
+                    >
+                      + Assign Plan
+                    </button>
+                    <button
+                      onClick={() => handleActivate(sub.publicId, sub.userName)}
+                      className="shrink-0 flex items-center gap-1.5 text-xs bg-green-600
                          text-white px-4 py-2 rounded-lg hover:bg-green-700
                          transition font-semibold"
-                  >
-                    <UserCheck size={13} />
-                    Activate
-                  </button>
+                    >
+                      <UserCheck size={13} />
+                      Activate
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>
@@ -626,6 +780,19 @@ function AdminMembersPage() {
                       <p className="text-xs text-slate-500">spent</p>
                     </div>
                     <button
+                      onClick={() =>
+                        setAssignModal({
+                          userId: user.userId,
+                          userName: user.name,
+                          hasActiveSub: false,
+                        })
+                      }
+                      className="flex items-center gap-1.5 text-xs bg-green-600 text-white
+             px-3 py-1.5 rounded-lg hover:bg-green-700 transition"
+                    >
+                      + Assign Plan
+                    </button>
+                    <button
                       onClick={() => handleInvite(user.userId, user.name)}
                       disabled={invitingId === user.userId}
                       className="flex items-center gap-1.5 text-xs bg-blue-600 text-white
@@ -662,9 +829,9 @@ function AdminMembersPage() {
             />
           ) : (
             <div className="space-y-3">
-              {guests.map((guest) => (
+              {guests.map((guest, index) => (
                 <div
-                  key={guest.phone}
+                  key={`${guest.phone}-${index}`}
                   className="bg-white rounded-xl border border-slate-200 p-4
                              flex items-center justify-between gap-4"
                 >
@@ -705,11 +872,9 @@ function AdminMembersPage() {
                       </p>
                       <p className="text-xs text-slate-500">spent</p>
                     </div>
-                    <span
-                      className="text-xs bg-slate-100 text-slate-500
-                                     px-2 py-1 rounded-lg font-medium"
-                    >
-                      Guest
+
+                    <span className="text-xs bg-slate-100 text-slate-400 px-2 py-1 rounded-lg">
+                      Guest — ask them to register first
                     </span>
                   </div>
                 </div>
@@ -771,11 +936,227 @@ function AdminMembersPage() {
           </div>
         </div>
       )}
+
+      {/* ── ASSIGN PLAN MODAL ─────────────────────────────────── */}
+      {assignModal && (
+        <AssignPlanModal
+          modal={assignModal}
+          plans={plans}
+          onClose={() => setAssignModal(null)}
+          onSuccess={() => {
+            fetchActive();
+            fetchQueued();
+          }}
+        />
+      )}
     </div>
   );
 }
 
 // ── Small reusable components ─────────────────────────────────────────────
+
+function AssignPlanModal({
+  modal,
+  plans,
+  onClose,
+  onSuccess,
+}: {
+  modal: { userId: string; userName: string; hasActiveSub: boolean };
+  plans: SubscriptionPlan[];
+  onClose: () => void;
+  onSuccess: () => void;
+}) {
+  const [selectedPlanId, setSelectedPlanId] = useState("");
+  const [overridePrice, setOverridePrice] = useState("");
+  const [notes, setNotes] = useState("");
+  const [assigning, setAssigning] = useState(false);
+
+  const selectedPlan = plans.find((p) => p.publicId === selectedPlanId);
+
+  // Pre-fill price when plan selected
+  const handlePlanChange = (publicId: string) => {
+    setSelectedPlanId(publicId);
+    const plan = plans.find((p) => p.publicId === publicId);
+    if (plan) setOverridePrice(String(plan.price));
+  };
+
+  const handleAssign = async () => {
+    if (!selectedPlanId || !overridePrice) {
+      toast.error("Select a plan and enter price");
+      return;
+    }
+    setAssigning(true);
+    try {
+      await api.post("/admin/subscriptions/assign", {
+        userPublicId: modal.userId,
+        planPublicId: selectedPlanId,
+        overridePrice: parseFloat(overridePrice),
+        notes,
+      });
+      toast.success(
+        modal.hasActiveSub
+          ? `Plan queued for ${modal.userName}`
+          : `Plan activated for ${modal.userName}`,
+      );
+      onSuccess();
+      onClose();
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message || "Failed to assign plan");
+    } finally {
+      setAssigning(false);
+    }
+  };
+
+  return (
+    <div
+      className="fixed inset-0 bg-black/50 z-50 flex items-end sm:items-center
+                    justify-center p-0 sm:p-4"
+    >
+      <div
+        className="bg-white w-full sm:max-w-md sm:rounded-2xl rounded-t-2xl
+                      shadow-xl overflow-hidden"
+      >
+        {/* Header */}
+        <div className="flex items-center justify-between px-5 py-4 border-b bg-slate-50">
+          <div>
+            <h3 className="font-bold text-slate-900">Assign Plan</h3>
+            <p className="text-xs text-slate-500 mt-0.5">{modal.userName}</p>
+          </div>
+          <button
+            onClick={onClose}
+            className="text-slate-400 hover:text-slate-600 p-1"
+          >
+            <X size={20} />
+          </button>
+        </div>
+
+        <div className="p-5 space-y-4 max-h-[70vh] overflow-y-auto">
+          {/* Queued warning */}
+          {modal.hasActiveSub && (
+            <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">
+              <p className="text-xs text-amber-700 font-medium">
+                ⏳ This user has an active subscription. The new plan will be
+                <strong> queued</strong> and auto-activate when current plan
+                expires or sessions run out.
+              </p>
+            </div>
+          )}
+
+          {/* Plan selector */}
+          <div>
+            <label className="text-xs font-semibold text-slate-600 mb-2 block">
+              Select Plan *
+            </label>
+            <div className="space-y-2">
+              {plans.map((plan) => (
+                <button
+                  key={plan.publicId}
+                  onClick={() => handlePlanChange(plan.publicId)}
+                  className={`w-full flex items-center justify-between px-4 py-3
+                              rounded-xl border-2 transition text-left
+                              ${
+                                selectedPlanId === plan.publicId
+                                  ? "border-blue-600 bg-blue-50"
+                                  : "border-slate-200 hover:border-blue-300"
+                              }`}
+                >
+                  <div>
+                    <p className="text-sm font-semibold text-slate-800">
+                      {plan.sessionsPerMonth} sessions ×{" "}
+                      {plan.months === 12
+                        ? "1 Year"
+                        : `${plan.months} Month${plan.months > 1 ? "s" : ""}`}
+                    </p>
+                    <p className="text-xs text-slate-500">
+                      {plan.totalSessions} total sessions
+                    </p>
+                    {plan.description && (
+                      <p className="text-xs text-blue-600 mt-0.5">
+                        {plan.description}
+                      </p>
+                    )}
+                  </div>
+                  <p className="text-base font-bold text-blue-700 shrink-0 ml-2">
+                    ₹{plan.price.toLocaleString("en-IN")}
+                  </p>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Price override */}
+          <div>
+            <label className="text-xs font-semibold text-slate-600 mb-1.5 block">
+              Amount Collected (₹) *
+            </label>
+            <input
+              type="number"
+              value={overridePrice}
+              onChange={(e) => setOverridePrice(e.target.value)}
+              placeholder="Enter actual amount collected"
+              className="w-full px-4 py-2.5 border border-slate-200 rounded-xl text-sm
+                         focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+            {selectedPlan &&
+              overridePrice &&
+              parseFloat(overridePrice) !== selectedPlan.price && (
+                <p className="text-xs text-amber-600 mt-1">
+                  ⚠️ Plan price is ₹{selectedPlan.price.toLocaleString("en-IN")}{" "}
+                  — you've entered a different amount
+                </p>
+              )}
+          </div>
+
+          {/* Notes */}
+          <div>
+            <label className="text-xs font-semibold text-slate-600 mb-1.5 block">
+              Notes{" "}
+              <span className="font-normal text-slate-400">(optional)</span>
+            </label>
+            <input
+              type="text"
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              placeholder="e.g. Paid via UPI, discount applied..."
+              className="w-full px-4 py-2.5 border border-slate-200 rounded-xl text-sm
+                         focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+        </div>
+
+        {/* Footer buttons */}
+        <div className="flex gap-3 px-5 py-4 border-t bg-slate-50">
+          <button
+            onClick={onClose}
+            disabled={assigning}
+            className="flex-1 py-2.5 text-sm font-medium text-slate-600
+                       bg-white border border-slate-200 rounded-xl hover:bg-slate-100 transition"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleAssign}
+            disabled={assigning || !selectedPlanId || !overridePrice}
+            className="flex-1 py-2.5 text-sm font-medium text-white bg-blue-600
+                       rounded-xl hover:bg-blue-700 transition flex items-center
+                       justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {assigning ? (
+              <div
+                className="w-4 h-4 border-2 border-white border-t-transparent
+                              rounded-full animate-spin"
+              />
+            ) : modal.hasActiveSub ? (
+              "Queue Plan"
+            ) : (
+              "Activate Plan"
+            )}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 function InfoTile({
   icon,
