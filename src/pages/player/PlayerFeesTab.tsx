@@ -238,45 +238,23 @@ function PlayerFeesTab() {
     }
   };
 
-  const handleDownloadReceipt = (publicId: string) => {
-    const token = localStorage.getItem("accessToken");
-
-    if (!token) {
-      toast.error("Session expired. Please log in again.");
-      return;
+  const handleDownloadReceipt = async (publicId: string) => {
+    try {
+      const response = await api.get(
+        `/admin/fees/payments/${publicId}/receipt-pdf`,
+        { responseType: "blob" },
+      );
+      const url = window.URL.createObjectURL(
+        new Blob([response.data], { type: "application/pdf" }),
+      );
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `receipt-${publicId}.pdf`;
+      a.click();
+      window.URL.revokeObjectURL(url);
+    } catch (e: any) {
+      toast.error(e?.response?.data?.message || "Failed to download receipt");
     }
-
-    const xhr = new XMLHttpRequest();
-    // ✅ Cache-bust with timestamp — forces a fresh request every time
-    const url = `/api/admin/fees/payments/${publicId}/receipt-pdf?t=${Date.now()}`;
-    xhr.open("GET", url, true);
-    xhr.setRequestHeader("Authorization", `Bearer ${token}`);
-    xhr.setRequestHeader("Cache-Control", "no-cache, no-store");
-    xhr.setRequestHeader("Pragma", "no-cache");
-    xhr.responseType = "blob";
-
-    xhr.onload = () => {
-      if (xhr.status === 200) {
-        const blobUrl = window.URL.createObjectURL(xhr.response);
-        const link = document.createElement("a");
-        link.href = blobUrl;
-        link.download = `receipt-${publicId}.pdf`;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        setTimeout(() => window.URL.revokeObjectURL(blobUrl), 10000);
-      } else if (xhr.status === 401) {
-        toast.error("Session expired. Please log in again.");
-      } else {
-        toast.error("Failed to generate receipt. Please try again.");
-      }
-    };
-
-    xhr.onerror = () => {
-      toast.error("Failed to download receipt");
-    };
-
-    xhr.send();
   };
 
   const handleReverse = async (paymentId: string) => {

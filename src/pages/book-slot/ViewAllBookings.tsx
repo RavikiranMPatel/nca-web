@@ -296,6 +296,16 @@ function ViewAllBookings() {
             <span className="hidden sm:inline">Manual Booking</span>
           </button>
           <button
+            onClick={() => {
+              setLoading(true);
+              loadBookings();
+            }}
+            className="flex items-center gap-1.5 px-2.5 py-2 bg-gray-100 text-gray-700 rounded-lg text-xs font-semibold hover:bg-gray-200 transition"
+          >
+            <span>🔄</span>
+            <span className="hidden sm:inline">Refresh</span>
+          </button>
+          <button
             onClick={exportToCSV}
             className="flex items-center gap-1.5 px-2.5 py-2 bg-green-600 text-white rounded-lg text-xs font-semibold hover:bg-green-700 transition"
           >
