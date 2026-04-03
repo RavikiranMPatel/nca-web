@@ -359,7 +359,7 @@ export default function AdminRevenueDashboard() {
         api.get("/admin/fees/payments"),
         api.get("/admin/bookings"),
         api
-          .get("/admin/summer-camps/revenue/payments", {
+          .get("/admin/summer-camps/revenue-payments-all", {
             skipAuthError: true,
           } as any)
           .catch(() => ({ data: [] })),
