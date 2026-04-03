@@ -26,7 +26,12 @@ api.interceptors.response.use(
       // ✅ Skip logout for blob requests (PDF/file downloads)
       const isFileDownload = error.config?.responseType === "blob";
       if (isFileDownload) {
-        return Promise.reject(error); // caught in handleDownloadReceipt's catch block
+        return Promise.reject(error);
+      }
+
+      // ✅ Skip logout for requests that explicitly opt out
+      if (error.config?.skipAuthError) {
+        return Promise.reject(error);
       }
 
       // ✅ Redirect ONLY if user was logged in
