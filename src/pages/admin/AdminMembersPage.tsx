@@ -406,7 +406,7 @@ function AdminMembersPage() {
       </div>
 
       {/* Tab Bar */}
-      <div className="flex gap-2 flex-wrap">
+      <div className="flex gap-2 overflow-x-auto no-scrollbar">
         {tabs.map((tab) => {
           const Icon = tab.icon;
           const isActive = activeTab === tab.key;
@@ -426,8 +426,8 @@ function AdminMembersPage() {
             <button
               key={tab.key}
               onClick={() => setActiveTab(tab.key)}
-              className={`flex items-center gap-2 px-4 py-2.5 rounded-xl border
-                          text-sm font-medium transition ${colorMap[tab.color]}`}
+              className={`flex-shrink-0 flex items-center gap-2 px-4 py-2.5 rounded-xl border
+            text-sm font-medium transition ${colorMap[tab.color]}`}
             >
               <Icon size={15} />
               {tab.label}
@@ -653,7 +653,7 @@ function AdminMembersPage() {
                 <div
                   key={sub.publicId}
                   className="bg-white rounded-xl border border-amber-200 p-4
-                       flex items-center justify-between gap-4"
+     flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3"
                 >
                   <div className="flex items-center gap-3 min-w-0">
                     <div
@@ -690,7 +690,7 @@ function AdminMembersPage() {
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-2 shrink-0">
+                  <div className="flex flex-wrap gap-2 w-full sm:w-auto">
                     <button
                       onClick={() =>
                         setAssignModal({
@@ -737,8 +737,8 @@ function AdminMembersPage() {
               {nonSubscribers.map((user) => (
                 <div
                   key={user.userId}
-                  className="bg-white rounded-xl border border-slate-200 p-4
-                             flex items-center justify-between gap-4"
+                  className="bg-white rounded-xl border border-amber-200 p-4
+     flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3"
                 >
                   <div className="flex items-center gap-3 min-w-0">
                     <div
@@ -766,7 +766,7 @@ function AdminMembersPage() {
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-4 shrink-0">
+                  <div className="flex flex-wrap gap-2 w-full sm:w-auto">
                     <div className="text-right hidden sm:block">
                       <p className="text-sm font-bold text-slate-900">
                         {user.bookingCount}
@@ -832,8 +832,8 @@ function AdminMembersPage() {
               {guests.map((guest, index) => (
                 <div
                   key={`${guest.phone}-${index}`}
-                  className="bg-white rounded-xl border border-slate-200 p-4
-                             flex items-center justify-between gap-4"
+                  className="bg-white rounded-xl border border-amber-200 p-4
+     flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3"
                 >
                   <div className="flex items-center gap-3 min-w-0">
                     <div
@@ -859,7 +859,7 @@ function AdminMembersPage() {
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-4 shrink-0">
+                  <div className="flex flex-wrap gap-2 w-full sm:w-auto">
                     <div className="text-right hidden sm:block">
                       <p className="text-sm font-bold text-slate-900">
                         {guest.bookingCount}
@@ -1012,7 +1012,6 @@ function AssignPlanModal({
       className="fixed inset-0 bg-black/50 z-50 flex items-end sm:items-center
                     justify-center p-0 sm:p-4"
     >
-      // Replace with:
       <div
         className="bg-white w-full sm:max-w-md sm:rounded-2xl rounded-t-2xl
                 shadow-xl overflow-hidden flex flex-col max-h-[90vh]"
