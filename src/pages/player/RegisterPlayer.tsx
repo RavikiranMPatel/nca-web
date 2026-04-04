@@ -230,10 +230,10 @@ function RegisterPlayer() {
       errors.push("Address is required");
       fieldErrors.address = true;
     }
-    if (!formData.email?.trim()) {
-      errors.push("Email is required");
-      fieldErrors.email = true;
-    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
+    if (
+      formData.email?.trim() &&
+      !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)
+    ) {
       errors.push("Invalid email format");
       fieldErrors.email = true;
     }

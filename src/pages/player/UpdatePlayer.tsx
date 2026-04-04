@@ -270,10 +270,7 @@ export function validatePlayerForm(
     fieldErrors.address = true;
   }
 
-  if (!formData.email?.trim()) {
-    errors.push("Email is required");
-    fieldErrors.email = true;
-  } else {
+  if (formData.email?.trim()) {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(formData.email)) {
       errors.push("Invalid email format");

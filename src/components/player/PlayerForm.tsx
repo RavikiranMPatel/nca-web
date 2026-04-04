@@ -313,7 +313,7 @@ function PlayerForm({
             />
           </Field>
 
-          <Field label="Email" required error={invalidFields.email} colSpan2>
+          <Field label="Email" error={invalidFields.email} colSpan2>
             <input
               type="email"
               name="email"
