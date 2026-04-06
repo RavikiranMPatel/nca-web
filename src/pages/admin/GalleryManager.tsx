@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { Upload, Trash2, Eye, EyeOff, Image as ImageIcon } from "lucide-react";
-import axiosInstance from "../../api/axios";
+import api from "../../api/axios";
 import { getImageUrl } from "../../utils/imageUrl";
 import PresenceBanner from "../../components/PresenceBanner";
 import { useAuth } from "../../auth/useAuth";
@@ -24,7 +24,7 @@ const GalleryManager = () => {
 
   const loadImages = async () => {
     try {
-      const response = await axiosInstance.get("/admin/cms/gallery");
+      const response = await api.get("/admin/cms/gallery");
       setImages(response.data);
       setLoading(false);
     } catch (error) {
@@ -44,7 +44,7 @@ const GalleryManager = () => {
         const formData = new FormData();
         formData.append("file", file);
 
-        const response = await axiosInstance.post(
+        const response = await api.post(
           "/admin/cms/gallery/upload-image",
           formData,
         );
@@ -55,7 +55,7 @@ const GalleryManager = () => {
           active: true,
         };
 
-        const createResponse = await axiosInstance.post(
+        const createResponse = await api.post(
           "/admin/cms/gallery", // ✅ removed /api
           galleryEntry,
         );
@@ -73,7 +73,7 @@ const GalleryManager = () => {
 
   const handleToggle = async (id: string) => {
     try {
-      await axiosInstance.patch(`/admin/cms/gallery/${id}/toggle`);
+      await api.patch(`/admin/cms/gallery/${id}/toggle`);
       setImages(
         images.map((img) =>
           img.id === id ? { ...img, active: !img.active } : img,
@@ -87,7 +87,7 @@ const GalleryManager = () => {
   const handleDelete = async (id: string) => {
     if (!confirm("Delete this image?")) return;
     try {
-      await axiosInstance.delete(`/admin/cms/gallery/${id}`); // ✅ removed /api
+      await api.delete(`/admin/cms/gallery/${id}`); // ✅ removed /api
       setImages(images.filter((img) => img.id !== id));
     } catch (error) {
       console.error("Error deleting:", error);
@@ -99,7 +99,7 @@ const GalleryManager = () => {
       const image = images.find((img) => img.id === id);
       if (!image) return;
 
-      await axiosInstance.put(`/admin/cms/gallery/${id}`, {
+      await api.put(`/admin/cms/gallery/${id}`, {
         // ✅ removed /api
         ...image,
         caption,

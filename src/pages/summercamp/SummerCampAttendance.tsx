@@ -817,12 +817,25 @@ function HistoryTab({
   const [loading, setLoading] = useState(true);
   const [fetched, setFetched] = useState(false);
 
+  // NEW
   const loadSessions = useCallback(async () => {
     if (fetched) return;
     setLoading(true);
+    const token = localStorage.getItem("accessToken");
+    console.log("[HistoryTab] loadSessions firing", {
+      campId,
+      hasToken: !!token,
+      tokenPrefix: token ? token.substring(0, 20) + "…" : "null",
+    });
     try {
       const res = await api.get(
         `/admin/summer-camps/${campId}/attendance/history`,
+      );
+      console.log(
+        "[HistoryTab] history response",
+        res.status,
+        res.data?.length,
+        "sessions",
       );
       setSessions(res.data);
       setFetched(true);

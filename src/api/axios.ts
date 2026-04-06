@@ -5,11 +5,18 @@ const api = axios.create({
 });
 
 // 🔐 Attach JWT to every request
+// NEW
 api.interceptors.request.use(
   (config) => {
     const token = localStorage.getItem("accessToken");
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
+    } else {
+      console.warn(
+        "[axios request] No token for",
+        config.method?.toUpperCase(),
+        config.url,
+      );
     }
     return config;
   },
@@ -20,8 +27,17 @@ api.interceptors.request.use(
 api.interceptors.response.use(
   (response) => response,
   (error) => {
+    // NEW
     if (error.response?.status === 401) {
       const token = localStorage.getItem("accessToken");
+      console.error("[401 interceptor]", {
+        url: error.config?.url,
+        method: error.config?.method,
+        hasToken: !!token,
+        tokenPrefix: token ? token.substring(0, 20) + "…" : "null",
+        responseData: error.response?.data,
+        headers: error.config?.headers,
+      });
 
       // ✅ Skip logout for blob requests (PDF/file downloads)
       const isFileDownload = error.config?.responseType === "blob";
