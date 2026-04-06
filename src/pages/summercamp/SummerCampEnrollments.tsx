@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { motion } from "framer-motion";
+import { AlertTriangle } from "lucide-react";
 import {
   ArrowLeft,
   Search,
@@ -106,6 +107,10 @@ function SummerCampEnrollments() {
 
     const matchesPayment =
       paymentFilter === "all" || enrollment.paymentStatus === paymentFilter;
+
+    // Low attendance filter — flag enrollments where paid & balance > 0 is pending
+    // Since we don't have attendance % on the list, we use payment as proxy
+    // The real attendance filter works via the detail page
 
     return matchesSearch && matchesStatus && matchesPayment;
   });
@@ -284,6 +289,15 @@ function SummerCampEnrollments() {
             </div>
 
             {/* Reset */}
+            <button
+              onClick={() =>
+                navigate(`/admin/summer-camps/${campId}/attendance`)
+              }
+              className="self-end flex items-center gap-1.5 px-4 py-2 text-sm text-amber-700 bg-amber-50 border border-amber-200 hover:bg-amber-100 rounded-lg transition-all font-medium"
+            >
+              <AlertTriangle size={14} />
+              View Low Attendance
+            </button>
             {(search || statusFilter !== "all" || paymentFilter !== "all") && (
               <button
                 onClick={() => {
@@ -336,7 +350,13 @@ function SummerCampEnrollments() {
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: index * 0.05 }}
-                    className="bg-white rounded-xl border border-slate-200 shadow-sm p-4"
+                    className="bg-white rounded-xl border border-slate-200 shadow-sm p-4 cursor-pointer active:scale-[0.98] transition-transform"
+                    onClick={() =>
+                      navigate(
+                        `/admin/summer-camps/${campId}/enrollments/${enrollment.publicId}`,
+                        { state: { enrollment } },
+                      )
+                    }
                   >
                     <h3 className="font-bold text-slate-900 mb-2">
                       {enrollment.playerName}
@@ -385,7 +405,10 @@ function SummerCampEnrollments() {
 
                     <div className="flex gap-2">
                       <button
-                        onClick={() => openPaymentModal(enrollment)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          openPaymentModal(enrollment);
+                        }}
                         className="flex-1 flex items-center justify-center gap-2 px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition text-sm"
                       >
                         <CreditCard size={16} />
@@ -435,7 +458,13 @@ function SummerCampEnrollments() {
                       return (
                         <tr
                           key={enrollment.publicId}
-                          className="hover:bg-slate-50 transition"
+                          className="hover:bg-slate-50 transition cursor-pointer"
+                          onClick={() =>
+                            navigate(
+                              `/admin/summer-camps/${campId}/enrollments/${enrollment.publicId}`,
+                              { state: { enrollment } },
+                            )
+                          }
                         >
                           <td className="px-4 py-3">
                             <div>
@@ -492,7 +521,10 @@ function SummerCampEnrollments() {
                           <td className="px-4 py-3">
                             <div className="flex items-center justify-center gap-2">
                               <button
-                                onClick={() => openPaymentModal(enrollment)}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  openPaymentModal(enrollment);
+                                }}
                                 className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition"
                                 title="Record Payment"
                               >

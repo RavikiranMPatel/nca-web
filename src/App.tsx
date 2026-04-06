@@ -43,6 +43,7 @@ import SummerCampEdit from "./pages/summercamp/SummerCampEdit";
 import SummerCampEnrollments from "./pages/summercamp/SummerCampEnrollments";
 import SummerCampConversion from "./pages/summercamp/SummerCampConversion";
 import SummerCampAttendance from "./pages/summercamp/SummerCampAttendance";
+import SummerCampEnrollmentDetail from "./pages/summercamp/SummerCampEnrollmentDetail";
 import PlayerAttendanceHistoryPage from "./pages/regular-camp-attendance/PlayerAttendanceHistoryPage";
 import PlayerAnalysisPage from "./pages/player/PlayerAnalysisPage";
 import PlayerAssessmentDashboardPage from "./pages/player/PlayerAssessmentDashboardPage";
@@ -613,6 +614,16 @@ function App() {
           <ProtectedRoute roles={["ROLE_ADMIN", "ROLE_SUPER_ADMIN"]}>
             <AppLayout>
               <SummerCampEnrollments />
+            </AppLayout>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/summer-camps/:campId/enrollments/:enrollmentId"
+        element={
+          <ProtectedRoute roles={["ROLE_ADMIN", "ROLE_SUPER_ADMIN"]}>
+            <AppLayout>
+              <SummerCampEnrollmentDetail />
             </AppLayout>
           </ProtectedRoute>
         }

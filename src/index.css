@@ -88,7 +88,7 @@ button {
 
 /* Touch-friendly buttons on mobile */
 @media (max-width: 767px) {
-  button {
+  button:not(.no-min-h) {
     min-height: 44px; /* iOS recommended touch target */
   }
 }

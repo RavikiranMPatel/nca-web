@@ -182,3 +182,56 @@ export type EnrollmentAttendanceSummary = {
   absentSessions: number;
   attendancePercentage: number;
 };
+
+export type SummerCampEnrollmentAttendanceDTO = {
+  enrollmentPublicId: string;
+  playerName: string;
+  campName: string;
+  totalSessions: number;
+  presentCount: number;
+  absentCount: number;
+  attendancePercentage: number;
+  dailyHistory: {
+    date: string;
+    dayNumber: number;
+    batchName: string;
+    status: "PRESENT" | "ABSENT" | "NOT_TAKEN";
+    overridden: boolean;
+    overrideReason?: string;
+    attendanceRecordId?: string;
+  }[];
+};
+
+export type SessionSummary = {
+  sessionPublicId: string;
+  attendanceDate: string;
+  dayNumber: number;
+  batchId: string;
+  batchName: string;
+  batchTime?: string;
+  present: number;
+  absent: number;
+  total: number;
+  locked: boolean;
+  editableByAdmin: boolean;
+  editableBySuperAdmin: boolean;
+};
+
+export type SessionDetail = {
+  sessionPublicId: string;
+  attendanceDate: string;
+  dayNumber: number;
+  batchName: string;
+  present: number;
+  absent: number;
+  total: number;
+  locked: boolean;
+  students: {
+    attendanceRecordId: string;
+    enrollmentPublicId: string;
+    playerName: string;
+    status: "PRESENT" | "ABSENT";
+    overridden: boolean;
+    overrideReason?: string;
+  }[];
+};

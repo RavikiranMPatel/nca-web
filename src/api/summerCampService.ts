@@ -23,6 +23,9 @@ import type {
   ConversionResponse,
   SummerCampStats,
   EnrollmentAttendanceSummary,
+  SummerCampEnrollmentAttendanceDTO,
+  SessionSummary,
+  SessionDetail,
 } from "../types/summercamp";
 
 // ==================== SUMMER CAMP MANAGEMENT ====================
@@ -237,6 +240,64 @@ export const summerCampService = {
       `/admin/summer-camps/${campId}/enrollments/${enrollmentId}/attendance/summary`,
     );
     return response.data;
+  },
+
+  /**
+   * Get full attendance history for a camp (all sessions with summary)
+   */
+  getCampAttendanceHistory: async (
+    campId: string,
+    batchId?: string,
+  ): Promise<SessionSummary[]> => {
+    const response = await api.get(
+      `/admin/summer-camps/${campId}/attendance/history`,
+      { params: batchId ? { batchId } : {} },
+    );
+    return response.data;
+  },
+
+  /**
+   * Get drill-down detail for one session
+   */
+  getSessionDetail: async (
+    campId: string,
+    date: string,
+    batchId: string,
+  ): Promise<SessionDetail> => {
+    const response = await api.get(
+      `/admin/summer-camps/${campId}/attendance/history/session`,
+      { params: { date, batchId } },
+    );
+    return response.data;
+  },
+
+  /**
+   * Get full attendance history for a single enrollment
+   */
+  getEnrollmentAttendanceHistory: async (
+    campId: string,
+    enrollmentId: string,
+  ): Promise<SummerCampEnrollmentAttendanceDTO> => {
+    const response = await api.get(
+      `/admin/summer-camps/${campId}/enrollments/${enrollmentId}/attendance-history`,
+    );
+    return response.data;
+  },
+
+  /**
+   * Super admin bulk override for a past session
+   */
+  bulkOverrideAttendance: async (
+    campId: string,
+    date: string,
+    batchId: string,
+    items: { enrollmentPublicId: string; newStatus: string; reason: string }[],
+  ): Promise<void> => {
+    await api.post(`/admin/summer-camps/${campId}/attendance/bulk-override`, {
+      date,
+      batchId,
+      items,
+    });
   },
 
   // ==================== CONVERSION ====================
