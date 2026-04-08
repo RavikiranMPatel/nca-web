@@ -407,6 +407,17 @@ function Home() {
     settings.YOUTUBE_VIDEO_5,
   ].filter(Boolean) as string[];
 
+  // Add state at the top with other useState declarations
+  const [publicStats, setPublicStats] = useState<{
+    totalPlayers: number;
+    activePlayers: number;
+    morningBatch: number;
+    eveningBatch: number;
+    bothBatch: number;
+    todayPresent: number;
+    weekPresent: number;
+  } | null>(null);
+
   const instagramEnabled = settings.SECTION_INSTAGRAM_ENABLED !== "false";
   const instagramHeading =
     settings.INSTAGRAM_HEADING || "Follow Us on Instagram";
@@ -468,6 +479,7 @@ function Home() {
         testimonialsRes,
         teamRes,
         newsRes,
+        statsRes,
       ] = await Promise.allSettled([
         publicApi.get("/settings/public"),
         publicApi.get("/cms/gallery"),
@@ -476,6 +488,7 @@ function Home() {
         publicApi.get("/cms/testimonials"),
         publicApi.get("/team"),
         publicApi.get("/cms/news?status=PUBLISHED"),
+        publicApi.get("/public/stats"), // add as last entry
       ]);
 
       if (settingsRes.status === "fulfilled")
@@ -494,6 +507,11 @@ function Home() {
       if (teamRes.status === "fulfilled") setTeam(teamRes.value.data);
       if (newsRes.status === "fulfilled")
         setNews(newsRes.value.data.slice(0, 3));
+
+      // index matches position you added it in the array
+      if (statsRes.status === "fulfilled" && statsRes.value?.status === 200) {
+        setPublicStats(statsRes.value.data);
+      }
 
       setLoading(false);
     };
@@ -687,6 +705,79 @@ function Home() {
             >
               Contact Us
             </button>
+          </div>
+        </section>
+      )}
+
+      {/* ── ACADEMY AT A GLANCE ── */}
+      {settings.SECTION_STATS_ENABLED !== "false" && publicStats && (
+        <section className="py-8 md:py-12 px-4 bg-white border-b">
+          <div className="max-w-6xl mx-auto">
+            <SectionHeading
+              title="Academy at a Glance"
+              subtitle="Live numbers from our training ground"
+              primaryColor={primaryColor}
+            />
+            <div className="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-3">
+              {[
+                {
+                  label: "Total Players",
+                  value: publicStats.totalPlayers,
+                  emoji: "🏏",
+                },
+                {
+                  label: "Active Players",
+                  value: publicStats.activePlayers,
+                  emoji: "✅",
+                },
+                {
+                  label: "Morning Batch",
+                  value: publicStats.morningBatch,
+                  emoji: "🌅",
+                },
+                {
+                  label: "Evening Batch",
+                  value: publicStats.eveningBatch,
+                  emoji: "🌙",
+                },
+                {
+                  label: "Both Batches",
+                  value: publicStats.bothBatch,
+                  emoji: "⭐",
+                },
+                {
+                  label: "Present Today",
+                  value: publicStats.todayPresent,
+                  emoji: "📋",
+                },
+                {
+                  label: "This Week",
+                  value: publicStats.weekPresent,
+                  emoji: "📈",
+                },
+              ].map(({ label, value, emoji }) => (
+                <div
+                  key={label}
+                  className={`text-center p-4 md:p-5 ${getShadowClass()}`}
+                  style={{
+                    ...getCardStyle(),
+                    border: `1px solid ${primaryColor}20`,
+                    background: `${primaryColor}06`,
+                  }}
+                >
+                  <div className="text-xl md:text-2xl mb-1">{emoji}</div>
+                  <div
+                    className="text-2xl md:text-3xl font-extrabold"
+                    style={{ color: primaryColor }}
+                  >
+                    {value}
+                  </div>
+                  <div className="text-xs text-gray-500 mt-1 leading-tight">
+                    {label}
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
         </section>
       )}

@@ -9,6 +9,9 @@ import {
   TrendingUp,
   Settings,
   ArrowLeft,
+  ChevronLeft,
+  ChevronRight,
+  Calendar,
 } from "lucide-react";
 import AttendanceRow from "../../components/attendance-component/AttendanceRow";
 import Button from "../../components/Button";
@@ -43,7 +46,8 @@ type AttendanceRecord = {
 
 function AttendancePage() {
   const navigate = useNavigate();
-  const today = new Date().toISOString().slice(0, 10);
+  const todayStr = new Date().toISOString().slice(0, 10);
+  const [selectedDate, setSelectedDate] = useState(todayStr);
 
   const [players, setPlayers] = useState<Player[]>([]);
   const [isLoadingPlayers, setIsLoadingPlayers] = useState(true);
@@ -69,7 +73,8 @@ function AttendancePage() {
 
   const userRole = localStorage.getItem("userRole");
   const isSuperAdmin = userRole === "ROLE_SUPER_ADMIN";
-  const canEdit = session.attendanceMarked ? isSuperAdmin : session.editable;
+
+  const canEdit = isSuperAdmin || session.editable;
 
   const formatDate = (iso: string) =>
     new Date(iso).toLocaleDateString("en-GB", {
@@ -130,7 +135,7 @@ function AttendancePage() {
     if (!selectedBatchId) return;
     api
       .get("/admin/attendance/status", {
-        params: { date: today, batchId: selectedBatchId },
+        params: { date: selectedDate, batchId: selectedBatchId },
       })
       .then((res) => {
         setSession(res.data);
@@ -144,7 +149,12 @@ function AttendancePage() {
           attendanceMarked: false,
         }),
       );
-  }, [today, selectedBatchId]);
+  }, [selectedDate, selectedBatchId]);
+
+  useEffect(() => {
+    setAttendance({});
+    setRecords({});
+  }, [selectedDate]);
 
   useEffect(() => {
     loadSessionStatus();
@@ -158,7 +168,7 @@ function AttendancePage() {
     if (!session.attendanceMarked || !selectedBatchId) return;
     api
       .get("/admin/attendance/records", {
-        params: { date: today, batchId: selectedBatchId },
+        params: { date: selectedDate, batchId: selectedBatchId },
       })
       .then((res) => {
         const map: Record<string, AttendanceRecord> = {};
@@ -181,7 +191,7 @@ function AttendancePage() {
           setAttendance(editable);
         }
       });
-  }, [session.attendanceMarked, selectedBatchId, today, isSuperAdmin]);
+  }, [session.attendanceMarked, selectedBatchId, selectedDate, isSuperAdmin]);
 
   const filteredPlayers = useMemo(() => {
     if (!selectedBatchId) return [];
@@ -254,7 +264,7 @@ function AttendancePage() {
     setIsSubmitting(true);
     try {
       await submitBulkAttendance({
-        date: today,
+        date: selectedDate,
         batchId: selectedBatchId,
         records: payload,
       });
@@ -320,7 +330,6 @@ function AttendancePage() {
                   Attendance
                 </h1>
               </div>
-              <p className="text-xs text-gray-500 ml-6">{formatDate(today)}</p>
             </div>
 
             {/* Action buttons — icon-only on mobile, labeled on desktop */}
@@ -340,6 +349,35 @@ function AttendancePage() {
                 <span className="hidden sm:inline">Analytics</span>
               </button>
             </div>
+          </div>
+
+          <div className="flex items-center gap-2 mt-1 ml-6">
+            <button
+              onClick={() => {
+                const input = document.getElementById(
+                  "attendance-date-picker",
+                ) as HTMLInputElement;
+                if (input.showPicker) {
+                  input.showPicker();
+                } else {
+                  input.click(); // fallback for older mobile browsers
+                }
+              }}
+              className="inline-flex items-center gap-2 px-3 py-1.5 bg-gray-100 hover:bg-gray-200 rounded-full transition cursor-pointer"
+            >
+              <Calendar size={13} className="text-gray-500 flex-shrink-0" />
+              <span className="text-xs font-semibold text-gray-700">
+                {formatDate(selectedDate)}
+              </span>
+            </button>
+            <input
+              id="attendance-date-picker"
+              type="date"
+              value={selectedDate}
+              max={todayStr}
+              onChange={(e) => setSelectedDate(e.target.value)}
+              className="w-0 h-0 opacity-0 absolute pointer-events-none"
+            />
           </div>
 
           {/* Birthday banner */}
