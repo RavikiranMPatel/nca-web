@@ -75,10 +75,23 @@ function isEligibleForGroup(
   const dobDate = new Date(dob);
   if (isNaN(dobDate.getTime())) return false;
   const seasonYear = getSeasonYear();
-  const group = AGE_GROUPS.find((g) => g.value === groupValue);
-  if (!group) return false;
-  const cutoff = new Date(seasonYear - group.age, 8, 1);
-  return dobDate >= cutoff;
+  const groupIndex = AGE_GROUPS.findIndex((g) => g.value === groupValue);
+  if (groupIndex === -1) return false;
+
+  const group = AGE_GROUPS[groupIndex];
+  // Lower bound: born on/after this → eligible for this group
+  const lowerCutoff = new Date(seasonYear - group.age, 8, 1);
+
+  // Upper bound: born before the next smaller group's cutoff
+  // e.g. U-19 upper = 1 Sep (seasonYear - 16) → too old for U-16
+  const prevGroup = AGE_GROUPS[groupIndex - 1];
+  const upperCutoff = prevGroup
+    ? new Date(seasonYear - prevGroup.age, 8, 1)
+    : null;
+
+  return (
+    dobDate >= lowerCutoff && (upperCutoff === null || dobDate < upperCutoff)
+  );
 }
 
 // ─── SHARE MODAL ────────────────────────────────────────
