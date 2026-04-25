@@ -36,6 +36,9 @@ type Player = {
   active: boolean;
   photoUrl?: string;
   branchId?: string;
+  feeType?: "MONTHLY" | "ANNUAL" | "OTHER" | null; // ← NEW
+  feeStatus?: "PAID" | "DUE" | "OVERDUE" | null; // ← NEW
+  nextDueOn?: string | null;
 };
 
 const ITEMS_PER_PAGE = 10;
@@ -780,6 +783,9 @@ function PlayersListPage() {
                     Age Group
                   </th>
                   <th className="px-6 py-4 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">
+                    Fee
+                  </th>
+                  <th className="px-6 py-4 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">
                     Type
                   </th>
                   <th className="px-6 py-4 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">
@@ -854,6 +860,36 @@ function PlayersListPage() {
                           <span className="text-xs text-slate-500">Senior</span>
                         ) : (
                           <span className="text-xs text-slate-400">—</span>
+                        )}
+                      </td>
+                      <td className="px-6 py-4">
+                        {p.feeType ? (
+                          <div className="flex flex-col gap-1">
+                            <span
+                              className={`inline-flex px-2 py-0.5 rounded-full text-[10px] font-bold w-fit ${
+                                p.feeType === "ANNUAL"
+                                  ? "bg-indigo-100 text-indigo-700"
+                                  : "bg-blue-100 text-blue-700"
+                              }`}
+                            >
+                              {p.feeType}
+                            </span>
+                            {p.feeStatus && (
+                              <span
+                                className={`inline-flex px-2 py-0.5 rounded-full text-[10px] font-semibold w-fit ${
+                                  p.feeStatus === "PAID"
+                                    ? "bg-emerald-100 text-emerald-700"
+                                    : p.feeStatus === "OVERDUE"
+                                      ? "bg-red-100 text-red-700"
+                                      : "bg-amber-100 text-amber-700"
+                                }`}
+                              >
+                                {p.feeStatus}
+                              </span>
+                            )}
+                          </div>
+                        ) : (
+                          <span className="text-slate-300 text-xs">—</span>
                         )}
                       </td>
                       <td className="px-6 py-4">
