@@ -785,35 +785,37 @@ function PlayerMediaTab({ playerPublicId }: Props) {
       )}
 
       {/* ─── LIGHTBOX ─────────────────────────────────── */}
+
       {lightboxMedia && lightboxIndex !== null && (
         <div
-          className="fixed inset-0 bg-black/90 flex items-center justify-center z-50"
+          className="fixed inset-0 bg-black/90 flex flex-col items-center justify-center z-50"
           onClick={() => setLightboxIndex(null)}
         >
+          {/* Close — always visible, top-right of screen */}
+          <button
+            type="button"
+            onClick={() => setLightboxIndex(null)}
+            className="absolute top-3 right-3 p-2 text-white/70 hover:text-white z-10"
+          >
+            <X size={24} />
+          </button>
+
           <div
             className="relative w-full max-w-3xl mx-4"
             onClick={(e) => e.stopPropagation()}
           >
-            {/* Close */}
-            <button
-              type="button"
-              onClick={() => setLightboxIndex(null)}
-              className="absolute -top-10 right-0 p-2 text-white/70 hover:text-white z-10"
-            >
-              <X size={24} />
-            </button>
-
             {/* Media */}
-            <div className="bg-black rounded-lg overflow-hidden">
+            <div className="bg-black rounded-t-lg overflow-hidden flex items-center justify-center">
               {lightboxMedia.mediaType === "PHOTO" ? (
                 <img
                   src={lightboxMedia.mediaUrl}
                   alt=""
-                  className="w-full max-h-[70vh] object-contain"
+                  className="max-w-full max-h-[65vh] object-contain"
+                  style={{ width: "auto", height: "auto" }}
                 />
               ) : lightboxMedia.videoPlatform === "YOUTUBE" &&
                 lightboxMedia.videoId ? (
-                <div className="aspect-video">
+                <div className="aspect-video w-full">
                   <iframe
                     src={`${getYouTubeEmbedUrl(lightboxMedia.videoId)}?autoplay=1`}
                     className="w-full h-full"
@@ -824,7 +826,7 @@ function PlayerMediaTab({ playerPublicId }: Props) {
                 </div>
               ) : lightboxMedia.videoPlatform === "INSTAGRAM" &&
                 lightboxMedia.videoId ? (
-                <div className="aspect-[9/16] max-h-[70vh] mx-auto">
+                <div className="aspect-[9/16] max-h-[65vh] mx-auto">
                   <iframe
                     src={getInstagramEmbedUrl(lightboxMedia.videoId)}
                     className="w-full h-full"
@@ -865,7 +867,6 @@ function PlayerMediaTab({ playerPublicId }: Props) {
                   </p>
                 )}
               </div>
-
               {lightboxMedia.mediaType === "VIDEO" &&
                 lightboxMedia.mediaUrl && (
                   <a
@@ -879,12 +880,12 @@ function PlayerMediaTab({ playerPublicId }: Props) {
                 )}
             </div>
 
-            {/* Navigation */}
+            {/* Navigation — inside container so they stay on screen on mobile */}
             {lightboxIndex > 0 && (
               <button
                 type="button"
                 onClick={() => goLightbox(-1)}
-                className="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-12 p-2 rounded-full bg-white/10 text-white hover:bg-white/20 transition-all"
+                className="absolute left-2 top-1/3 -translate-y-1/2 p-2 rounded-full bg-white/10 text-white hover:bg-white/20 transition-all"
               >
                 <ChevronLeft size={24} />
               </button>
@@ -893,7 +894,7 @@ function PlayerMediaTab({ playerPublicId }: Props) {
               <button
                 type="button"
                 onClick={() => goLightbox(1)}
-                className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-12 p-2 rounded-full bg-white/10 text-white hover:bg-white/20 transition-all"
+                className="absolute right-2 top-1/3 -translate-y-1/2 p-2 rounded-full bg-white/10 text-white hover:bg-white/20 transition-all"
               >
                 <ChevronRight size={24} />
               </button>

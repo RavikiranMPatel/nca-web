@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
+  Activity,
   Calendar,
   ClipboardList,
   Power,
@@ -351,6 +352,14 @@ function AdminDashboard() {
             onClick={() => navigate("/admin/coaching")}
             gradient="bg-gradient-to-br from-indigo-500 to-indigo-600"
             textLight="text-indigo-100"
+          />
+          <ActionCard
+            icon={Activity}
+            title="Matches & Scoring"
+            description="Score live matches, view scorecards and share with players"
+            onClick={() => navigate("/admin/cricket/matches")}
+            gradient="bg-gradient-to-br from-cyan-500 to-blue-600"
+            textLight="text-cyan-100"
           />
         </div>
       </section>

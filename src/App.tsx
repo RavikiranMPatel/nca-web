@@ -64,6 +64,12 @@ import PlayerCoachingPage from "./pages/player/PlayerCoachingPage";
 import CoachingDashboardPage from "./pages/coaching/CoachingDashboardPage";
 import PlayerCoachingViewPage from "./pages/player/PlayerCoachingViewPage";
 import UserFormPage from "./pages/UserFormPage";
+import MatchSetupPage from "./pages/scoring/MatchSetupPage";
+import LiveScorerPage from "./pages/scoring/LiveScorerPage";
+import ManualEntryPage from "./pages/scoring/ManualEntryPage";
+import PublicScorecardPage from "./pages/scoring/PublicScorecardPage";
+import PublicPlayerProfilePage from "./pages/scoring/PublicPlayerProfilePage";
+import MatchListPage from "./pages/scoring/MatchListPage";
 
 // Add route after /my-bookings route:
 <Route
@@ -310,6 +316,46 @@ function App() {
           <ProtectedRoute roles={["ROLE_ADMIN", "ROLE_SUPER_ADMIN"]}>
             <AppLayout>
               <AcademySettings />
+            </AppLayout>
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/admin/cricket/matches"
+        element={
+          <ProtectedRoute roles={["ROLE_ADMIN", "ROLE_SUPER_ADMIN"]}>
+            <AppLayout>
+              <MatchListPage />
+            </AppLayout>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/cricket/matches/new"
+        element={
+          <ProtectedRoute roles={["ROLE_ADMIN", "ROLE_SUPER_ADMIN"]}>
+            <AppLayout>
+              <MatchSetupPage />
+            </AppLayout>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/cricket/matches/:matchId/score"
+        element={
+          <ProtectedRoute roles={["ROLE_ADMIN", "ROLE_SUPER_ADMIN"]}>
+            {/* No AppLayout — Live scorer is full screen dark UI */}
+            <LiveScorerPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/cricket/matches/:matchId/enter"
+        element={
+          <ProtectedRoute roles={["ROLE_ADMIN", "ROLE_SUPER_ADMIN"]}>
+            <AppLayout>
+              <ManualEntryPage />
             </AppLayout>
           </ProtectedRoute>
         }
@@ -657,6 +703,15 @@ function App() {
             </AppLayout>
           </ProtectedRoute>
         }
+      />
+
+      <Route
+        path="/match/:matchId/scorecard"
+        element={<PublicScorecardPage />}
+      />
+      <Route
+        path="/players/:playerPublicId/profile"
+        element={<PublicPlayerProfilePage />}
       />
 
       {/* CATCH-ALL */}

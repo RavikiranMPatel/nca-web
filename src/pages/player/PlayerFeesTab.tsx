@@ -13,6 +13,7 @@ import {
   Image as ImageIcon,
   FileText,
   Eye,
+  ChevronDown,
 } from "lucide-react";
 import api from "../../api/axios";
 import { toast } from "react-hot-toast";
@@ -51,6 +52,7 @@ type FeePayment = {
   receiptImageUrl: string | null;
   player?: { phone?: string; parentsPhone?: string; displayName?: string };
   nextDueOn?: string;
+  reversedPaymentPublicId?: string;
 };
 
 const PAYMENT_MODES = [
@@ -69,6 +71,11 @@ function PlayerFeesTab() {
   const { playerPublicId } = useParams();
   const role = localStorage.getItem("userRole");
   const isSuperAdmin = role === "ROLE_SUPER_ADMIN";
+  const [editDatePayment, setEditDatePayment] = useState<FeePayment | null>(
+    null,
+  );
+  const [editDateValue, setEditDateValue] = useState("");
+  const [savingDate, setSavingDate] = useState(false);
 
   const [showSendReceiptModal, setShowSendReceiptModal] =
     useState<FeePayment | null>(null);
@@ -92,6 +99,23 @@ function PlayerFeesTab() {
       toast.error(err.response?.data?.message || "Failed to send receipt");
     } finally {
       setSendingReceipt(false);
+    }
+  };
+
+  const handleUpdateDate = async () => {
+    if (!editDatePayment || !editDateValue) return;
+    setSavingDate(true);
+    try {
+      await api.patch(
+        `/admin/fees/payments/${editDatePayment.publicId}/date?paidOn=${editDateValue}`,
+      );
+      toast.success("Payment date updated!");
+      setEditDatePayment(null);
+      loadAll();
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || "Failed to update date");
+    } finally {
+      setSavingDate(false);
     }
   };
 
@@ -502,6 +526,7 @@ function PlayerFeesTab() {
         ) : (
           <>
             {/* Desktop Table */}
+            {/* Desktop Table */}
             <div className="hidden sm:block overflow-x-auto">
               <table className="w-full">
                 <thead>
@@ -519,214 +544,334 @@ function PlayerFeesTab() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {payments.map((p) => (
-                    <tr
-                      key={p.publicId}
-                      className={`hover:bg-slate-50 transition ${p.type === "REVERSAL" ? "bg-red-50/30" : ""}`}
-                    >
-                      <td className="px-5 py-3 text-sm text-slate-700">
-                        {formatDate(p.paidOn)}
-                      </td>
-                      <td className="px-5 py-3 text-sm text-slate-600">
-                        {p.feePlan?.name || "—"}
-                      </td>
-                      <td className="px-5 py-3 text-sm font-semibold text-slate-800">
-                        ₹{p.amount?.toLocaleString("en-IN")}
-                      </td>
-                      <td className="px-5 py-3 text-sm text-slate-600">
-                        {formatPaymentMode(p.paymentMode)}
-                      </td>
-                      <td className="px-5 py-3">
-                        <div className="flex items-center gap-2">
-                          {p.referenceNumber && (
-                            <span className="text-xs font-mono text-slate-600 bg-slate-100 px-2 py-0.5 rounded">
-                              {p.referenceNumber}
-                            </span>
-                          )}
-                          {p.receiptImageUrl && (
-                            <button
-                              onClick={() =>
-                                setShowReceiptViewer(p.receiptImageUrl)
-                              }
-                              className="text-blue-600 hover:text-blue-700 p-1 hover:bg-blue-50 rounded"
-                              title="View receipt"
+                  {payments
+                    .filter((p) => p.type !== "REVERSAL")
+                    .sort((a, b) => (b.paidOn > a.paidOn ? 1 : -1))
+                    .map((p) => {
+                      // Find reversal for this payment if any
+                      const reversal = payments.find(
+                        (r) =>
+                          r.type === "REVERSAL" &&
+                          r.reversedPaymentPublicId === p.publicId,
+                      );
+                      return (
+                        <>
+                          {/* ── Main Payment Row ── */}
+                          <tr
+                            key={p.publicId}
+                            className={`hover:bg-slate-50 transition ${reversal ? "opacity-60" : ""}`}
+                          >
+                            <td className="px-5 py-3 text-sm text-slate-700">
+                              {formatDate(p.paidOn)}
+                            </td>
+                            <td
+                              className={`px-5 py-3 text-sm ${reversal ? "text-slate-400 line-through" : "text-slate-600"}`}
                             >
-                              <Eye size={14} />
-                            </button>
-                          )}
-                          {!p.referenceNumber && !p.receiptImageUrl && (
-                            <span className="text-xs text-slate-400">—</span>
-                          )}
-                        </div>
-                      </td>
-                      <td className="px-5 py-3">
-                        {p.type !== "REVERSAL" && (
-                          <div className="flex items-center gap-2">
-                            {/* WhatsApp Receipt */}
-                            <button
-                              onClick={() => {
-                                const phone =
-                                  p.player?.parentsPhone ||
-                                  p.player?.phone ||
-                                  "";
-                                setReceiptPhone(phone);
-                                setShowSendReceiptModal(p);
-                              }}
-                              className="inline-flex items-center gap-1.5 text-xs font-medium text-emerald-600 hover:text-emerald-800 hover:bg-emerald-50 px-2.5 py-1.5 rounded-lg border border-emerald-200 transition"
-                              title="Send WhatsApp Receipt"
+                              {p.feePlan?.name || "—"}
+                            </td>
+                            <td
+                              className={`px-5 py-3 text-sm font-semibold ${reversal ? "text-slate-400 line-through" : "text-slate-800"}`}
                             >
-                              <svg
-                                viewBox="0 0 24 24"
-                                className="w-3.5 h-3.5 fill-current"
-                                xmlns="http://www.w3.org/2000/svg"
-                              >
-                                <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z" />
-                                <path d="M12 0C5.373 0 0 5.373 0 12c0 2.098.546 4.07 1.5 5.785L0 24l6.435-1.635A11.945 11.945 0 0012 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 22c-1.887 0-3.655-.487-5.194-1.344l-.372-.22-3.818.97.994-3.71-.242-.383A9.938 9.938 0 012 12C2 6.477 6.477 2 12 2s10 4.477 10 10-4.477 10-10 10z" />
-                              </svg>
-                              Receipt
-                            </button>
+                              ₹{p.amount?.toLocaleString("en-IN")}
+                            </td>
+                            <td className="px-5 py-3 text-sm text-slate-600">
+                              {formatPaymentMode(p.paymentMode)}
+                            </td>
+                            <td className="px-5 py-3">
+                              <div className="flex items-center gap-2">
+                                {p.referenceNumber && (
+                                  <span className="text-xs font-mono text-slate-600 bg-slate-100 px-2 py-0.5 rounded">
+                                    {p.referenceNumber}
+                                  </span>
+                                )}
+                                {p.receiptImageUrl && (
+                                  <button
+                                    onClick={() =>
+                                      setShowReceiptViewer(p.receiptImageUrl)
+                                    }
+                                    className="text-blue-600 hover:text-blue-700 p-1 hover:bg-blue-50 rounded"
+                                  >
+                                    <Eye size={14} />
+                                  </button>
+                                )}
+                                {!p.referenceNumber && !p.receiptImageUrl && (
+                                  <span className="text-xs text-slate-400">
+                                    —
+                                  </span>
+                                )}
+                              </div>
+                            </td>
+                            <td className="px-5 py-3">
+                              {!reversal && (
+                                <div className="flex items-center gap-2">
+                                  <button
+                                    onClick={() => {
+                                      const phone =
+                                        p.player?.parentsPhone ||
+                                        p.player?.phone ||
+                                        "";
+                                      setReceiptPhone(phone);
+                                      setShowSendReceiptModal(p);
+                                    }}
+                                    className="inline-flex items-center gap-1.5 text-xs font-medium text-emerald-600 hover:text-emerald-800 hover:bg-emerald-50 px-2.5 py-1.5 rounded-lg border border-emerald-200 transition"
+                                  >
+                                    <svg
+                                      viewBox="0 0 24 24"
+                                      className="w-3.5 h-3.5 fill-current"
+                                      xmlns="http://www.w3.org/2000/svg"
+                                    >
+                                      <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z" />
+                                      <path d="M12 0C5.373 0 0 5.373 0 12c0 2.098.546 4.07 1.5 5.785L0 24l6.435-1.635A11.945 11.945 0 0012 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 22c-1.887 0-3.655-.487-5.194-1.344l-.372-.22-3.818.97.994-3.71-.242-.383A9.938 9.938 0 012 12C2 6.477 6.477 2 12 2s10 4.477 10 10-4.477 10-10 10z" />
+                                    </svg>
+                                    Receipt
+                                  </button>
+                                  <button
+                                    onClick={() =>
+                                      handleDownloadReceipt(p.publicId)
+                                    }
+                                    className="inline-flex items-center gap-1.5 text-xs font-medium text-blue-600 hover:text-blue-800 hover:bg-blue-50 px-2.5 py-1.5 rounded-lg border border-blue-200 transition"
+                                  >
+                                    <FileText size={13} />
+                                    PDF
+                                  </button>
+                                </div>
+                              )}
+                            </td>
+                            <td className="px-5 py-3">
+                              {reversal ? (
+                                <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-red-100 text-red-600">
+                                  ⊘ Reversed
+                                </span>
+                              ) : (
+                                <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-700">
+                                  Paid
+                                </span>
+                              )}
+                            </td>
+                            {isSuperAdmin && (
+                              <td className="px-5 py-3 text-right">
+                                {!reversal && (
+                                  <div className="flex items-center gap-2 justify-end">
+                                    <button
+                                      onClick={() => {
+                                        setEditDatePayment(p);
+                                        setEditDateValue(
+                                          p.paidOn.split("T")[0],
+                                        );
+                                      }}
+                                      className="text-xs text-blue-500 hover:text-blue-700 font-medium hover:underline"
+                                    >
+                                      Edit Date
+                                    </button>
+                                    <button
+                                      onClick={() => handleReverse(p.publicId)}
+                                      className="text-xs text-red-500 hover:text-red-700 font-medium hover:underline"
+                                    >
+                                      Reverse
+                                    </button>
+                                  </div>
+                                )}
+                              </td>
+                            )}
+                          </tr>
 
-                            {/* PDF Download */}
-                            <button
-                              onClick={() => handleDownloadReceipt(p.publicId)}
-                              className="inline-flex items-center gap-1.5 text-xs font-medium text-blue-600 hover:text-blue-800 hover:bg-blue-50 px-2.5 py-1.5 rounded-lg border border-blue-200 transition"
-                              title="Download PDF Receipt"
+                          {/* ── Reversal Sub-row ── */}
+                          {reversal && (
+                            <tr
+                              key={reversal.publicId}
+                              className="bg-red-50/60"
                             >
-                              <FileText size={13} />
-                              PDF
-                            </button>
-                          </div>
-                        )}
-                      </td>
-                      <td className="px-5 py-3">
-                        <span
-                          className={`text-xs font-semibold px-2.5 py-1 rounded-full ${p.type === "REVERSAL" ? "bg-red-100 text-red-600" : "bg-emerald-100 text-emerald-700"}`}
-                        >
-                          {p.type === "REVERSAL" ? "Reversed" : "Paid"}
-                        </span>
-                      </td>
-                      {isSuperAdmin && (
-                        <td className="px-5 py-3 text-right">
-                          {p.type !== "REVERSAL" && (
-                            <button
-                              onClick={() => handleReverse(p.id)}
-                              className="text-xs text-red-500 hover:text-red-700 font-medium hover:underline"
-                            >
-                              Reverse
-                            </button>
+                              <td
+                                colSpan={isSuperAdmin ? 8 : 7}
+                                className="px-5 py-2"
+                              >
+                                <div className="flex items-center gap-2 text-xs text-red-500">
+                                  <span className="text-red-400">↳</span>
+                                  <span className="font-semibold">
+                                    Reversed
+                                  </span>
+                                  <span className="text-red-400">·</span>
+                                  <span>{formatDate(reversal.paidOn)}</span>
+                                  {reversal.referenceNumber && (
+                                    <>
+                                      <span className="text-red-400">·</span>
+                                      <span className="italic text-red-400">
+                                        Reason:{" "}
+                                        {reversal.referenceNumber.replace(
+                                          "REVERSAL: ",
+                                          "",
+                                        )}
+                                      </span>
+                                    </>
+                                  )}
+                                </div>
+                              </td>
+                            </tr>
                           )}
-                        </td>
-                      )}
-                    </tr>
-                  ))}
+                        </>
+                      );
+                    })}
                 </tbody>
               </table>
             </div>
 
             {/* Mobile Cards */}
             <div className="sm:hidden divide-y divide-slate-100">
-              {payments.map((p) => (
-                <div
-                  key={p.publicId}
-                  className={`p-4 ${p.type === "REVERSAL" ? "bg-red-50/30" : ""}`}
-                >
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-sm font-medium text-slate-700">
-                      {formatDate(p.paidOn)}
-                    </span>
-                    <span
-                      className={`text-xs font-semibold px-2 py-0.5 rounded-full ${p.type === "REVERSAL" ? "bg-red-100 text-red-600" : "bg-emerald-100 text-emerald-700"}`}
+              {payments
+                .filter((p) => p.type !== "REVERSAL")
+                .sort((a, b) => (b.paidOn > a.paidOn ? 1 : -1))
+                .map((p) => {
+                  const reversal = payments.find(
+                    (r) =>
+                      r.type === "REVERSAL" &&
+                      r.reversedPaymentPublicId === p.publicId,
+                  );
+                  return (
+                    <div
+                      key={p.publicId}
+                      className={reversal ? "bg-red-50/30" : ""}
                     >
-                      {p.type === "REVERSAL" ? "Reversed" : "Paid"}
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between mb-1.5">
-                    <span className="text-lg font-bold text-slate-900">
-                      ₹{p.amount?.toLocaleString("en-IN")}
-                    </span>
-                    <span className="text-xs text-slate-500">
-                      {formatPaymentMode(p.paymentMode)}
-                    </span>
-                  </div>
-                  {/* Ref & Receipt */}
-                  {(p.referenceNumber || p.receiptImageUrl) && (
-                    <div className="flex items-center gap-2 mb-1.5">
-                      {p.referenceNumber && (
-                        <span className="text-[11px] font-mono text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded">
-                          Ref: {p.referenceNumber}
-                        </span>
-                      )}
-                      {p.receiptImageUrl && (
-                        <button
-                          onClick={() =>
-                            setShowReceiptViewer(p.receiptImageUrl)
-                          }
-                          className="text-[11px] text-blue-600 flex items-center gap-1"
-                        >
-                          <ImageIcon size={12} /> Receipt
-                        </button>
-                      )}
-                    </div>
-                  )}
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs text-slate-400">
-                      {p.feePlan?.name}
-                    </span>
-                    <div className="flex items-center gap-2">
-                      {p.type !== "REVERSAL" && (
-                        <>
-                          {/* WhatsApp */}
-                          <button
-                            onClick={() => {
-                              const phone =
-                                p.player?.parentsPhone || p.player?.phone || "";
-                              setReceiptPhone(phone);
-                              setShowSendReceiptModal(p);
-                            }}
-                            className="text-[11px] text-emerald-600 font-medium flex items-center gap-1"
+                      {/* Main card */}
+                      <div className="p-4">
+                        <div className="flex items-center justify-between mb-2">
+                          <span
+                            className={`text-sm font-medium ${reversal ? "text-slate-400" : "text-slate-700"}`}
                           >
-                            <svg
-                              viewBox="0 0 24 24"
-                              className="w-3 h-3 fill-current"
-                              xmlns="http://www.w3.org/2000/svg"
-                            >
-                              <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z" />
-                              <path d="M12 0C5.373 0 0 5.373 0 12c0 2.098.546 4.07 1.5 5.785L0 24l6.435-1.635A11.945 11.945 0 0012 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 22c-1.887 0-3.655-.487-5.194-1.344l-.372-.22-3.818.97.994-3.71-.242-.383A9.938 9.938 0 012 12C2 6.477 6.477 2 12 2s10 4.477 10 10-4.477 10-10 10z" />
-                            </svg>
-                            Receipt
-                          </button>
+                            {formatDate(p.paidOn)}
+                          </span>
+                          {reversal ? (
+                            <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-red-100 text-red-600">
+                              ⊘ Reversed
+                            </span>
+                          ) : (
+                            <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700">
+                              Paid
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex items-center justify-between mb-1.5">
+                          <span
+                            className={`text-lg font-bold ${reversal ? "text-slate-400 line-through" : "text-slate-900"}`}
+                          >
+                            ₹{p.amount?.toLocaleString("en-IN")}
+                          </span>
+                          <span className="text-xs text-slate-500">
+                            {formatPaymentMode(p.paymentMode)}
+                          </span>
+                        </div>
+                        <p
+                          className={`text-xs mb-1.5 ${reversal ? "text-slate-400 line-through" : "text-slate-500"}`}
+                        >
+                          {p.feePlan?.name}
+                        </p>
+                        {(p.referenceNumber || p.receiptImageUrl) &&
+                          !reversal && (
+                            <div className="flex items-center gap-2 mb-1.5">
+                              {p.referenceNumber && (
+                                <span className="text-[11px] font-mono text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded">
+                                  Ref: {p.referenceNumber}
+                                </span>
+                              )}
+                              {p.receiptImageUrl && (
+                                <button
+                                  onClick={() =>
+                                    setShowReceiptViewer(p.receiptImageUrl)
+                                  }
+                                  className="text-[11px] text-blue-600 flex items-center gap-1"
+                                >
+                                  <ImageIcon size={12} /> Receipt
+                                </button>
+                              )}
+                            </div>
+                          )}
+                        {!reversal && (
+                          <div className="flex items-center justify-between mt-2">
+                            <div className="flex items-center gap-2">
+                              <button
+                                onClick={() => {
+                                  const phone =
+                                    p.player?.parentsPhone ||
+                                    p.player?.phone ||
+                                    "";
+                                  setReceiptPhone(phone);
+                                  setShowSendReceiptModal(p);
+                                }}
+                                className="text-[11px] text-emerald-600 font-medium flex items-center gap-1"
+                              >
+                                <svg
+                                  viewBox="0 0 24 24"
+                                  className="w-3 h-3 fill-current"
+                                  xmlns="http://www.w3.org/2000/svg"
+                                >
+                                  <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z" />
+                                  <path d="M12 0C5.373 0 0 5.373 0 12c0 2.098.546 4.07 1.5 5.785L0 24l6.435-1.635A11.945 11.945 0 0012 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 22c-1.887 0-3.655-.487-5.194-1.344l-.372-.22-3.818.97.994-3.71-.242-.383A9.938 9.938 0 012 12C2 6.477 6.477 2 12 2s10 4.477 10 10-4.477 10-10 10z" />
+                                </svg>
+                                Receipt
+                              </button>
+                              <button
+                                onClick={() =>
+                                  handleDownloadReceipt(p.publicId)
+                                }
+                                className="text-[11px] text-blue-600 font-medium flex items-center gap-1"
+                              >
+                                <FileText size={12} /> PDF
+                              </button>
+                            </div>
+                            {isSuperAdmin && (
+                              <div className="flex items-center gap-2">
+                                <button
+                                  onClick={() => {
+                                    setEditDatePayment(p);
+                                    setEditDateValue(p.paidOn.split("T")[0]);
+                                  }}
+                                  className="text-xs text-blue-500 font-medium"
+                                >
+                                  Edit Date
+                                </button>
+                                <button
+                                  onClick={() => handleReverse(p.publicId)}
+                                  className="text-xs text-red-500 font-medium"
+                                >
+                                  Reverse
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
 
-                          {/* PDF */}
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.preventDefault();
-                              e.stopPropagation();
-                              handleDownloadReceipt(p.publicId);
-                            }}
-                            className="text-[11px] text-blue-600 font-medium flex items-center gap-1"
-                          >
-                            <FileText size={12} />
-                            PDF
-                          </button>
-                        </>
-                      )}
-                      {isSuperAdmin && p.type !== "REVERSAL" && (
-                        <button
-                          onClick={() => handleReverse(p.id)}
-                          className="text-xs text-red-500 font-medium"
-                        >
-                          Reverse
-                        </button>
+                      {/* Reversal sub-row */}
+                      {reversal && (
+                        <div className="px-4 pb-3 flex items-center gap-1.5 text-xs text-red-400">
+                          <span>↳</span>
+                          <span className="font-semibold text-red-500">
+                            Reversed
+                          </span>
+                          <span>·</span>
+                          <span>{formatDate(reversal.paidOn)}</span>
+                          {reversal.referenceNumber && (
+                            <>
+                              <span>·</span>
+                              <span className="italic">
+                                {reversal.referenceNumber.replace(
+                                  "REVERSAL: ",
+                                  "",
+                                )}
+                              </span>
+                            </>
+                          )}
+                        </div>
                       )}
                     </div>
-                  </div>
-                </div>
-              ))}
+                  );
+                })}
             </div>
           </>
         )}
       </div>
+
+      {/* ── INSTALLMENT PLANS ── */}
+      <InstallmentSection playerPublicId={playerPublicId!} />
 
       {/* ── MARK AS PAID MODAL ── */}
       {showPayModal && account && (
@@ -1093,11 +1238,645 @@ function PlayerFeesTab() {
           </div>
         </div>
       )}
+
+      {/* ── EDIT DATE MODAL ── */}
+      {editDatePayment && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center">
+          <div className="bg-white rounded-t-2xl sm:rounded-xl shadow-xl w-full sm:max-w-sm">
+            <div className="flex items-center justify-between px-5 py-4 border-b bg-slate-50 rounded-t-2xl sm:rounded-t-xl">
+              <div>
+                <h3 className="font-bold text-slate-800">Edit Payment Date</h3>
+                <p className="text-xs text-slate-500">
+                  ₹{editDatePayment.amount?.toLocaleString("en-IN")} ·{" "}
+                  {editDatePayment.feePlan?.name}
+                </p>
+              </div>
+              <button onClick={() => setEditDatePayment(null)}>
+                <X size={18} className="text-slate-400" />
+              </button>
+            </div>
+            <div className="p-5 space-y-4">
+              <div>
+                <label className="text-xs font-semibold text-slate-600 block mb-1.5">
+                  Payment Date *
+                </label>
+                <input
+                  type="date"
+                  value={editDateValue}
+                  onChange={(e) => setEditDateValue(e.target.value)}
+                  className="w-full px-4 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+              <div className="flex gap-2 pt-1">
+                <button
+                  onClick={() => setEditDatePayment(null)}
+                  className="flex-1 py-2.5 text-sm font-medium text-slate-600 bg-slate-100 rounded-lg hover:bg-slate-200"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleUpdateDate}
+                  disabled={savingDate || !editDateValue}
+                  className="flex-1 py-2.5 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-50"
+                >
+                  {savingDate ? "Saving…" : "Save Date"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
 
-// ==================== PLAN SELECTOR MODAL ====================
+// ==================== INSTALLMENT SECTION ====================
+
+type InstallmentPlan = {
+  publicId: string;
+  totalAmount: number;
+  paidAmount: number;
+  description: string | null;
+  status: string;
+  createdAt: string;
+  installments: Installment[];
+};
+
+type Installment = {
+  publicId: string;
+  installmentNumber: number;
+  dueDate: string;
+  dueAmount: number;
+  paidAmount: number;
+  balanceAmount: number;
+  status: string;
+  notes: string | null;
+};
+
+function InstallmentSection({ playerPublicId }: { playerPublicId: string }) {
+  const [plans, setPlans] = useState<InstallmentPlan[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [expandedPlan, setExpandedPlan] = useState<string | null>(null);
+
+  // Create plan modal
+  const [showCreatePlan, setShowCreatePlan] = useState(false);
+  const [planForm, setPlanForm] = useState({
+    totalAmount: "",
+    description: "",
+  });
+  const [savingPlan, setSavingPlan] = useState(false);
+
+  // Add installment modal
+  const [showAddInstallment, setShowAddInstallment] = useState<string | null>(
+    null,
+  );
+  const [instForm, setInstForm] = useState({
+    dueDate: "",
+    dueAmount: "",
+    notes: "",
+  });
+  const [savingInst, setSavingInst] = useState(false);
+
+  // Record payment modal
+  const [showPayInstallment, setShowPayInstallment] =
+    useState<Installment | null>(null);
+  const [payInstForm, setPayInstForm] = useState({
+    amount: "",
+    paymentMode: "CASH",
+    referenceNumber: "",
+  });
+  const [savingPayInst, setSavingPayInst] = useState(false);
+
+  useEffect(() => {
+    loadPlans();
+  }, [playerPublicId]);
+
+  const loadPlans = async () => {
+    setLoading(true);
+    try {
+      const res = await api.get(
+        `/admin/fee-installments/player/${playerPublicId}`,
+      );
+      setPlans(res.data || []);
+    } catch {
+      toast.error("Failed to load installment plans");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleCreatePlan = async () => {
+    if (!planForm.totalAmount) return;
+    setSavingPlan(true);
+    try {
+      await api.post("/admin/fee-installments/plans", {
+        playerPublicId,
+        totalAmount: parseFloat(planForm.totalAmount),
+        description: planForm.description || null,
+      });
+      toast.success("Installment plan created!");
+      setShowCreatePlan(false);
+      setPlanForm({ totalAmount: "", description: "" });
+      loadPlans();
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || "Failed to create plan");
+    } finally {
+      setSavingPlan(false);
+    }
+  };
+
+  const handleAddInstallment = async (planPublicId: string) => {
+    if (!instForm.dueDate || !instForm.dueAmount) return;
+    setSavingInst(true);
+    try {
+      await api.post(`/admin/fee-installments/installments`, {
+        planPublicId,
+        dueDate: instForm.dueDate,
+        dueAmount: parseFloat(instForm.dueAmount),
+        notes: instForm.notes || null,
+      });
+      toast.success("Installment added!");
+      setShowAddInstallment(null);
+      setInstForm({ dueDate: "", dueAmount: "", notes: "" });
+      loadPlans();
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || "Failed to add installment");
+    } finally {
+      setSavingInst(false);
+    }
+  };
+
+  const handlePayInstallment = async () => {
+    if (!showPayInstallment || !payInstForm.amount) return;
+    setSavingPayInst(true);
+    try {
+      await api.post(`/admin/fee-installments/payments`, {
+        installmentPublicId: showPayInstallment.publicId,
+        amount: parseFloat(payInstForm.amount),
+        paymentMode: payInstForm.paymentMode,
+        referenceNumber: payInstForm.referenceNumber || null,
+        notes: null,
+      });
+      toast.success("Payment recorded!");
+      setShowPayInstallment(null);
+      setPayInstForm({ amount: "", paymentMode: "CASH", referenceNumber: "" });
+      loadPlans();
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || "Failed to record payment");
+    } finally {
+      setSavingPayInst(false);
+    }
+  };
+
+  const getInstallmentStatusConfig = (status: string) => {
+    switch (status) {
+      case "PAID":
+        return { bg: "bg-emerald-100 text-emerald-700", dot: "bg-emerald-500" };
+      case "OVERDUE":
+        return { bg: "bg-red-100 text-red-700", dot: "bg-red-500" };
+      case "PARTIAL":
+        return { bg: "bg-blue-100 text-blue-700", dot: "bg-blue-500" };
+      default:
+        return { bg: "bg-amber-100 text-amber-700", dot: "bg-amber-500" };
+    }
+  };
+
+  const formatDate = (d: string | null) => {
+    if (!d) return "—";
+    return new Date(d).toLocaleDateString("en-IN", {
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+    });
+  };
+
+  return (
+    <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+      {/* Header */}
+      <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100 bg-slate-50">
+        <div className="flex items-center gap-2">
+          <CreditCard size={17} className="text-slate-500" />
+          <h3 className="font-bold text-slate-800 text-sm">
+            Installment Plans
+          </h3>
+          <span className="text-xs text-slate-400">({plans.length})</span>
+        </div>
+        <button
+          onClick={() => setShowCreatePlan(true)}
+          className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 text-white text-xs font-semibold rounded-lg hover:bg-blue-700 transition"
+        >
+          + New Plan
+        </button>
+      </div>
+
+      {/* Body */}
+      {loading ? (
+        <div className="flex justify-center py-8">
+          <div className="w-6 h-6 border-2 border-slate-200 border-t-blue-600 rounded-full animate-spin" />
+        </div>
+      ) : plans.length === 0 ? (
+        <div className="text-center py-10">
+          <CreditCard size={32} className="mx-auto text-slate-200 mb-3" />
+          <p className="text-sm text-slate-500 mb-1">
+            No installment plans yet
+          </p>
+          <p className="text-xs text-slate-400">
+            Create a plan to split fees into multiple payments
+          </p>
+        </div>
+      ) : (
+        <div className="divide-y divide-slate-100">
+          {plans.map((plan) => {
+            const progress =
+              plan.totalAmount > 0
+                ? Math.min(100, (plan.paidAmount / plan.totalAmount) * 100)
+                : 0;
+            const balance = plan.totalAmount - plan.paidAmount;
+            const isExpanded = expandedPlan === plan.publicId;
+
+            return (
+              <div key={plan.publicId}>
+                {/* Plan summary row */}
+                <div
+                  className="px-4 py-3.5 cursor-pointer hover:bg-slate-50 transition"
+                  onClick={() =>
+                    setExpandedPlan(isExpanded ? null : plan.publicId)
+                  }
+                >
+                  <div className="flex items-start justify-between gap-3 mb-2">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span
+                          className={`text-xs font-bold px-2 py-0.5 rounded-full ${
+                            plan.status === "COMPLETED"
+                              ? "bg-emerald-100 text-emerald-700"
+                              : plan.status === "CANCELLED"
+                                ? "bg-slate-100 text-slate-500"
+                                : "bg-blue-100 text-blue-700"
+                          }`}
+                        >
+                          {plan.status}
+                        </span>
+                        {plan.description && (
+                          <span className="text-xs text-slate-500 truncate">
+                            {plan.description}
+                          </span>
+                        )}
+                      </div>
+                      {/* Progress bar */}
+                      <div className="mt-2 h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                        <div
+                          className="h-full bg-emerald-500 rounded-full transition-all"
+                          style={{ width: `${progress}%` }}
+                        />
+                      </div>
+                      <div className="flex items-center justify-between mt-1">
+                        <span className="text-[10px] text-emerald-600 font-semibold">
+                          ₹{plan.paidAmount.toLocaleString("en-IN")} paid
+                        </span>
+                        <span className="text-[10px] text-slate-400">
+                          {progress.toFixed(0)}%
+                        </span>
+                        <span className="text-[10px] text-red-500 font-semibold">
+                          ₹{balance.toLocaleString("en-IN")} left
+                        </span>
+                      </div>
+                    </div>
+                    <div className="text-right flex-shrink-0">
+                      <p className="text-sm font-bold text-slate-800">
+                        ₹{plan.totalAmount.toLocaleString("en-IN")}
+                      </p>
+                      <p className="text-[10px] text-slate-400 mt-0.5">
+                        {plan.installments?.length || 0} installments
+                      </p>
+                      <ChevronDown
+                        size={14}
+                        className={`text-slate-400 mt-1 ml-auto transition-transform ${isExpanded ? "rotate-180" : ""}`}
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Expanded installments */}
+                {isExpanded && (
+                  <div className="bg-slate-50 border-t border-slate-100 px-4 py-3 space-y-2">
+                    {plan.installments?.length === 0 ? (
+                      <p className="text-xs text-slate-400 text-center py-2">
+                        No installments added yet
+                      </p>
+                    ) : (
+                      plan.installments.map((inst) => {
+                        const sc = getInstallmentStatusConfig(inst.status);
+                        return (
+                          <div
+                            key={inst.publicId}
+                            className="bg-white rounded-lg border border-slate-200 px-3 py-2.5 flex items-center justify-between gap-3"
+                          >
+                            <div className="flex items-center gap-2.5 min-w-0">
+                              <div
+                                className={`w-2 h-2 rounded-full flex-shrink-0 ${sc.dot}`}
+                              />
+                              <div className="min-w-0">
+                                <p className="text-xs font-semibold text-slate-700">
+                                  #{inst.installmentNumber} ·{" "}
+                                  {formatDate(inst.dueDate)}
+                                </p>
+                                <p className="text-[10px] text-slate-400">
+                                  ₹{inst.paidAmount.toLocaleString("en-IN")}{" "}
+                                  paid
+                                  {inst.balanceAmount > 0 &&
+                                    ` · ₹${inst.balanceAmount.toLocaleString("en-IN")} left`}
+                                </p>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-2 flex-shrink-0">
+                              <span
+                                className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${sc.bg}`}
+                              >
+                                {inst.status}
+                              </span>
+                              <p className="text-xs font-bold text-slate-800">
+                                ₹{inst.dueAmount.toLocaleString("en-IN")}
+                              </p>
+                              {inst.status !== "PAID" && (
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setPayInstForm({
+                                      amount: String(inst.balanceAmount),
+                                      paymentMode: "CASH",
+                                      referenceNumber: "",
+                                    });
+                                    setShowPayInstallment(inst);
+                                  }}
+                                  className="px-2 py-1 bg-emerald-500 text-white text-[10px] font-bold rounded-lg hover:bg-emerald-600 transition"
+                                >
+                                  Pay
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })
+                    )}
+
+                    {/* Add installment button */}
+                    {plan.status === "ACTIVE" && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setInstForm({
+                            dueDate: "",
+                            dueAmount: "",
+                            notes: "",
+                          });
+                          setShowAddInstallment(plan.publicId);
+                        }}
+                        className="w-full py-2 border-2 border-dashed border-slate-300 text-slate-500 text-xs font-medium rounded-lg hover:border-blue-400 hover:text-blue-600 transition"
+                      >
+                        + Add Installment
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* ── CREATE PLAN MODAL ── */}
+      {showCreatePlan && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center">
+          <div className="bg-white rounded-t-2xl sm:rounded-xl shadow-xl w-full sm:max-w-sm">
+            <div className="flex items-center justify-between px-5 py-4 border-b bg-slate-50 rounded-t-2xl sm:rounded-t-xl">
+              <h3 className="font-bold text-slate-800">New Installment Plan</h3>
+              <button onClick={() => setShowCreatePlan(false)}>
+                <X size={18} className="text-slate-400" />
+              </button>
+            </div>
+            <div className="p-5 space-y-4">
+              <div>
+                <label className="text-xs font-semibold text-slate-600 block mb-1.5">
+                  Total Amount (₹) *
+                </label>
+                <input
+                  type="number"
+                  inputMode="numeric"
+                  value={planForm.totalAmount}
+                  onChange={(e) =>
+                    setPlanForm((f) => ({ ...f, totalAmount: e.target.value }))
+                  }
+                  placeholder="e.g. 19500"
+                  className="w-full px-4 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-slate-600 block mb-1.5">
+                  Description (optional)
+                </label>
+                <input
+                  type="text"
+                  value={planForm.description}
+                  onChange={(e) =>
+                    setPlanForm((f) => ({ ...f, description: e.target.value }))
+                  }
+                  placeholder="e.g. Annual fee split 3 installments"
+                  className="w-full px-4 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+              <div className="flex gap-2 pt-1">
+                <button
+                  onClick={() => setShowCreatePlan(false)}
+                  className="flex-1 py-2.5 text-sm font-medium text-slate-600 bg-slate-100 rounded-lg hover:bg-slate-200"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleCreatePlan}
+                  disabled={savingPlan || !planForm.totalAmount}
+                  className="flex-1 py-2.5 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-50"
+                >
+                  {savingPlan ? "Creating…" : "Create Plan"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── ADD INSTALLMENT MODAL ── */}
+      {showAddInstallment && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center">
+          <div className="bg-white rounded-t-2xl sm:rounded-xl shadow-xl w-full sm:max-w-sm">
+            <div className="flex items-center justify-between px-5 py-4 border-b bg-slate-50 rounded-t-2xl sm:rounded-t-xl">
+              <h3 className="font-bold text-slate-800">Add Installment</h3>
+              <button onClick={() => setShowAddInstallment(null)}>
+                <X size={18} className="text-slate-400" />
+              </button>
+            </div>
+            <div className="p-5 space-y-4">
+              <div>
+                <label className="text-xs font-semibold text-slate-600 block mb-1.5">
+                  Due Date *
+                </label>
+                <input
+                  type="date"
+                  value={instForm.dueDate}
+                  onChange={(e) =>
+                    setInstForm((f) => ({ ...f, dueDate: e.target.value }))
+                  }
+                  className="w-full px-4 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-slate-600 block mb-1.5">
+                  Amount (₹) *
+                </label>
+                <input
+                  type="number"
+                  inputMode="numeric"
+                  value={instForm.dueAmount}
+                  onChange={(e) =>
+                    setInstForm((f) => ({ ...f, dueAmount: e.target.value }))
+                  }
+                  placeholder="e.g. 6500"
+                  className="w-full px-4 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-slate-600 block mb-1.5">
+                  Notes (optional)
+                </label>
+                <input
+                  type="text"
+                  value={instForm.notes}
+                  onChange={(e) =>
+                    setInstForm((f) => ({ ...f, notes: e.target.value }))
+                  }
+                  placeholder="e.g. First installment"
+                  className="w-full px-4 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+              <div className="flex gap-2 pt-1">
+                <button
+                  onClick={() => setShowAddInstallment(null)}
+                  className="flex-1 py-2.5 text-sm font-medium text-slate-600 bg-slate-100 rounded-lg hover:bg-slate-200"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => handleAddInstallment(showAddInstallment)}
+                  disabled={
+                    savingInst || !instForm.dueDate || !instForm.dueAmount
+                  }
+                  className="flex-1 py-2.5 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-50"
+                >
+                  {savingInst ? "Adding…" : "Add Installment"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── PAY INSTALLMENT MODAL ── */}
+      {showPayInstallment && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center">
+          <div className="bg-white rounded-t-2xl sm:rounded-xl shadow-xl w-full sm:max-w-sm">
+            <div className="flex items-center justify-between px-5 py-4 border-b bg-slate-50 rounded-t-2xl sm:rounded-t-xl">
+              <div>
+                <h3 className="font-bold text-slate-800">Record Payment</h3>
+                <p className="text-xs text-slate-500">
+                  Installment #{showPayInstallment.installmentNumber} · Due{" "}
+                  {formatDate(showPayInstallment.dueDate)}
+                </p>
+              </div>
+              <button onClick={() => setShowPayInstallment(null)}>
+                <X size={18} className="text-slate-400" />
+              </button>
+            </div>
+            <div className="p-5 space-y-4">
+              <div className="bg-blue-50 rounded-xl p-3 text-center">
+                <p className="text-xs text-slate-500">Balance Due</p>
+                <p className="text-2xl font-bold text-blue-700">
+                  ₹{showPayInstallment.balanceAmount.toLocaleString("en-IN")}
+                </p>
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-slate-600 block mb-1.5">
+                  Amount (₹) *
+                </label>
+                <input
+                  type="number"
+                  inputMode="numeric"
+                  value={payInstForm.amount}
+                  onChange={(e) =>
+                    setPayInstForm((f) => ({ ...f, amount: e.target.value }))
+                  }
+                  className="w-full px-4 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-slate-600 block mb-1.5">
+                  Payment Mode
+                </label>
+                <select
+                  value={payInstForm.paymentMode}
+                  onChange={(e) =>
+                    setPayInstForm((f) => ({
+                      ...f,
+                      paymentMode: e.target.value,
+                    }))
+                  }
+                  className="w-full px-4 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  {PAYMENT_MODES.map((m) => (
+                    <option key={m.value} value={m.value}>
+                      {m.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-slate-600 block mb-1.5">
+                  Reference Number (optional)
+                </label>
+                <input
+                  type="text"
+                  value={payInstForm.referenceNumber}
+                  onChange={(e) =>
+                    setPayInstForm((f) => ({
+                      ...f,
+                      referenceNumber: e.target.value,
+                    }))
+                  }
+                  placeholder="UTR / Transaction ID"
+                  className="w-full px-4 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+              <div className="flex gap-2 pt-1 pb-4">
+                <button
+                  onClick={() => setShowPayInstallment(null)}
+                  className="flex-1 py-2.5 text-sm font-medium text-slate-600 bg-slate-100 rounded-lg hover:bg-slate-200"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handlePayInstallment}
+                  disabled={savingPayInst || !payInstForm.amount}
+                  className="flex-1 py-2.5 text-sm font-medium text-white bg-emerald-600 rounded-lg hover:bg-emerald-700 disabled:opacity-50"
+                >
+                  {savingPayInst ? "Processing…" : "Confirm Payment"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 function PlanSelectorModal({
   title,
