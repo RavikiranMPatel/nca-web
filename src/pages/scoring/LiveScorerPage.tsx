@@ -69,7 +69,6 @@ const DISMISSALS = [
   "Obstructing Field",
 ];
 
-// ── PlayerSelector defined OUTSIDE component — prevents search losing focus ───
 const PlayerSelector = ({
   title,
   players,
@@ -151,7 +150,6 @@ const PlayerSelector = ({
   );
 };
 
-// ── Helper to build over snap from raw delivery data ──────────────────────────
 const mapToBallDTO = (d: Record<string, unknown>): BallDTO => ({
   runsBatsman: d.runsBatsman as number,
   runsExtras: d.runsExtras as number,
@@ -187,47 +185,58 @@ const mapToBallDTO = (d: Record<string, unknown>): BallDTO => ({
               : "b-dot",
 });
 
+// Per-batter accumulated stats for the innings
+interface BatterStats {
+  runs: number;
+  balls: number;
+  fours: number;
+  sixes: number;
+}
+const emptyStats = (): BatterStats => ({
+  runs: 0,
+  balls: 0,
+  fours: 0,
+  sixes: 0,
+});
+
 export default function LiveScorerPage() {
   const { matchId } = useParams<{ matchId: string }>();
   const navigate = useNavigate();
 
   const [match, setMatch] = useState<CricketMatch | null>(null);
-
   const [teams, setTeams] = useState<CricketTeam[]>([]);
-  // FIX 1: teams declared but never read — removed, use ts directly in loadAll
   const [innings, setInnings] = useState<InningsState | null>(null);
   const [thisOver, setThisOver] = useState<BallDTO[]>([]);
   const [loading, setLoading] = useState(true);
   const [posting, setPosting] = useState(false);
   const [error, setError] = useState("");
+  const [toast, setToast] = useState<string | null>(null);
+  const [lastOverNumber, setLastOverNumber] = useState(1);
   const [dismissedPlayerIds, setDismissedPlayerIds] = useState<Set<string>>(
     new Set(),
   );
-
   const [bowlerOversMap, setBowlerOversMap] = useState<Record<string, number>>(
     {},
   );
   const [lastBowlerPublicId, setLastBowlerPublicId] = useState<string | null>(
     null,
   );
-
   const [battingTeamId, setBattingTeamId] = useState<string | null>(null);
   const [bowlingTeamId, setBowlingTeamId] = useState<string | null>(null);
   const [battingPlayers, setBattingPlayers] = useState<ScoringPlayer[]>([]);
   const [bowlingPlayers, setBowlingPlayers] = useState<ScoringPlayer[]>([]);
-
   const [striker, setStriker] = useState<ScoringPlayer | null>(null);
   const [nonStriker, setNonStriker] = useState<ScoringPlayer | null>(null);
   const [bowler, setBowler] = useState<ScoringPlayer | null>(null);
 
-  const [strikerRuns, setStrikerRuns] = useState(0);
-  const [strikerBalls, setStrikerBalls] = useState(0);
-  const [strikerFours, setStrikerFours] = useState(0);
-  const [strikerSixes, setStrikerSixes] = useState(0);
+  // ── Per-batter accumulated stats (persists across overs) ──────────────────
+  const [batterStatsMap, setBatterStatsMap] = useState<
+    Record<string, BatterStats>
+  >({});
+
   const [bowlerBalls, setBowlerBalls] = useState(0);
   const [bowlerRuns, setBowlerRuns] = useState(0);
   const [bowlerWickets, setBowlerWickets] = useState(0);
-
   const [showWicket, setShowWicket] = useState(false);
   const [showBatterSelect, setShowBatterSelect] = useState<
     "striker" | "nonstriker" | null
@@ -238,7 +247,6 @@ export default function LiveScorerPage() {
   const [showCloseInnings, setShowCloseInnings] = useState(false);
   const [showResult, setShowResult] = useState(false);
   const [showPlayerSearch, setShowPlayerSearch] = useState("");
-
   const [dismissalType, setDismissalType] = useState("");
   const [dismissedPlayer, setDismissedPlayer] = useState<ScoringPlayer | null>(
     null,
@@ -246,11 +254,9 @@ export default function LiveScorerPage() {
   const [fielder, setFielder] = useState<ScoringPlayer | null>(null);
   const [pendingRuns, setPendingRuns] = useState(0);
   const [isFreeHit, setIsFreeHit] = useState(false);
-
   const [resultType, setResultType] = useState("");
   const [resultMargin, setResultMargin] = useState("");
   const [resultDesc, setResultDesc] = useState("");
-
   const [lastOverBalls, setLastOverBalls] = useState<BallDTO[]>([]);
   const [lastOverRuns, setLastOverRuns] = useState(0);
   const [autoResult, setAutoResult] = useState<{
@@ -258,10 +264,16 @@ export default function LiveScorerPage() {
     resultMargin: number;
     resultDescription: string;
   } | null>(null);
+  const [finalInningsState, setFinalInningsState] =
+    useState<InningsState | null>(null);
 
   const loadingRef = useRef(false);
 
-  // FIX 2: useEffect dependency — loadAll is stable (defined outside effect scope)
+  const showToast = (msg: string) => {
+    setToast(msg);
+    setTimeout(() => setToast(null), 2000);
+  };
+
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (!matchId) return;
@@ -276,7 +288,6 @@ export default function LiveScorerPage() {
       const [m, ts] = await Promise.all([getMatch(matchId), getTeams(matchId)]);
       setMatch(m);
       setTeams(ts as CricketTeam[]);
-      // FIX 1: removed setTeams(ts) since teams state was unused
 
       const teamPlayers: Record<string, ScoringPlayer[]> = {};
       for (const team of ts as CricketTeam[]) {
@@ -322,9 +333,58 @@ export default function LiveScorerPage() {
       try {
         const state = await getScoringState(matchId);
         setInnings(state.inningsState);
+
+        const deliveries = await api
+          .get(`/admin/cricket/matches/${matchId}/scoring/deliveries`)
+          .then((r) => r.data as Record<string, unknown>[])
+          .catch(() => [] as Record<string, unknown>[]);
+
+        const ballsPerOver = m.ballsPerOver ?? 6;
+        const currentOverIndex = Math.floor(
+          state.inningsState.totalBalls / ballsPerOver,
+        );
+
+        // Restore bowlerOversMap
+        const overBowlers: Record<number, string> = {};
+        deliveries.forEach((d) => {
+          const overNum = d.overNumber as number;
+          const bowlerPid =
+            (d.bowlerPublicId as string) ??
+            ((d.bowler as Record<string, unknown>)?.publicId as string);
+          if (bowlerPid) overBowlers[overNum] = bowlerPid;
+        });
+        const oversMap: Record<string, number> = {};
+        Object.entries(overBowlers).forEach(([overIdx, bowlerPid]) => {
+          if (Number(overIdx) < currentOverIndex) {
+            oversMap[bowlerPid] = (oversMap[bowlerPid] ?? 0) + 1;
+          }
+        });
+        setBowlerOversMap(oversMap);
+        setLastBowlerPublicId(overBowlers[currentOverIndex - 1] ?? null);
+
+        // Restore batter stats from delivery history
+        const statsMap: Record<string, BatterStats> = {};
+        deliveries.forEach((d) => {
+          const batsmanPid =
+            (d.batsmanPublicId as string) ??
+            ((d.batsman as Record<string, unknown>)?.publicId as string);
+          if (!batsmanPid) return;
+          if (!statsMap[batsmanPid]) statsMap[batsmanPid] = emptyStats();
+          const runs = (d.runsBatsman as number) ?? 0;
+          const isLegal = d.isLegalBall as boolean;
+          const isWicket = d.isWicket as boolean;
+          if (!isWicket) {
+            statsMap[batsmanPid].runs += runs;
+            if (isLegal) statsMap[batsmanPid].balls += 1;
+            if (runs === 4) statsMap[batsmanPid].fours += 1;
+            if (runs === 6) statsMap[batsmanPid].sixes += 1;
+          }
+        });
+        setBatterStatsMap(statsMap);
+
         await refreshOver();
       } catch {
-        // no innings yet
+        /* no innings yet */
       }
     } catch {
       setError("Failed to load match");
@@ -336,7 +396,14 @@ export default function LiveScorerPage() {
 
   const applyState = (state: BallResponse) => {
     setInnings(state.inningsState);
-    if (state.inningsComplete) setShowCloseInnings(true);
+    if (state.inningsComplete) {
+      if (state.inningsState.inningsNumber === 2) {
+        setFinalInningsState(state.inningsState);
+        setShowResult(true);
+      } else {
+        setShowCloseInnings(true);
+      }
+    }
   };
 
   const refreshOver = useCallback(async () => {
@@ -349,16 +416,6 @@ export default function LiveScorerPage() {
     }
   }, [matchId]);
 
-  const getOverSnap = async (): Promise<BallDTO[]> => {
-    if (!matchId) return [];
-    try {
-      const over = await getThisOver(matchId);
-      return (over as Record<string, unknown>[]).map(mapToBallDTO);
-    } catch {
-      return [];
-    }
-  };
-
   const score = async (runs: number, extra?: string, extraRuns = 1) => {
     if (!matchId || !striker || !nonStriker || !bowler) {
       setError("Set striker, non-striker and bowler first");
@@ -367,8 +424,47 @@ export default function LiveScorerPage() {
     if (posting) return;
     setPosting(true);
     setError("");
+
+    // Capture at function entry — immune to React state batching
+    const currentStriker = striker;
+    const currentNonStriker = nonStriker;
+
     const isLegalBall = !extra || !["WIDE", "NO_BALL"].includes(extra);
     const nextFreeHit = extra === "NO_BALL";
+
+    const currentBallForSummary: BallDTO = {
+      runsBatsman: runs,
+      runsExtras: extra ? extraRuns : 0,
+      extraType: extra,
+      isWicket: false,
+      isLegalBall,
+      sequenceNumber: 0,
+      displayLabel:
+        extra === "WIDE"
+          ? "Wd"
+          : extra === "NO_BALL"
+            ? "Nb"
+            : extra === "LEG_BYE"
+              ? "Lb"
+              : extra === "BYE"
+                ? "B"
+                : runs === 0
+                  ? "·"
+                  : String(runs),
+      displayClass:
+        runs === 6
+          ? "b-6"
+          : runs === 4
+            ? "b-4"
+            : extra === "WIDE"
+              ? "b-wd"
+              : extra === "NO_BALL"
+                ? "b-nb"
+                : runs > 0
+                  ? "b-1"
+                  : "b-dot",
+    };
+
     try {
       const state = await postBall(matchId, {
         bowlerPublicId: bowler.publicId,
@@ -376,7 +472,6 @@ export default function LiveScorerPage() {
         nonStrikerPublicId: nonStriker.publicId,
         runsBatsman: runs,
         runsExtras: extra ? extraRuns : 0,
-        // FIX 3: extraType must match the union type — cast correctly
         extraType: (extra ?? null) as
           | "WIDE"
           | "NO_BALL"
@@ -388,33 +483,65 @@ export default function LiveScorerPage() {
         isWicket: false,
         isFreeHit,
       });
-      setStrikerRuns((r) => r + runs);
-      if (isLegalBall) setStrikerBalls((b) => b + 1);
-      if (runs === 4) setStrikerFours((f) => f + 1);
-      if (runs === 6) setStrikerSixes((s) => s + 1);
+
+      // Update batter stats map for striker
+      if (isLegalBall || runs > 0) {
+        setBatterStatsMap((prev) => {
+          const existing = prev[currentStriker.publicId] ?? emptyStats();
+          return {
+            ...prev,
+            [currentStriker.publicId]: {
+              runs: existing.runs + runs,
+              balls: existing.balls + (isLegalBall ? 1 : 0),
+              fours: existing.fours + (runs === 4 ? 1 : 0),
+              sixes: existing.sixes + (runs === 6 ? 1 : 0),
+            },
+          };
+        });
+      } else if (isLegalBall) {
+        // dot ball — still counts as a ball faced
+        setBatterStatsMap((prev) => {
+          const existing = prev[currentStriker.publicId] ?? emptyStats();
+          return {
+            ...prev,
+            [currentStriker.publicId]: {
+              ...existing,
+              balls: existing.balls + 1,
+            },
+          };
+        });
+      }
+
       if (isLegalBall) setBowlerBalls((b) => b + 1);
       setBowlerRuns((r) => r + runs + (extra ? extraRuns : 0));
       setIsFreeHit(nextFreeHit);
-      if (isLegalBall && runs % 2 !== 0) {
-        setStriker(nonStriker);
-        setNonStriker(striker);
+
+      // Rotate strike for odd runs on legal ball
+      const shouldRotate = isLegalBall && runs % 2 !== 0;
+      if (shouldRotate) {
+        setStriker(currentNonStriker);
+        setNonStriker(currentStriker);
       }
-      await refreshOver();
+
+      setThisOver((prev) => [...prev, currentBallForSummary]);
       applyState(state);
+      showToast("✓ Ball saved");
+
       if (state.overComplete) {
-        const overSnap = await getOverSnap();
+        setLastOverNumber(innings?.overNumber ?? 1);
+        const overSnap = [...thisOver, currentBallForSummary];
         setLastOverBalls(overSnap);
         setLastOverRuns(
           overSnap.reduce((s, b) => s + b.runsBatsman + b.runsExtras, 0),
         );
-        setStriker(nonStriker);
-        setNonStriker(striker);
+        // End of over: non-striker always faces next over
+        setStriker(currentNonStriker);
+        setNonStriker(currentStriker);
         setBowlerBalls(0);
         setBowlerRuns(0);
         setBowlerWickets(0);
         setThisOver([]);
         setShowOverSummary(true);
-        // Record this bowler's over count and mark as last bowler
         if (bowler) {
           setBowlerOversMap((prev) => ({
             ...prev,
@@ -425,7 +552,6 @@ export default function LiveScorerPage() {
         setShowBowlerSelect(true);
       }
     } catch (e: unknown) {
-      // FIX 4: catch(e: any) → catch(e: unknown) with type guard
       const msg =
         e instanceof Error
           ? e.message
@@ -448,17 +574,28 @@ export default function LiveScorerPage() {
       setError("Select dismissal type");
       return;
     }
-
     if (!striker || !nonStriker) {
       setError("Select striker and non-striker first");
       return;
     }
-
     if (!bowler) {
       setError("Select bowler first");
       return;
     }
     if (!matchId) return;
+
+    const capturedNonStriker = nonStriker;
+
+    const wicketBallForSummary: BallDTO = {
+      runsBatsman: pendingRuns,
+      runsExtras: 0,
+      extraType: undefined,
+      isWicket: true,
+      isLegalBall: true,
+      sequenceNumber: 0,
+      displayLabel: "W",
+      displayClass: "b-wk",
+    };
 
     setPosting(true);
     setError("");
@@ -476,11 +613,32 @@ export default function LiveScorerPage() {
         fielderPublicId: fielder?.publicId || undefined,
         isFreeHit,
       });
-      setStrikerBalls((b) => b + 1);
+
+      // Update batter stats for runs scored on wicket ball
+      if (pendingRuns > 0) {
+        setBatterStatsMap((prev) => {
+          const pid = striker.publicId;
+          const existing = prev[pid] ?? emptyStats();
+          return {
+            ...prev,
+            [pid]: {
+              ...existing,
+              runs: existing.runs + pendingRuns,
+              balls: existing.balls + 1,
+            },
+          };
+        });
+      } else {
+        setBatterStatsMap((prev) => {
+          const pid = striker.publicId;
+          const existing = prev[pid] ?? emptyStats();
+          return { ...prev, [pid]: { ...existing, balls: existing.balls + 1 } };
+        });
+      }
+
       setBowlerBalls((b) => b + 1);
-      setStrikerRuns((r) => r + pendingRuns);
-      setBowlerRuns((r) => r + pendingRuns);
       setBowlerWickets((w) => w + 1);
+      setBowlerRuns((r) => r + pendingRuns);
       setShowWicket(false);
       setDismissedPlayerIds((prev) => {
         const next = new Set(prev);
@@ -491,25 +649,32 @@ export default function LiveScorerPage() {
       setDismissedPlayer(null);
       setFielder(null);
       setIsFreeHit(false);
-      setStrikerRuns(0);
-      setStrikerBalls(0);
-      setStrikerFours(0);
-      setStrikerSixes(0);
-      await refreshOver();
+
+      setThisOver((prev) => [...prev, wicketBallForSummary]);
       applyState(state);
+      showToast("✓ Wicket saved");
+
       if (state.overComplete) {
-        const overSnap = await getOverSnap();
+        setLastOverNumber(innings?.overNumber ?? 1);
+        const overSnap = [...thisOver, wicketBallForSummary];
         setLastOverBalls(overSnap);
         setLastOverRuns(
           overSnap.reduce((s, b) => s + b.runsBatsman + b.runsExtras, 0),
         );
-        setStriker(nonStriker);
-        setNonStriker(striker);
+        setStriker(capturedNonStriker);
+        setNonStriker(null);
         setBowlerBalls(0);
         setBowlerRuns(0);
         setBowlerWickets(0);
         setThisOver([]);
         setShowOverSummary(true);
+        if (bowler) {
+          setBowlerOversMap((prev) => ({
+            ...prev,
+            [bowler.publicId]: (prev[bowler.publicId] ?? 0) + 1,
+          }));
+          setLastBowlerPublicId(bowler.publicId);
+        }
         setShowBowlerSelect(true);
       }
       setShowBatterSelect("striker");
@@ -532,6 +697,34 @@ export default function LiveScorerPage() {
       await refreshOver();
       setInnings(state.inningsState);
       setDismissedPlayerIds(new Set());
+      // Reload batter stats from backend after undo
+      const deliveries = await api
+        .get(`/admin/cricket/matches/${matchId}/scoring/deliveries`)
+        .then((r) => r.data as Record<string, unknown>[])
+        .catch(() => [] as Record<string, unknown>[]);
+      const statsMap: Record<string, BatterStats> = {};
+      deliveries.forEach((d) => {
+        const batsmanPid =
+          (d.batsmanPublicId as string) ??
+          ((d.batsman as Record<string, unknown>)?.publicId as string);
+        if (!batsmanPid) return;
+        if (!statsMap[batsmanPid]) statsMap[batsmanPid] = emptyStats();
+        const runs = (d.runsBatsman as number) ?? 0;
+        const isLegal = d.isLegalBall as boolean;
+        const isWicket = d.isWicket as boolean;
+        if (!isWicket) {
+          statsMap[batsmanPid].runs += runs;
+          if (isLegal) statsMap[batsmanPid].balls += 1;
+          if (runs === 4) statsMap[batsmanPid].fours += 1;
+          if (runs === 6) statsMap[batsmanPid].sixes += 1;
+        } else {
+          // wicket ball — only count balls faced
+          if (isLegal) statsMap[batsmanPid].balls += 1;
+          statsMap[batsmanPid].runs += runs;
+        }
+      });
+      setBatterStatsMap(statsMap);
+      showToast("✓ Undone");
     } catch (e: unknown) {
       const msg =
         (e as { response?: { data?: { message?: string } } })?.response?.data
@@ -557,10 +750,6 @@ export default function LiveScorerPage() {
       setStriker(null);
       setNonStriker(null);
       setBowler(null);
-      setStrikerRuns(0);
-      setStrikerBalls(0);
-      setStrikerFours(0);
-      setStrikerSixes(0);
       setBowlerBalls(0);
       setBowlerRuns(0);
       setBowlerWickets(0);
@@ -570,7 +759,9 @@ export default function LiveScorerPage() {
       setDismissedPlayerIds(new Set());
       setBowlerOversMap({});
       setLastBowlerPublicId(null);
+      setBatterStatsMap({}); // reset for new innings
       await loadAll();
+      showToast("✓ Innings closed");
     } catch (e: unknown) {
       const msg =
         (e as { response?: { data?: { message?: string } } })?.response?.data
@@ -587,8 +778,9 @@ export default function LiveScorerPage() {
     teams.find((t) => t.publicId === bowlingTeamId)?.name ?? "Bowling Team";
 
   const computeAutoResult = useCallback(() => {
-    if (!innings) return null;
-    const { totalRuns, totalWickets, target, inningsNumber } = innings;
+    const src = finalInningsState ?? innings;
+    if (!src) return null;
+    const { totalRuns, totalWickets, target, inningsNumber } = src;
     if (inningsNumber === 2 && target) {
       if (totalRuns >= target) {
         const w = 10 - totalWickets;
@@ -607,7 +799,7 @@ export default function LiveScorerPage() {
       }
     }
     return null;
-  }, [innings, battingTeamName, bowlingTeamName]);
+  }, [finalInningsState, innings, battingTeamName, bowlingTeamName]);
 
   useEffect(() => {
     if (showResult) {
@@ -662,10 +854,14 @@ export default function LiveScorerPage() {
   const totalRuns = innings?.totalRuns ?? 0;
   const totalWickets = innings?.totalWickets ?? 0;
   const totalBalls = innings?.totalBalls ?? 0;
-  const overNum = innings?.overNumber ?? 1;
   const crr = innings
     ? fmtCRR(totalRuns, totalBalls, match?.ballsPerOver ?? 6)
     : "0.00";
+
+  // Get live stats for display
+  const strikerStats = batterStatsMap[striker?.publicId ?? ""] ?? emptyStats();
+  const nonStrikerStats =
+    batterStatsMap[nonStriker?.publicId ?? ""] ?? emptyStats();
 
   return (
     <div className="min-h-screen bg-gray-950 text-gray-100 flex flex-col select-none">
@@ -708,23 +904,9 @@ export default function LiveScorerPage() {
       {/* Batters */}
       <div className="bg-gray-900 px-4 py-2 border-b border-gray-800 space-y-1.5">
         {[
-          {
-            player: striker,
-            runs: strikerRuns,
-            balls: strikerBalls,
-            fours: strikerFours,
-            sixes: strikerSixes,
-            isStriker: true,
-          },
-          {
-            player: nonStriker,
-            runs: 0,
-            balls: 0,
-            fours: 0,
-            sixes: 0,
-            isStriker: false,
-          },
-        ].map(({ player, runs, balls, fours, sixes, isStriker }) => (
+          { player: striker, stats: strikerStats, isStriker: true },
+          { player: nonStriker, stats: nonStrikerStats, isStriker: false },
+        ].map(({ player, stats, isStriker }) => (
           <button
             key={isStriker ? "striker" : "ns"}
             onClick={() =>
@@ -745,12 +927,12 @@ export default function LiveScorerPage() {
             </div>
             {player && (
               <span className="text-xs text-gray-400">
-                <b className="text-white">{runs}</b>({balls})
-                {fours > 0 && (
-                  <span className="ml-1 text-green-400">4s:{fours}</span>
+                <b className="text-white">{stats.runs}</b>({stats.balls})
+                {stats.fours > 0 && (
+                  <span className="ml-1 text-green-400">4s:{stats.fours}</span>
                 )}
-                {sixes > 0 && (
-                  <span className="ml-1 text-purple-400">6s:{sixes}</span>
+                {stats.sixes > 0 && (
+                  <span className="ml-1 text-purple-400">6s:{stats.sixes}</span>
                 )}
               </span>
             )}
@@ -793,7 +975,6 @@ export default function LiveScorerPage() {
         ))}
       </div>
 
-      {/* Error */}
       {error && (
         <div className="mx-4 mt-3 px-3 py-2 bg-red-900/30 border border-red-800 rounded-xl text-xs text-red-400">
           {error}
@@ -927,15 +1108,8 @@ export default function LiveScorerPage() {
           onSearchChange={setShowPlayerSearch}
           onClose={closeSelector}
           onSelect={(p) => {
-            if (showBatterSelect === "striker") {
-              setStriker(p);
-              setStrikerRuns(0);
-              setStrikerBalls(0);
-              setStrikerFours(0);
-              setStrikerSixes(0);
-            } else {
-              setNonStriker(p);
-            }
+            if (showBatterSelect === "striker") setStriker(p);
+            else setNonStriker(p);
             setShowBatterSelect(null);
             setShowPlayerSearch("");
           }}
@@ -943,17 +1117,18 @@ export default function LiveScorerPage() {
       )}
 
       {/* Bowler selector */}
-      {/* Bowler selector */}
       {showBowlerSelect &&
         (() => {
           const maxOvers = match ? Math.floor(match.totalOvers / 5) : 99;
           const bowlersWithStatus = bowlingPlayers.map((p) => {
             const oversUsed = bowlerOversMap[p.publicId] ?? 0;
-            const isMaxed = maxOvers > 0 && oversUsed >= maxOvers;
-            const isLastBowler = p.publicId === lastBowlerPublicId;
-            return { ...p, oversUsed, isMaxed, isLastBowler };
+            return {
+              ...p,
+              oversUsed,
+              isMaxed: maxOvers > 0 && oversUsed >= maxOvers,
+              isLastBowler: p.publicId === lastBowlerPublicId,
+            };
           });
-
           return (
             <div className="fixed inset-0 z-50 bg-black/70 flex items-end">
               <div className="w-full bg-gray-900 rounded-t-2xl max-h-[80vh] overflow-hidden flex flex-col">
@@ -1001,11 +1176,7 @@ export default function LiveScorerPage() {
                             setShowBowlerSelect(false);
                             setShowPlayerSearch("");
                           }}
-                          className={`w-full flex items-center justify-between gap-3 px-3 py-3 rounded-xl text-left transition-all ${
-                            disabled
-                              ? "bg-gray-800/50 opacity-40 cursor-not-allowed"
-                              : "bg-gray-800 hover:bg-gray-700 active:scale-95"
-                          }`}
+                          className={`w-full flex items-center justify-between gap-3 px-3 py-3 rounded-xl text-left transition-all ${disabled ? "bg-gray-800/50 opacity-40 cursor-not-allowed" : "bg-gray-800 hover:bg-gray-700 active:scale-95"}`}
                         >
                           <div className="flex items-center gap-3">
                             <div className="w-8 h-8 bg-gray-700 rounded-full flex items-center justify-center text-xs font-bold text-white flex-shrink-0">
@@ -1023,11 +1194,7 @@ export default function LiveScorerPage() {
                             </div>
                           </div>
                           <div
-                            className={`text-xs flex-shrink-0 ${
-                              p.isMaxed || p.isLastBowler
-                                ? "text-red-400"
-                                : "text-gray-500"
-                            }`}
+                            className={`text-xs flex-shrink-0 ${p.isMaxed || p.isLastBowler ? "text-red-400" : "text-gray-500"}`}
                           >
                             {reason}
                           </div>
@@ -1179,7 +1346,7 @@ export default function LiveScorerPage() {
               <div className="text-3xl mb-1">🏏</div>
               <h3 className="text-base font-bold text-white">Over Complete!</h3>
               <p className="text-sm text-gray-400 mt-1">
-                Over {overNum - 1} · {lastOverRuns} runs ·{" "}
+                Over {lastOverNumber} · {lastOverRuns} runs ·{" "}
                 {lastOverBalls.filter((b) => b.isWicket).length} wicket(s)
               </p>
             </div>
@@ -1250,7 +1417,6 @@ export default function LiveScorerPage() {
             <h3 className="text-sm font-semibold text-white text-center mb-3">
               Match Result
             </h3>
-
             {autoResult && (
               <div className="mb-4 px-4 py-3 bg-green-900/30 border border-green-700 rounded-xl text-center">
                 <div className="text-xs text-green-400 uppercase tracking-wide mb-1">
@@ -1264,7 +1430,6 @@ export default function LiveScorerPage() {
                 </div>
               </div>
             )}
-
             <div className="space-y-3">
               <div className="grid grid-cols-2 gap-2">
                 {[
@@ -1297,7 +1462,6 @@ export default function LiveScorerPage() {
                   </button>
                 ))}
               </div>
-
               {(resultType === "WON_BY_RUNS" ||
                 resultType === "WON_BY_WICKETS") && (
                 <div>
@@ -1315,7 +1479,6 @@ export default function LiveScorerPage() {
                   />
                 </div>
               )}
-
               <div>
                 <label className="text-xs text-gray-400 mb-1 block">
                   Result description
@@ -1328,7 +1491,6 @@ export default function LiveScorerPage() {
                   onChange={(e) => setResultDesc(e.target.value)}
                 />
               </div>
-
               <button
                 disabled={!resultType || posting}
                 onClick={handleResult}
@@ -1344,6 +1506,13 @@ export default function LiveScorerPage() {
               </button>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Toast */}
+      {toast && (
+        <div className="fixed bottom-28 left-1/2 -translate-x-1/2 z-[100] bg-gray-800 border border-green-600 text-green-400 text-sm font-semibold px-6 py-2.5 rounded-full shadow-xl pointer-events-none">
+          {toast}
         </div>
       )}
     </div>

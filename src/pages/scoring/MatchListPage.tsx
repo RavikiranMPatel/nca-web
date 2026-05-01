@@ -132,9 +132,11 @@ const ShareButton = ({ match }: { match: CricketMatch }) => {
 const MatchCard = ({
   match,
   onClick,
+  onDelete,
 }: {
   match: CricketMatch;
   onClick: () => void;
+  onDelete: (publicId: string) => void;
 }) => (
   <div
     onClick={onClick}
@@ -171,7 +173,34 @@ const MatchCard = ({
       </div>
 
       {/* Share buttons — always visible for started matches */}
-      {match.status !== "SETUP" && <ShareButton match={match} />}
+      <div
+        className="flex items-center gap-1.5"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {match.status !== "SETUP" && <ShareButton match={match} />}
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onDelete(match.publicId);
+          }}
+          className="p-2 rounded-lg bg-red-50 dark:bg-red-900/20 text-red-500 dark:text-red-400 active:scale-90 transition-all"
+          title="Delete match"
+        >
+          <svg
+            className="w-4 h-4"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+            />
+          </svg>
+        </button>
+      </div>
     </div>
 
     {/* Action row */}
@@ -222,6 +251,25 @@ export default function MatchListPage() {
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<"all" | "live" | "completed">("all");
   const [search, setSearch] = useState("");
+  const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
+
+  const handleDelete = async (publicId: string) => {
+    setConfirmDelete(publicId);
+  };
+
+  const confirmDeleteMatch = async () => {
+    if (!confirmDelete) return;
+    try {
+      await import("../../api/scoring/matchApi").then((m) =>
+        m.deleteMatch(confirmDelete),
+      );
+      setMatches((prev) => prev.filter((m) => m.publicId !== confirmDelete));
+    } catch {
+      /* silent */
+    } finally {
+      setConfirmDelete(null);
+    }
+  };
 
   useEffect(() => {
     listMatches()
@@ -340,10 +388,40 @@ export default function MatchListPage() {
               key={match.publicId}
               match={match}
               onClick={() => handleMatchClick(match)}
+              onDelete={handleDelete}
             />
           ))
         )}
       </div>
+
+      {/* Delete confirmation */}
+      {confirmDelete && (
+        <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-6">
+          <div className="w-full max-w-sm bg-white dark:bg-gray-900 rounded-2xl p-5 shadow-xl">
+            <h3 className="text-base font-semibold text-gray-900 dark:text-white mb-2">
+              Delete Match?
+            </h3>
+            <p className="text-sm text-gray-500 dark:text-gray-400 mb-5">
+              This will permanently delete the match and all its deliveries,
+              innings, and scorecard data. This cannot be undone.
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setConfirmDelete(null)}
+                className="flex-1 py-2.5 rounded-xl border border-gray-200 dark:border-gray-700 text-sm font-medium text-gray-600 dark:text-gray-400"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={confirmDeleteMatch}
+                className="flex-1 py-2.5 rounded-xl bg-red-600 text-white text-sm font-semibold active:scale-95"
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -4,7 +4,7 @@ export interface BallRequest {
   nonStrikerPublicId: string;
   runsBatsman: number;
   runsExtras?: number;
-  extraType?: 'WIDE' | 'NO_BALL' | 'BYE' | 'LEG_BYE' | 'PENALTY' | null;
+  extraType?: "WIDE" | "NO_BALL" | "BYE" | "LEG_BYE" | "PENALTY" | null;
   isWicket?: boolean;
   dismissalType?: string;
   dismissedPlayerPublicId?: string;
@@ -26,6 +26,7 @@ export interface InningsState {
   currentRunRate: number;
   target?: number;
   requiredRuns?: number;
+  inningsNumber?: number;
 }
 
 export interface BallDTO {

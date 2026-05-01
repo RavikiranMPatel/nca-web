@@ -55,3 +55,6 @@ export const recordResult = (
 // ── Players list for team selection ──────────────────────────────────────────
 export const getBranchPlayers = () =>
   api.get("/admin/players").then((r) => r.data);
+
+export const deleteMatch = (publicId: string) =>
+  api.delete(`/admin/cricket/matches/${publicId}`);

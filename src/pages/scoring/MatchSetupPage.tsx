@@ -62,6 +62,84 @@ const X = () => (
   </svg>
 );
 
+const PlayerCard = ({
+  player,
+  selected,
+  onToggle,
+  onRoleToggle,
+}: {
+  player: PlayerOption;
+  selected: PlayerSelection[];
+  onToggle: () => void;
+  onRoleToggle: (role: "isCaptain" | "isWicketkeeper") => void;
+}) => {
+  const sel = selected.find((s) => s.playerPublicId === player.publicId);
+  const isSelected = !!sel;
+
+  return (
+    <div
+      className={`flex items-center justify-between p-3 rounded-xl border transition-all ${
+        isSelected
+          ? "bg-blue-50 border-blue-300 dark:bg-blue-900/20 dark:border-blue-600"
+          : "bg-white border-gray-200 dark:bg-gray-800 dark:border-gray-700"
+      }`}
+    >
+      <button
+        className="flex items-center gap-3 flex-1 text-left"
+        onClick={onToggle}
+      >
+        <div
+          className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 ${
+            isSelected
+              ? "bg-blue-600 text-white"
+              : "bg-gray-100 dark:bg-gray-700 text-gray-500"
+          }`}
+        >
+          {isSelected
+            ? sel!.battingOrder
+            : player.displayName.charAt(0).toUpperCase()}
+        </div>
+        <div>
+          <div className="text-sm font-medium text-gray-900 dark:text-gray-100">
+            {player.displayName}
+          </div>
+          {(player.battingStyle || player.bowlingStyle) && (
+            <div className="text-xs text-gray-400">
+              {[player.battingStyle, player.bowlingStyle]
+                .filter(Boolean)
+                .join(" · ")}
+            </div>
+          )}
+        </div>
+      </button>
+      {isSelected && (
+        <div className="flex gap-2 ml-2">
+          <button
+            onClick={() => onRoleToggle("isCaptain")}
+            className={`text-xs px-2 py-1 rounded-lg font-medium transition-colors ${
+              sel!.isCaptain
+                ? "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400"
+                : "bg-gray-100 text-gray-500 dark:bg-gray-700 dark:text-gray-400"
+            }`}
+          >
+            C
+          </button>
+          <button
+            onClick={() => onRoleToggle("isWicketkeeper")}
+            className={`text-xs px-2 py-1 rounded-lg font-medium transition-colors ${
+              sel!.isWicketkeeper
+                ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
+                : "bg-gray-100 text-gray-500 dark:bg-gray-700 dark:text-gray-400"
+            }`}
+          >
+            WK
+          </button>
+        </div>
+      )}
+    </div>
+  );
+};
+
 export default function MatchSetupPage() {
   const navigate = useNavigate();
   const [step, setStep] = useState(0);
@@ -69,6 +147,8 @@ export default function MatchSetupPage() {
   const [error, setError] = useState("");
   const [allPlayers, setAllPlayers] = useState<PlayerOption[]>([]);
   const creatingRef = useRef(false);
+  const [teamAExternalName, setTeamAExternalName] = useState("");
+  const [addingExternalA, setAddingExternalA] = useState(false);
   const [teamBExternalName, setTeamBExternalName] = useState("");
   const [addingExternal, setAddingExternal] = useState(false);
 
@@ -161,6 +241,42 @@ export default function MatchSetupPage() {
       .map((s, idx) => ({ ...s, battingOrder: idx + 1 }));
     setSelected(updated);
     setError("");
+  };
+
+  const addExternalPlayerToTeamA = async () => {
+    const name = teamAExternalName.trim();
+    if (!name) return;
+    if (teamAPlayers.length >= 11) {
+      setError("Team A already has 11 players");
+      return;
+    }
+    setAddingExternalA(true);
+    try {
+      const res = await api.post("/admin/players/external", {
+        displayName: name,
+        gender: "MALE",
+      });
+      const newPlayer: PlayerOption = {
+        publicId: res.data.publicId,
+        displayName: res.data.displayName,
+      };
+      setAllPlayers((prev) => [...prev, newPlayer]);
+      setTeamAPlayers((prev) => [
+        ...prev,
+        {
+          playerPublicId: newPlayer.publicId,
+          battingOrder: prev.length + 1,
+          isCaptain: false,
+          isWicketkeeper: false,
+          isImpactPlayer: false,
+        },
+      ]);
+      setTeamAExternalName("");
+    } catch (e: any) {
+      setError(e.response?.data?.message || "Failed to add player");
+    } finally {
+      setAddingExternalA(false);
+    }
   };
 
   const addExternalPlayerToTeamB = async () => {
@@ -264,6 +380,16 @@ export default function MatchSetupPage() {
       setError("Add at least 1 player to Team B");
       return;
     }
+    const hasCaptB = teamBPlayers.some((p) => p.isCaptain);
+    const hasWkB = teamBPlayers.some((p) => p.isWicketkeeper);
+    if (!hasCaptB) {
+      setError("Select a captain for Team B");
+      return;
+    }
+    if (!hasWkB) {
+      setError("Select a wicketkeeper for Team B");
+      return;
+    }
     setLoading(true);
     setError("");
     try {
@@ -273,8 +399,11 @@ export default function MatchSetupPage() {
         teamAPlayers,
         teamBPlayers,
       });
+      // Always reload teams after save — ensures toss uses fresh publicIds
       const fetchedTeams = await getTeams(createdMatch.publicId);
       setTeams_(fetchedTeams);
+      // Reset toss winner in case user went back and changed teams
+      setTossWinner("");
       setStep(3);
     } catch (e: any) {
       setError(e.response?.data?.message || "Failed to set teams");
@@ -286,6 +415,16 @@ export default function MatchSetupPage() {
   const handleGoToTeamB = () => {
     if (teamAPlayers.length < 1) {
       setError("Add at least 1 player to Team A");
+      return;
+    }
+    const hasCapt = teamAPlayers.some((p) => p.isCaptain);
+    const hasWk = teamAPlayers.some((p) => p.isWicketkeeper);
+    if (!hasCapt) {
+      setError("Select a captain for Team A");
+      return;
+    }
+    if (!hasWk) {
+      setError("Select a wicketkeeper for Team A");
       return;
     }
     setError("");
@@ -327,84 +466,6 @@ export default function MatchSetupPage() {
     } finally {
       setLoading(false);
     }
-  };
-
-  const PlayerCard = ({
-    player,
-    selected,
-    onToggle,
-    onRoleToggle,
-  }: {
-    player: PlayerOption;
-    selected: PlayerSelection[];
-    onToggle: () => void;
-    onRoleToggle: (role: "isCaptain" | "isWicketkeeper") => void;
-  }) => {
-    const sel = selected.find((s) => s.playerPublicId === player.publicId);
-    const isSelected = !!sel;
-
-    return (
-      <div
-        className={`flex items-center justify-between p-3 rounded-xl border transition-all ${
-          isSelected
-            ? "bg-blue-50 border-blue-300 dark:bg-blue-900/20 dark:border-blue-600"
-            : "bg-white border-gray-200 dark:bg-gray-800 dark:border-gray-700"
-        }`}
-      >
-        <button
-          className="flex items-center gap-3 flex-1 text-left"
-          onClick={onToggle}
-        >
-          <div
-            className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 ${
-              isSelected
-                ? "bg-blue-600 text-white"
-                : "bg-gray-100 dark:bg-gray-700 text-gray-500"
-            }`}
-          >
-            {isSelected
-              ? sel!.battingOrder
-              : player.displayName.charAt(0).toUpperCase()}
-          </div>
-          <div>
-            <div className="text-sm font-medium text-gray-900 dark:text-gray-100">
-              {player.displayName}
-            </div>
-            {(player.battingStyle || player.bowlingStyle) && (
-              <div className="text-xs text-gray-400">
-                {[player.battingStyle, player.bowlingStyle]
-                  .filter(Boolean)
-                  .join(" · ")}
-              </div>
-            )}
-          </div>
-        </button>
-        {isSelected && (
-          <div className="flex gap-2 ml-2">
-            <button
-              onClick={() => onRoleToggle("isCaptain")}
-              className={`text-xs px-2 py-1 rounded-lg font-medium transition-colors ${
-                sel!.isCaptain
-                  ? "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400"
-                  : "bg-gray-100 text-gray-500 dark:bg-gray-700 dark:text-gray-400"
-              }`}
-            >
-              C
-            </button>
-            <button
-              onClick={() => onRoleToggle("isWicketkeeper")}
-              className={`text-xs px-2 py-1 rounded-lg font-medium transition-colors ${
-                sel!.isWicketkeeper
-                  ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
-                  : "bg-gray-100 text-gray-500 dark:bg-gray-700 dark:text-gray-400"
-              }`}
-            >
-              WK
-            </button>
-          </div>
-        )}
-      </div>
-    );
   };
 
   const currentPlayers = step === 1 ? teamAPlayers : teamBPlayers;
@@ -602,38 +663,55 @@ export default function MatchSetupPage() {
               />
             </div>
 
-            {/* FIX 4: External player add input — Team B only */}
-            {step === 2 && (
-              <>
-                <p className="text-xs text-gray-400 dark:text-gray-500">
-                  Add opposition players by name, or select academy players
-                  below.
-                </p>
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    className="flex-1 px-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm text-gray-900 dark:text-gray-100 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    placeholder="Add player by name..."
-                    value={teamBExternalName}
-                    onChange={(e) => setTeamBExternalName(e.target.value)}
-                    onKeyDown={(e) =>
-                      e.key === "Enter" && addExternalPlayerToTeamB()
+            {/* Add player by name — both Team A and Team B */}
+            <p className="text-xs text-gray-400 dark:text-gray-500">
+              {step === 1
+                ? "Add players by name if not in your academy DB, or search below."
+                : "Add opposition players by name, or search academy players below."}
+            </p>
+            <div className="flex gap-2">
+              <input
+                type="text"
+                className="flex-1 px-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm text-gray-900 dark:text-gray-100 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                placeholder="Add player by name..."
+                value={step === 1 ? teamAExternalName : teamBExternalName}
+                onChange={(e) =>
+                  step === 1
+                    ? setTeamAExternalName(e.target.value)
+                    : setTeamBExternalName(e.target.value)
+                }
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    if (step === 1) {
+                      addExternalPlayerToTeamA();
+                    } else {
+                      addExternalPlayerToTeamB();
                     }
-                  />
-                  <button
-                    onClick={addExternalPlayerToTeamB}
-                    disabled={
-                      !teamBExternalName.trim() ||
+                  }
+                }}
+              />
+              <button
+                onClick={
+                  step === 1
+                    ? addExternalPlayerToTeamA
+                    : addExternalPlayerToTeamB
+                }
+                disabled={
+                  step === 1
+                    ? !teamAExternalName.trim() ||
+                      addingExternalA ||
+                      teamAPlayers.length >= 11
+                    : !teamBExternalName.trim() ||
                       addingExternal ||
                       teamBPlayers.length >= 11
-                    }
-                    className="px-4 py-2.5 bg-blue-600 text-white text-sm font-semibold rounded-xl disabled:opacity-40 active:scale-95 transition-all flex-shrink-0"
-                  >
-                    {addingExternal ? "..." : "+ Add"}
-                  </button>
-                </div>
-              </>
-            )}
+                }
+                className="px-4 py-2.5 bg-blue-600 text-white text-sm font-semibold rounded-xl disabled:opacity-40 active:scale-95 transition-all flex-shrink-0"
+              >
+                {(step === 1 ? addingExternalA : addingExternal)
+                  ? "..."
+                  : "+ Add"}
+              </button>
+            </div>
 
             <div className="flex items-center justify-between">
               <span className="text-xs font-medium text-gray-500 dark:text-gray-400">
