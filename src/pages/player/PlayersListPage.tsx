@@ -16,6 +16,7 @@ import {
   Info,
   Building2,
   UserPlus,
+  Trash2,
 } from "lucide-react";
 import { getImageUrl } from "../../utils/imageUrl";
 import { toast } from "react-hot-toast";
@@ -265,16 +266,29 @@ function PlayersListPage() {
   }>({ open: false, channel: "WHATSAPP" });
   const [showAgeGroupTooltip, setShowAgeGroupTooltip] = useState(false);
 
-  useEffect(() => {
-    loadPlayers();
-    if (isSuperAdmin) {
-      getAdminBranches()
-        .then(setBranches)
-        .catch(() => setBranches([]));
-    }
-  }, [isSuperAdmin]);
+  const [deleteConfirm, setDeleteConfirm] = useState<{
+    open: boolean;
+    player: Player | null;
+  }>({ open: false, player: null });
+  const [deleting, setDeleting] = useState(false);
 
-  const loadPlayers = async () => {
+  const handleDeleteExt = async () => {
+    if (!deleteConfirm.player) return;
+    setDeleting(true);
+    try {
+      await playerService.deleteExtPlayer(deleteConfirm.player.publicId);
+      toast.success(`${deleteConfirm.player.displayName} deleted`);
+      setDeleteConfirm({ open: false, player: null });
+      loadPlayers();
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || "Failed to delete player");
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  const loadPlayers = async (showLoadingSpinner = false) => {
+    if (showLoadingSpinner) setLoading(true);
     try {
       const players = await playerService.getAllPlayers();
       setPlayers(players);
@@ -284,6 +298,15 @@ function PlayersListPage() {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    loadPlayers();
+    if (isSuperAdmin) {
+      getAdminBranches()
+        .then(setBranches)
+        .catch(() => setBranches([]));
+    }
+  }, [isSuperAdmin]);
 
   const getBranchName = (branchId?: string) =>
     branches.find((b) => b.id === branchId)?.name ?? "—";
@@ -749,10 +772,20 @@ function PlayersListPage() {
                   </div>
 
                   {/* Chevron hint */}
-                  <ChevronRight
-                    size={16}
-                    className="text-slate-300 flex-shrink-0"
-                  />
+                  <div className="flex flex-col items-end justify-between gap-1 flex-shrink-0">
+                    {isSuperAdmin && p.publicId.startsWith("EXT-") && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setDeleteConfirm({ open: true, player: p });
+                        }}
+                        className="p-1.5 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    )}
+                    <ChevronRight size={16} className="text-slate-300" />
+                  </div>
                 </div>
               </div>
             );
@@ -923,14 +956,28 @@ function PlayersListPage() {
                         </span>
                       </td>
                       <td className="px-6 py-4 text-right">
-                        <button
-                          onClick={() =>
-                            navigate(`/admin/players/${p.publicId}`)
-                          }
-                          className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition shadow-sm"
-                        >
-                          View
-                        </button>
+                        <div className="flex items-center justify-end gap-2">
+                          {isSuperAdmin && p.publicId.startsWith("EXT-") && (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setDeleteConfirm({ open: true, player: p });
+                              }}
+                              className="p-2 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition"
+                              title="Delete EXT player"
+                            >
+                              <Trash2 size={15} />
+                            </button>
+                          )}
+                          <button
+                            onClick={() =>
+                              navigate(`/admin/players/${p.publicId}`)
+                            }
+                            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition shadow-sm"
+                          >
+                            View
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   );
@@ -1003,6 +1050,72 @@ function PlayersListPage() {
           </div>
         )}
       </div>
+
+      {/* ── DELETE CONFIRM MODAL ── */}
+      {deleteConfirm.open && deleteConfirm.player && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-sm">
+            {/* Header */}
+            <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 bg-red-100 rounded-full flex items-center justify-center">
+                  <Trash2 size={15} className="text-red-600" />
+                </div>
+                <h3 className="font-semibold text-slate-900">Delete Player</h3>
+              </div>
+              <button
+                onClick={() => setDeleteConfirm({ open: false, player: null })}
+                className="text-slate-400 hover:text-slate-600 transition p-1"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* Body */}
+            <div className="p-5 space-y-4">
+              <div className="bg-red-50 border border-red-100 rounded-lg p-3">
+                <p className="text-sm text-slate-700">
+                  You are about to permanently delete{" "}
+                  <span className="font-semibold text-slate-900">
+                    {deleteConfirm.player.displayName}
+                  </span>{" "}
+                  <span className="font-mono text-xs text-slate-500">
+                    ({deleteConfirm.player.publicId})
+                  </span>
+                  . All associated records will also be deleted.
+                </p>
+              </div>
+              <p className="text-xs text-slate-400">
+                This action cannot be undone.
+              </p>
+
+              <div className="flex gap-2 pt-1">
+                <button
+                  onClick={() =>
+                    setDeleteConfirm({ open: false, player: null })
+                  }
+                  disabled={deleting}
+                  className="flex-1 py-2.5 text-sm font-medium text-slate-600 bg-slate-100 rounded-lg hover:bg-slate-200 transition disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleDeleteExt}
+                  disabled={deleting}
+                  className="flex-1 py-2.5 text-sm font-medium text-white bg-red-600 rounded-lg hover:bg-red-700 transition flex items-center justify-center gap-2 disabled:opacity-50"
+                >
+                  {deleting ? (
+                    <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                  ) : (
+                    <Trash2 size={14} />
+                  )}
+                  {deleting ? "Deleting..." : "Delete"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── SHARE MODAL ── */}
       <ShareModal
