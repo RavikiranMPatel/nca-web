@@ -107,6 +107,16 @@ button {
   }
 }
 
+@layer utilities {
+  .pb-safe {
+    padding-bottom: max(12px, env(safe-area-inset-bottom));
+  }
+
+  .pb-safe-lg {
+    padding-bottom: max(24px, env(safe-area-inset-bottom));
+  }
+}
+
 /* Custom scrollbar (desktop only) */
 @media (min-width: 768px) {
   ::-webkit-scrollbar {
