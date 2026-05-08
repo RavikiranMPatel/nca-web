@@ -1,10 +1,23 @@
 // ── Cricket scoring types ─────────────────────────────────────────────────────
 
-export type MatchType = 'INTERNAL' | 'INTER_ACADEMY' | 'KSCA_TOURNAMENT';
-export type MatchStatus = 'SETUP' | 'IN_PROGRESS' | 'INNINGS_BREAK' | 'SUPER_OVER' | 'COMPLETED' | 'ABANDONED';
-export type DataSource = 'BALL_BY_BALL' | 'MANUAL';
-export type TossDecision = 'BAT' | 'FIELD';
-export type ResultType = 'WON_BY_RUNS' | 'WON_BY_WICKETS' | 'TIE' | 'SUPER_OVER' | 'DRAW' | 'NO_RESULT' | 'ABANDONED';
+export type MatchType = "INTERNAL" | "INTER_ACADEMY" | "KSCA_TOURNAMENT";
+export type MatchStatus =
+  | "SETUP"
+  | "IN_PROGRESS"
+  | "INNINGS_BREAK"
+  | "SUPER_OVER"
+  | "COMPLETED"
+  | "ABANDONED";
+export type DataSource = "BALL_BY_BALL" | "MANUAL";
+export type TossDecision = "BAT" | "FIELD";
+export type ResultType =
+  | "WON_BY_RUNS"
+  | "WON_BY_WICKETS"
+  | "TIE"
+  | "SUPER_OVER"
+  | "DRAW"
+  | "NO_RESULT"
+  | "ABANDONED";
 
 export interface CricketMatch {
   id: string;
@@ -20,14 +33,14 @@ export interface CricketMatch {
   tossDecision?: TossDecision;
   resultType?: ResultType;
   resultDescription?: string;
-  tournamentName?: string;
+  tournament?: { name: string; publicId: string };
 }
 
 export interface CricketTeam {
   id: string;
   publicId: string;
   name: string;
-  teamType: 'TEAM_A' | 'TEAM_B';
+  teamType: "TEAM_A" | "TEAM_B";
 }
 
 export interface MatchTeamPlayer {

@@ -155,8 +155,11 @@ const MatchCard = ({
             {matchTypeLabel(match.matchType)} · {match.totalOvers} ov
           </span>
         </div>
-
-        {/* Title */}
+        {match.tournament?.name && (
+          <div className="text-xs text-blue-600 dark:text-blue-400 font-medium mb-1 truncate">
+            🏆 {match.tournament.name}
+          </div>
+        )}
         <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100 truncate">
           {match.title}
         </h3>
@@ -249,7 +252,9 @@ export default function MatchListPage() {
   const navigate = useNavigate();
   const [matches, setMatches] = useState<CricketMatch[]>([]);
   const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState<"all" | "live" | "completed">("all");
+  const [filter, setFilter] = useState<
+    "all" | "live" | "completed" | "tournament"
+  >("all");
   const [search, setSearch] = useState("");
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
 
@@ -284,7 +289,11 @@ export default function MatchListPage() {
         ? true
         : filter === "live"
           ? ["IN_PROGRESS", "INNINGS_BREAK", "SUPER_OVER"].includes(m.status)
-          : m.status === "COMPLETED";
+          : filter === "completed"
+            ? m.status === "COMPLETED"
+            : filter === "tournament"
+              ? !!m.tournament?.name
+              : true;
     const matchesSearch = m.title.toLowerCase().includes(search.toLowerCase());
     return matchesFilter && matchesSearch;
   });
@@ -341,7 +350,7 @@ export default function MatchListPage() {
 
         {/* Filter tabs */}
         <div className="flex gap-2">
-          {(["all", "live", "completed"] as const).map((f) => (
+          {(["all", "live", "completed", "tournament"] as const).map((f) => (
             <button
               key={f}
               onClick={() => setFilter(f)}
@@ -351,7 +360,13 @@ export default function MatchListPage() {
                   : "bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400"
               }`}
             >
-              {f === "all" ? "All" : f === "live" ? "🔴 Live" : "Completed"}
+              {f === "all"
+                ? "All"
+                : f === "live"
+                  ? "🔴 Live"
+                  : f === "tournament"
+                    ? "🏆 Tournament"
+                    : "Completed"}
             </button>
           ))}
         </div>

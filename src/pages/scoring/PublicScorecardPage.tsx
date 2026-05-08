@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { useParams, useSearchParams } from "react-router-dom";
+import { useParams } from "react-router-dom";
 import { getPublicScorecard } from "../../api/scoring/publicApi";
 
 // ── Types (inline — no auth imports needed) ───────────────────────────────────
@@ -12,7 +12,9 @@ interface BattingLine {
   fours: number;
   sixes: number;
   strikeRate: number;
+  isStriker: boolean;
   isDismissed: boolean;
+  dismissed: boolean;
   howOut: string;
 }
 
@@ -334,7 +336,7 @@ const InningsCard = ({
               <td className="py-2.5 px-4">
                 <div className="font-medium text-gray-900 dark:text-gray-100 text-sm">
                   {b.playerName}
-                  {!b.isDismissed && (
+                  {b.isStriker && (
                     <span className="ml-1 text-green-600 dark:text-green-400 text-xs">
                       *
                     </span>
@@ -509,6 +511,7 @@ export default function PublicScorecardPage() {
 
   // Tabs: innings index + special tabs
   // 0, 1 = innings; 'flow' = match flow; 'info' = match info
+
   const [activeTab, setActiveTab] = useState<number | "flow" | "info">(0);
   const [copied, setCopied] = useState(false);
 
@@ -527,6 +530,17 @@ export default function PublicScorecardPage() {
   useEffect(() => {
     load();
   }, [load]);
+
+  // Auto-switch to the live/active innings tab
+  useEffect(() => {
+    if (!scorecard) return;
+    const liveIndex = scorecard.innings.findIndex(
+      (inn) => inn.status === "IN_PROGRESS",
+    );
+    if (liveIndex !== -1) {
+      setActiveTab(liveIndex);
+    }
+  }, [scorecard?.innings.length]); // triggers when a new innings is added
 
   // Live polling — refresh every 15s if match is in progress
   useEffect(() => {

@@ -70,6 +70,10 @@ import ManualEntryPage from "./pages/scoring/ManualEntryPage";
 import PublicScorecardPage from "./pages/scoring/PublicScorecardPage";
 import PublicPlayerProfilePage from "./pages/scoring/PublicPlayerProfilePage";
 import MatchListPage from "./pages/scoring/MatchListPage";
+import TournamentCreatePage from "./pages/scoring/TournamentCreatePage";
+import TournamentDetailPage from "./pages/scoring/TournamentDetailPage";
+import TournamentListPage from "./pages/scoring/TournamentListPage";
+import CricketStatsPage from "./pages/CricketStatsPage";
 
 // Add route after /my-bookings route:
 <Route
@@ -135,6 +139,15 @@ function App() {
         element={
           <AppLayout>
             <StarPerformer />
+          </AppLayout>
+        }
+      />
+
+      <Route
+        path="/cricket-stats"
+        element={
+          <AppLayout>
+            <CricketStatsPage />
           </AppLayout>
         }
       />
@@ -356,6 +369,37 @@ function App() {
           <ProtectedRoute roles={["ROLE_ADMIN", "ROLE_SUPER_ADMIN"]}>
             <AppLayout>
               <ManualEntryPage />
+            </AppLayout>
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/admin/cricket/tournaments"
+        element={
+          <ProtectedRoute roles={["ROLE_ADMIN", "ROLE_SUPER_ADMIN"]}>
+            <AppLayout>
+              <TournamentListPage />
+            </AppLayout>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/cricket/tournaments/new"
+        element={
+          <ProtectedRoute roles={["ROLE_ADMIN", "ROLE_SUPER_ADMIN"]}>
+            <AppLayout>
+              <TournamentCreatePage />
+            </AppLayout>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/cricket/tournaments/:publicId"
+        element={
+          <ProtectedRoute roles={["ROLE_ADMIN", "ROLE_SUPER_ADMIN"]}>
+            <AppLayout>
+              <TournamentDetailPage />
             </AppLayout>
           </ProtectedRoute>
         }

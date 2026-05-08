@@ -89,6 +89,7 @@ function AcademySettings() {
   const [announcementEnabled, setAnnouncementEnabled] = useState(true);
   const [announcementText, setAnnouncementText] = useState("");
   const [announcementExpiry, setAnnouncementExpiry] = useState("");
+  const [cricketStatsEnabled, setCricketStatsEnabled] = useState(true);
 
   // Theme settings
   const [buttonRadius, setButtonRadius] = useState("8");
@@ -153,6 +154,9 @@ function AcademySettings() {
       setNewsEnabled(response.data.SECTION_NEWS_ENABLED !== "false");
       setGalleryEnabled(response.data.SECTION_GALLERY_ENABLED !== "false");
       setTeamEnabled(response.data.SECTION_TEAM_ENABLED !== "false");
+      setCricketStatsEnabled(
+        response.data.SECTION_CRICKET_STATS_ENABLED !== "false",
+      );
       const moduleTypes = response.data.BATCH_MODULE_TYPES || "";
       setSelectedModules(
         moduleTypes
@@ -304,6 +308,30 @@ function AcademySettings() {
                     setStatsEnabled(e.target.checked);
                     handleToggleSetting(
                       "SECTION_STATS_ENABLED",
+                      e.target.checked,
+                    );
+                  }}
+                  className="w-5 h-5 text-blue-600 rounded"
+                />
+              </label>
+
+              <label className="flex items-center justify-between p-4 border rounded-lg bg-gray-50 cursor-pointer">
+                <div>
+                  <span className="font-medium text-sm">
+                    🏏 Cricket Stats Leaderboard
+                  </span>
+                  <p className="text-xs text-gray-500">
+                    Show public cricket batting & bowling leaderboard on home
+                    page
+                  </p>
+                </div>
+                <input
+                  type="checkbox"
+                  checked={cricketStatsEnabled}
+                  onChange={(e) => {
+                    setCricketStatsEnabled(e.target.checked);
+                    handleToggleSetting(
+                      "SECTION_CRICKET_STATS_ENABLED",
                       e.target.checked,
                     );
                   }}

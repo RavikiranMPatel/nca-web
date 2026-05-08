@@ -361,6 +361,14 @@ function AdminDashboard() {
             gradient="bg-gradient-to-br from-cyan-500 to-blue-600"
             textLight="text-cyan-100"
           />
+          <ActionCard
+            icon={Trophy}
+            title="Tournaments"
+            description="Create and manage tournaments, fixtures and standings"
+            onClick={() => navigate("/admin/cricket/tournaments")}
+            gradient="bg-gradient-to-br from-yellow-500 to-orange-500"
+            textLight="text-yellow-100"
+          />
         </div>
       </section>
 

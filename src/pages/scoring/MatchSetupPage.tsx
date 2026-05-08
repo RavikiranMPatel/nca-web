@@ -9,6 +9,7 @@ import {
   getBranchPlayers,
   getMatch,
 } from "../../api/scoring/matchApi";
+import { linkMatchToFixture } from "../../api/scoring/tournamentApi";
 import type {
   CricketMatch,
   CricketTeam,
@@ -19,7 +20,6 @@ import api from "../../api/axios";
 
 const STEPS = ["Match Details", "Team A", "Team B", "Toss", "Review"];
 
-// FIX 1: Removed unused ChevronRight icon
 const Check = () => (
   <svg
     className="w-4 h-4"
@@ -67,11 +67,13 @@ const PlayerCard = ({
   selected,
   onToggle,
   onRoleToggle,
+  isInSquad,
 }: {
   player: PlayerOption;
   selected: PlayerSelection[];
   onToggle: () => void;
   onRoleToggle: (role: "isCaptain" | "isWicketkeeper") => void;
+  isInSquad?: boolean;
 }) => {
   const sel = selected.find((s) => s.playerPublicId === player.publicId);
   const isSelected = !!sel;
@@ -100,8 +102,15 @@ const PlayerCard = ({
             : player.displayName.charAt(0).toUpperCase()}
         </div>
         <div>
-          <div className="text-sm font-medium text-gray-900 dark:text-gray-100">
-            {player.displayName}
+          <div className="flex items-center gap-1.5">
+            <div className="text-sm font-medium text-gray-900 dark:text-gray-100">
+              {player.displayName}
+            </div>
+            {isInSquad && !isSelected && (
+              <span className="text-xs px-1.5 py-0.5 bg-green-50 dark:bg-green-900/20 text-green-600 dark:text-green-400 rounded font-medium">
+                Squad
+              </span>
+            )}
           </div>
           {(player.battingStyle || player.bowlingStyle) && (
             <div className="text-xs text-gray-400">
@@ -142,38 +151,48 @@ const PlayerCard = ({
 
 export default function MatchSetupPage() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [step, setStep] = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [allPlayers, setAllPlayers] = useState<PlayerOption[]>([]);
   const creatingRef = useRef(false);
+
   const [teamAExternalName, setTeamAExternalName] = useState("");
   const [addingExternalA, setAddingExternalA] = useState(false);
   const [teamBExternalName, setTeamBExternalName] = useState("");
   const [addingExternal, setAddingExternal] = useState(false);
 
+  // Fixture pre-fill state
+  const [fixtureId, setFixtureId] = useState<string | null>(null);
+  const [tournamentId, setTournamentId] = useState<string | null>(null);
+  const [homeSquadIds, setHomeSquadIds] = useState<Set<string>>(new Set());
+  const [awaySquadIds, setAwaySquadIds] = useState<Set<string>>(new Set());
+
+  const [homeSquadPlayers, setHomeSquadPlayers] = useState<PlayerOption[]>([]);
+  const [awaySquadPlayers, setAwaySquadPlayers] = useState<PlayerOption[]>([]);
+
   const [matchDetails, setMatchDetails] = useState({
     title: "",
     matchDate: new Date().toISOString().split("T")[0],
-    matchType: "INTERNAL" as const,
+    matchType: "INTERNAL" as "INTERNAL" | "INTER_ACADEMY" | "KSCA_TOURNAMENT",
     venue: "",
     totalOvers: 20,
-    dataSource: "BALL_BY_BALL" as const,
+    dataSource: "BALL_BY_BALL" as "BALL_BY_BALL" | "MANUAL",
   });
 
   const [createdMatch, setCreatedMatch] = useState<CricketMatch | null>(null);
   const [teams, setTeams_] = useState<CricketTeam[]>([]);
-
   const [teamAName, setTeamAName] = useState("Team A");
   const [teamBName, setTeamBName] = useState("Team B");
   const [teamAPlayers, setTeamAPlayers] = useState<PlayerSelection[]>([]);
   const [teamBPlayers, setTeamBPlayers] = useState<PlayerSelection[]>([]);
   const [searchA, setSearchA] = useState("");
   const [searchB, setSearchB] = useState("");
-
   const [tossWinner, setTossWinner] = useState("");
   const [tossDecision, setTossDecision] = useState<"BAT" | "FIELD">("BAT");
 
+  // Load branch players
   useEffect(() => {
     getBranchPlayers()
       .then((data: any[]) => {
@@ -189,15 +208,103 @@ export default function MatchSetupPage() {
       .catch(() => setError("Failed to load players"));
   }, []);
 
+  // Handle fixture pre-fill from sessionStorage
+  useEffect(() => {
+    const fid = searchParams.get("fixtureId");
+    const tid = searchParams.get("tournamentId");
+    if (!fid || !tid) return;
+    setFixtureId(fid);
+    setTournamentId(tid);
+
+    const raw = sessionStorage.getItem("fixture_prefill");
+    if (!raw) return;
+    try {
+      const data = JSON.parse(raw);
+      sessionStorage.removeItem("fixture_prefill");
+
+      setMatchDetails((p) => ({
+        ...p,
+        title: data.suggestedTitle ?? p.title,
+        totalOvers: data.defaultOvers ?? p.totalOvers,
+        matchType: "KSCA_TOURNAMENT",
+      }));
+
+      setTeamAName(data.homeTeam?.name ?? "Team A");
+      setTeamBName(data.awayTeam?.name ?? "Team B");
+
+      const homePlayers: PlayerOption[] = (data.homeTeam?.squad ?? []).map(
+        (p: any) => ({
+          publicId: p.publicId,
+          displayName: p.displayName,
+          battingStyle: p.battingStyle,
+          bowlingStyle: p.bowlingStyle,
+        }),
+      );
+      const awayPlayers: PlayerOption[] = (data.awayTeam?.squad ?? []).map(
+        (p: any) => ({
+          publicId: p.publicId,
+          displayName: p.displayName,
+          battingStyle: p.battingStyle,
+          bowlingStyle: p.bowlingStyle,
+        }),
+      );
+
+      setHomeSquadIds(new Set(homePlayers.map((p) => p.publicId)));
+      setAwaySquadIds(new Set(awayPlayers.map((p) => p.publicId)));
+      setHomeSquadPlayers(homePlayers);
+      setAwaySquadPlayers(awayPlayers);
+
+      // Merge squad players into allPlayers list
+      setAllPlayers((prev) => {
+        const existingIds = new Set(prev.map((p) => p.publicId));
+        const newPlayers = [...homePlayers, ...awayPlayers].filter(
+          (p) => !existingIds.has(p.publicId),
+        );
+        return [...prev, ...newPlayers];
+      });
+    } catch {
+      /* ignore */
+    }
+  }, [searchParams]);
+
+  // Resume existing match
+  useEffect(() => {
+    const resumeId = searchParams.get("resume");
+    if (!resumeId) return;
+    getMatch(resumeId)
+      .then((match) => {
+        setCreatedMatch(match);
+        setStep(1);
+      })
+      .catch(() => setError("Failed to load match"));
+  }, []);
+
   const selectedAIds = teamAPlayers.map((p) => p.playerPublicId);
   const selectedBIds = teamBPlayers.map((p) => p.playerPublicId);
 
-  const filteredA = allPlayers
+  // When coming from a fixture, only show that team's squad members.
+  // When NOT from a fixture, show all branch players sorted by squad membership.
+  const filteredA = (
+    fixtureId && homeSquadPlayers.length > 0 ? homeSquadPlayers : allPlayers
+  )
     .filter((p) => !selectedBIds.includes(p.publicId))
-    .filter((p) => p.displayName.toLowerCase().includes(searchA.toLowerCase()));
-  const filteredB = allPlayers
+    .filter((p) => p.displayName.toLowerCase().includes(searchA.toLowerCase()))
+    .sort(
+      (a, b) =>
+        (homeSquadIds.has(a.publicId) ? 0 : 1) -
+        (homeSquadIds.has(b.publicId) ? 0 : 1),
+    );
+
+  const filteredB = (
+    fixtureId && awaySquadPlayers.length > 0 ? awaySquadPlayers : allPlayers
+  )
     .filter((p) => !selectedAIds.includes(p.publicId))
-    .filter((p) => p.displayName.toLowerCase().includes(searchB.toLowerCase()));
+    .filter((p) => p.displayName.toLowerCase().includes(searchB.toLowerCase()))
+    .sort(
+      (a, b) =>
+        (awaySquadIds.has(a.publicId) ? 0 : 1) -
+        (awaySquadIds.has(b.publicId) ? 0 : 1),
+    );
 
   const togglePlayer = (
     player: PlayerOption,
@@ -206,11 +313,11 @@ export default function MatchSetupPage() {
   ) => {
     const exists = selected.find((s) => s.playerPublicId === player.publicId);
     if (exists) {
-      // Remove and re-number batting orders
-      const updated = selected
-        .filter((s) => s.playerPublicId !== player.publicId)
-        .map((s, idx) => ({ ...s, battingOrder: idx + 1 }));
-      setSelected(updated);
+      setSelected(
+        selected
+          .filter((s) => s.playerPublicId !== player.publicId)
+          .map((s, idx) => ({ ...s, battingOrder: idx + 1 })),
+      );
     } else {
       if (selected.length >= 11) {
         setError("Playing XI cannot have more than 11 players");
@@ -230,16 +337,16 @@ export default function MatchSetupPage() {
     setError("");
   };
 
-  // FIX 2: Remove player directly from selected list (for the selected summary chips)
   const removePlayer = (
     publicId: string,
     selected: PlayerSelection[],
     setSelected: (s: PlayerSelection[]) => void,
   ) => {
-    const updated = selected
-      .filter((s) => s.playerPublicId !== publicId)
-      .map((s, idx) => ({ ...s, battingOrder: idx + 1 }));
-    setSelected(updated);
+    setSelected(
+      selected
+        .filter((s) => s.playerPublicId !== publicId)
+        .map((s, idx) => ({ ...s, battingOrder: idx + 1 })),
+    );
     setError("");
   };
 
@@ -252,7 +359,7 @@ export default function MatchSetupPage() {
     }
     setAddingExternalA(true);
     try {
-      const res = await api.post("/admin/players/external", {
+      const res = await api.post("/admin/players/external/tournament-guest", {
         displayName: name,
         gender: "MALE",
       });
@@ -288,7 +395,7 @@ export default function MatchSetupPage() {
     }
     setAddingExternal(true);
     try {
-      const res = await api.post("/admin/players/external", {
+      const res = await api.post("/admin/players/external/tournament-guest", {
         displayName: name,
         gender: "MALE",
       });
@@ -314,19 +421,6 @@ export default function MatchSetupPage() {
       setAddingExternal(false);
     }
   };
-
-  const [searchParams] = useSearchParams();
-
-  useEffect(() => {
-    const resumeId = searchParams.get("resume");
-    if (!resumeId) return;
-    getMatch(resumeId)
-      .then((match) => {
-        setCreatedMatch(match);
-        setStep(1);
-      })
-      .catch(() => setError("Failed to load match"));
-  }, []);
 
   const toggleRole = (
     publicId: string,
@@ -359,8 +453,14 @@ export default function MatchSetupPage() {
     setLoading(true);
     setError("");
     try {
-      const match = await createMatch(matchDetails);
+      const match = await createMatch({
+        ...matchDetails,
+        tournamentPublicId: tournamentId ?? undefined,
+      });
       setCreatedMatch(match);
+
+      // Link to fixture if coming from tournament
+
       setStep(1);
     } catch (e: any) {
       setError(e.response?.data?.message || "Failed to create match");
@@ -380,13 +480,11 @@ export default function MatchSetupPage() {
       setError("Add at least 1 player to Team B");
       return;
     }
-    const hasCaptB = teamBPlayers.some((p) => p.isCaptain);
-    const hasWkB = teamBPlayers.some((p) => p.isWicketkeeper);
-    if (!hasCaptB) {
+    if (!teamBPlayers.some((p) => p.isCaptain)) {
       setError("Select a captain for Team B");
       return;
     }
-    if (!hasWkB) {
+    if (!teamBPlayers.some((p) => p.isWicketkeeper)) {
       setError("Select a wicketkeeper for Team B");
       return;
     }
@@ -399,10 +497,8 @@ export default function MatchSetupPage() {
         teamAPlayers,
         teamBPlayers,
       });
-      // Always reload teams after save — ensures toss uses fresh publicIds
       const fetchedTeams = await getTeams(createdMatch.publicId);
       setTeams_(fetchedTeams);
-      // Reset toss winner in case user went back and changed teams
       setTossWinner("");
       setStep(3);
     } catch (e: any) {
@@ -417,21 +513,17 @@ export default function MatchSetupPage() {
       setError("Add at least 1 player to Team A");
       return;
     }
-    const hasCapt = teamAPlayers.some((p) => p.isCaptain);
-    const hasWk = teamAPlayers.some((p) => p.isWicketkeeper);
-    if (!hasCapt) {
+    if (!teamAPlayers.some((p) => p.isCaptain)) {
       setError("Select a captain for Team A");
       return;
     }
-    if (!hasWk) {
+    if (!teamAPlayers.some((p) => p.isWicketkeeper)) {
       setError("Select a wicketkeeper for Team A");
       return;
     }
     setError("");
     setStep(2);
   };
-
-  // FIX 3: Removed unused handleTeamB — step 2 button now calls handleSetTeams directly
 
   const handleToss = async () => {
     if (!tossWinner) {
@@ -459,6 +551,17 @@ export default function MatchSetupPage() {
     setLoading(true);
     setError("");
     try {
+      if (fixtureId && tournamentId) {
+        try {
+          await linkMatchToFixture(
+            tournamentId,
+            fixtureId,
+            createdMatch.publicId,
+          );
+        } catch {
+          /* non-fatal */
+        }
+      }
       await startMatch(createdMatch.publicId);
       navigate(`/admin/cricket/matches/${createdMatch.publicId}/score`);
     } catch (e: any) {
@@ -470,10 +573,10 @@ export default function MatchSetupPage() {
 
   const currentPlayers = step === 1 ? teamAPlayers : teamBPlayers;
   const setCurrentPlayers = step === 1 ? setTeamAPlayers : setTeamBPlayers;
+  const currentSquadIds = step === 1 ? homeSquadIds : awaySquadIds;
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-950 pb-24">
-      {/* Header */}
       <div className="sticky top-0 z-10 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 px-4 py-3">
         <div className="flex items-center gap-3">
           <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center text-white">
@@ -481,7 +584,7 @@ export default function MatchSetupPage() {
           </div>
           <div>
             <h1 className="text-base font-semibold text-gray-900 dark:text-white">
-              New Match
+              {fixtureId ? "Match from Fixture" : "New Match"}
             </h1>
             <p className="text-xs text-gray-500">{STEPS[step]}</p>
           </div>
@@ -490,9 +593,7 @@ export default function MatchSetupPage() {
           {STEPS.map((s, i) => (
             <div
               key={s}
-              className={`h-1 flex-1 rounded-full transition-all duration-300 ${
-                i <= step ? "bg-blue-600" : "bg-gray-200 dark:bg-gray-700"
-              }`}
+              className={`h-1 flex-1 rounded-full transition-all duration-300 ${i <= step ? "bg-blue-600" : "bg-gray-200 dark:bg-gray-700"}`}
             />
           ))}
         </div>
@@ -508,6 +609,12 @@ export default function MatchSetupPage() {
         {/* STEP 0: Match Details */}
         {step === 0 && (
           <div className="space-y-4">
+            {fixtureId && (
+              <div className="px-4 py-3 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-900 rounded-xl text-xs text-green-700 dark:text-green-400">
+                🏆 Match pre-filled from tournament fixture. Squad members will
+                appear first in player selection.
+              </div>
+            )}
             <div>
               <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
                 Match Title *
@@ -574,11 +681,7 @@ export default function MatchSetupPage() {
                     onClick={() =>
                       setMatchDetails((p) => ({ ...p, matchType: type }))
                     }
-                    className={`py-2.5 px-2 rounded-xl text-xs font-medium border transition-all active:scale-95 ${
-                      matchDetails.matchType === type
-                        ? "bg-blue-600 text-white border-blue-600"
-                        : "bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-400 border-gray-200 dark:border-gray-700"
-                    }`}
+                    className={`py-2.5 px-2 rounded-xl text-xs font-medium border transition-all active:scale-95 ${matchDetails.matchType === type ? "bg-blue-600 text-white border-blue-600" : "bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-400 border-gray-200 dark:border-gray-700"}`}
                   >
                     {type === "INTERNAL"
                       ? "Internal"
@@ -627,11 +730,7 @@ export default function MatchSetupPage() {
                     onClick={() =>
                       setMatchDetails((p) => ({ ...p, dataSource: val }))
                     }
-                    className={`p-3 rounded-xl border text-left transition-all active:scale-95 ${
-                      matchDetails.dataSource === val
-                        ? "bg-blue-50 dark:bg-blue-900/20 border-blue-300 dark:border-blue-700"
-                        : "bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700"
-                    }`}
+                    className={`p-3 rounded-xl border text-left transition-all active:scale-95 ${matchDetails.dataSource === val ? "bg-blue-50 dark:bg-blue-900/20 border-blue-300 dark:border-blue-700" : "bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700"}`}
                   >
                     <div className="text-xs font-semibold text-gray-900 dark:text-gray-100">
                       {label}
@@ -644,7 +743,7 @@ export default function MatchSetupPage() {
           </div>
         )}
 
-        {/* STEP 1 & 2: Team A / Team B */}
+        {/* STEP 1 & 2: Teams */}
         {(step === 1 || step === 2) && (
           <div className="space-y-4">
             <div>
@@ -663,7 +762,13 @@ export default function MatchSetupPage() {
               />
             </div>
 
-            {/* Add player by name — both Team A and Team B */}
+            {fixtureId && currentSquadIds.size > 0 && (
+              <div className="px-3 py-2 bg-blue-50 dark:bg-blue-900/20 border border-blue-100 dark:border-blue-900 rounded-xl text-xs text-blue-600 dark:text-blue-400">
+                💡 {currentSquadIds.size} squad members shown — select your
+                playing XI
+              </div>
+            )}
+
             <p className="text-xs text-gray-400 dark:text-gray-500">
               {step === 1
                 ? "Add players by name if not in your academy DB, or search below."
@@ -682,11 +787,8 @@ export default function MatchSetupPage() {
                 }
                 onKeyDown={(e) => {
                   if (e.key === "Enter") {
-                    if (step === 1) {
-                      addExternalPlayerToTeamA();
-                    } else {
-                      addExternalPlayerToTeamB();
-                    }
+                    if (step === 1) addExternalPlayerToTeamA();
+                    else addExternalPlayerToTeamB();
                   }
                 }}
               />
@@ -717,15 +819,47 @@ export default function MatchSetupPage() {
               <span className="text-xs font-medium text-gray-500 dark:text-gray-400">
                 Select Players
               </span>
-              <span
-                className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
-                  currentPlayers.length === 11
-                    ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
-                    : "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400"
-                }`}
-              >
-                {currentPlayers.length}/11
-              </span>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => {
+                    const currentFiltered = step === 1 ? filteredA : filteredB;
+                    const currentSelected =
+                      step === 1 ? teamAPlayers : teamBPlayers;
+                    const setSelected =
+                      step === 1 ? setTeamAPlayers : setTeamBPlayers;
+                    const unselectedIds = new Set(
+                      currentSelected.map((p) => p.playerPublicId),
+                    );
+                    const toAdd = currentFiltered
+                      .filter((p) => !unselectedIds.has(p.publicId))
+                      .slice(0, 11 - currentSelected.length);
+                    if (toAdd.length === 0) {
+                      // Deselect all
+                      setSelected([]);
+                    } else {
+                      setSelected([
+                        ...currentSelected,
+                        ...toAdd.map((p, idx) => ({
+                          playerPublicId: p.publicId,
+                          battingOrder: currentSelected.length + idx + 1,
+                          isCaptain: false,
+                          isWicketkeeper: false,
+                          isImpactPlayer: false,
+                        })),
+                      ]);
+                    }
+                    setError("");
+                  }}
+                  className="text-xs font-semibold px-2 py-0.5 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 active:scale-95 transition-all"
+                >
+                  {currentPlayers.length > 0 ? "Clear All" : "Select All"}
+                </button>
+                <span
+                  className={`text-xs font-semibold px-2 py-0.5 rounded-full ${currentPlayers.length === 11 ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400" : "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400"}`}
+                >
+                  {currentPlayers.length}/11
+                </span>
+              </div>
             </div>
 
             <input
@@ -746,6 +880,7 @@ export default function MatchSetupPage() {
                   key={player.publicId}
                   player={player}
                   selected={currentPlayers}
+                  isInSquad={currentSquadIds.has(player.publicId)}
                   onToggle={() =>
                     togglePlayer(player, currentPlayers, setCurrentPlayers)
                   }
@@ -766,7 +901,6 @@ export default function MatchSetupPage() {
               )}
             </div>
 
-            {/* FIX 5: Selected summary with remove button on each chip */}
             {currentPlayers.length > 0 && (
               <div className="bg-blue-50 dark:bg-blue-900/10 border border-blue-100 dark:border-blue-900/30 rounded-xl p-3">
                 <div className="text-xs font-medium text-blue-700 dark:text-blue-400 mb-2">
@@ -785,7 +919,6 @@ export default function MatchSetupPage() {
                         {sel.battingOrder}. {p?.displayName}
                         {sel.isCaptain ? " (C)" : ""}
                         {sel.isWicketkeeper ? " (WK)" : ""}
-                        {/* FIX 5: Remove button on each selected player chip */}
                         <button
                           onClick={() =>
                             removePlayer(
@@ -794,7 +927,7 @@ export default function MatchSetupPage() {
                               setCurrentPlayers,
                             )
                           }
-                          className="ml-0.5 w-4 h-4 rounded-full bg-blue-200 dark:bg-blue-800 hover:bg-red-200 hover:text-red-600 dark:hover:bg-red-900/40 dark:hover:text-red-400 flex items-center justify-center transition-colors flex-shrink-0"
+                          className="ml-0.5 w-4 h-4 rounded-full bg-blue-200 dark:bg-blue-800 hover:bg-red-200 hover:text-red-600 flex items-center justify-center transition-colors flex-shrink-0"
                         >
                           <X />
                         </button>
@@ -824,11 +957,7 @@ export default function MatchSetupPage() {
                 <button
                   key={team.publicId}
                   onClick={() => setTossWinner(team.publicId)}
-                  className={`w-full p-4 rounded-xl border text-left transition-all active:scale-95 ${
-                    tossWinner === team.publicId
-                      ? "bg-yellow-50 dark:bg-yellow-900/20 border-yellow-400 dark:border-yellow-600"
-                      : "bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700"
-                  }`}
+                  className={`w-full p-4 rounded-xl border text-left transition-all active:scale-95 ${tossWinner === team.publicId ? "bg-yellow-50 dark:bg-yellow-900/20 border-yellow-400 dark:border-yellow-600" : "bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700"}`}
                 >
                   <div className="flex items-center justify-between">
                     <span className="font-medium text-gray-900 dark:text-gray-100">
@@ -853,13 +982,7 @@ export default function MatchSetupPage() {
                     <button
                       key={dec}
                       onClick={() => setTossDecision(dec)}
-                      className={`py-4 rounded-xl border font-semibold transition-all active:scale-95 ${
-                        tossDecision === dec
-                          ? dec === "BAT"
-                            ? "bg-green-600 text-white border-green-600"
-                            : "bg-blue-600 text-white border-blue-600"
-                          : "bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-400 border-gray-200 dark:border-gray-700"
-                      }`}
+                      className={`py-4 rounded-xl border font-semibold transition-all active:scale-95 ${tossDecision === dec ? (dec === "BAT" ? "bg-green-600 text-white border-green-600" : "bg-blue-600 text-white border-blue-600") : "bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-400 border-gray-200 dark:border-gray-700"}`}
                     >
                       {dec === "BAT" ? "🏏 BAT" : "⚾ FIELD"}
                     </button>
@@ -870,7 +993,7 @@ export default function MatchSetupPage() {
           </div>
         )}
 
-        {/* STEP 4: Review & Start */}
+        {/* STEP 4: Review */}
         {step === 4 && createdMatch && (
           <div className="space-y-4">
             <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 divide-y divide-gray-100 dark:divide-gray-700">
@@ -880,7 +1003,7 @@ export default function MatchSetupPage() {
                 { label: "Overs", value: `${matchDetails.totalOvers} overs` },
                 {
                   label: "Type",
-                  value: matchDetails.matchType.replace("_", " "),
+                  value: matchDetails.matchType.replace(/_/g, " "),
                 },
                 { label: "Venue", value: matchDetails.venue || "—" },
                 {
@@ -940,9 +1063,7 @@ export default function MatchSetupPage() {
                     ? handleToss
                     : handleStartMatch
           }
-          className={`flex-1 py-3 rounded-xl text-sm font-semibold text-white transition-all active:scale-95 flex items-center justify-center gap-2 ${
-            loading ? "bg-blue-400" : "bg-blue-600 hover:bg-blue-700"
-          }`}
+          className={`flex-1 py-3 rounded-xl text-sm font-semibold text-white transition-all active:scale-95 flex items-center justify-center gap-2 ${loading ? "bg-blue-400" : "bg-blue-600 hover:bg-blue-700"}`}
         >
           {loading && (
             <svg

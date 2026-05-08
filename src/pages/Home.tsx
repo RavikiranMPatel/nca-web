@@ -19,15 +19,12 @@ import LoginPromptModal from "../components/LoginPromptModal";
 import publicApi from "../api/publicApi";
 import { getImageUrl } from "../utils/imageUrl";
 import ContactForm from "../components/ContactForm";
-
-/* Swiper */
 import { Swiper, SwiperSlide } from "swiper/react";
 import { Autoplay, Pagination, Navigation } from "swiper/modules";
 import "swiper/css";
 import "swiper/css/pagination";
 import "swiper/css/navigation";
 
-/* ─── Types ─────────────────────────────────────────────── */
 type SliderImage = {
   id: string;
   imageUrl: string;
@@ -36,7 +33,6 @@ type SliderImage = {
   title?: string;
   description?: string;
 };
-
 type AcademySettings = {
   ACADEMY_NAME?: string;
   LOGO_URL?: string;
@@ -98,7 +94,6 @@ type AcademySettings = {
   INSTAGRAM_POST_4?: string;
   INSTAGRAM_POST_5?: string;
 };
-
 type TeamMember = {
   id: string;
   publicId: string;
@@ -109,7 +104,6 @@ type TeamMember = {
   displayOrder: number;
   active: boolean;
 };
-
 type Facility = {
   id: string;
   title: string;
@@ -118,7 +112,6 @@ type Facility = {
   displayOrder: number;
   active: boolean;
 };
-
 type Testimonial = {
   id: string;
   name: string;
@@ -129,7 +122,6 @@ type Testimonial = {
   featured?: boolean;
   active: boolean;
 };
-
 type NewsPost = {
   id: string;
   title: string;
@@ -140,15 +132,22 @@ type NewsPost = {
   publishedAt: string;
   status: string;
 };
-
 type GalleryImage = {
   id: string;
   imageUrl: string;
   caption?: string;
   active: boolean;
 };
+type LiveMatch = {
+  matchPublicId: string;
+  title: string;
+  matchType: string;
+  venue?: string;
+  matchDate?: string;
+  totalOvers: number;
+  tournamentName?: string;
+};
 
-/* ─── YouTube Grid ──────────────────────────────────────── */
 function YoutubeGrid({
   videos,
   getShadowClass,
@@ -166,7 +165,6 @@ function YoutubeGrid({
   ): { embedUrl: string; isShort: boolean } | null => {
     try {
       const u = new URL(url);
-      // Shorts
       if (u.pathname.startsWith("/shorts/")) {
         const id = u.pathname.split("/shorts/")[1].split("?")[0];
         return {
@@ -174,7 +172,6 @@ function YoutubeGrid({
           isShort: true,
         };
       }
-      // Regular
       const videoId =
         u.searchParams.get("v") ||
         (u.hostname === "youtu.be" ? u.pathname.slice(1) : null);
@@ -188,7 +185,6 @@ function YoutubeGrid({
       return null;
     }
   };
-
   return (
     <>
       <div className="grid grid-cols-2 md:grid-cols-3 gap-4 items-start">
@@ -236,7 +232,6 @@ function YoutubeGrid({
   );
 }
 
-/* ─── Instagram Grid ─────────────────────────────────────── */
 function InstagramGrid({
   posts,
   getShadowClass,
@@ -252,7 +247,6 @@ function InstagramGrid({
   instagramUrl?: string;
 }) {
   useEffect(() => {
-    // Load Instagram embed script
     if ((window as any).instgrm) {
       (window as any).instgrm.Embeds.process();
     } else {
@@ -260,16 +254,12 @@ function InstagramGrid({
       script.src = "https://www.instagram.com/embed.js";
       script.async = true;
       script.onload = () => {
-        if ((window as any).instgrm) {
-          (window as any).instgrm.Embeds.process();
-        }
+        if ((window as any).instgrm) (window as any).instgrm.Embeds.process();
       };
       document.body.appendChild(script);
     }
   }, [posts]);
-
   const getCleanUrl = (url: string): string => {
-    // Strip query params like ?utm_source etc, keep just the post URL
     try {
       const u = new URL(url);
       return `${u.origin}${u.pathname}`;
@@ -277,7 +267,6 @@ function InstagramGrid({
       return url;
     }
   };
-
   return (
     <>
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
@@ -328,7 +317,6 @@ function InstagramGrid({
   );
 }
 
-/* ─── Section Heading ───────────────────────────────────── */
 function SectionHeading({
   title,
   subtitle,
@@ -356,10 +344,8 @@ function SectionHeading({
   );
 }
 
-/* ─── Home ──────────────────────────────────────────────── */
 function Home() {
   const navigate = useNavigate();
-
   const [showLoginPrompt, setShowLoginPrompt] = useState(false);
   const [expandedMemberId, setExpandedMemberId] = useState<string | null>(null);
   const [announcementVisible, setAnnouncementVisible] = useState(true);
@@ -374,8 +360,21 @@ function Home() {
   const [gallery, setGallery] = useState<GalleryImage[]>([]);
   const [selectedGalleryImage, setSelectedGalleryImage] =
     useState<GalleryImage | null>(null);
+  const [publicStats, setPublicStats] = useState<{
+    totalPlayers: number;
+    activePlayers: number;
+    todayPresent: number;
+    weekPresent: number;
+  } | null>(null);
+  const [liveCount, setLiveCount] = useState<number | null>(null);
 
-  /* ── Derived settings ── */
+  // ── LIVE MATCHES STATE ──────────────────────────────────────────────────────
+  const [liveMatches, setLiveMatches] = useState<LiveMatch[]>([]);
+  const [liveScores, setLiveScores] = useState<Record<string, any>>({});
+  const [topPerformers, setTopPerformers] = useState<{
+    topBatters: any[];
+    topBowlers: any[];
+  } | null>(null);
   const academyName = settings.ACADEMY_NAME || "NextGen Cricket Academy";
   const logoUrl = settings.LOGO_URL;
   const primaryColor = settings.PRIMARY_COLOR || "#2563eb";
@@ -384,17 +383,16 @@ function Home() {
   const cardRadius = settings.CARD_RADIUS || "12";
   const shadowIntensity = settings.SHADOW_INTENSITY || "md";
   const slideDuration = parseInt(settings.SLIDE_DURATION || "5000");
-
   const sliderEnabled = settings.SECTION_SLIDER_ENABLED !== "false";
-
   const facilitiesEnabled = settings.SECTION_FACILITIES_ENABLED !== "false";
   const testimonialsEnabled = settings.SECTION_TESTIMONIALS_ENABLED !== "false";
   const newsEnabled = settings.SECTION_NEWS_ENABLED !== "false";
   const galleryEnabled = settings.SECTION_GALLERY_ENABLED !== "false";
   const starPerformerEnabled =
     settings.SECTION_STAR_PERFORMER_ENABLED !== "false";
-
   const youtubeEnabled = settings.SECTION_YOUTUBE_ENABLED !== "false";
+  const cricketStatsEnabled =
+    settings.SECTION_CRICKET_STATS_ENABLED !== "false";
   const youtubeHeading = settings.YOUTUBE_HEADING || "Watch Us in Action";
   const youtubeSubheading =
     settings.YOUTUBE_SUBHEADING ||
@@ -406,31 +404,53 @@ function Home() {
     settings.YOUTUBE_VIDEO_4,
     settings.YOUTUBE_VIDEO_5,
   ].filter(Boolean) as string[];
+  const instagramEnabled = settings.SECTION_INSTAGRAM_ENABLED !== "false";
+  const instagramHeading =
+    settings.INSTAGRAM_HEADING || "Follow Us on Instagram";
+  const instagramSubheading =
+    settings.INSTAGRAM_SUBHEADING || "Stay connected with our latest updates";
+  const instagramPosts = [
+    settings.INSTAGRAM_POST_1,
+    settings.INSTAGRAM_POST_2,
+    settings.INSTAGRAM_POST_3,
+    settings.INSTAGRAM_POST_4,
+    settings.INSTAGRAM_POST_5,
+  ].filter(Boolean) as string[];
+  const starPerformerHeading =
+    settings.STAR_PERFORMER_HEADING || "Star Performer of the Week";
+  const starPerformerSubheading =
+    settings.STAR_PERFORMER_SUBHEADING ||
+    "Celebrating excellence and dedication";
+  const starPerformerName = settings.STAR_PERFORMER_NAME || "";
+  const starPerformerAchievement = settings.STAR_PERFORMER_ACHIEVEMENT || "";
+  const starPerformerPhotoUrl = settings.STAR_PERFORMER_PHOTO_URL || "";
+  const testimonialsHeading =
+    settings.TESTIMONIALS_HEADING || "What Our Students Say";
+  const testimonialsSubheading =
+    settings.TESTIMONIALS_SUBHEADING ||
+    "Real success stories from our cricket family";
+  const newsHeading = settings.NEWS_HEADING || "Latest News & Updates";
+  const newsSubheading =
+    settings.NEWS_SUBHEADING || "Stay updated with our latest achievements";
+  const galleryHeading = settings.GALLERY_HEADING || "Gallery";
+  const gallerySubheading =
+    settings.GALLERY_SUBHEADING ||
+    "Glimpses from our training sessions and tournaments";
+  const socialLinks = {
+    facebook: settings.SOCIAL_FACEBOOK,
+    twitter: settings.SOCIAL_TWITTER,
+    instagram: settings.SOCIAL_INSTAGRAM,
+    youtube: settings.SOCIAL_YOUTUBE,
+    linkedin: settings.SOCIAL_LINKEDIN,
+  };
+  const getButtonStyle = () => ({ borderRadius: `${buttonRadius}px` });
+  const getCardStyle = () => ({ borderRadius: `${cardRadius}px` });
+  const getShadowClass = () =>
+    shadowIntensity === "none"
+      ? "border border-gray-200"
+      : `shadow-${shadowIntensity}`;
 
-  const [liveCount, setLiveCount] = useState<number | null>(null);
-
-  useEffect(() => {
-    // Generate a stable session ID for this tab
-    let sid = sessionStorage.getItem("nca_sid");
-    if (!sid) {
-      sid = Math.random().toString(36).slice(2);
-      sessionStorage.setItem("nca_sid", sid);
-    }
-
-    const ping = async () => {
-      try {
-        const res = await publicApi.get(`/public/live-count?sid=${sid}`);
-        setLiveCount(res.data.count);
-      } catch {
-        // silently fail — don't show badge if error
-      }
-    };
-
-    ping();
-    const interval = setInterval(ping, 60_000); // ping every 60s
-    return () => clearInterval(interval);
-  }, []);
-
+  // Live visitor count
   useEffect(() => {
     let mounted = true;
     let sid = sessionStorage.getItem("nca_sid");
@@ -452,65 +472,32 @@ function Home() {
     };
   }, []);
 
-  // Add state at the top with other useState declarations
-  const [publicStats, setPublicStats] = useState<{
-    totalPlayers: number;
-    activePlayers: number;
-    todayPresent: number;
-    weekPresent: number;
-  } | null>(null);
+  // ── LIVE MATCHES POLL ──────────────────────────────────────────────────────
+  useEffect(() => {
+    const fetchLive = async () => {
+      try {
+        const res = await publicApi.get("/public/live-matches");
+        const matches: LiveMatch[] = res.data;
+        setLiveMatches(matches);
+        for (const m of matches) {
+          try {
+            const sc = await publicApi.get(
+              `/public/scorecard/${m.matchPublicId}`,
+            );
+            setLiveScores((prev) => ({ ...prev, [m.matchPublicId]: sc.data }));
+          } catch {
+            /* silent */
+          }
+        }
+      } catch {
+        /* silent */
+      }
+    };
+    fetchLive();
+    const interval = setInterval(fetchLive, 30_000);
+    return () => clearInterval(interval);
+  }, []);
 
-  const instagramEnabled = settings.SECTION_INSTAGRAM_ENABLED !== "false";
-  const instagramHeading =
-    settings.INSTAGRAM_HEADING || "Follow Us on Instagram";
-  const instagramSubheading =
-    settings.INSTAGRAM_SUBHEADING || "Stay connected with our latest updates";
-  const instagramPosts = [
-    settings.INSTAGRAM_POST_1,
-    settings.INSTAGRAM_POST_2,
-    settings.INSTAGRAM_POST_3,
-    settings.INSTAGRAM_POST_4,
-    settings.INSTAGRAM_POST_5,
-  ].filter(Boolean) as string[];
-
-  const starPerformerHeading =
-    settings.STAR_PERFORMER_HEADING || "Star Performer of the Week";
-  const starPerformerSubheading =
-    settings.STAR_PERFORMER_SUBHEADING ||
-    "Celebrating excellence and dedication";
-  const starPerformerName = settings.STAR_PERFORMER_NAME || "";
-  const starPerformerAchievement = settings.STAR_PERFORMER_ACHIEVEMENT || "";
-  const starPerformerPhotoUrl = settings.STAR_PERFORMER_PHOTO_URL || "";
-
-  const testimonialsHeading =
-    settings.TESTIMONIALS_HEADING || "What Our Students Say";
-  const testimonialsSubheading =
-    settings.TESTIMONIALS_SUBHEADING ||
-    "Real success stories from our cricket family";
-  const newsHeading = settings.NEWS_HEADING || "Latest News & Updates";
-  const newsSubheading =
-    settings.NEWS_SUBHEADING || "Stay updated with our latest achievements";
-  const galleryHeading = settings.GALLERY_HEADING || "Gallery";
-  const gallerySubheading =
-    settings.GALLERY_SUBHEADING ||
-    "Glimpses from our training sessions and tournaments";
-
-  const socialLinks = {
-    facebook: settings.SOCIAL_FACEBOOK,
-    twitter: settings.SOCIAL_TWITTER,
-    instagram: settings.SOCIAL_INSTAGRAM,
-    youtube: settings.SOCIAL_YOUTUBE,
-    linkedin: settings.SOCIAL_LINKEDIN,
-  };
-
-  const getButtonStyle = () => ({ borderRadius: `${buttonRadius}px` });
-  const getCardStyle = () => ({ borderRadius: `${cardRadius}px` });
-  const getShadowClass = () =>
-    shadowIntensity === "none"
-      ? "border border-gray-200"
-      : `shadow-${shadowIntensity}`;
-
-  /* ── Load data ── */
   useEffect(() => {
     const loadAllData = async () => {
       const [
@@ -522,6 +509,7 @@ function Home() {
         teamRes,
         newsRes,
         statsRes,
+        topPerformersRes,
       ] = await Promise.allSettled([
         publicApi.get("/settings/public"),
         publicApi.get("/cms/gallery"),
@@ -530,9 +518,9 @@ function Home() {
         publicApi.get("/cms/testimonials"),
         publicApi.get("/team"),
         publicApi.get("/cms/news?status=PUBLISHED"),
-        publicApi.get("/public/stats"), // add as last entry
+        publicApi.get("/public/stats"),
+        publicApi.get("/public/cricket-stats/top-performers?period=alltime"),
       ]);
-
       if (settingsRes.status === "fulfilled")
         setSettings(settingsRes.value.data);
       if (galleryRes.status === "fulfilled") setGallery(galleryRes.value.data);
@@ -549,12 +537,10 @@ function Home() {
       if (teamRes.status === "fulfilled") setTeam(teamRes.value.data);
       if (newsRes.status === "fulfilled")
         setNews(newsRes.value.data.slice(0, 3));
-
-      // index matches position you added it in the array
-      if (statsRes.status === "fulfilled" && statsRes.value?.status === 200) {
+      if (statsRes.status === "fulfilled" && statsRes.value?.status === 200)
         setPublicStats(statsRes.value.data);
-      }
-
+      if (topPerformersRes.status === "fulfilled")
+        setTopPerformers(topPerformersRes.value.data);
       setLoading(false);
     };
     loadAllData();
@@ -587,7 +573,6 @@ function Home() {
   return (
     <div className="min-h-screen bg-gray-50 pb-20 sm:pb-0">
       {/* ── ANNOUNCEMENT BAR ── */}
-
       {(() => {
         const enabled = settings.ANNOUNCEMENT_ENABLED !== "false";
         const text = settings.ANNOUNCEMENT_TEXT || "";
@@ -634,20 +619,96 @@ function Home() {
         );
       })()}
 
+      {/* ── 🔴 LIVE MATCHES SECTION ── */}
+      {liveMatches.length > 0 && (
+        <section className="py-4 px-4 bg-red-50 border-b border-red-100">
+          <div className="max-w-6xl mx-auto">
+            <div className="flex items-center gap-2 mb-3">
+              <span className="relative flex h-2.5 w-2.5">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-500 opacity-75" />
+                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-red-600" />
+              </span>
+              <span className="text-sm font-bold text-red-700 uppercase tracking-wide">
+                Live Matches
+              </span>
+            </div>
+            <div className="flex gap-3 overflow-x-auto pb-1 -mx-1 px-1">
+              {liveMatches.map((match) => {
+                const sc = liveScores[match.matchPublicId];
+                const innings = sc?.innings ?? [];
+                return (
+                  <a
+                    key={match.matchPublicId}
+                    href={`/match/${match.matchPublicId}/scorecard`}
+                    className="flex-shrink-0 bg-white border border-red-200 rounded-2xl p-3 min-w-[220px] max-w-[260px] shadow-sm hover:shadow-md transition-shadow active:scale-95"
+                  >
+                    {match.tournamentName && (
+                      <div className="text-xs text-red-500 font-medium mb-1 truncate">
+                        🏆 {match.tournamentName}
+                      </div>
+                    )}
+                    <div className="text-xs font-semibold text-gray-800 mb-2 leading-tight truncate">
+                      {match.title}
+                    </div>
+                    {innings.length > 0 ? (
+                      <div className="space-y-1">
+                        {innings.map((inn: any) => (
+                          <div key={inn.inningsNumber}>
+                            <div className="flex items-baseline justify-between">
+                              <span
+                                className={`text-xs truncate max-w-[120px] ${inn.status === "IN_PROGRESS" ? "font-bold text-gray-900" : "text-gray-500"}`}
+                              >
+                                {inn.battingTeamName}
+                              </span>
+                              <span
+                                className={`text-sm font-black ml-2 ${inn.status === "IN_PROGRESS" ? "text-gray-900" : "text-gray-500"}`}
+                              >
+                                {inn.totalRuns}/{inn.totalWickets}
+                                <span className="text-xs font-normal text-gray-400 ml-1">
+                                  ({Math.floor(inn.totalBalls / 6)}.
+                                  {inn.totalBalls % 6} ov)
+                                </span>
+                              </span>
+                            </div>
+                            {/* Target & required runs — only for live 2nd innings */}
+                            {inn.status === "IN_PROGRESS" && inn.target && (
+                              <div className="flex items-center justify-between mt-0.5">
+                                <span className="text-xs text-gray-400">
+                                  Target:{" "}
+                                  <b className="text-gray-700">{inn.target}</b>
+                                </span>
+                                <span className="text-xs font-semibold text-orange-500">
+                                  Need {inn.target - inn.totalRuns} runs
+                                </span>
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="text-xs text-gray-400">
+                        Match in progress
+                      </div>
+                    )}
+                    <div className="mt-2 text-xs text-red-500 font-medium">
+                      View Scorecard →
+                    </div>
+                  </a>
+                );
+              })}
+            </div>
+          </div>
+        </section>
+      )}
+
       {/* ── SLIDER ── */}
       {hasSlider && (
         <section className="w-full bg-gray-100 relative">
           <Swiper
             modules={[Autoplay, Pagination, Navigation]}
             autoplay={{ delay: slideDuration, disableOnInteraction: false }}
-            pagination={{
-              clickable: true,
-              el: ".slider-pagination",
-            }}
-            navigation={{
-              prevEl: ".slider-prev",
-              nextEl: ".slider-next",
-            }}
+            pagination={{ clickable: true, el: ".slider-pagination" }}
+            navigation={{ prevEl: ".slider-prev", nextEl: ".slider-next" }}
             loop
             speed={700}
             className="w-full"
@@ -677,7 +738,6 @@ function Home() {
                   )}
                 </div>
               );
-
               return (
                 <SwiperSlide key={img.id}>
                   {img.redirectUrl ? (
@@ -695,11 +755,7 @@ function Home() {
               );
             })}
           </Swiper>
-
-          {/* Pagination dots — below image, always visible */}
           <div className="slider-pagination flex justify-center py-2" />
-
-          {/* Nav arrows — desktop only */}
           <button
             className="slider-prev hidden sm:flex absolute left-3 top-1/2 -translate-y-1/2 z-10 w-10 h-10 rounded-full bg-white/90 hover:bg-white shadow-md items-center justify-center transition"
             style={{ color: primaryColor }}
@@ -715,7 +771,7 @@ function Home() {
         </section>
       )}
 
-      {/* ── CTA STRIP — shown below slider ── */}
+      {/* ── CTA STRIP ── */}
       {hasSlider && (
         <section
           className="py-4 px-4 border-b"
@@ -772,7 +828,6 @@ function Home() {
                   value: publicStats.activePlayers,
                   emoji: "✅",
                 },
-
                 {
                   label: "Present Today",
                   value: publicStats.todayPresent,
@@ -809,6 +864,192 @@ function Home() {
           </div>
         </section>
       )}
+
+      {cricketStatsEnabled &&
+        topPerformers &&
+        (topPerformers.topBatters.length > 0 ||
+          topPerformers.topBowlers.length > 0) && (
+          <section className="py-8 md:py-12 px-4 bg-white border-b">
+            <div className="max-w-6xl mx-auto">
+              <div className="flex items-center justify-between mb-6">
+                <div>
+                  <h2 className="text-xl md:text-2xl font-bold text-gray-900">
+                    🏆 Top Performers
+                  </h2>
+                  <p className="text-sm text-gray-400 mt-0.5">
+                    Academy cricket leaderboard
+                  </p>
+                </div>
+                <button
+                  onClick={() => navigate("/cricket-stats")}
+                  className="flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-xl transition"
+                  style={{
+                    color: primaryColor,
+                    background: `${primaryColor}10`,
+                  }}
+                >
+                  View All →
+                </button>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {/* Top Batter */}
+                {topPerformers.topBatters[0] && (
+                  <div
+                    className={`bg-white overflow-hidden cursor-pointer ${getShadowClass()}`}
+                    style={{
+                      ...getCardStyle(),
+                      border: `1px solid ${primaryColor}20`,
+                    }}
+                    onClick={() => navigate("/cricket-stats")}
+                  >
+                    <div
+                      className="px-4 py-2 flex items-center gap-2"
+                      style={{ background: `${primaryColor}08` }}
+                    >
+                      <span className="text-sm">🏏</span>
+                      <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                        Top Batter
+                      </span>
+                    </div>
+                    <div className="p-4">
+                      <div className="flex items-center gap-3 mb-3">
+                        <div
+                          className="w-11 h-11 rounded-full overflow-hidden flex-shrink-0 flex items-center justify-center font-bold text-white text-base"
+                          style={{ backgroundColor: primaryColor }}
+                        >
+                          {topPerformers.topBatters[0].photoUrl ? (
+                            <img
+                              src={topPerformers.topBatters[0].photoUrl}
+                              alt=""
+                              className="w-full h-full object-cover"
+                            />
+                          ) : (
+                            topPerformers.topBatters[0].playerName.charAt(0)
+                          )}
+                        </div>
+                        <div>
+                          <div className="text-sm font-bold text-gray-900">
+                            {topPerformers.topBatters[0].playerName}
+                          </div>
+                          <div className="text-xs text-gray-400">
+                            {topPerformers.topBatters[0].matches} matches
+                          </div>
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-3 gap-2">
+                        {[
+                          {
+                            label: "Runs",
+                            value: topPerformers.topBatters[0].runs,
+                          },
+                          {
+                            label: "HS",
+                            value: topPerformers.topBatters[0].highScore,
+                          },
+                          {
+                            label: "Avg",
+                            value: topPerformers.topBatters[0].average,
+                          },
+                        ].map(({ label, value }) => (
+                          <div
+                            key={label}
+                            className="text-center p-2 rounded-xl"
+                            style={{ background: `${primaryColor}08` }}
+                          >
+                            <div
+                              className="text-base font-black"
+                              style={{ color: primaryColor }}
+                            >
+                              {value ?? "—"}
+                            </div>
+                            <div className="text-xs text-gray-400">{label}</div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                )}
+                {/* Top Bowler */}
+                {topPerformers.topBowlers[0] && (
+                  <div
+                    className={`bg-white overflow-hidden cursor-pointer ${getShadowClass()}`}
+                    style={{
+                      ...getCardStyle(),
+                      border: `1px solid ${primaryColor}20`,
+                    }}
+                    onClick={() => navigate("/cricket-stats")}
+                  >
+                    <div
+                      className="px-4 py-2 flex items-center gap-2"
+                      style={{ background: `${primaryColor}08` }}
+                    >
+                      <span className="text-sm">⚾</span>
+                      <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                        Top Bowler
+                      </span>
+                    </div>
+                    <div className="p-4">
+                      <div className="flex items-center gap-3 mb-3">
+                        <div
+                          className="w-11 h-11 rounded-full overflow-hidden flex-shrink-0 flex items-center justify-center font-bold text-white text-base"
+                          style={{ backgroundColor: primaryColor }}
+                        >
+                          {topPerformers.topBowlers[0].photoUrl ? (
+                            <img
+                              src={topPerformers.topBowlers[0].photoUrl}
+                              alt=""
+                              className="w-full h-full object-cover"
+                            />
+                          ) : (
+                            topPerformers.topBowlers[0].playerName.charAt(0)
+                          )}
+                        </div>
+                        <div>
+                          <div className="text-sm font-bold text-gray-900">
+                            {topPerformers.topBowlers[0].playerName}
+                          </div>
+                          <div className="text-xs text-gray-400">
+                            {topPerformers.topBowlers[0].matches} matches
+                          </div>
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-3 gap-2">
+                        {[
+                          {
+                            label: "Wkts",
+                            value: topPerformers.topBowlers[0].wickets,
+                          },
+                          {
+                            label: "Best",
+                            value: topPerformers.topBowlers[0].bestFigures,
+                          },
+                          {
+                            label: "Econ",
+                            value: topPerformers.topBowlers[0].economy,
+                          },
+                        ].map(({ label, value }) => (
+                          <div
+                            key={label}
+                            className="text-center p-2 rounded-xl"
+                            style={{ background: `${primaryColor}08` }}
+                          >
+                            <div
+                              className="text-base font-black"
+                              style={{ color: primaryColor }}
+                            >
+                              {value ?? "—"}
+                            </div>
+                            <div className="text-xs text-gray-400">{label}</div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          </section>
+        )}
 
       {/* ── HERO (no slider) ── */}
       {!hasSlider && (
@@ -989,8 +1230,6 @@ function Home() {
               subtitle="State-of-the-art infrastructure designed to bring out the best in every player"
               primaryColor={primaryColor}
             />
-
-            {/* Mobile: horizontal scroll  |  Desktop: 3-col grid */}
             <div className="flex md:grid md:grid-cols-3 gap-4 overflow-x-auto pb-2 md:overflow-visible md:pb-0 -mx-4 px-4 md:mx-0 md:px-0 snap-x snap-mandatory scroll-smooth">
               {(facilities.length > 0
                 ? facilities
@@ -1046,7 +1285,6 @@ function Home() {
       )}
 
       {/* ── TEAM ── */}
-
       {settings.SECTION_TEAM_ENABLED !== "false" && team.length > 0 && (
         <section
           id="team"
@@ -1059,8 +1297,6 @@ function Home() {
               subtitle="The coaches and management team behind NextGen Cricket Academy"
               primaryColor={primaryColor}
             />
-
-            {/* Mobile: horizontal scroll  |  Desktop: 3-col grid */}
             <div className="flex md:grid md:grid-cols-3 gap-4 overflow-x-auto pb-2 md:overflow-visible md:pb-0 -mx-4 px-4 md:mx-0 md:px-0 snap-x snap-mandatory scroll-smooth">
               {team.map((member) => (
                 <div
@@ -1092,7 +1328,6 @@ function Home() {
                       </div>
                     )}
                   </div>
-
                   <h3 className="font-bold text-gray-800 text-sm md:text-base">
                     {member.name}
                   </h3>
@@ -1102,13 +1337,11 @@ function Home() {
                   >
                     {member.role}
                   </p>
-
                   {member.bio && (
                     <p className="text-xs text-gray-400 mt-2 leading-relaxed line-clamp-2 md:line-clamp-3">
                       {member.bio}
                     </p>
                   )}
-
                   {member.bio && (
                     <p
                       className="sm:hidden text-xs mt-2 font-medium"
@@ -1119,7 +1352,6 @@ function Home() {
                         : "Tap to read more ▼"}
                     </p>
                   )}
-
                   {member.bio && expandedMemberId === member.id && (
                     <div
                       className="sm:hidden mt-3 p-3 rounded-xl text-xs text-left leading-relaxed text-white"
@@ -1128,20 +1360,13 @@ function Home() {
                       {member.bio}
                     </div>
                   )}
-
                   {member.bio && (
                     <div
-                      className="hidden sm:block absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-64 p-4 bg-gray-900 text-white text-xs leading-relaxed rounded-xl shadow-xl
-                   opacity-0 group-hover:opacity-100 pointer-events-none
-                   transition-opacity duration-200 z-30 text-left"
+                      className="hidden sm:block absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-64 p-4 bg-gray-900 text-white text-xs leading-relaxed rounded-xl shadow-xl opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity duration-200 z-30 text-left"
                       style={{ maxWidth: "min(256px, 90vw)" }}
                     >
                       {member.bio}
-                      <div
-                        className="absolute top-full left-1/2 -translate-x-1/2 w-0 h-0
-                        border-l-8 border-r-8 border-t-8
-                        border-l-transparent border-r-transparent border-t-gray-900"
-                      />
+                      <div className="absolute top-full left-1/2 -translate-x-1/2 w-0 h-0 border-l-8 border-r-8 border-t-8 border-l-transparent border-r-transparent border-t-gray-900" />
                     </div>
                   )}
                 </div>
@@ -1260,7 +1485,7 @@ function Home() {
                       publishedAt: "2026-01-25",
                       category: "Announcement",
                       shortDescription:
-                        "Join our intensive 6-week summer training program. Expert coaching, match practice, and fitness sessions included.",
+                        "Join our intensive 6-week summer training program.",
                       slug: "",
                       status: "PUBLISHED",
                     },
@@ -1270,7 +1495,7 @@ function Home() {
                       publishedAt: "2026-01-20",
                       category: "Achievement",
                       shortDescription:
-                        "Our U-16 team clinched the district championship. Three players selected for state-level trials.",
+                        "Our U-16 team clinched the district championship.",
                       slug: "",
                       status: "PUBLISHED",
                     },
@@ -1280,7 +1505,7 @@ function Home() {
                       publishedAt: "2026-01-15",
                       category: "Facility Update",
                       shortDescription:
-                        "We're launching a new climate-controlled indoor practice center with bowling machines and video analysis.",
+                        "We're launching a new climate-controlled indoor practice center.",
                       slug: "",
                       status: "PUBLISHED",
                     },
@@ -1335,8 +1560,7 @@ function Home() {
         </section>
       )}
 
-      {/* ── YOUTUBE VIDEOS ── */}
-
+      {/* ── YOUTUBE ── */}
       {youtubeEnabled && youtubeVideos.length > 0 && (
         <section id="videos" className="py-10 md:py-14 px-4 bg-white">
           <div className="max-w-6xl mx-auto">
@@ -1396,9 +1620,7 @@ function Home() {
                     <div
                       key={image.id}
                       onClick={() => setSelectedGalleryImage(image)}
-                      className={`overflow-hidden shadow-sm hover:shadow-xl transition cursor-pointer relative group
-                        ${wideImages[image.id] ? "col-span-2 aspect-[16/9]" : "col-span-1 aspect-square"}
-                      `}
+                      className={`overflow-hidden shadow-sm hover:shadow-xl transition cursor-pointer relative group ${wideImages[image.id] ? "col-span-2 aspect-[16/9]" : "col-span-1 aspect-square"}`}
                       style={{ borderRadius: `${cardRadius}px` }}
                     >
                       <img
@@ -1454,7 +1676,6 @@ function Home() {
         </section>
       )}
 
-      {/* ── CONTACT ── */}
       <ContactForm
         primaryColor={primaryColor}
         cardStyle={getCardStyle()}
@@ -1462,7 +1683,6 @@ function Home() {
         settings={settings}
       />
 
-      {/* ── FOOTER ── */}
       <footer className="py-8 px-4 text-center border-t bg-white">
         {(socialLinks.facebook ||
           socialLinks.instagram ||
@@ -1546,7 +1766,6 @@ function Home() {
         </div>
       )}
 
-      {/* ── LOGIN MODAL ── */}
       <LoginPromptModal
         open={showLoginPrompt}
         message="Please login to book a slot."
@@ -1554,7 +1773,6 @@ function Home() {
         onCancel={() => setShowLoginPrompt(false)}
       />
 
-      {/* ── GALLERY LIGHTBOX ── */}
       {selectedGalleryImage && (
         <div
           className="fixed inset-0 z-50 bg-black/85 flex items-center justify-center p-4"

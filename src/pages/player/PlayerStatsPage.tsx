@@ -12,6 +12,7 @@ import {
   ChevronUp,
 } from "lucide-react";
 import api from "../../api/axios";
+import publicApi from "../../api/publicApi";
 import { getImageUrl } from "../../utils/imageUrl";
 import { toast } from "react-hot-toast";
 
@@ -58,6 +59,47 @@ type PlayerInfo = {
   batch?: string;
   active?: boolean;
   status?: string;
+};
+
+// ── NEW: Career stats type ────────────────────────────────────────────────────
+type CareerStats = {
+  batting: {
+    matches: number;
+    innings: number;
+    runs: number;
+    ballsFaced: number;
+    notOuts: number;
+    highScore: number;
+    average: number;
+    strikeRate: number;
+    fifties: number;
+    hundreds: number;
+    fours: number;
+    sixes: number;
+  };
+  bowling: {
+    wickets: number;
+    overs: string;
+    runsConceded: number;
+    economy: number;
+    average: number;
+    bestFigures: string;
+    threeWickets: number;
+    fiveWickets: number;
+    maidens: number;
+  };
+  fielding: {
+    catches: number;
+    stumpings: number;
+    runOuts: number;
+  };
+  season: {
+    matches: number;
+    runs: number;
+    wickets: number;
+    highScore: number;
+    bestFigures: string;
+  };
 };
 
 type StatsGroupedByMonth = { [monthYear: string]: PlayerStat[] };
@@ -217,6 +259,190 @@ function groupByFormat(allStats: PlayerStat[]): Record<string, PlayerStat[]> {
   return grouped;
 }
 
+// ─── NEW: Career Stats Panel ──────────────────────────────────────────────────
+
+function CareerStatsPanel({ careerStats }: { careerStats: CareerStats }) {
+  const [activeTab, setActiveTab] = useState<
+    "batting" | "bowling" | "fielding"
+  >("batting");
+  const currentYear = new Date().getFullYear();
+
+  return (
+    <div className="bg-white rounded-xl border border-blue-100 overflow-hidden">
+      {/* Header */}
+      <div className="px-4 py-3 bg-gradient-to-r from-blue-600 to-blue-700 flex items-center gap-2">
+        <Trophy size={14} className="text-white" />
+        <span className="text-xs font-bold text-white uppercase tracking-wider">
+          Career Stats (Live Matches)
+        </span>
+      </div>
+
+      {/* Season snapshot */}
+      {careerStats.season.matches > 0 && (
+        <div className="px-4 py-2.5 bg-blue-50 border-b border-blue-100">
+          <p className="text-[10px] font-semibold text-blue-500 uppercase tracking-wide mb-1.5">
+            {currentYear} Season
+          </p>
+          <div className="grid grid-cols-4 gap-2">
+            {[
+              { label: "Mat", value: careerStats.season.matches },
+              { label: "Runs", value: careerStats.season.runs },
+              { label: "Wkts", value: careerStats.season.wickets },
+              { label: "HS", value: careerStats.season.highScore },
+            ].map(({ label, value }) => (
+              <div key={label} className="text-center">
+                <div className="text-sm font-black text-blue-700">{value}</div>
+                <div className="text-[10px] text-blue-400">{label}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Tab switcher */}
+      <div className="flex border-b border-gray-100">
+        {(["batting", "bowling", "fielding"] as const).map((t) => (
+          <button
+            key={t}
+            onClick={() => setActiveTab(t)}
+            className={`flex-1 py-2 text-[11px] font-semibold transition ${
+              activeTab === t
+                ? "border-b-2 border-blue-600 text-blue-600"
+                : "text-gray-400"
+            }`}
+          >
+            {t === "batting"
+              ? "🏏 Bat"
+              : t === "bowling"
+                ? "⚾ Bowl"
+                : "🧤 Field"}
+          </button>
+        ))}
+      </div>
+
+      {/* Batting */}
+      {activeTab === "batting" && (
+        <div className="px-3 py-3">
+          {careerStats.batting.innings === 0 ? (
+            <p className="text-xs text-gray-400 text-center py-2">
+              No batting data
+            </p>
+          ) : (
+            <div className="grid grid-cols-3 gap-2">
+              {[
+                { label: "Matches", value: careerStats.batting.matches },
+                { label: "Innings", value: careerStats.batting.innings },
+                {
+                  label: "Runs",
+                  value: careerStats.batting.runs,
+                  highlight: true,
+                },
+                { label: "HS", value: careerStats.batting.highScore },
+                { label: "Avg", value: careerStats.batting.average },
+                { label: "SR", value: careerStats.batting.strikeRate },
+                { label: "50s", value: careerStats.batting.fifties },
+                { label: "100s", value: careerStats.batting.hundreds },
+                { label: "6s", value: careerStats.batting.sixes },
+              ].map(({ label, value, highlight }) => (
+                <div
+                  key={label}
+                  className="text-center p-1.5 rounded-lg bg-gray-50"
+                >
+                  <div
+                    className={`text-sm font-black ${highlight ? "text-blue-700" : "text-gray-700"}`}
+                  >
+                    {value}
+                  </div>
+                  <div className="text-[10px] text-gray-400">{label}</div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Bowling */}
+      {activeTab === "bowling" && (
+        <div className="px-3 py-3">
+          {careerStats.bowling.wickets === 0 &&
+          careerStats.bowling.runsConceded === 0 ? (
+            <p className="text-xs text-gray-400 text-center py-2">
+              No bowling data
+            </p>
+          ) : (
+            <div className="grid grid-cols-3 gap-2">
+              {[
+                {
+                  label: "Wickets",
+                  value: careerStats.bowling.wickets,
+                  highlight: true,
+                },
+                { label: "Overs", value: careerStats.bowling.overs },
+                { label: "Runs", value: careerStats.bowling.runsConceded },
+                { label: "Economy", value: careerStats.bowling.economy },
+                { label: "Average", value: careerStats.bowling.average },
+                { label: "Best", value: careerStats.bowling.bestFigures },
+                { label: "3W", value: careerStats.bowling.threeWickets },
+                { label: "5W", value: careerStats.bowling.fiveWickets },
+                { label: "Maidens", value: careerStats.bowling.maidens },
+              ].map(({ label, value, highlight }) => (
+                <div
+                  key={label}
+                  className="text-center p-1.5 rounded-lg bg-gray-50"
+                >
+                  <div
+                    className={`text-sm font-black ${highlight ? "text-red-600" : "text-gray-700"}`}
+                  >
+                    {value}
+                  </div>
+                  <div className="text-[10px] text-gray-400">{label}</div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Fielding */}
+      {activeTab === "fielding" && (
+        <div className="px-3 py-3">
+          {careerStats.fielding.catches === 0 &&
+          careerStats.fielding.stumpings === 0 &&
+          careerStats.fielding.runOuts === 0 ? (
+            <p className="text-xs text-gray-400 text-center py-2">
+              No fielding data
+            </p>
+          ) : (
+            <div className="grid grid-cols-3 gap-2">
+              {[
+                { label: "Catches", value: careerStats.fielding.catches },
+                { label: "Stumpings", value: careerStats.fielding.stumpings },
+                { label: "Run Outs", value: careerStats.fielding.runOuts },
+              ].map(({ label, value }) => (
+                <div
+                  key={label}
+                  className="text-center p-1.5 rounded-lg bg-gray-50"
+                >
+                  <div className="text-sm font-black text-orange-600">
+                    {value}
+                  </div>
+                  <div className="text-[10px] text-gray-400">{label}</div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      <div className="px-3 pb-2">
+        <p className="text-[10px] text-gray-300 text-center">
+          From ball-by-ball scored matches · refreshed nightly
+        </p>
+      </div>
+    </div>
+  );
+}
+
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 function PlayerStatsPage() {
@@ -225,8 +451,9 @@ function PlayerStatsPage() {
   const [player, setPlayer] = useState<PlayerInfo | null>(null);
   const [loading, setLoading] = useState(true);
   const [selectedMonth, setSelectedMonth] = useState<string>("");
-  // Mobile: profile card collapsed by default
   const [profileExpanded, setProfileExpanded] = useState(false);
+  // ── NEW ──
+  const [careerStats, setCareerStats] = useState<CareerStats | null>(null);
 
   useEffect(() => {
     loadAll();
@@ -236,14 +463,19 @@ function PlayerStatsPage() {
     if (!playerPublicId) return;
     try {
       setLoading(true);
-      const [statsRes, infoRes] = await Promise.all([
+      const [statsRes, infoRes, careerRes] = await Promise.allSettled([
         api.get(`/admin/cricket-stats/${playerPublicId}`),
         api.get(`/admin/players/${playerPublicId}/info`),
+        publicApi.get(`/public/cricket-stats/player/${playerPublicId}`),
       ]);
-      setStats(statsRes.data);
-      setPlayer(infoRes.data);
-      const months = Object.keys(statsRes.data);
-      if (months.length > 0) setSelectedMonth(months[0]);
+      if (statsRes.status === "fulfilled") {
+        setStats(statsRes.value.data);
+        const months = Object.keys(statsRes.value.data);
+        if (months.length > 0) setSelectedMonth(months[0]);
+      }
+      if (infoRes.status === "fulfilled") setPlayer(infoRes.value.data);
+      if (careerRes.status === "fulfilled")
+        setCareerStats(careerRes.value.data);
     } catch {
       toast.error("Failed to load stats");
     } finally {
@@ -272,7 +504,6 @@ function PlayerStatsPage() {
       {/* ── MOBILE: collapsible profile strip ── */}
       <div className="lg:hidden">
         <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-          {/* Always-visible strip */}
           <button
             onClick={() => setProfileExpanded((p) => !p)}
             className="w-full flex items-center gap-3 px-4 py-3"
@@ -304,7 +535,6 @@ function PlayerStatsPage() {
             )}
           </button>
 
-          {/* Expanded profile content */}
           {profileExpanded && (
             <div className="border-t border-gray-100 px-4 py-3 space-y-2">
               <ProfileInfoGrid
@@ -315,16 +545,25 @@ function PlayerStatsPage() {
             </div>
           )}
         </div>
+
+        {/* Career stats on mobile — shown below profile strip */}
+        {careerStats && (
+          <div className="mt-3">
+            <CareerStatsPanel careerStats={careerStats} />
+          </div>
+        )}
       </div>
 
       {/* ── DESKTOP: sidebar + main layout ── */}
       <div className="hidden lg:flex gap-4 items-start">
-        <aside className="w-72 flex-shrink-0">
+        <aside className="w-72 flex-shrink-0 space-y-4">
           <PlayerProfileCard
             player={player}
             allStats={allStats}
             byFormat={byFormat}
           />
+          {/* Career stats in sidebar on desktop */}
+          {careerStats && <CareerStatsPanel careerStats={careerStats} />}
         </aside>
         <main className="flex-1 min-w-0 space-y-4">
           <StatsContent
@@ -351,7 +590,7 @@ function PlayerStatsPage() {
   );
 }
 
-// ─── Stats Content (shared between mobile and desktop) ───────────────────────
+// ─── Stats Content ────────────────────────────────────────────────────────────
 
 function StatsContent({
   months,
@@ -382,7 +621,6 @@ function StatsContent({
 
   return (
     <div className="space-y-4">
-      {/* Month filter */}
       <div className="bg-white rounded-xl border border-gray-200 p-3">
         <div className="flex items-center gap-2 mb-2">
           <Calendar size={14} className="text-blue-600" />
@@ -407,8 +645,6 @@ function StatsContent({
           ))}
         </div>
       </div>
-
-      {/* Match cards */}
       <div className="space-y-3">
         {selectedStats.map((stat) => (
           <MatchStatCard key={stat.id} stat={stat} />
@@ -418,7 +654,7 @@ function StatsContent({
   );
 }
 
-// ─── Profile info grid — used in both sidebar and mobile expanded ─────────────
+// ─── Profile info grid ────────────────────────────────────────────────────────
 
 function ProfileInfoGrid({
   player,
@@ -654,7 +890,6 @@ function CareerSummaryTable({
           {title}
         </span>
       </div>
-      {/* Scrollable table — no overflow on mobile */}
       <div className="overflow-x-auto rounded-lg">
         <table className="w-full text-xs border-collapse min-w-0">
           <thead>
@@ -742,7 +977,6 @@ function MatchStatCard({ stat }: { stat: PlayerStat }) {
 
   return (
     <div className="bg-white rounded-xl border overflow-hidden shadow-sm">
-      {/* Header */}
       <div className="bg-gradient-to-r from-[#1a3a5c] to-[#1e4d7b] text-white px-4 py-2.5">
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0">
@@ -788,7 +1022,6 @@ function MatchStatCard({ stat }: { stat: PlayerStat }) {
         </div>
       </div>
 
-      {/* Stats Body */}
       <div className="divide-y divide-gray-100">
         {hasBatting && (
           <div className="px-4 py-3">
@@ -798,7 +1031,6 @@ function MatchStatCard({ stat }: { stat: PlayerStat }) {
                 Batting
               </span>
             </div>
-            {/* Mobile-friendly: grid instead of wide table */}
             <div className="grid grid-cols-3 sm:grid-cols-6 gap-x-4 gap-y-2">
               {[
                 { label: "Runs", value: stat.runs ?? "-", highlight: true },
