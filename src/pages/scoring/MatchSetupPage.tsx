@@ -158,17 +158,27 @@ export default function MatchSetupPage() {
   const [allPlayers, setAllPlayers] = useState<PlayerOption[]>([]);
   const creatingRef = useRef(false);
 
+  // ── Wagon wheel toggle (pre-match setting, persisted in localStorage) ──────
+  const [wagonWheelEnabled, setWagonWheelEnabled] = useState(
+    () => localStorage.getItem("nca_ww_enabled") !== "false",
+  );
+
   const [teamAExternalName, setTeamAExternalName] = useState("");
   const [addingExternalA, setAddingExternalA] = useState(false);
   const [teamBExternalName, setTeamBExternalName] = useState("");
   const [addingExternal, setAddingExternal] = useState(false);
 
-  // Fixture pre-fill state
+  const [teamAExternalBattingStyle, setTeamAExternalBattingStyle] = useState<
+    "RIGHT_HAND_BAT" | "LEFT_HAND_BAT"
+  >("RIGHT_HAND_BAT");
+  const [teamBExternalBattingStyle, setTeamBExternalBattingStyle] = useState<
+    "RIGHT_HAND_BAT" | "LEFT_HAND_BAT"
+  >("RIGHT_HAND_BAT");
+
   const [fixtureId, setFixtureId] = useState<string | null>(null);
   const [tournamentId, setTournamentId] = useState<string | null>(null);
   const [homeSquadIds, setHomeSquadIds] = useState<Set<string>>(new Set());
   const [awaySquadIds, setAwaySquadIds] = useState<Set<string>>(new Set());
-
   const [homeSquadPlayers, setHomeSquadPlayers] = useState<PlayerOption[]>([]);
   const [awaySquadPlayers, setAwaySquadPlayers] = useState<PlayerOption[]>([]);
 
@@ -192,7 +202,6 @@ export default function MatchSetupPage() {
   const [tossWinner, setTossWinner] = useState("");
   const [tossDecision, setTossDecision] = useState<"BAT" | "FIELD">("BAT");
 
-  // Load branch players
   useEffect(() => {
     getBranchPlayers()
       .then((data: any[]) => {
@@ -208,7 +217,6 @@ export default function MatchSetupPage() {
       .catch(() => setError("Failed to load players"));
   }, []);
 
-  // Handle fixture pre-fill from sessionStorage
   useEffect(() => {
     const fid = searchParams.get("fixtureId");
     const tid = searchParams.get("tournamentId");
@@ -254,7 +262,6 @@ export default function MatchSetupPage() {
       setHomeSquadPlayers(homePlayers);
       setAwaySquadPlayers(awayPlayers);
 
-      // Merge squad players into allPlayers list
       setAllPlayers((prev) => {
         const existingIds = new Set(prev.map((p) => p.publicId));
         const newPlayers = [...homePlayers, ...awayPlayers].filter(
@@ -267,7 +274,6 @@ export default function MatchSetupPage() {
     }
   }, [searchParams]);
 
-  // Resume existing match
   useEffect(() => {
     const resumeId = searchParams.get("resume");
     if (!resumeId) return;
@@ -282,8 +288,6 @@ export default function MatchSetupPage() {
   const selectedAIds = teamAPlayers.map((p) => p.playerPublicId);
   const selectedBIds = teamBPlayers.map((p) => p.playerPublicId);
 
-  // When coming from a fixture, only show that team's squad members.
-  // When NOT from a fixture, show all branch players sorted by squad membership.
   const filteredA = (
     fixtureId && homeSquadPlayers.length > 0 ? homeSquadPlayers : allPlayers
   )
@@ -362,10 +366,15 @@ export default function MatchSetupPage() {
       const res = await api.post("/admin/players/external/tournament-guest", {
         displayName: name,
         gender: "MALE",
+        battingStyle: teamAExternalBattingStyle,
       });
       const newPlayer: PlayerOption = {
         publicId: res.data.publicId,
         displayName: res.data.displayName,
+        battingStyle:
+          teamAExternalBattingStyle === "RIGHT_HAND_BAT"
+            ? "Right Hand Bat"
+            : "Left Hand Bat",
       };
       setAllPlayers((prev) => [...prev, newPlayer]);
       setTeamAPlayers((prev) => [
@@ -398,10 +407,15 @@ export default function MatchSetupPage() {
       const res = await api.post("/admin/players/external/tournament-guest", {
         displayName: name,
         gender: "MALE",
+        battingStyle: teamBExternalBattingStyle,
       });
       const newPlayer: PlayerOption = {
         publicId: res.data.publicId,
         displayName: res.data.displayName,
+        battingStyle:
+          teamBExternalBattingStyle === "RIGHT_HAND_BAT"
+            ? "Right Hand Bat"
+            : "Left Hand Bat",
       };
       setAllPlayers((prev) => [...prev, newPlayer]);
       setTeamBPlayers((prev) => [
@@ -458,9 +472,6 @@ export default function MatchSetupPage() {
         tournamentPublicId: tournamentId ?? undefined,
       });
       setCreatedMatch(match);
-
-      // Link to fixture if coming from tournament
-
       setStep(1);
     } catch (e: any) {
       setError(e.response?.data?.message || "Failed to create match");
@@ -562,6 +573,8 @@ export default function MatchSetupPage() {
           /* non-fatal */
         }
       }
+      // Persist wagon wheel setting for the live scorer
+      localStorage.setItem("nca_ww_enabled", String(wagonWheelEnabled));
       await startMatch(createdMatch.publicId);
       navigate(`/admin/cricket/matches/${createdMatch.publicId}/score`);
     } catch (e: any) {
@@ -577,6 +590,7 @@ export default function MatchSetupPage() {
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-950 pb-32">
+      {/* Header + progress */}
       <div className="sticky top-0 z-10 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 px-4 py-3">
         <div className="flex items-center gap-3">
           <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center text-white">
@@ -593,7 +607,9 @@ export default function MatchSetupPage() {
           {STEPS.map((s, i) => (
             <div
               key={s}
-              className={`h-1 flex-1 rounded-full transition-all duration-300 ${i <= step ? "bg-blue-600" : "bg-gray-200 dark:bg-gray-700"}`}
+              className={`h-1 flex-1 rounded-full transition-all duration-300 ${
+                i <= step ? "bg-blue-600" : "bg-gray-200 dark:bg-gray-700"
+              }`}
             />
           ))}
         </div>
@@ -606,7 +622,7 @@ export default function MatchSetupPage() {
           </div>
         )}
 
-        {/* STEP 0: Match Details */}
+        {/* ── STEP 0: Match Details ─────────────────────────────────────────── */}
         {step === 0 && (
           <div className="space-y-4">
             {fixtureId && (
@@ -681,7 +697,11 @@ export default function MatchSetupPage() {
                     onClick={() =>
                       setMatchDetails((p) => ({ ...p, matchType: type }))
                     }
-                    className={`py-2.5 px-2 rounded-xl text-xs font-medium border transition-all active:scale-95 ${matchDetails.matchType === type ? "bg-blue-600 text-white border-blue-600" : "bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-400 border-gray-200 dark:border-gray-700"}`}
+                    className={`py-2.5 px-2 rounded-xl text-xs font-medium border transition-all active:scale-95 ${
+                      matchDetails.matchType === type
+                        ? "bg-blue-600 text-white border-blue-600"
+                        : "bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-400 border-gray-200 dark:border-gray-700"
+                    }`}
                   >
                     {type === "INTERNAL"
                       ? "Internal"
@@ -730,7 +750,11 @@ export default function MatchSetupPage() {
                     onClick={() =>
                       setMatchDetails((p) => ({ ...p, dataSource: val }))
                     }
-                    className={`p-3 rounded-xl border text-left transition-all active:scale-95 ${matchDetails.dataSource === val ? "bg-blue-50 dark:bg-blue-900/20 border-blue-300 dark:border-blue-700" : "bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700"}`}
+                    className={`p-3 rounded-xl border text-left transition-all active:scale-95 ${
+                      matchDetails.dataSource === val
+                        ? "bg-blue-50 dark:bg-blue-900/20 border-blue-300 dark:border-blue-700"
+                        : "bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700"
+                    }`}
                   >
                     <div className="text-xs font-semibold text-gray-900 dark:text-gray-100">
                       {label}
@@ -740,10 +764,42 @@ export default function MatchSetupPage() {
                 ))}
               </div>
             </div>
+
+            {/* ── Wagon Wheel toggle — only for live scoring ──────────────────── */}
+            {matchDetails.dataSource === "BALL_BY_BALL" && (
+              <div className="flex items-center justify-between p-4 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl">
+                <div>
+                  <div className="text-sm font-semibold text-gray-900 dark:text-gray-100">
+                    🎯 Wagon Wheel
+                  </div>
+                  <div className="text-xs text-gray-400 mt-0.5">
+                    Scorer taps field after each scoring shot
+                  </div>
+                </div>
+                <button
+                  onClick={() => {
+                    const next = !wagonWheelEnabled;
+                    setWagonWheelEnabled(next);
+                    localStorage.setItem("nca_ww_enabled", String(next));
+                  }}
+                  className={`w-12 h-6 rounded-full transition-all relative flex-shrink-0 ${
+                    wagonWheelEnabled
+                      ? "bg-blue-600"
+                      : "bg-gray-300 dark:bg-gray-600"
+                  }`}
+                >
+                  <div
+                    className={`w-5 h-5 bg-white rounded-full absolute top-0.5 shadow transition-all ${
+                      wagonWheelEnabled ? "left-6" : "left-0.5"
+                    }`}
+                  />
+                </button>
+              </div>
+            )}
           </div>
         )}
 
-        {/* STEP 1 & 2: Teams */}
+        {/* ── STEP 1 & 2: Teams ─────────────────────────────────────────────── */}
         {(step === 1 || step === 2) && (
           <div className="space-y-4">
             <div>
@@ -774,11 +830,13 @@ export default function MatchSetupPage() {
                 ? "Add players by name if not in your academy DB, or search below."
                 : "Add opposition players by name, or search academy players below."}
             </p>
-            <div className="flex gap-2">
+
+            {/* Guest player input */}
+            <div className="flex gap-2 items-center">
               <input
                 type="text"
-                className="flex-1 px-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm text-gray-900 dark:text-gray-100 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder="Add player by name..."
+                className="flex-1 min-w-0 px-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm text-gray-900 dark:text-gray-100 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                placeholder="Add guest by name..."
                 value={step === 1 ? teamAExternalName : teamBExternalName}
                 onChange={(e) =>
                   step === 1
@@ -792,6 +850,40 @@ export default function MatchSetupPage() {
                   }
                 }}
               />
+              <div className="flex bg-gray-100 dark:bg-gray-700 rounded-xl p-0.5 gap-0.5 flex-shrink-0">
+                <button
+                  onClick={() =>
+                    step === 1
+                      ? setTeamAExternalBattingStyle("RIGHT_HAND_BAT")
+                      : setTeamBExternalBattingStyle("RIGHT_HAND_BAT")
+                  }
+                  className={`px-2.5 py-2 text-xs font-bold rounded-lg transition-all ${
+                    (step === 1
+                      ? teamAExternalBattingStyle
+                      : teamBExternalBattingStyle) === "RIGHT_HAND_BAT"
+                      ? "bg-blue-600 text-white"
+                      : "text-gray-500 dark:text-gray-400"
+                  }`}
+                >
+                  RHB
+                </button>
+                <button
+                  onClick={() =>
+                    step === 1
+                      ? setTeamAExternalBattingStyle("LEFT_HAND_BAT")
+                      : setTeamBExternalBattingStyle("LEFT_HAND_BAT")
+                  }
+                  className={`px-2.5 py-2 text-xs font-bold rounded-lg transition-all ${
+                    (step === 1
+                      ? teamAExternalBattingStyle
+                      : teamBExternalBattingStyle) === "LEFT_HAND_BAT"
+                      ? "bg-blue-600 text-white"
+                      : "text-gray-500 dark:text-gray-400"
+                  }`}
+                >
+                  LHB
+                </button>
+              </div>
               <button
                 onClick={
                   step === 1
@@ -807,14 +899,15 @@ export default function MatchSetupPage() {
                       addingExternal ||
                       teamBPlayers.length >= 11
                 }
-                className="px-4 py-2.5 bg-blue-600 text-white text-sm font-semibold rounded-xl disabled:opacity-40 active:scale-95 transition-all flex-shrink-0"
+                className="px-3 py-2.5 bg-blue-600 text-white text-sm font-bold rounded-xl disabled:opacity-40 active:scale-95 transition-all flex-shrink-0"
               >
                 {(step === 1 ? addingExternalA : addingExternal)
-                  ? "..."
+                  ? "…"
                   : "+ Add"}
               </button>
             </div>
 
+            {/* Select All / Clear All */}
             <div className="flex items-center justify-between">
               <span className="text-xs font-medium text-gray-500 dark:text-gray-400">
                 Select Players
@@ -823,39 +916,31 @@ export default function MatchSetupPage() {
                 <button
                   onClick={() => {
                     const currentFiltered = step === 1 ? filteredA : filteredB;
-                    const currentSelected =
-                      step === 1 ? teamAPlayers : teamBPlayers;
-                    const setSelected =
-                      step === 1 ? setTeamAPlayers : setTeamBPlayers;
-                    const unselectedIds = new Set(
-                      currentSelected.map((p) => p.playerPublicId),
-                    );
-                    const toAdd = currentFiltered
-                      .filter((p) => !unselectedIds.has(p.publicId))
-                      .slice(0, 11 - currentSelected.length);
-                    if (toAdd.length === 0) {
-                      // Deselect all
-                      setSelected([]);
+                    if (currentPlayers.length > 0) {
+                      setCurrentPlayers([]);
                     } else {
-                      setSelected([
-                        ...currentSelected,
-                        ...toAdd.map((p, idx) => ({
+                      setCurrentPlayers(
+                        currentFiltered.slice(0, 11).map((p, idx) => ({
                           playerPublicId: p.publicId,
-                          battingOrder: currentSelected.length + idx + 1,
+                          battingOrder: idx + 1,
                           isCaptain: false,
                           isWicketkeeper: false,
                           isImpactPlayer: false,
                         })),
-                      ]);
+                      );
                     }
                     setError("");
                   }}
-                  className="text-xs font-semibold px-2 py-0.5 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 active:scale-95 transition-all"
+                  className="text-xs font-semibold px-2.5 py-1 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 active:scale-95 transition-all"
                 >
                   {currentPlayers.length > 0 ? "Clear All" : "Select All"}
                 </button>
                 <span
-                  className={`text-xs font-semibold px-2 py-0.5 rounded-full ${currentPlayers.length === 11 ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400" : "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400"}`}
+                  className={`text-xs font-semibold px-2.5 py-1 rounded-full ${
+                    currentPlayers.length === 11
+                      ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
+                      : "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400"
+                  }`}
                 >
                   {currentPlayers.length}/11
                 </span>
@@ -940,7 +1025,7 @@ export default function MatchSetupPage() {
           </div>
         )}
 
-        {/* STEP 3: Toss */}
+        {/* ── STEP 3: Toss ──────────────────────────────────────────────────── */}
         {step === 3 && (
           <div className="space-y-5">
             <div className="text-center">
@@ -957,7 +1042,11 @@ export default function MatchSetupPage() {
                 <button
                   key={team.publicId}
                   onClick={() => setTossWinner(team.publicId)}
-                  className={`w-full p-4 rounded-xl border text-left transition-all active:scale-95 ${tossWinner === team.publicId ? "bg-yellow-50 dark:bg-yellow-900/20 border-yellow-400 dark:border-yellow-600" : "bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700"}`}
+                  className={`w-full p-4 rounded-xl border text-left transition-all active:scale-95 ${
+                    tossWinner === team.publicId
+                      ? "bg-yellow-50 dark:bg-yellow-900/20 border-yellow-400 dark:border-yellow-600"
+                      : "bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700"
+                  }`}
                 >
                   <div className="flex items-center justify-between">
                     <span className="font-medium text-gray-900 dark:text-gray-100">
@@ -982,7 +1071,13 @@ export default function MatchSetupPage() {
                     <button
                       key={dec}
                       onClick={() => setTossDecision(dec)}
-                      className={`py-4 rounded-xl border font-semibold transition-all active:scale-95 ${tossDecision === dec ? (dec === "BAT" ? "bg-green-600 text-white border-green-600" : "bg-blue-600 text-white border-blue-600") : "bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-400 border-gray-200 dark:border-gray-700"}`}
+                      className={`py-4 rounded-xl border font-semibold transition-all active:scale-95 ${
+                        tossDecision === dec
+                          ? dec === "BAT"
+                            ? "bg-green-600 text-white border-green-600"
+                            : "bg-blue-600 text-white border-blue-600"
+                          : "bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-400 border-gray-200 dark:border-gray-700"
+                      }`}
                     >
                       {dec === "BAT" ? "🏏 BAT" : "⚾ FIELD"}
                     </button>
@@ -993,42 +1088,114 @@ export default function MatchSetupPage() {
           </div>
         )}
 
-        {/* STEP 4: Review */}
+        {/* ── STEP 4: Review ────────────────────────────────────────────────── */}
         {step === 4 && createdMatch && (
           <div className="space-y-4">
             <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 divide-y divide-gray-100 dark:divide-gray-700">
               {[
-                { label: "Match", value: matchDetails.title },
-                { label: "Date", value: matchDetails.matchDate },
-                { label: "Overs", value: `${matchDetails.totalOvers} overs` },
+                {
+                  label: "Match",
+                  value: matchDetails.title,
+                  onEdit: undefined as (() => void) | undefined,
+                },
+                {
+                  label: "Date",
+                  value: matchDetails.matchDate,
+                  onEdit: undefined,
+                },
+                {
+                  label: "Overs",
+                  value: `${matchDetails.totalOvers} overs`,
+                  onEdit: undefined,
+                },
                 {
                   label: "Type",
                   value: matchDetails.matchType.replace(/_/g, " "),
+                  onEdit: undefined,
                 },
-                { label: "Venue", value: matchDetails.venue || "—" },
+                {
+                  label: "Venue",
+                  value: matchDetails.venue || "—",
+                  onEdit: undefined,
+                },
                 {
                   label: "Team A",
-                  value: `${teamAName} (${teamAPlayers.length} players)`,
+                  value: `${teamAName} (${teamAPlayers.length}p)`,
+                  onEdit: () => {
+                    setStep(1);
+                    setError("");
+                  },
                 },
                 {
                   label: "Team B",
-                  value: `${teamBName} (${teamBPlayers.length} players)`,
+                  value: `${teamBName} (${teamBPlayers.length}p)`,
+                  onEdit: () => {
+                    setStep(2);
+                    setError("");
+                  },
                 },
                 {
                   label: "Toss",
                   value: `${teams.find((t) => t.publicId === tossWinner)?.name} chose to ${tossDecision}`,
+                  onEdit: () => {
+                    setStep(3);
+                    setError("");
+                  },
                 },
-              ].map(({ label, value }) => (
-                <div key={label} className="flex justify-between px-4 py-3">
-                  <span className="text-sm text-gray-500 dark:text-gray-400">
+              ].map(({ label, value, onEdit }) => (
+                <div
+                  key={label}
+                  onClick={onEdit}
+                  className={`px-4 py-3 flex justify-between items-start gap-3 ${
+                    onEdit
+                      ? "active:bg-gray-50 dark:active:bg-gray-700/50 cursor-pointer"
+                      : ""
+                  }`}
+                >
+                  <span className="text-sm text-gray-500 dark:text-gray-400 flex-shrink-0">
                     {label}
                   </span>
-                  <span className="text-sm font-medium text-gray-900 dark:text-gray-100 text-right max-w-[60%]">
-                    {value}
-                  </span>
+                  <div className="flex items-center gap-1.5 text-right min-w-0">
+                    <span className="text-sm font-medium text-gray-900 dark:text-gray-100 break-words text-right">
+                      {value}
+                    </span>
+                    {onEdit && (
+                      <span className="text-blue-400 flex-shrink-0">✏️</span>
+                    )}
+                  </div>
                 </div>
               ))}
             </div>
+
+            {/* Wagon wheel setting summary */}
+            {matchDetails.dataSource === "BALL_BY_BALL" && (
+              <div className="flex items-center justify-between px-4 py-3 bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-gray-500 dark:text-gray-400">
+                    🎯 Wagon Wheel
+                  </span>
+                  <span
+                    className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
+                      wagonWheelEnabled
+                        ? "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400"
+                        : "bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-500"
+                    }`}
+                  >
+                    {wagonWheelEnabled ? "Enabled" : "Disabled"}
+                  </span>
+                </div>
+                <button
+                  onClick={() => {
+                    setStep(0);
+                    setError("");
+                  }}
+                  className="text-xs text-blue-500 font-semibold px-2 py-0.5 rounded-lg bg-blue-50 dark:bg-blue-900/20 active:scale-95 transition-all"
+                >
+                  Edit
+                </button>
+              </div>
+            )}
+
             <div className="bg-green-50 dark:bg-green-900/10 border border-green-200 dark:border-green-900/30 rounded-xl p-4 text-sm text-green-700 dark:text-green-400">
               Everything looks good! Tap <strong>Start Match</strong> to open
               the live scorer.
@@ -1039,7 +1206,7 @@ export default function MatchSetupPage() {
 
       {/* Bottom action bar */}
       <div
-        className="fixed bottom-0 left-0 right-0 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-800 px-4 pt-3 pb-safe flex gap-3"
+        className="fixed bottom-0 left-0 right-0 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-800 px-4 pt-3 flex gap-3"
         style={{ paddingBottom: "max(12px, env(safe-area-inset-bottom))" }}
       >
         {step > 0 && (
@@ -1066,7 +1233,9 @@ export default function MatchSetupPage() {
                     ? handleToss
                     : handleStartMatch
           }
-          className={`flex-1 py-3 rounded-xl text-sm font-semibold text-white transition-all active:scale-95 flex items-center justify-center gap-2 ${loading ? "bg-blue-400" : "bg-blue-600 hover:bg-blue-700"}`}
+          className={`flex-1 py-3 rounded-xl text-sm font-semibold text-white transition-all active:scale-95 flex items-center justify-center gap-2 ${
+            loading ? "bg-blue-400" : "bg-blue-600 hover:bg-blue-700"
+          }`}
         >
           {loading && (
             <svg

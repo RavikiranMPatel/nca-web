@@ -16,6 +16,7 @@ import type {
 } from "../../types/scoring";
 import type { CricketMatch, CricketTeam } from "../../types/match";
 import api from "../../api/axios";
+import WagonWheelModal from "./WagonWheelModal";
 
 const fmtOvers = (balls: number, perOver = 6) =>
   `${Math.floor(balls / perOver)}.${balls % perOver}`;
@@ -92,7 +93,7 @@ const PlayerSelector = ({
       (p.displayName ?? "").toLowerCase().includes(searchValue.toLowerCase()),
     );
   return (
-    <div className="fixed inset-0 z-50 bg-black/70 flex items-end">
+    <div className="fixed inset-0 z-[70] bg-black/70 flex items-end">
       <div className="w-full bg-gray-900 rounded-t-2xl max-h-[80vh] overflow-hidden flex flex-col">
         <div className="p-4 border-b border-gray-800">
           <div className="w-10 h-1 bg-gray-600 rounded-full mx-auto mb-3" />
@@ -185,28 +186,28 @@ const mapToBallDTO = (d: Record<string, unknown>): BallDTO => ({
               : "b-dot",
 });
 
-// ── Strike rotation helper ────────────────────────────────────────────────────
-// Mid-over:  odd runs on a legal ball → rotate
-// End of over: even runs on last ball → rotate (non-striker faces next over)
-//              odd runs on last ball  → no rotate (same batter faces next over)
-// Wide: batter didn't physically run → no rotation regardless of runs added
 const shouldRotateMidOver = (
   runs: number,
   isLegalBall: boolean,
   extra?: string,
 ): boolean => {
-  if (!isLegalBall) return false; // wide / no-ball — no rotation
-  if (extra === "WIDE") return false; // wide never rotates
-  return runs % 2 !== 0; // odd runs → rotate
+  if (!isLegalBall) return false;
+  if (extra === "WIDE") return false;
+  return runs % 2 !== 0;
 };
 
 const shouldRotateEndOfOver = (runs: number, extra?: string): boolean => {
-  if (extra === "WIDE") return true; // wide = 0 batter runs = even → rotate (non-striker faces)
-  return runs % 2 === 0; // even runs on last ball → rotate (non-striker faces next over)
-  // odd runs on last ball → no rotate (same batter faces next over)
+  if (extra === "WIDE") return true;
+  return runs % 2 === 0;
 };
 
-// Per-batter accumulated stats for the innings
+// At module level — not inside any function
+const needsWagonWheel = (runs: number, extra?: string): boolean => {
+  if (extra === "WIDE") return false;
+  if (extra === "NO_BALL" && runs === 0) return false;
+  return runs > 0;
+};
+
 interface BatterStats {
   runs: number;
   balls: number;
@@ -236,6 +237,19 @@ export default function LiveScorerPage() {
   const [dismissedPlayerIds, setDismissedPlayerIds] = useState<Set<string>>(
     new Set(),
   );
+
+  // ── Wagon wheel — read from localStorage (set during match setup) ──────────
+  const wagonWheelEnabled = localStorage.getItem("nca_ww_enabled") !== "false";
+  const [showWagonWheel, setShowWagonWheel] = useState(false);
+  const [lastDeliveryPublicId, setLastDeliveryPublicId] = useState<
+    string | null
+  >(null);
+  const [lastBallRuns, setLastBallRuns] = useState(0);
+
+  // Partnership state
+  const [partnershipRuns, setPartnershipRuns] = useState(0);
+  const [partnershipBalls, setPartnershipBalls] = useState(0);
+
   const [bowlerOversMap, setBowlerOversMap] = useState<Record<string, number>>(
     {},
   );
@@ -249,11 +263,9 @@ export default function LiveScorerPage() {
   const [striker, setStriker] = useState<ScoringPlayer | null>(null);
   const [nonStriker, setNonStriker] = useState<ScoringPlayer | null>(null);
   const [bowler, setBowler] = useState<ScoringPlayer | null>(null);
-
   const [batterStatsMap, setBatterStatsMap] = useState<
     Record<string, BatterStats>
   >({});
-
   const [bowlerBalls, setBowlerBalls] = useState(0);
   const [bowlerRuns, setBowlerRuns] = useState(0);
   const [bowlerWickets, setBowlerWickets] = useState(0);
@@ -294,6 +306,20 @@ export default function LiveScorerPage() {
     setTimeout(() => setToast(null), 2000);
   };
 
+  const saveShotZone = async (zone: string) => {
+    setShowWagonWheel(false);
+    if (!lastDeliveryPublicId || !matchId) return;
+    try {
+      await api.patch(
+        `/admin/cricket/matches/${matchId}/scoring/deliveries/${lastDeliveryPublicId}/shot-zone`,
+        { shotZone: zone },
+      );
+    } catch {
+      /* silent — shot zone is optional */
+    }
+    setLastDeliveryPublicId(null);
+  };
+
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (!matchId) return;
@@ -323,6 +349,8 @@ export default function LiveScorerPage() {
             displayName: mtp.displayName as string,
             battingStyle: mtp.battingStyle as string | undefined,
             bowlingStyle: mtp.bowlingStyle as string | undefined,
+            isWicketkeeper: !!mtp.isWicketkeeper,
+            isCaptain: !!mtp.isCaptain,
           }));
       }
 
@@ -537,7 +565,6 @@ export default function LiveScorerPage() {
         isFreeHit,
       });
 
-      // Update batter stats
       if (isLegalBall || runs > 0) {
         setBatterStatsMap((prev) => {
           const existing = prev[currentStriker.publicId] ?? emptyStats();
@@ -568,21 +595,32 @@ export default function LiveScorerPage() {
       setBowlerRuns((r) => r + runs + (extra ? extraRuns : 0));
       setIsFreeHit(nextFreeHit);
 
+      if (isLegalBall) {
+        setPartnershipBalls((b) => b + 1);
+        setPartnershipRuns((r) => r + runs);
+      }
+
       setThisOver((prev) => [...prev, currentBallForSummary]);
       applyState(state);
       showToast("✓ Ball saved");
 
+      // Gate wagon wheel on the pre-match setting
+      if (
+        wagonWheelEnabled &&
+        state.lastDeliveryPublicId &&
+        needsWagonWheel(runs, extra)
+      ) {
+        setLastDeliveryPublicId(state.lastDeliveryPublicId);
+        setLastBallRuns(runs);
+        setShowWagonWheel(true);
+      }
+
       if (state.overComplete) {
-        // ── END OF OVER strike rotation ──────────────────────────────────────
-        // Rule: even runs on last ball → non-striker faces next over (rotate)
-        //       odd runs on last ball  → same batter faces next over (no rotate)
-        // Wide is treated as 0 batter runs → rotate (non-striker faces)
         const rotateEndOfOver = shouldRotateEndOfOver(runs, extra);
         if (rotateEndOfOver) {
           setStriker(currentNonStriker);
           setNonStriker(currentStriker);
         }
-        // If !rotateEndOfOver: same batter (currentStriker) stays on strike — no swap needed
 
         setLastOverNumber(innings?.overNumber ?? 1);
         const overSnap = [...thisOver, currentBallForSummary];
@@ -604,9 +642,6 @@ export default function LiveScorerPage() {
         }
         setShowBowlerSelect(true);
       } else {
-        // ── MID-OVER strike rotation ─────────────────────────────────────────
-        // Rule: odd runs on a legal ball → rotate
-        //       wide → no rotation (batter didn't run)
         const rotateMidOver = shouldRotateMidOver(runs, isLegalBall, extra);
         if (rotateMidOver) {
           setStriker(currentNonStriker);
@@ -702,6 +737,17 @@ export default function LiveScorerPage() {
       setBowlerWickets((w) => w + 1);
       setBowlerRuns((r) => r + pendingRuns);
       setShowWicket(false);
+
+      setPartnershipRuns(0);
+      setPartnershipBalls(0);
+
+      // Wagon wheel for runs on wicket ball
+      if (wagonWheelEnabled && state.lastDeliveryPublicId && pendingRuns > 0) {
+        setLastDeliveryPublicId(state.lastDeliveryPublicId);
+        setLastBallRuns(pendingRuns);
+        setShowWagonWheel(true);
+      }
+
       setDismissedPlayerIds((prev) => {
         const next = new Set(prev);
         if (dismissedPlayer?.publicId) next.add(dismissedPlayer.publicId);
@@ -717,14 +763,8 @@ export default function LiveScorerPage() {
       showToast("✓ Wicket saved");
 
       if (state.overComplete) {
-        // ── END OF OVER wicket rotation ──────────────────────────────────────
-        // New batter will be selected via showBatterSelect.
-        // Non-striker always faces next over after an end-of-over wicket
-        // (new batter comes in at striker end but over has changed)
-        // So: non-striker becomes striker, new batter will be selected as non-striker?
-        // Actually: wicket on last ball → new batter comes in, non-striker rotates to face
         setStriker(capturedNonStriker);
-        setNonStriker(null); // new batter selected via prompt
+        setNonStriker(null);
 
         setLastOverNumber(innings?.overNumber ?? 1);
         const overSnap = [...thisOver, wicketBallForSummary];
@@ -746,19 +786,11 @@ export default function LiveScorerPage() {
         }
         setShowBowlerSelect(true);
       } else {
-        // ── MID-OVER wicket ──────────────────────────────────────────────────
-        // New batter comes in at striker end
-        // Runs on wicket ball: odd → non-striker was already at striker end
-        //   but since wicket happened, new batter always faces next ball
-        // So: keep nonStriker as nonStriker, clear striker for new batter
         if (pendingRuns % 2 !== 0) {
-          // odd runs — batters crossed before wicket
-          // non-striker is now at striker end but wicket happened
-          // new batter comes in at striker end
-          setNonStriker(capturedNonStriker); // non-striker stays
+          setNonStriker(capturedNonStriker);
         }
-        // striker is out — prompt for new batter
       }
+
       const availableBatters = battingPlayers.filter(
         (p) =>
           !dismissedPlayerIds.has(p.publicId) &&
@@ -849,6 +881,8 @@ export default function LiveScorerPage() {
       setBowlerOversMap({});
       setLastBowlerPublicId(null);
       setBatterStatsMap({});
+      setPartnershipRuns(0);
+      setPartnershipBalls(0);
       await loadAll();
       showToast("✓ Innings closed");
     } catch (e: unknown) {
@@ -946,7 +980,6 @@ export default function LiveScorerPage() {
   const crr = innings
     ? fmtCRR(totalRuns, totalBalls, match?.ballsPerOver ?? 6)
     : "0.00";
-
   const strikerStats = batterStatsMap[striker?.publicId ?? ""] ?? emptyStats();
   const nonStrikerStats =
     batterStatsMap[nonStriker?.publicId ?? ""] ?? emptyStats();
@@ -1004,7 +1037,11 @@ export default function LiveScorerPage() {
           >
             <div className="flex items-center gap-2">
               <div
-                className={`w-2 h-2 rounded-full flex-shrink-0 ${isStriker ? "bg-green-400" : "bg-transparent border border-gray-600"}`}
+                className={`w-2 h-2 rounded-full flex-shrink-0 ${
+                  isStriker
+                    ? "bg-green-400"
+                    : "bg-transparent border border-gray-600"
+                }`}
               />
               <span
                 className={`text-sm ${player ? "text-gray-100" : "text-gray-600"}`}
@@ -1027,6 +1064,24 @@ export default function LiveScorerPage() {
           </button>
         ))}
       </div>
+
+      {/* Partnership */}
+      {striker && nonStriker && (
+        <div className="bg-gray-950 px-4 py-1.5 border-b border-gray-800 flex items-center justify-between">
+          <span className="text-xs text-gray-600">
+            Partnership: <b className="text-gray-400">{partnershipRuns}</b> (
+            {partnershipBalls}b)
+          </span>
+          {partnershipBalls > 0 && (
+            <span className="text-xs text-gray-600">
+              RR:{" "}
+              <b className="text-gray-400">
+                {((partnershipRuns / partnershipBalls) * 6).toFixed(2)}
+              </b>
+            </span>
+          )}
+        </div>
+      )}
 
       {/* Bowler */}
       <button
@@ -1216,11 +1271,8 @@ export default function LiveScorerPage() {
             const oversUsed = bowlerOversMap[p.publicId] ?? 0;
             const hasQuota = maxOvers <= 0 || oversUsed < maxOvers;
             const isLastBowler = p.publicId === lastBowlerPublicId;
-
-            // ── Look-ahead validation ─────────────────────────────────────────
-            // If selecting this bowler, how many valid bowlers remain for next over?
             const validForNextOver = bowlingPlayers.filter((other) => {
-              if (other.publicId === p.publicId) return false; // can't bowl consecutive
+              if (other.publicId === p.publicId) return false;
               const otherOversUsed = bowlerOversMap[other.publicId] ?? 0;
               return maxOvers <= 0 || otherOversUsed < maxOvers;
             });
@@ -1234,7 +1286,6 @@ export default function LiveScorerPage() {
               !isLastBowler &&
               oversRemaining > 1 &&
               validForNextOver.length === 1;
-
             return {
               ...p,
               oversUsed,
@@ -1303,7 +1354,11 @@ export default function LiveScorerPage() {
                             setShowBowlerSelect(false);
                             setShowPlayerSearch("");
                           }}
-                          className={`w-full flex items-center justify-between gap-3 px-3 py-3 rounded-xl text-left transition-all ${hardDisabled ? "bg-gray-800/50 opacity-40 cursor-not-allowed" : "bg-gray-800 hover:bg-gray-700 active:scale-95"}`}
+                          className={`w-full flex items-center justify-between gap-3 px-3 py-3 rounded-xl text-left transition-all ${
+                            hardDisabled
+                              ? "bg-gray-800/50 opacity-40 cursor-not-allowed"
+                              : "bg-gray-800 hover:bg-gray-700 active:scale-95"
+                          }`}
                         >
                           <div className="flex items-center gap-3">
                             <div className="w-8 h-8 bg-gray-700 rounded-full flex items-center justify-center text-xs font-bold text-white flex-shrink-0">
@@ -1378,7 +1433,19 @@ export default function LiveScorerPage() {
                   {DISMISSALS.map((d) => (
                     <button
                       key={d}
-                      onClick={() => setDismissalType(d)}
+                      onClick={() => {
+                        setDismissalType(d);
+                        if (d === "Stumped") {
+                          // Auto-select wicketkeeper as fielder
+                          const wk = bowlingPlayers.find(
+                            (p) => p.isWicketkeeper,
+                          );
+                          if (wk) setFielder(wk);
+                        } else if (dismissalType === "Stumped") {
+                          // Switching away from Stumped — clear the auto-set WK
+                          setFielder(null);
+                        }
+                      }}
                       className={`py-2.5 px-3 rounded-xl text-sm font-medium border transition-all active:scale-95 ${
                         dismissalType === d
                           ? "bg-red-900 border-red-600 text-red-200"
@@ -1415,10 +1482,21 @@ export default function LiveScorerPage() {
                 <div>
                   <div className="text-xs text-gray-500 uppercase mb-2">
                     Fielder
+                    {dismissalType === "Stumped" && fielder && (
+                      <span className="ml-2 text-green-400 normal-case">
+                        (auto: WK)
+                      </span>
+                    )}
                   </div>
                   <button
                     onClick={() => setShowFielderSelect(true)}
-                    className="w-full py-2.5 px-3 bg-gray-800 border border-gray-700 rounded-xl text-sm text-left text-gray-300"
+                    className={`w-full py-2.5 px-3 border rounded-xl text-sm text-left transition-all ${
+                      fielder
+                        ? dismissalType === "Stumped"
+                          ? "bg-green-900/30 border-green-700 text-green-300"
+                          : "bg-gray-800 border-gray-600 text-white"
+                        : "bg-gray-800 border-gray-700 text-gray-300"
+                    }`}
                   >
                     {fielder?.displayName ?? "Tap to select fielder →"}
                   </button>
@@ -1455,6 +1533,7 @@ export default function LiveScorerPage() {
                 onClick={() => {
                   setShowWicket(false);
                   setDismissalType("");
+                  setFielder(null);
                 }}
                 className="w-full py-2 text-gray-500 text-sm"
               >
@@ -1634,6 +1713,21 @@ export default function LiveScorerPage() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Wagon Wheel Modal — z-[80] above all other modals */}
+      {showWagonWheel && striker && (
+        <WagonWheelModal
+          strikerName={striker.displayName}
+          strikerBattingStyle={striker.battingStyle}
+          runs={lastBallRuns}
+          deliveryPublicId={lastDeliveryPublicId ?? ""}
+          onSave={saveShotZone}
+          onSkip={() => {
+            setShowWagonWheel(false);
+            setLastDeliveryPublicId(null);
+          }}
+        />
       )}
 
       {/* Toast */}

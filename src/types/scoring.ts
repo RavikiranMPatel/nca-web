@@ -64,4 +64,6 @@ export interface ScoringPlayer {
   displayName: string;
   battingStyle?: string;
   bowlingStyle?: string;
+  isWicketkeeper?: boolean;
+  isCaptain?: boolean;
 }
