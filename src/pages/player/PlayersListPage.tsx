@@ -773,7 +773,7 @@ function PlayersListPage() {
 
                   {/* Chevron hint */}
                   <div className="flex flex-col items-end justify-between gap-1 flex-shrink-0">
-                    {isSuperAdmin && p.publicId.startsWith("EXT-") && (
+                    {isSuperAdmin && (
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
@@ -957,14 +957,14 @@ function PlayersListPage() {
                       </td>
                       <td className="px-6 py-4 text-right">
                         <div className="flex items-center justify-end gap-2">
-                          {isSuperAdmin && p.publicId.startsWith("EXT-") && (
+                          {isSuperAdmin && (
                             <button
                               onClick={(e) => {
                                 e.stopPropagation();
                                 setDeleteConfirm({ open: true, player: p });
                               }}
                               className="p-2 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition"
-                              title="Delete EXT player"
+                              title="Delete player"
                             >
                               <Trash2 size={15} />
                             </button>

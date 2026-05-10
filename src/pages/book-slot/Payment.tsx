@@ -50,7 +50,7 @@ function Payment() {
       .then((res) => {
         setUpiQrUrl(res.data.UPI_QR_URL || "");
         setUpiId(res.data.UPI_ID || "");
-        setBookingPhone(res.data.BOOKING_PHONE || "");
+        setBookingPhone(res.data.BOOKING_PHONE || res.data.CONTACT_PHONE || "");
       })
       .catch(() => {});
   }, [isMemberBooking]);
@@ -260,6 +260,79 @@ function Payment() {
               </p>
             </div>
 
+            {/* Instructions — shown BEFORE QR so user knows what to do */}
+            <div className="rounded-xl overflow-hidden border-2 border-orange-400 shadow-md">
+              <div className="bg-orange-500 px-4 py-2.5 flex items-center gap-2">
+                <span className="text-lg">⚠️</span>
+                <p className="font-bold text-white text-sm uppercase tracking-wide">
+                  Read Before Paying
+                </p>
+              </div>
+              <div className="bg-orange-50 px-4 py-4 space-y-4">
+                {/* Step 1 */}
+                <div className="flex items-start gap-3">
+                  <span className="w-7 h-7 rounded-full bg-orange-500 text-white text-sm font-bold flex items-center justify-center flex-shrink-0 mt-0.5">
+                    1
+                  </span>
+                  <p className="text-sm text-gray-800">
+                    Scan the QR below and pay{" "}
+                    <span className="text-xl font-extrabold text-orange-600">
+                      ₹{booking.amount}
+                    </span>
+                  </p>
+                </div>
+
+                {/* Step 2 — call button full width for easy mobile tap */}
+                <div className="flex items-start gap-3">
+                  <span className="w-7 h-7 rounded-full bg-orange-500 text-white text-sm font-bold flex items-center justify-center flex-shrink-0 mt-0.5">
+                    2
+                  </span>
+                  <div className="flex-1 space-y-2">
+                    <p className="text-sm text-gray-800">
+                      Call us after payment to confirm your slot
+                    </p>
+                    {bookingPhone ? (
+                      <a
+                        href={`tel:${bookingPhone}`}
+                        className="flex items-center justify-center gap-2 w-full py-3
+                                   bg-blue-600 text-white rounded-xl font-bold text-base
+                                   active:scale-95 transition-all shadow-sm"
+                      >
+                        📞 Call Now — {bookingPhone}
+                      </a>
+                    ) : (
+                      <p className="text-sm font-bold text-gray-800">
+                        Call the academy
+                      </p>
+                    )}
+                  </div>
+                </div>
+
+                {/* Step 3 — what happens after */}
+                <div className="flex items-start gap-3">
+                  <span className="w-7 h-7 rounded-full bg-amber-500 text-white text-sm font-bold flex items-center justify-center flex-shrink-0 mt-0.5">
+                    3
+                  </span>
+                  <p className="text-sm text-gray-800">
+                    We verify your payment and mark your slot as confirmed —{" "}
+                    <strong>usually within 5–10 mins</strong> during working
+                    hours
+                  </p>
+                </div>
+
+                {/* Step 4 */}
+                <div className="flex items-start gap-3">
+                  <span className="w-7 h-7 rounded-full bg-green-500 text-white text-sm font-bold flex items-center justify-center flex-shrink-0 mt-0.5">
+                    ✓
+                  </span>
+                  <p className="text-sm text-gray-800">
+                    This page updates automatically once confirmed —{" "}
+                    <strong>don't close it</strong>
+                  </p>
+                </div>
+              </div>
+            </div>
+
             {/* QR Code */}
             <div className="text-center space-y-3">
               <p className="font-semibold text-gray-800">
@@ -280,30 +353,40 @@ function Payment() {
               </p>
             </div>
 
-            {/* Instructions */}
-            <div className="bg-blue-50 border border-blue-200 rounded-xl p-5 space-y-3">
-              <p className="font-semibold text-blue-900">
-                How to confirm your slot:
+            {/* What happens next */}
+            <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-3">
+              <p className="text-xs font-bold text-slate-500 uppercase tracking-wide">
+                What happens next?
               </p>
-              <ol className="text-sm text-blue-800 space-y-2 list-decimal list-inside">
-                <li>
-                  Scan the QR above and pay <strong>₹{booking.amount}</strong>
-                </li>
-                <li>
-                  Call us at <strong>{bookingPhone || "the academy"}</strong>{" "}
-                  after payment
-                </li>
-                <li>
-                  We'll confirm your slot — this page will update automatically
-                  ✅
-                </li>
-              </ol>
+              <div className="space-y-2.5">
+                <div className="flex items-start gap-2.5">
+                  <span className="text-base mt-0.5">💸</span>
+                  <p className="text-sm text-slate-700">
+                    You pay via UPI and call us
+                  </p>
+                </div>
+                <div className="flex items-start gap-2.5">
+                  <span className="text-base mt-0.5">🔍</span>
+                  <p className="text-sm text-slate-700">
+                    Our team verifies your payment
+                  </p>
+                </div>
+                <div className="flex items-start gap-2.5">
+                  <span className="text-base mt-0.5">✅</span>
+                  <p className="text-sm text-slate-700">
+                    We mark your slot as confirmed —{" "}
+                    <strong>this page updates automatically</strong>
+                  </p>
+                </div>
+                <div className="flex items-start gap-2.5">
+                  <span className="text-base mt-0.5">⏱️</span>
+                  <p className="text-sm text-slate-700">
+                    Usually confirmed within <strong>5–10 minutes</strong>{" "}
+                    during working hours
+                  </p>
+                </div>
+              </div>
             </div>
-
-            <p className="text-xs text-center text-gray-400">
-              This page refreshes automatically once your payment is confirmed.
-              Don't close it.
-            </p>
           </>
         )}
       </div>

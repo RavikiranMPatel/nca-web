@@ -14,6 +14,7 @@ import {
   FileText,
   Eye,
   ChevronDown,
+  Calendar,
 } from "lucide-react";
 import api from "../../api/axios";
 import { toast } from "react-hot-toast";
@@ -38,7 +39,6 @@ type FeeAccount = {
   status: "PAID" | "DUE" | "OVERDUE";
 };
 
-// Add to FeePayment type
 type FeePayment = {
   id: string;
   publicId: string;
@@ -53,6 +53,15 @@ type FeePayment = {
   player?: { phone?: string; parentsPhone?: string; displayName?: string };
   nextDueOn?: string;
   reversedPaymentPublicId?: string;
+};
+
+// ── NEW: Registration Fee type ──
+type RegFeeStatus = {
+  playerPublicId: string;
+  regFeePaid: boolean;
+  regFeePaidOn: string | null;
+  regFeePaymentMode: string | null;
+  regFeeAmount: number;
 };
 
 const PAYMENT_MODES = [
@@ -81,6 +90,20 @@ function PlayerFeesTab() {
     useState<FeePayment | null>(null);
   const [receiptPhone, setReceiptPhone] = useState("");
   const [sendingReceipt, setSendingReceipt] = useState(false);
+
+  // ── Edit Due Date state ──
+  const [showEditDueDate, setShowEditDueDate] = useState(false);
+  const [editDueDateValue, setEditDueDateValue] = useState("");
+  const [savingDueDate, setSavingDueDate] = useState(false);
+
+  // ── NEW: Registration Fee state ──
+  const [regFee, setRegFee] = useState<RegFeeStatus | null>(null);
+  const [showRegFeeModal, setShowRegFeeModal] = useState(false);
+  const [regFeeMode, setRegFeeMode] = useState("PHONE_PE");
+  const [regFeePaidOn, setRegFeePaidOn] = useState(
+    new Date().toISOString().split("T")[0],
+  );
+  const [savingRegFee, setSavingRegFee] = useState(false);
 
   const handleSendReceipt = async () => {
     if (!showSendReceiptModal) return;
@@ -119,6 +142,58 @@ function PlayerFeesTab() {
     }
   };
 
+  // ── Edit Due Date handler ──
+  const handleUpdateDueDate = async () => {
+    if (!account || !editDueDateValue) return;
+    setSavingDueDate(true);
+    try {
+      await api.patch(
+        `/admin/fees/accounts/${account.publicId}/due-date?dueDate=${editDueDateValue}`,
+      );
+      toast.success("Due date updated!");
+      setShowEditDueDate(false);
+      loadAll();
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || "Failed to update due date");
+    } finally {
+      setSavingDueDate(false);
+    }
+  };
+
+  // ── NEW: Registration Fee handlers ──
+  const handleMarkRegFeePaid = async () => {
+    if (!playerPublicId) return;
+    setSavingRegFee(true);
+    try {
+      await api.post(
+        `/admin/fees/players/${playerPublicId}/registration-fee?paymentMode=${regFeeMode}&paidOn=${regFeePaidOn}`,
+      );
+      toast.success("Registration fee marked as paid!");
+      setShowRegFeeModal(false);
+      loadAll();
+    } catch (err: any) {
+      toast.error(
+        err.response?.data?.message || "Failed to mark registration fee",
+      );
+    } finally {
+      setSavingRegFee(false);
+    }
+  };
+
+  const handleUnmarkRegFee = async () => {
+    if (!playerPublicId) return;
+    if (!window.confirm("Unmark registration fee payment?")) return;
+    try {
+      await api.delete(
+        `/admin/fees/players/${playerPublicId}/registration-fee`,
+      );
+      toast.success("Registration fee unmarked");
+      loadAll();
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || "Failed to unmark");
+    }
+  };
+
   const [account, setAccount] = useState<FeeAccount | null>(null);
   const [payments, setPayments] = useState<FeePayment[]>([]);
   const [plans, setPlans] = useState<FeePlan[]>([]);
@@ -130,15 +205,16 @@ function PlayerFeesTab() {
     null,
   );
 
-  // Mark paid form
   const [paymentMode, setPaymentMode] = useState("PHONE_PE");
   const [otherModeText, setOtherModeText] = useState("");
   const [referenceNumber, setReferenceNumber] = useState("");
   const [receiptFile, setReceiptFile] = useState<File | null>(null);
   const [receiptPreview, setReceiptPreview] = useState("");
   const [markingPaid, setMarkingPaid] = useState(false);
+  const [paidOnDate, setPaidOnDate] = useState(
+    new Date().toISOString().split("T")[0],
+  );
 
-  // Assign form
   const [selectedPlanId, setSelectedPlanId] = useState("");
   const [assigning, setAssigning] = useState(false);
 
@@ -149,12 +225,13 @@ function PlayerFeesTab() {
   const loadAll = async () => {
     setLoading(true);
     try {
-      const [accountRes, paymentsRes, plansRes] = await Promise.all([
+      const [accountRes, paymentsRes, plansRes, regFeeRes] = await Promise.all([
         api.get(`/admin/fees/accounts/${playerPublicId}`).catch(() => null),
         api
           .get(`/admin/fees/payments?playerPublicId=${playerPublicId}`)
           .catch(() => ({ data: [] })),
         api.get("/admin/fees/plans/active"),
+        api.get("/admin/fees/registration-fees").catch(() => ({ data: [] })),
       ]);
       if (accountRes && accountRes.status === 200 && accountRes.data) {
         setAccount(accountRes.data);
@@ -163,6 +240,11 @@ function PlayerFeesTab() {
       }
       setPayments(paymentsRes.data || []);
       setPlans(plansRes.data || []);
+      // ── NEW: find this player's reg fee ──
+      const allRegFees: RegFeeStatus[] = regFeeRes.data || [];
+      setRegFee(
+        allRegFees.find((r) => r.playerPublicId === playerPublicId) || null,
+      );
     } catch {
       toast.error("Failed to load fee data");
     } finally {
@@ -195,6 +277,7 @@ function PlayerFeesTab() {
     setPaymentMode("PHONE_PE");
     setOtherModeText("");
     setReferenceNumber("");
+    setPaidOnDate(new Date().toISOString().split("T")[0]);
     removeReceipt();
   };
 
@@ -205,12 +288,12 @@ function PlayerFeesTab() {
       const formData = new FormData();
       formData.append("feeAccountPublicId", account.publicId);
       formData.append("paymentMode", paymentMode);
+      formData.append("paidOn", paidOnDate);
       if (paymentMode === "OTHER" && otherModeText)
         formData.append("otherModeText", otherModeText);
       if (referenceNumber.trim())
         formData.append("referenceNumber", referenceNumber.trim());
       if (receiptFile) formData.append("receiptImage", receiptFile);
-
       await api.post("/admin/fees/pay", formData, {
         headers: { "Content-Type": "multipart/form-data" },
       });
@@ -359,6 +442,19 @@ function PlayerFeesTab() {
   if (!account) {
     return (
       <div className="space-y-6">
+        {regFee && (
+          <RegistrationFeeCard
+            regFee={regFee}
+            isSuperAdmin={isSuperAdmin}
+            formatDate={formatDate}
+            onMarkPaid={() => {
+              setRegFeeMode("PHONE_PE");
+              setRegFeePaidOn(new Date().toISOString().split("T")[0]);
+              setShowRegFeeModal(true);
+            }}
+            onUnmark={handleUnmarkRegFee}
+          />
+        )}
         <div className="bg-white rounded-xl border-2 border-dashed border-slate-200 p-8 sm:p-12 text-center">
           <IndianRupee size={48} className="mx-auto text-slate-300 mb-4" />
           <h3 className="text-lg font-bold text-slate-700 mb-2">
@@ -391,6 +487,17 @@ function PlayerFeesTab() {
             getFinalAmount={getFinalAmount}
           />
         )}
+        {showRegFeeModal && (
+          <RegFeeModal
+            regFeeMode={regFeeMode}
+            setRegFeeMode={setRegFeeMode}
+            regFeePaidOn={regFeePaidOn}
+            setRegFeePaidOn={setRegFeePaidOn}
+            savingRegFee={savingRegFee}
+            onConfirm={handleMarkRegFeePaid}
+            onClose={() => setShowRegFeeModal(false)}
+          />
+        )}
       </div>
     );
   }
@@ -402,9 +509,23 @@ function PlayerFeesTab() {
 
   return (
     <div className="space-y-4">
+      {/* ── NEW: Registration Fee Card ── */}
+      {regFee && (
+        <RegistrationFeeCard
+          regFee={regFee}
+          isSuperAdmin={isSuperAdmin}
+          formatDate={formatDate}
+          onMarkPaid={() => {
+            setRegFeeMode("PHONE_PE");
+            setRegFeePaidOn(new Date().toISOString().split("T")[0]);
+            setShowRegFeeModal(true);
+          }}
+          onUnmark={handleUnmarkRegFee}
+        />
+      )}
+
       {/* ── FEE STATUS CARD ── */}
       <div className={`rounded-xl border-2 p-4 sm:p-6 ${statusConfig.bg}`}>
-        {/* Plan name + status badge */}
         <div className="flex items-center gap-2 mb-3">
           {statusConfig.icon}
           <h3 className="text-base font-bold text-slate-900">{plan.name}</h3>
@@ -415,7 +536,6 @@ function PlayerFeesTab() {
           </span>
         </div>
 
-        {/* Amount */}
         <div className="flex items-center gap-3 mb-3">
           {plan.discountAmount > 0 ? (
             <>
@@ -436,7 +556,6 @@ function PlayerFeesTab() {
           )}
         </div>
 
-        {/* Info grid — always 3 cols, compact */}
         <div className="grid grid-cols-3 gap-2 mb-4">
           <div>
             <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide">
@@ -476,7 +595,6 @@ function PlayerFeesTab() {
           </div>
         </div>
 
-        {/* Action buttons — stacked on mobile */}
         <div className="flex flex-col sm:flex-row gap-2">
           {account.status !== "PAID" ? (
             <button
@@ -507,6 +625,15 @@ function PlayerFeesTab() {
           >
             <ArrowRightLeft size={15} /> Change Plan
           </button>
+          <button
+            onClick={() => {
+              setEditDueDateValue(account.nextDueOn.split("T")[0]);
+              setShowEditDueDate(true);
+            }}
+            className="flex-1 sm:flex-none inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-white text-slate-700 border border-slate-200 rounded-lg font-medium hover:bg-slate-50 transition text-sm"
+          >
+            <Calendar size={15} /> Edit Due Date
+          </button>
         </div>
       </div>
 
@@ -526,13 +653,12 @@ function PlayerFeesTab() {
         ) : (
           <>
             {/* Desktop Table */}
-            {/* Desktop Table */}
             <div className="hidden sm:block overflow-x-auto">
               <table className="w-full">
                 <thead>
                   <tr className="text-xs text-slate-500 uppercase tracking-wide border-b bg-slate-50/50">
                     <th className="text-left px-5 py-3">Date</th>
-                    <th className="text-left px-5 py-3">Plan</th>
+                    <th className="text-left px-5 py3">Plan</th>
                     <th className="text-left px-5 py-3">Amount</th>
                     <th className="text-left px-5 py-3">Mode</th>
                     <th className="text-left px-5 py-3">Ref / Receipt</th>
@@ -548,7 +674,6 @@ function PlayerFeesTab() {
                     .filter((p) => p.type !== "REVERSAL")
                     .sort((a, b) => (b.paidOn > a.paidOn ? 1 : -1))
                     .map((p) => {
-                      // Find reversal for this payment if any
                       const reversal = payments.find(
                         (r) =>
                           r.type === "REVERSAL" &&
@@ -556,7 +681,6 @@ function PlayerFeesTab() {
                       );
                       return (
                         <>
-                          {/* ── Main Payment Row ── */}
                           <tr
                             key={p.publicId}
                             className={`hover:bg-slate-50 transition ${reversal ? "opacity-60" : ""}`}
@@ -606,11 +730,11 @@ function PlayerFeesTab() {
                                 <div className="flex items-center gap-2">
                                   <button
                                     onClick={() => {
-                                      const phone =
+                                      setReceiptPhone(
                                         p.player?.parentsPhone ||
-                                        p.player?.phone ||
-                                        "";
-                                      setReceiptPhone(phone);
+                                          p.player?.phone ||
+                                          "",
+                                      );
                                       setShowSendReceiptModal(p);
                                     }}
                                     className="inline-flex items-center gap-1.5 text-xs font-medium text-emerald-600 hover:text-emerald-800 hover:bg-emerald-50 px-2.5 py-1.5 rounded-lg border border-emerald-200 transition"
@@ -674,8 +798,6 @@ function PlayerFeesTab() {
                               </td>
                             )}
                           </tr>
-
-                          {/* ── Reversal Sub-row ── */}
                           {reversal && (
                             <tr
                               key={reversal.publicId}
@@ -731,7 +853,6 @@ function PlayerFeesTab() {
                       key={p.publicId}
                       className={reversal ? "bg-red-50/30" : ""}
                     >
-                      {/* Main card */}
                       <div className="p-4">
                         <div className="flex items-center justify-between mb-2">
                           <span
@@ -789,11 +910,11 @@ function PlayerFeesTab() {
                             <div className="flex items-center gap-2">
                               <button
                                 onClick={() => {
-                                  const phone =
+                                  setReceiptPhone(
                                     p.player?.parentsPhone ||
-                                    p.player?.phone ||
-                                    "";
-                                  setReceiptPhone(phone);
+                                      p.player?.phone ||
+                                      "",
+                                  );
                                   setShowSendReceiptModal(p);
                                 }}
                                 className="text-[11px] text-emerald-600 font-medium flex items-center gap-1"
@@ -839,8 +960,6 @@ function PlayerFeesTab() {
                           </div>
                         )}
                       </div>
-
-                      {/* Reversal sub-row */}
                       {reversal && (
                         <div className="px-4 pb-3 flex items-center gap-1.5 text-xs text-red-400">
                           <span>↳</span>
@@ -893,9 +1012,7 @@ function PlayerFeesTab() {
                 </button>
               </div>
             </div>
-
             <div className="p-5 space-y-4">
-              {/* Amount */}
               <div className="bg-blue-50 rounded-xl p-4 text-center">
                 {plan.discountAmount > 0 && (
                   <p className="text-sm text-slate-400 line-through mb-0.5">
@@ -916,8 +1033,18 @@ function PlayerFeesTab() {
                   </span>
                 )}
               </div>
-
-              {/* Payment Mode */}
+              <div>
+                <label className="text-xs font-semibold text-slate-600 block mb-1.5">
+                  Payment Date
+                </label>
+                <input
+                  type="date"
+                  value={paidOnDate}
+                  max={new Date().toISOString().split("T")[0]}
+                  onChange={(e) => setPaidOnDate(e.target.value)}
+                  className="w-full px-4 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
               <div>
                 <label className="text-xs font-semibold text-slate-600 block mb-1.5">
                   Payment Mode
@@ -934,7 +1061,6 @@ function PlayerFeesTab() {
                   ))}
                 </select>
               </div>
-
               {paymentMode === "OTHER" && (
                 <div>
                   <label className="text-xs font-semibold text-slate-600 block mb-1.5">
@@ -949,12 +1075,10 @@ function PlayerFeesTab() {
                   />
                 </div>
               )}
-
-              {/* Reference Number */}
               <div>
                 <label className="text-xs font-semibold text-slate-600 block mb-1.5">
                   <span className="flex items-center gap-1.5">
-                    <FileText size={12} /> {getRefLabel()}
+                    <FileText size={12} /> {getRefLabel()}{" "}
                     <span className="text-slate-400 font-normal">
                       (optional)
                     </span>
@@ -968,12 +1092,10 @@ function PlayerFeesTab() {
                   className="w-full px-4 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
               </div>
-
-              {/* Receipt Screenshot */}
               <div>
                 <label className="text-xs font-semibold text-slate-600 block mb-1.5">
                   <span className="flex items-center gap-1.5">
-                    <ImageIcon size={12} /> Payment Screenshot
+                    <ImageIcon size={12} /> Payment Screenshot{" "}
                     <span className="text-slate-400 font-normal">
                       (optional)
                     </span>
@@ -1018,21 +1140,19 @@ function PlayerFeesTab() {
                   </label>
                 )}
               </div>
-
-              {/* Next due preview */}
               <div className="bg-slate-50 rounded-lg p-3 text-sm">
                 <p className="text-slate-600">
                   Next due date:{" "}
                   <span className="font-semibold text-slate-800">
                     {formatDate(
                       new Date(
-                        Date.now() + plan.durationDays * 86400000,
+                        new Date(paidOnDate).getTime() +
+                          plan.durationDays * 86400000,
                       ).toISOString(),
                     )}
                   </span>
                 </p>
               </div>
-
               <div className="flex gap-2 pt-1 pb-8">
                 <button
                   onClick={() => {
@@ -1286,6 +1406,244 @@ function PlayerFeesTab() {
           </div>
         </div>
       )}
+
+      {/* ── EDIT DUE DATE MODAL ── */}
+      {showEditDueDate && account && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center">
+          <div className="bg-white rounded-t-2xl sm:rounded-xl shadow-xl w-full sm:max-w-sm">
+            <div className="flex items-center justify-between px-5 py-4 border-b bg-slate-50 rounded-t-2xl sm:rounded-t-xl">
+              <div>
+                <h3 className="font-bold text-slate-800">Edit Due Date</h3>
+                <p className="text-xs text-slate-500">{account.feePlan.name}</p>
+              </div>
+              <button onClick={() => setShowEditDueDate(false)}>
+                <X size={18} className="text-slate-400" />
+              </button>
+            </div>
+            <div className="p-5 space-y-4">
+              <div>
+                <label className="text-xs font-semibold text-slate-600 block mb-1.5">
+                  New Due Date *
+                </label>
+                <input
+                  type="date"
+                  value={editDueDateValue}
+                  onChange={(e) => setEditDueDateValue(e.target.value)}
+                  className="w-full px-4 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+              <p className="text-xs text-amber-600 bg-amber-50 rounded-lg px-3 py-2">
+                This only changes the due date. It does not record a payment.
+              </p>
+              <div className="flex gap-2 pt-1">
+                <button
+                  onClick={() => setShowEditDueDate(false)}
+                  className="flex-1 py-2.5 text-sm font-medium text-slate-600 bg-slate-100 rounded-lg hover:bg-slate-200"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleUpdateDueDate}
+                  disabled={savingDueDate || !editDueDateValue}
+                  className="flex-1 py-2.5 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-50"
+                >
+                  {savingDueDate ? "Saving…" : "Save Due Date"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── NEW: REGISTRATION FEE MODAL ── */}
+      {showRegFeeModal && (
+        <RegFeeModal
+          regFeeMode={regFeeMode}
+          setRegFeeMode={setRegFeeMode}
+          regFeePaidOn={regFeePaidOn}
+          setRegFeePaidOn={setRegFeePaidOn}
+          savingRegFee={savingRegFee}
+          onConfirm={handleMarkRegFeePaid}
+          onClose={() => setShowRegFeeModal(false)}
+        />
+      )}
+    </div>
+  );
+}
+
+// ==================== NEW: Registration Fee Card ====================
+
+function RegistrationFeeCard({
+  regFee,
+  isSuperAdmin,
+  formatDate,
+  onMarkPaid,
+  onUnmark,
+}: {
+  regFee: RegFeeStatus;
+  isSuperAdmin: boolean;
+  formatDate: (d: string | null) => string;
+  onMarkPaid: () => void;
+  onUnmark: () => void;
+}) {
+  return (
+    <div
+      className={`rounded-xl border-2 p-4 ${regFee.regFeePaid ? "bg-emerald-50 border-emerald-200" : "bg-amber-50 border-amber-200"}`}
+    >
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-2.5 min-w-0">
+          <div
+            className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${regFee.regFeePaid ? "bg-emerald-100" : "bg-amber-100"}`}
+          >
+            <IndianRupee
+              size={16}
+              className={
+                regFee.regFeePaid ? "text-emerald-600" : "text-amber-600"
+              }
+            />
+          </div>
+          <div className="min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              <p className="text-sm font-bold text-slate-800">
+                Registration Fee
+              </p>
+              <span
+                className={`text-xs font-bold px-2 py-0.5 rounded-full ${regFee.regFeePaid ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}`}
+              >
+                {regFee.regFeePaid ? "✓ Paid" : "Not Paid"}
+              </span>
+            </div>
+            <p className="text-xs text-slate-500 mt-0.5">
+              ₹{regFee.regFeeAmount.toLocaleString("en-IN")} · One-time
+              {regFee.regFeePaid && regFee.regFeePaidOn && (
+                <span className="ml-1">
+                  · {formatDate(regFee.regFeePaidOn)}
+                  {regFee.regFeePaymentMode && (
+                    <span className="ml-1">
+                      ·{" "}
+                      {regFee.regFeePaymentMode
+                        .replace("_", " ")
+                        .replace("PHONE PE", "PhonePe")}
+                    </span>
+                  )}
+                </span>
+              )}
+            </p>
+          </div>
+        </div>
+        <div className="flex items-center gap-2 flex-shrink-0">
+          {!regFee.regFeePaid ? (
+            <button
+              onClick={onMarkPaid}
+              className="px-3 py-1.5 bg-emerald-600 text-white text-xs font-semibold rounded-lg hover:bg-emerald-700 transition"
+            >
+              Mark as Paid
+            </button>
+          ) : isSuperAdmin ? (
+            <button
+              onClick={onUnmark}
+              className="px-3 py-1.5 bg-slate-100 text-slate-600 text-xs font-semibold rounded-lg hover:bg-slate-200 transition"
+            >
+              Unmark
+            </button>
+          ) : null}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ==================== NEW: Registration Fee Modal ====================
+
+function RegFeeModal({
+  regFeeMode,
+  setRegFeeMode,
+  regFeePaidOn,
+  setRegFeePaidOn,
+  savingRegFee,
+  onConfirm,
+  onClose,
+}: {
+  regFeeMode: string;
+  setRegFeeMode: (v: string) => void;
+  regFeePaidOn: string;
+  setRegFeePaidOn: (v: string) => void;
+  savingRegFee: boolean;
+  onConfirm: () => void;
+  onClose: () => void;
+}) {
+  return (
+    <div className="fixed inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center">
+      <div className="bg-white rounded-t-2xl sm:rounded-xl shadow-xl w-full sm:max-w-sm">
+        <div className="flex items-center justify-between px-5 py-4 border-b bg-slate-50 rounded-t-2xl sm:rounded-t-xl">
+          <div>
+            <h3 className="font-bold text-slate-800">
+              Mark Registration Fee Paid
+            </h3>
+            <p className="text-xs text-slate-500">One-time · ₹1,500</p>
+          </div>
+          <button onClick={onClose}>
+            <X size={18} className="text-slate-400" />
+          </button>
+        </div>
+        <div className="p-5 space-y-4">
+          <div className="bg-emerald-50 rounded-xl p-3 text-center">
+            <p className="text-xs text-slate-500">Amount</p>
+            <p className="text-2xl font-bold text-emerald-700">₹1,500</p>
+            <p className="text-xs text-slate-400 mt-0.5">
+              One-time registration fee
+            </p>
+          </div>
+          <div>
+            <label className="text-xs font-semibold text-slate-600 block mb-1.5">
+              Payment Date
+            </label>
+            <input
+              type="date"
+              value={regFeePaidOn}
+              max={new Date().toISOString().split("T")[0]}
+              onChange={(e) => setRegFeePaidOn(e.target.value)}
+              className="w-full px-4 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+            />
+          </div>
+          <div>
+            <label className="text-xs font-semibold text-slate-600 block mb-1.5">
+              Payment Mode
+            </label>
+            <select
+              value={regFeeMode}
+              onChange={(e) => setRegFeeMode(e.target.value)}
+              className="w-full px-4 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+            >
+              {PAYMENT_MODES.map((m) => (
+                <option key={m.value} value={m.value}>
+                  {m.label}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="flex gap-2 pt-1 pb-4">
+            <button
+              onClick={onClose}
+              className="flex-1 py-2.5 text-sm font-medium text-slate-600 bg-slate-100 rounded-lg hover:bg-slate-200"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={onConfirm}
+              disabled={savingRegFee}
+              className="flex-1 py-2.5 text-sm font-medium text-white bg-emerald-600 rounded-lg hover:bg-emerald-700 disabled:opacity-50 flex items-center justify-center gap-2"
+            >
+              {savingRegFee ? (
+                <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+              ) : (
+                <CheckCircle2 size={14} />
+              )}
+              {savingRegFee ? "Saving…" : "Confirm Payment"}
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
@@ -1301,7 +1659,6 @@ type InstallmentPlan = {
   createdAt: string;
   installments: Installment[];
 };
-
 type Installment = {
   publicId: string;
   installmentNumber: number;
@@ -1317,16 +1674,12 @@ function InstallmentSection({ playerPublicId }: { playerPublicId: string }) {
   const [plans, setPlans] = useState<InstallmentPlan[]>([]);
   const [loading, setLoading] = useState(true);
   const [expandedPlan, setExpandedPlan] = useState<string | null>(null);
-
-  // Create plan modal
   const [showCreatePlan, setShowCreatePlan] = useState(false);
   const [planForm, setPlanForm] = useState({
     totalAmount: "",
     description: "",
   });
   const [savingPlan, setSavingPlan] = useState(false);
-
-  // Add installment modal
   const [showAddInstallment, setShowAddInstallment] = useState<string | null>(
     null,
   );
@@ -1336,8 +1689,6 @@ function InstallmentSection({ playerPublicId }: { playerPublicId: string }) {
     notes: "",
   });
   const [savingInst, setSavingInst] = useState(false);
-
-  // Record payment modal
   const [showPayInstallment, setShowPayInstallment] =
     useState<Installment | null>(null);
   const [payInstForm, setPayInstForm] = useState({
@@ -1452,7 +1803,6 @@ function InstallmentSection({ playerPublicId }: { playerPublicId: string }) {
 
   return (
     <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-      {/* Header */}
       <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100 bg-slate-50">
         <div className="flex items-center gap-2">
           <CreditCard size={17} className="text-slate-500" />
@@ -1469,7 +1819,6 @@ function InstallmentSection({ playerPublicId }: { playerPublicId: string }) {
         </button>
       </div>
 
-      {/* Body */}
       {loading ? (
         <div className="flex justify-center py-8">
           <div className="w-6 h-6 border-2 border-slate-200 border-t-blue-600 rounded-full animate-spin" />
@@ -1493,10 +1842,8 @@ function InstallmentSection({ playerPublicId }: { playerPublicId: string }) {
                 : 0;
             const balance = plan.totalAmount - plan.paidAmount;
             const isExpanded = expandedPlan === plan.publicId;
-
             return (
               <div key={plan.publicId}>
-                {/* Plan summary row */}
                 <div
                   className="px-4 py-3.5 cursor-pointer hover:bg-slate-50 transition"
                   onClick={() =>
@@ -1507,13 +1854,7 @@ function InstallmentSection({ playerPublicId }: { playerPublicId: string }) {
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2 flex-wrap">
                         <span
-                          className={`text-xs font-bold px-2 py-0.5 rounded-full ${
-                            plan.status === "COMPLETED"
-                              ? "bg-emerald-100 text-emerald-700"
-                              : plan.status === "CANCELLED"
-                                ? "bg-slate-100 text-slate-500"
-                                : "bg-blue-100 text-blue-700"
-                          }`}
+                          className={`text-xs font-bold px-2 py-0.5 rounded-full ${plan.status === "COMPLETED" ? "bg-emerald-100 text-emerald-700" : plan.status === "CANCELLED" ? "bg-slate-100 text-slate-500" : "bg-blue-100 text-blue-700"}`}
                         >
                           {plan.status}
                         </span>
@@ -1523,7 +1864,6 @@ function InstallmentSection({ playerPublicId }: { playerPublicId: string }) {
                           </span>
                         )}
                       </div>
-                      {/* Progress bar */}
                       <div className="mt-2 h-1.5 bg-slate-100 rounded-full overflow-hidden">
                         <div
                           className="h-full bg-emerald-500 rounded-full transition-all"
@@ -1556,8 +1896,6 @@ function InstallmentSection({ playerPublicId }: { playerPublicId: string }) {
                     </div>
                   </div>
                 </div>
-
-                {/* Expanded installments */}
                 {isExpanded && (
                   <div className="bg-slate-50 border-t border-slate-100 px-4 py-3 space-y-2">
                     {plan.installments?.length === 0 ? (
@@ -1619,8 +1957,6 @@ function InstallmentSection({ playerPublicId }: { playerPublicId: string }) {
                         );
                       })
                     )}
-
-                    {/* Add installment button */}
                     {plan.status === "ACTIVE" && (
                       <button
                         onClick={(e) => {
@@ -1645,7 +1981,6 @@ function InstallmentSection({ playerPublicId }: { playerPublicId: string }) {
         </div>
       )}
 
-      {/* ── CREATE PLAN MODAL ── */}
       {showCreatePlan && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center">
           <div className="bg-white rounded-t-2xl sm:rounded-xl shadow-xl w-full sm:max-w-sm">
@@ -1705,7 +2040,6 @@ function InstallmentSection({ playerPublicId }: { playerPublicId: string }) {
         </div>
       )}
 
-      {/* ── ADD INSTALLMENT MODAL ── */}
       {showAddInstallment && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center">
           <div className="bg-white rounded-t-2xl sm:rounded-xl shadow-xl w-full sm:max-w-sm">
@@ -1780,7 +2114,6 @@ function InstallmentSection({ playerPublicId }: { playerPublicId: string }) {
         </div>
       )}
 
-      {/* ── PAY INSTALLMENT MODAL ── */}
       {showPayInstallment && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center">
           <div className="bg-white rounded-t-2xl sm:rounded-xl shadow-xl w-full sm:max-w-sm">
@@ -1912,11 +2245,7 @@ function PlanSelectorModal({
             <button
               key={plan.publicId}
               onClick={() => setSelectedPlanId(plan.publicId)}
-              className={`w-full text-left p-4 rounded-xl border-2 transition ${
-                selectedPlanId === plan.publicId
-                  ? "border-blue-500 bg-blue-50"
-                  : "border-slate-200 hover:border-blue-200"
-              }`}
+              className={`w-full text-left p-4 rounded-xl border-2 transition ${selectedPlanId === plan.publicId ? "border-blue-500 bg-blue-50" : "border-slate-200 hover:border-blue-200"}`}
             >
               <div className="flex items-center justify-between">
                 <div>
@@ -1974,8 +2303,6 @@ function PlanSelectorModal({
     </div>
   );
 }
-
-// ==================== HELPERS ====================
 
 function formatPaymentMode(mode: string): string {
   const map: Record<string, string> = {

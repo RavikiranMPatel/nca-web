@@ -60,7 +60,6 @@ type GuestBooker = {
   totalSpent: number;
 };
 
-// ADD after existing types:
 type AssignModal = {
   userId: string;
   userName: string;
@@ -87,6 +86,14 @@ type SubscriptionPlan = {
 
 type Tab = "ACTIVE" | "QUEUED" | "NON_SUBSCRIBERS" | "GUESTS";
 
+const PAYMENT_MODES = [
+  { value: "CASH", label: "Cash" },
+  { value: "PHONE_PE", label: "PhonePe" },
+  { value: "GOOGLE_PAY", label: "GPay" },
+  { value: "ONLINE", label: "Online" },
+  { value: "OTHER", label: "Other" },
+];
+
 // ── Main Component ────────────────────────────────────────────────────────
 
 function AdminMembersPage() {
@@ -98,13 +105,11 @@ function AdminMembersPage() {
   >([]);
   const [nonSubscribers, setNonSubscribers] = useState<NonSubscriber[]>([]);
   const [guests, setGuests] = useState<GuestBooker[]>([]);
-
   const [queuedSubscriptions, setQueuedSubscriptions] = useState<
     ActiveSubscriber[]
   >([]);
   const [loadingQueued, setLoadingQueued] = useState(false);
 
-  // ADD after existing useState declarations:
   const [assignModal, setAssignModal] = useState<AssignModal | null>(null);
   const [plans, setPlans] = useState<SubscriptionPlan[]>([]);
 
@@ -121,12 +126,13 @@ function AdminMembersPage() {
   const [invitingId, setInvitingId] = useState<string | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
-  // ── Fetch active subscribers on mount ──────────────────────────────────
-  useEffect(() => {
-    fetchActive();
-    fetchQueued();
-    fetchPlans();
-  }, []);
+  // ── Activate modal state — lives in AdminMembersPage ──────────────────
+  const [activateModal, setActivateModal] = useState<{
+    publicId: string;
+    userName: string;
+  } | null>(null);
+  const [activatePaymentMode, setActivatePaymentMode] = useState("CASH");
+  const [activating, setActivating] = useState(false);
 
   const [deductModal, setDeductModal] = useState<{
     publicId: string;
@@ -136,14 +142,16 @@ function AdminMembersPage() {
   } | null>(null);
   const [deducting, setDeducting] = useState(false);
 
-  // ── Fetch on tab switch ─────────────────────────────────────────────────
   useEffect(() => {
-    if (activeTab === "NON_SUBSCRIBERS" && nonSubscribers.length === 0) {
+    fetchActive();
+    fetchQueued();
+    fetchPlans();
+  }, []);
+
+  useEffect(() => {
+    if (activeTab === "NON_SUBSCRIBERS" && nonSubscribers.length === 0)
       fetchNonSubscribers();
-    }
-    if (activeTab === "GUESTS" && guests.length === 0) {
-      fetchGuests();
-    }
+    if (activeTab === "GUESTS" && guests.length === 0) fetchGuests();
   }, [activeTab]);
 
   const fetchActive = async () => {
@@ -192,7 +200,7 @@ function AdminMembersPage() {
       );
       setUserSearchResults(res.data);
     } catch {
-      // silently fail
+      /* silently fail */
     } finally {
       setSearchingUsers(false);
     }
@@ -238,8 +246,7 @@ function AdminMembersPage() {
 
   const handleCancelSubscription = async (publicId: string) => {
     const notes = window.prompt("Reason for cancellation (optional):");
-    if (notes === null) return; // cancelled prompt
-
+    if (notes === null) return;
     try {
       await api.post(`/admin/subscriptions/${publicId}/cancel`, { notes });
       toast.success("Subscription cancelled");
@@ -249,20 +256,25 @@ function AdminMembersPage() {
     }
   };
 
-  const handleActivate = async (publicId: string, name: string) => {
-    if (
-      !confirm(
-        `Activate subscription for ${name}? Make sure payment has been received.`,
-      )
-    )
-      return;
+  // ── Activate handler — in AdminMembersPage scope ──────────────────────
+  const handleActivate = async () => {
+    if (!activateModal) return;
+    setActivating(true);
     try {
-      await api.post(`/admin/subscriptions/${publicId}/activate`);
-      toast.success(`Subscription activated for ${name}!`);
+      await api.post(
+        `/admin/subscriptions/${activateModal.publicId}/activate`,
+        {
+          paymentMode: activatePaymentMode,
+        },
+      );
+      toast.success(`Subscription activated for ${activateModal.userName}!`);
+      setActivateModal(null);
       fetchActive();
       fetchQueued();
     } catch (err: any) {
       toast.error(err?.response?.data?.message || "Failed to activate");
+    } finally {
+      setActivating(false);
     }
   };
 
@@ -274,9 +286,7 @@ function AdminMembersPage() {
         deductModal.action === "deduct"
           ? `/admin/subscriptions/${deductModal.publicId}/deduct-session`
           : `/admin/subscriptions/${deductModal.publicId}/restore-session`;
-
       await api.post(endpoint, { ballCount });
-
       toast.success(
         deductModal.action === "deduct"
           ? `${ballCount === 120 ? "2 sessions" : "1 session"} deducted from ${deductModal.userName}`
@@ -292,11 +302,9 @@ function AdminMembersPage() {
     }
   };
 
-  const toggleExpand = (id: string) => {
+  const toggleExpand = (id: string) =>
     setExpandedId((prev) => (prev === id ? null : id));
-  };
 
-  // ── Tab counts ──────────────────────────────────────────────────────────
   const tabs: {
     key: Tab;
     label: string;
@@ -341,7 +349,7 @@ function AdminMembersPage() {
         <h2 className="text-lg font-semibold text-slate-900">
           Bowling Machine Members
         </h2>
-        <PresenceBanner entity="branches-tab" id={academyId ?? undefined} />{" "}
+        <PresenceBanner entity="branches-tab" id={academyId ?? undefined} />
         <p className="text-sm text-slate-500 mt-1">
           Manage subscribers, logged-in users, and guest bookers
         </p>
@@ -354,27 +362,19 @@ function AdminMembersPage() {
           value={userSearch}
           onChange={(e) => handleUserSearch(e.target.value)}
           placeholder="Search any user by name or phone..."
-          className="w-full px-4 py-2.5 border border-slate-200 rounded-xl text-sm
-               focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+          className="w-full px-4 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
         />
         {searchingUsers && (
           <div className="absolute right-3 top-3">
-            <div
-              className="w-4 h-4 border-2 border-slate-300 border-t-blue-500
-                      rounded-full animate-spin"
-            />
+            <div className="w-4 h-4 border-2 border-slate-300 border-t-blue-500 rounded-full animate-spin" />
           </div>
         )}
         {userSearchResults.length > 0 && (
-          <div
-            className="absolute z-20 top-full mt-1 w-full bg-white border
-                    border-slate-200 rounded-xl shadow-lg overflow-hidden"
-          >
+          <div className="absolute z-20 top-full mt-1 w-full bg-white border border-slate-200 rounded-xl shadow-lg overflow-hidden">
             {userSearchResults.map((u) => (
               <div
                 key={u.publicId}
-                className="flex items-center justify-between px-4 py-3
-                     hover:bg-slate-50 border-b border-slate-100 last:border-0"
+                className="flex items-center justify-between px-4 py-3 hover:bg-slate-50 border-b border-slate-100 last:border-0"
               >
                 <div>
                   <p className="text-sm font-semibold text-slate-800">
@@ -394,8 +394,7 @@ function AdminMembersPage() {
                     setUserSearch("");
                     setUserSearchResults([]);
                   }}
-                  className="text-xs bg-blue-600 text-white px-3 py-1.5
-                       rounded-lg hover:bg-blue-700 transition font-medium shrink-0 ml-2"
+                  className="text-xs bg-blue-600 text-white px-3 py-1.5 rounded-lg hover:bg-blue-700 transition font-medium shrink-0 ml-2"
                 >
                   Assign Plan
                 </button>
@@ -421,19 +420,16 @@ function AdminMembersPage() {
               ? "bg-blue-600 text-white border-blue-600"
               : "border-slate-200 text-slate-600 hover:border-blue-300",
           };
-
           return (
             <button
               key={tab.key}
               onClick={() => setActiveTab(tab.key)}
-              className={`flex-shrink-0 flex items-center gap-2 px-4 py-2.5 rounded-xl border
-            text-sm font-medium transition ${colorMap[tab.color]}`}
+              className={`flex-shrink-0 flex items-center gap-2 px-4 py-2.5 rounded-xl border text-sm font-medium transition ${colorMap[tab.color]}`}
             >
               <Icon size={15} />
               {tab.label}
               <span
-                className={`text-xs px-1.5 py-0.5 rounded-full font-bold
-                  ${isActive ? "bg-white/20" : "bg-slate-100 text-slate-500"}`}
+                className={`text-xs px-1.5 py-0.5 rounded-full font-bold ${isActive ? "bg-white/20" : "bg-slate-100 text-slate-500"}`}
               >
                 {tab.count}
               </span>
@@ -442,7 +438,7 @@ function AdminMembersPage() {
         })}
       </div>
 
-      {/* ── TAB 1: ACTIVE SUBSCRIBERS ──────────────────────────────────── */}
+      {/* ── TAB 1: ACTIVE SUBSCRIBERS ─────────────────────────────────── */}
       {activeTab === "ACTIVE" && (
         <>
           {loadingActive ? (
@@ -459,23 +455,17 @@ function AdminMembersPage() {
                 const pct = Math.round(
                   (sub.sessionsRemaining / sub.totalSessions) * 100,
                 );
-
                 return (
                   <div
                     key={sub.publicId}
                     className="bg-white rounded-xl border border-slate-200 overflow-hidden"
                   >
-                    {/* Card Header */}
                     <div
-                      className="flex items-center justify-between p-4 cursor-pointer
-                                 hover:bg-slate-50 transition"
+                      className="flex items-center justify-between p-4 cursor-pointer hover:bg-slate-50 transition"
                       onClick={() => toggleExpand(sub.publicId)}
                     >
                       <div className="flex items-center gap-3">
-                        <div
-                          className="w-10 h-10 rounded-full bg-green-100 flex items-center
-                                        justify-center text-green-700 font-bold text-sm"
-                        >
+                        <div className="w-10 h-10 rounded-full bg-green-100 flex items-center justify-center text-green-700 font-bold text-sm">
                           {sub.userName.charAt(0).toUpperCase() || "?"}
                         </div>
                         <div>
@@ -487,9 +477,7 @@ function AdminMembersPage() {
                           </p>
                         </div>
                       </div>
-
                       <div className="flex items-center gap-4">
-                        {/* Sessions pill */}
                         <div className="text-right">
                           <p className="text-sm font-bold text-slate-900">
                             {sub.sessionsRemaining}
@@ -501,18 +489,10 @@ function AdminMembersPage() {
                             sessions left
                           </p>
                         </div>
-
-                        {/* Progress bar */}
                         <div className="w-20 hidden sm:block">
                           <div className="h-2 bg-slate-100 rounded-full">
                             <div
-                              className={`h-2 rounded-full transition-all ${
-                                pct > 50
-                                  ? "bg-green-500"
-                                  : pct > 20
-                                    ? "bg-amber-500"
-                                    : "bg-red-500"
-                              }`}
+                              className={`h-2 rounded-full transition-all ${pct > 50 ? "bg-green-500" : pct > 20 ? "bg-amber-500" : "bg-red-500"}`}
                               style={{ width: `${pct}%` }}
                             />
                           </div>
@@ -520,15 +500,12 @@ function AdminMembersPage() {
                             {pct}%
                           </p>
                         </div>
-
-                        {/* Expiry */}
                         <div className="text-right hidden md:block">
                           <p className="text-xs text-slate-500">Expires</p>
                           <p className="text-sm font-medium text-slate-700">
                             {sub.expiresOn}
                           </p>
                         </div>
-
                         {isExpanded ? (
                           <ChevronUp size={16} className="text-slate-400" />
                         ) : (
@@ -537,7 +514,6 @@ function AdminMembersPage() {
                       </div>
                     </div>
 
-                    {/* Expanded Details */}
                     {isExpanded && (
                       <div className="border-t border-slate-100 p-4 bg-slate-50 space-y-4">
                         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -562,19 +538,16 @@ function AdminMembersPage() {
                             value={sub.startsOn}
                           />
                         </div>
-
                         {sub.activatedBy && (
                           <p className="text-xs text-slate-400">
                             Activated by: {sub.activatedBy}
                           </p>
                         )}
-
                         {sub.notes && (
                           <p className="text-xs text-slate-500 italic">
                             Note: {sub.notes}
                           </p>
                         )}
-
                         <div className="flex gap-2 pt-1 flex-wrap">
                           <button
                             onClick={() =>
@@ -584,8 +557,7 @@ function AdminMembersPage() {
                                 hasActiveSub: true,
                               })
                             }
-                            className="text-xs px-3 py-1.5 border border-blue-300
-             text-blue-700 rounded-lg hover:bg-blue-50 transition"
+                            className="text-xs px-3 py-1.5 border border-blue-300 text-blue-700 rounded-lg hover:bg-blue-50 transition"
                           >
                             + Assign Next Plan
                           </button>
@@ -598,8 +570,7 @@ function AdminMembersPage() {
                                 action: "deduct",
                               })
                             }
-                            className="text-xs px-3 py-1.5 border border-amber-300
-               text-amber-700 rounded-lg hover:bg-amber-50 transition"
+                            className="text-xs px-3 py-1.5 border border-amber-300 text-amber-700 rounded-lg hover:bg-amber-50 transition"
                           >
                             − Deduct Session
                           </button>
@@ -612,8 +583,7 @@ function AdminMembersPage() {
                                 action: "restore",
                               })
                             }
-                            className="text-xs px-3 py-1.5 border border-green-300
-               text-green-700 rounded-lg hover:bg-green-50 transition"
+                            className="text-xs px-3 py-1.5 border border-green-300 text-green-700 rounded-lg hover:bg-green-50 transition"
                           >
                             + Restore Session
                           </button>
@@ -621,8 +591,7 @@ function AdminMembersPage() {
                             onClick={() =>
                               handleCancelSubscription(sub.publicId)
                             }
-                            className="text-xs px-3 py-1.5 border border-red-300
-               text-red-600 rounded-lg hover:bg-red-50 transition"
+                            className="text-xs px-3 py-1.5 border border-red-300 text-red-600 rounded-lg hover:bg-red-50 transition"
                           >
                             Cancel Subscription
                           </button>
@@ -652,14 +621,10 @@ function AdminMembersPage() {
               {queuedSubscriptions.map((sub) => (
                 <div
                   key={sub.publicId}
-                  className="bg-white rounded-xl border border-amber-200 p-4
-     flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3"
+                  className="bg-white rounded-xl border border-amber-200 p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3"
                 >
                   <div className="flex items-center gap-3 min-w-0">
-                    <div
-                      className="w-10 h-10 rounded-full bg-amber-100 flex items-center
-                              justify-center text-amber-700 font-bold text-sm shrink-0"
-                    >
+                    <div className="w-10 h-10 rounded-full bg-amber-100 flex items-center justify-center text-amber-700 font-bold text-sm shrink-0">
                       {sub.userName?.charAt(0)?.toUpperCase() || "?"}
                     </div>
                     <div className="min-w-0">
@@ -689,7 +654,6 @@ function AdminMembersPage() {
                       </p>
                     </div>
                   </div>
-
                   <div className="flex flex-wrap gap-2 w-full sm:w-auto">
                     <button
                       onClick={() =>
@@ -699,17 +663,20 @@ function AdminMembersPage() {
                           hasActiveSub: false,
                         })
                       }
-                      className="shrink-0 flex items-center gap-1.5 text-xs border border-blue-300
-             text-blue-700 px-3 py-2 rounded-lg hover:bg-blue-50
-             transition font-medium"
+                      className="shrink-0 flex items-center gap-1.5 text-xs border border-blue-300 text-blue-700 px-3 py-2 rounded-lg hover:bg-blue-50 transition font-medium"
                     >
                       + Assign Plan
                     </button>
+                    {/* ── Activate opens modal in AdminMembersPage scope ── */}
                     <button
-                      onClick={() => handleActivate(sub.publicId, sub.userName)}
-                      className="shrink-0 flex items-center gap-1.5 text-xs bg-green-600
-                         text-white px-4 py-2 rounded-lg hover:bg-green-700
-                         transition font-semibold"
+                      onClick={() => {
+                        setActivatePaymentMode("CASH");
+                        setActivateModal({
+                          publicId: sub.publicId,
+                          userName: sub.userName,
+                        });
+                      }}
+                      className="shrink-0 flex items-center gap-1.5 text-xs bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition font-semibold"
                     >
                       <UserCheck size={13} />
                       Activate
@@ -737,14 +704,10 @@ function AdminMembersPage() {
               {nonSubscribers.map((user) => (
                 <div
                   key={user.userId}
-                  className="bg-white rounded-xl border border-amber-200 p-4
-     flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3"
+                  className="bg-white rounded-xl border border-amber-200 p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3"
                 >
                   <div className="flex items-center gap-3 min-w-0">
-                    <div
-                      className="w-10 h-10 rounded-full bg-amber-100 flex items-center
-                                    justify-center text-amber-700 font-bold text-sm shrink-0"
-                    >
+                    <div className="w-10 h-10 rounded-full bg-amber-100 flex items-center justify-center text-amber-700 font-bold text-sm shrink-0">
                       {user.name?.charAt(0)?.toUpperCase() || "?"}
                     </div>
                     <div className="min-w-0">
@@ -765,7 +728,6 @@ function AdminMembersPage() {
                       </div>
                     </div>
                   </div>
-
                   <div className="flex flex-wrap gap-2 w-full sm:w-auto">
                     <div className="text-right hidden sm:block">
                       <p className="text-sm font-bold text-slate-900">
@@ -787,23 +749,17 @@ function AdminMembersPage() {
                           hasActiveSub: false,
                         })
                       }
-                      className="flex items-center gap-1.5 text-xs bg-green-600 text-white
-             px-3 py-1.5 rounded-lg hover:bg-green-700 transition"
+                      className="flex items-center gap-1.5 text-xs bg-green-600 text-white px-3 py-1.5 rounded-lg hover:bg-green-700 transition"
                     >
                       + Assign Plan
                     </button>
                     <button
                       onClick={() => handleInvite(user.userId, user.name)}
                       disabled={invitingId === user.userId}
-                      className="flex items-center gap-1.5 text-xs bg-blue-600 text-white
-                                 px-3 py-1.5 rounded-lg hover:bg-blue-700 transition
-                                 disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="flex items-center gap-1.5 text-xs bg-blue-600 text-white px-3 py-1.5 rounded-lg hover:bg-blue-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       {invitingId === user.userId ? (
-                        <div
-                          className="w-3 h-3 border-2 border-white border-t-transparent
-                                        rounded-full animate-spin"
-                        />
+                        <div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
                       ) : (
                         <Send size={11} />
                       )}
@@ -832,14 +788,10 @@ function AdminMembersPage() {
               {guests.map((guest, index) => (
                 <div
                   key={`${guest.phone}-${index}`}
-                  className="bg-white rounded-xl border border-amber-200 p-4
-     flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3"
+                  className="bg-white rounded-xl border border-amber-200 p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3"
                 >
                   <div className="flex items-center gap-3 min-w-0">
-                    <div
-                      className="w-10 h-10 rounded-full bg-blue-100 flex items-center
-                                    justify-center text-blue-700 font-bold text-sm shrink-0"
-                    >
+                    <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center text-blue-700 font-bold text-sm shrink-0">
                       {guest.name?.charAt(0)?.toUpperCase() || "G"}
                     </div>
                     <div className="min-w-0">
@@ -858,7 +810,6 @@ function AdminMembersPage() {
                       </div>
                     </div>
                   </div>
-
                   <div className="flex flex-wrap gap-2 w-full sm:w-auto">
                     <div className="text-right hidden sm:block">
                       <p className="text-sm font-bold text-slate-900">
@@ -872,7 +823,6 @@ function AdminMembersPage() {
                       </p>
                       <p className="text-xs text-slate-500">spent</p>
                     </div>
-
                     <span className="text-xs bg-slate-100 text-slate-400 px-2 py-1 rounded-lg">
                       Guest — ask them to register first
                     </span>
@@ -907,9 +857,7 @@ function AdminMembersPage() {
               <button
                 onClick={() => handleManualSession(60)}
                 disabled={deducting}
-                className="py-4 rounded-xl border-2 border-blue-200 bg-blue-50
-                           hover:border-blue-400 transition text-center
-                           disabled:opacity-50"
+                className="py-4 rounded-xl border-2 border-blue-200 bg-blue-50 hover:border-blue-400 transition text-center disabled:opacity-50"
               >
                 <p className="text-xl font-bold text-blue-700">60</p>
                 <p className="text-xs text-blue-500">balls · 1 session</p>
@@ -917,9 +865,7 @@ function AdminMembersPage() {
               <button
                 onClick={() => handleManualSession(120)}
                 disabled={deducting}
-                className="py-4 rounded-xl border-2 border-purple-200 bg-purple-50
-                           hover:border-purple-400 transition text-center
-                           disabled:opacity-50"
+                className="py-4 rounded-xl border-2 border-purple-200 bg-purple-50 hover:border-purple-400 transition text-center disabled:opacity-50"
               >
                 <p className="text-xl font-bold text-purple-700">120</p>
                 <p className="text-xs text-purple-500">balls · 2 sessions</p>
@@ -928,11 +874,63 @@ function AdminMembersPage() {
             <button
               onClick={() => setDeductModal(null)}
               disabled={deducting}
-              className="w-full py-2.5 text-sm font-medium text-slate-600
-                         bg-slate-100 rounded-xl hover:bg-slate-200 transition"
+              className="w-full py-2.5 text-sm font-medium text-slate-600 bg-slate-100 rounded-xl hover:bg-slate-200 transition"
             >
               Cancel
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* ── ACTIVATE MODAL — in AdminMembersPage scope ────────────────── */}
+      {activateModal && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6 space-y-4">
+            <h3 className="font-bold text-lg">Activate Subscription</h3>
+            <p className="text-sm text-slate-500">
+              Player: <strong>{activateModal.userName}</strong>
+            </p>
+            <div>
+              <p className="text-sm font-semibold text-slate-700 mb-2">
+                Payment Mode *
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {PAYMENT_MODES.map((m) => (
+                  <button
+                    key={m.value}
+                    onClick={() => setActivatePaymentMode(m.value)}
+                    className={`px-3 py-1.5 rounded-lg border text-sm font-medium transition ${
+                      activatePaymentMode === m.value
+                        ? "bg-green-600 text-white border-green-600"
+                        : "border-gray-300 text-gray-700 hover:bg-gray-50"
+                    }`}
+                  >
+                    {m.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="flex gap-3 pt-1">
+              <button
+                onClick={() => setActivateModal(null)}
+                disabled={activating}
+                className="flex-1 border border-gray-200 text-gray-600 py-2.5 rounded-xl text-sm font-semibold hover:bg-gray-50 transition"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleActivate}
+                disabled={activating}
+                className="flex-1 bg-green-600 text-white py-2.5 rounded-xl text-sm font-semibold hover:bg-green-700 transition disabled:opacity-50 flex items-center justify-center gap-2"
+              >
+                {activating ? (
+                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                ) : (
+                  <UserCheck size={14} />
+                )}
+                {activating ? "Activating…" : "Confirm Activate"}
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -953,7 +951,7 @@ function AdminMembersPage() {
   );
 }
 
-// ── Small reusable components ─────────────────────────────────────────────
+// ── AssignPlanModal ───────────────────────────────────────────────────────
 
 function AssignPlanModal({
   modal,
@@ -970,10 +968,10 @@ function AssignPlanModal({
   const [overridePrice, setOverridePrice] = useState("");
   const [notes, setNotes] = useState("");
   const [assigning, setAssigning] = useState(false);
+  const [paymentMode, setPaymentMode] = useState("CASH"); // ── payment mode state
 
   const selectedPlan = plans.find((p) => p.publicId === selectedPlanId);
 
-  // Pre-fill price when plan selected
   const handlePlanChange = (publicId: string) => {
     setSelectedPlanId(publicId);
     const plan = plans.find((p) => p.publicId === publicId);
@@ -992,6 +990,7 @@ function AssignPlanModal({
         planPublicId: selectedPlanId,
         overridePrice: parseFloat(overridePrice),
         notes,
+        paymentMode, // ── sent to backend
       });
       toast.success(
         modal.hasActiveSub
@@ -1008,14 +1007,8 @@ function AssignPlanModal({
   };
 
   return (
-    <div
-      className="fixed inset-0 bg-black/50 z-50 flex items-end sm:items-center
-                    justify-center p-0 sm:p-4"
-    >
-      <div
-        className="bg-white w-full sm:max-w-md sm:rounded-2xl rounded-t-2xl
-                shadow-xl overflow-hidden flex flex-col max-h-[90vh]"
-      >
+    <div className="fixed inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
+      <div className="bg-white w-full sm:max-w-md sm:rounded-2xl rounded-t-2xl shadow-xl overflow-hidden flex flex-col max-h-[90vh]">
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b bg-slate-50">
           <div>
@@ -1031,12 +1024,11 @@ function AssignPlanModal({
         </div>
 
         <div className="p-5 space-y-4 overflow-y-auto flex-1 min-h-0">
-          {/* Queued warning */}
           {modal.hasActiveSub && (
             <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">
               <p className="text-xs text-amber-700 font-medium">
-                ⏳ This user has an active subscription. The new plan will be
-                <strong> queued</strong> and auto-activate when current plan
+                ⏳ This user has an active subscription. The new plan will be{" "}
+                <strong>queued</strong> and auto-activate when current plan
                 expires or sessions run out.
               </p>
             </div>
@@ -1052,13 +1044,7 @@ function AssignPlanModal({
                 <button
                   key={plan.publicId}
                   onClick={() => handlePlanChange(plan.publicId)}
-                  className={`w-full flex items-center justify-between px-4 py-3
-                              rounded-xl border-2 transition text-left
-                              ${
-                                selectedPlanId === plan.publicId
-                                  ? "border-blue-600 bg-blue-50"
-                                  : "border-slate-200 hover:border-blue-300"
-                              }`}
+                  className={`w-full flex items-center justify-between px-4 py-3 rounded-xl border-2 transition text-left ${selectedPlanId === plan.publicId ? "border-blue-600 bg-blue-50" : "border-slate-200 hover:border-blue-300"}`}
                 >
                   <div>
                     <p className="text-sm font-semibold text-slate-800">
@@ -1084,7 +1070,7 @@ function AssignPlanModal({
             </div>
           </div>
 
-          {/* Price override */}
+          {/* Amount */}
           <div>
             <label className="text-xs font-semibold text-slate-600 mb-1.5 block">
               Amount Collected (₹) *
@@ -1094,8 +1080,7 @@ function AssignPlanModal({
               value={overridePrice}
               onChange={(e) => setOverridePrice(e.target.value)}
               placeholder="Enter actual amount collected"
-              className="w-full px-4 py-2.5 border border-slate-200 rounded-xl text-sm
-                         focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full px-4 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
             {selectedPlan &&
               overridePrice &&
@@ -1105,6 +1090,28 @@ function AssignPlanModal({
                   — you've entered a different amount
                 </p>
               )}
+          </div>
+
+          {/* Payment Mode */}
+          <div>
+            <label className="text-xs font-semibold text-slate-600 mb-2 block">
+              Payment Mode *
+            </label>
+            <div className="flex flex-wrap gap-2">
+              {PAYMENT_MODES.map((m) => (
+                <button
+                  key={m.value}
+                  onClick={() => setPaymentMode(m.value)}
+                  className={`px-3 py-1.5 rounded-lg border text-sm font-medium transition ${
+                    paymentMode === m.value
+                      ? "bg-blue-600 text-white border-blue-600"
+                      : "border-gray-300 text-gray-700 hover:bg-gray-50"
+                  }`}
+                >
+                  {m.label}
+                </button>
+              ))}
+            </div>
           </div>
 
           {/* Notes */}
@@ -1118,33 +1125,27 @@ function AssignPlanModal({
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
               placeholder="e.g. Paid via UPI, discount applied..."
-              className="w-full px-4 py-2.5 border border-slate-200 rounded-xl text-sm
-                         focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full px-4 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
           </div>
         </div>
-        {/* Footer buttons */}
+
+        {/* Footer */}
         <div className="flex gap-3 px-5 py-4 border-t bg-slate-50">
           <button
             onClick={onClose}
             disabled={assigning}
-            className="flex-1 py-2.5 text-sm font-medium text-slate-600
-                       bg-white border border-slate-200 rounded-xl hover:bg-slate-100 transition"
+            className="flex-1 py-2.5 text-sm font-medium text-slate-600 bg-white border border-slate-200 rounded-xl hover:bg-slate-100 transition"
           >
             Cancel
           </button>
           <button
             onClick={handleAssign}
             disabled={assigning || !selectedPlanId || !overridePrice}
-            className="flex-1 py-2.5 text-sm font-medium text-white bg-blue-600
-                       rounded-xl hover:bg-blue-700 transition flex items-center
-                       justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="flex-1 py-2.5 text-sm font-medium text-white bg-blue-600 rounded-xl hover:bg-blue-700 transition flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {assigning ? (
-              <div
-                className="w-4 h-4 border-2 border-white border-t-transparent
-                              rounded-full animate-spin"
-              />
+              <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
             ) : modal.hasActiveSub ? (
               "Queue Plan"
             ) : (
@@ -1156,6 +1157,8 @@ function AssignPlanModal({
     </div>
   );
 }
+
+// ── Small reusable components ─────────────────────────────────────────────
 
 function InfoTile({
   icon,
@@ -1180,10 +1183,7 @@ function InfoTile({
 function Spinner() {
   return (
     <div className="flex justify-center py-12">
-      <div
-        className="w-8 h-8 border-4 border-slate-200 border-t-blue-600
-                      rounded-full animate-spin"
-      />
+      <div className="w-8 h-8 border-4 border-slate-200 border-t-blue-600 rounded-full animate-spin" />
     </div>
   );
 }
@@ -1196,10 +1196,7 @@ function EmptyState({
   message: string;
 }) {
   return (
-    <div
-      className="text-center py-16 bg-slate-50 rounded-xl border-2
-                    border-dashed border-slate-200"
-    >
+    <div className="text-center py-16 bg-slate-50 rounded-xl border-2 border-dashed border-slate-200">
       <div className="flex justify-center mb-3">{icon}</div>
       <p className="text-slate-500 font-medium">{message}</p>
     </div>

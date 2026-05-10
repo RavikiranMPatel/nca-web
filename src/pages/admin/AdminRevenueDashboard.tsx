@@ -24,6 +24,7 @@ import {
   SlidersHorizontal,
 } from "lucide-react";
 import api from "../../api/axios";
+import { toast } from "react-hot-toast";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -52,9 +53,9 @@ type Booking = {
   paymentStatus: string | null;
   paymentMode: string | null;
 };
-// ADD after the CampPayment type definition:
 type FeeCollectionSummaryRow = {
   playerPublicId: string;
+  feeAccountPublicId: string;
   playerName: string;
   phone: string | null;
   parentsPhone: string | null;
@@ -85,7 +86,6 @@ type OtherExpense = {
   notes: string | null;
   transactionType: "EXPENSE" | "INCOME";
 };
-
 type CampPayment = {
   publicId: string;
   campName: string;
@@ -127,12 +127,38 @@ type Suggestions = {
   paidBy: string[];
 };
 
+// ── NEW: Registration Fee type ──
+type RegFeeRow = {
+  playerPublicId: string;
+  playerName: string;
+  phone: string | null;
+  parentsPhone: string | null;
+  regFeePaid: boolean;
+  regFeePaidOn: string | null;
+  regFeePaymentMode: string | null;
+  regFeeAmount: number;
+};
+
+type SubRevenueRow = {
+  publicId: string;
+  userName: string;
+  userPhone: string;
+  pricePaid: number;
+  paymentMode: string;
+  activatedAt: string | null;
+  status: string;
+  sessionsPerMonth: number;
+  planMonths: number;
+};
+
 type Tab =
   | "overview"
   | "fees"
   | "bookings"
   | "campfees"
   | "feesummary"
+  | "regfees"
+  | "subscriptions"
   | "expenses"
   | "income";
 type ExpenseSubTab = "summary" | "monthly" | "all";
@@ -167,6 +193,14 @@ const EMPTY_EXPENSE_FORM = {
   transactionType: "EXPENSE" as "EXPENSE" | "INCOME",
 };
 
+const REG_FEE_PAYMENT_MODES = [
+  { value: "PHONE_PE", label: "PhonePe" },
+  { value: "GOOGLE_PAY", label: "Google Pay" },
+  { value: "CASH", label: "Cash" },
+  { value: "ONLINE", label: "Online / Bank Transfer" },
+  { value: "OTHER", label: "Other" },
+];
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 const fmt = (n: number) =>
@@ -197,7 +231,6 @@ const modeLabel: Record<string, string> = {
   OFFLINE: "Offline",
 };
 const fmtMode = (m: string | null) => (m ? modeLabel[m] || m : "—");
-
 const csvEscape = (s: string) =>
   s.includes(",") || s.includes('"') || s.includes("\n")
     ? `"${s.replace(/"/g, '""')}"`
@@ -323,7 +356,6 @@ export default function AdminRevenueDashboard() {
   const [expenses, setExpenses] = useState<OtherExpense[]>([]);
   const [partnerSpending, setPartnerSpending] = useState<PartnerSpending[]>([]);
   const [monthlyPayments, setMonthlyPayments] = useState<MonthlyPayment[]>([]);
-
   const [campPayments, setCampPayments] = useState<CampPayment[]>([]);
   const [feeSummary, setFeeSummary] = useState<FeeCollectionSummaryRow[]>([]);
   const [feeTypeFilter, setFeeTypeFilter] = useState<
@@ -342,11 +374,25 @@ export default function AdminRevenueDashboard() {
     paidBy: [],
   });
 
+  // ── NEW: Registration Fee state ──
+  const [regFees, setRegFees] = useState<RegFeeRow[]>([]);
+  const [regFeeSearch, setRegFeeSearch] = useState("");
+  const [showRegFeeModal, setShowRegFeeModal] = useState<RegFeeRow | null>(
+    null,
+  );
+  const [regFeeMode, setRegFeeMode] = useState("PHONE_PE");
+  const [regFeePaidOn, setRegFeePaidOn] = useState(
+    new Date().toISOString().split("T")[0],
+  );
+  const [savingRegFee, setSavingRegFee] = useState(false);
+
+  const [subRevenue, setSubRevenue] = useState<SubRevenueRow[]>([]);
+  const [subRevenueSearch, setSubRevenueSearch] = useState("");
+
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [activeTab, setActiveTab] = useState<Tab>("overview");
   const [expenseSubTab, setExpenseSubTab] = useState<ExpenseSubTab>("summary");
-
   const [dateRange, setDateRange] = useState<DateRange>("all");
   const [customFrom, setCustomFrom] = useState("");
   const [customTo, setCustomTo] = useState("");
@@ -373,26 +419,93 @@ export default function AdminRevenueDashboard() {
   const [expenseForm, setExpenseForm] = useState(EMPTY_EXPENSE_FORM);
   const [expenseSaving, setExpenseSaving] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
-
   const [payModal, setPayModal] = useState<MonthlyPayment | null>(null);
   const [payForm, setPayForm] = useState({ amount: "", paidBy: "", notes: "" });
   const [paySaving, setPaySaving] = useState(false);
+
+  // ── Edit Due Date state ──
+  const [editDueDateRow, setEditDueDateRow] =
+    useState<FeeCollectionSummaryRow | null>(null);
+  const [editDueDateValue, setEditDueDateValue] = useState("");
+  const [savingDueDate, setSavingDueDate] = useState(false);
+
+  const handleUpdateDueDate = async () => {
+    if (!editDueDateRow || !editDueDateValue) return;
+    setSavingDueDate(true);
+    try {
+      await api.patch(
+        `/admin/fees/accounts/${editDueDateRow.feeAccountPublicId}/due-date?dueDate=${editDueDateValue}`,
+      );
+      toast.success(`Due date updated for ${editDueDateRow.playerName}`);
+      setEditDueDateRow(null);
+      await load();
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || "Failed to update due date");
+    } finally {
+      setSavingDueDate(false);
+    }
+  };
+
+  // ── NEW: Registration Fee handlers ──
+  const handleMarkRegFeePaid = async () => {
+    if (!showRegFeeModal) return;
+    setSavingRegFee(true);
+    try {
+      await api.post(
+        `/admin/fees/players/${showRegFeeModal.playerPublicId}/registration-fee?paymentMode=${regFeeMode}&paidOn=${regFeePaidOn}`,
+      );
+      toast.success(
+        `Registration fee marked paid for ${showRegFeeModal.playerName}`,
+      );
+      setShowRegFeeModal(null);
+      await load();
+    } catch (err: any) {
+      toast.error(
+        err.response?.data?.message || "Failed to mark registration fee",
+      );
+    } finally {
+      setSavingRegFee(false);
+    }
+  };
+
+  const handleUnmarkRegFee = async (
+    playerPublicId: string,
+    playerName: string,
+  ) => {
+    if (!window.confirm(`Unmark registration fee for ${playerName}?`)) return;
+    try {
+      await api.delete(
+        `/admin/fees/players/${playerPublicId}/registration-fee`,
+      );
+      toast.success("Registration fee unmarked");
+      await load();
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || "Failed to unmark");
+    }
+  };
 
   const load = async () => {
     setLoading(true);
     setError("");
     const thisLoad = ++loadRef.current;
     try {
-      const [feesRes, bookingsRes, campPaymentsRes, feeSummaryRes] =
-        await Promise.all([
-          api.get("/admin/fees/payments"),
-          api.get("/admin/bookings"),
-          api
-            .get("/admin/camp-revenue/payments", { skipAuthError: true } as any)
-            .catch(() => ({ data: [] })),
-          api.get("/admin/fees/collection-summary").catch(() => ({ data: [] })),
-        ]);
-
+      const [
+        feesRes,
+        bookingsRes,
+        campPaymentsRes,
+        feeSummaryRes,
+        regFeesRes,
+        subRevenueRes,
+      ] = await Promise.all([
+        api.get("/admin/fees/payments"),
+        api.get("/admin/bookings"),
+        api
+          .get("/admin/camp-revenue/payments", { skipAuthError: true } as any)
+          .catch(() => ({ data: [] })),
+        api.get("/admin/fees/collection-summary").catch(() => ({ data: [] })),
+        api.get("/admin/fees/registration-fees").catch(() => ({ data: [] })),
+        api.get("/admin/subscriptions/revenue").catch(() => ({ data: [] })),
+      ]);
       if (thisLoad !== loadRef.current) return;
 
       let newExpenses: OtherExpense[] = [];
@@ -412,9 +525,7 @@ export default function AdminRevenueDashboard() {
           api.get("/admin/expenses/partner-spending"),
           api.get("/admin/expenses/suggestions"),
         ]);
-
         if (thisLoad !== loadRef.current) return;
-
         newExpenses = expRes.data || [];
         newPartnerSpending = partnerRes.data || [];
         newSuggestions = sugRes.data;
@@ -424,6 +535,8 @@ export default function AdminRevenueDashboard() {
       setBookings(bookingsRes.data || []);
       setCampPayments(campPaymentsRes.data || []);
       setFeeSummary(feeSummaryRes.data || []);
+      setRegFees(regFeesRes.data || []);
+      setSubRevenue(subRevenueRes.data || []);
       setExpenses(newExpenses);
       setPartnerSpending(newPartnerSpending);
       setSuggestions(newSuggestions);
@@ -443,7 +556,7 @@ export default function AdminRevenueDashboard() {
       );
       setMonthlyPayments(res.data || []);
     } catch {
-      // silently fail, don't trigger logout
+      /* silently fail */
     }
   };
 
@@ -514,7 +627,6 @@ export default function AdminRevenueDashboard() {
       ),
     [expenses, from, to],
   );
-
   const filteredCampFees = useMemo(
     () => campPayments.filter((p) => p.paidAt && inRange(p.paidAt)),
     [campPayments, from, to],
@@ -549,47 +661,44 @@ export default function AdminRevenueDashboard() {
     return Array.from(groups.values()).sort((a, b) => b.total - a.total);
   }, [filteredBookings]);
 
-  const searchedExpenses = useMemo(() => {
-    return filteredExpenses.filter((e) => {
-      const q = expenseSearch.toLowerCase();
-      const matchSearch =
-        !q ||
-        e.description.toLowerCase().includes(q) ||
-        (e.paidBy || "").toLowerCase().includes(q) ||
-        (e.budgetHead || "").toLowerCase().includes(q);
-      const matchBudgetHead =
-        !expenseFilterBudgetHead || e.budgetHead === expenseFilterBudgetHead;
-      const matchPaidBy =
-        !expenseFilterPaidBy || e.paidBy === expenseFilterPaidBy;
-      return matchSearch && matchBudgetHead && matchPaidBy;
-    });
-  }, [
-    filteredExpenses,
-    expenseSearch,
-    expenseFilterBudgetHead,
-    expenseFilterPaidBy,
-  ]);
+  const searchedExpenses = useMemo(
+    () =>
+      filteredExpenses.filter((e) => {
+        const q = expenseSearch.toLowerCase();
+        return (
+          (!q ||
+            e.description.toLowerCase().includes(q) ||
+            (e.paidBy || "").toLowerCase().includes(q) ||
+            (e.budgetHead || "").toLowerCase().includes(q)) &&
+          (!expenseFilterBudgetHead ||
+            e.budgetHead === expenseFilterBudgetHead) &&
+          (!expenseFilterPaidBy || e.paidBy === expenseFilterPaidBy)
+        );
+      }),
+    [
+      filteredExpenses,
+      expenseSearch,
+      expenseFilterBudgetHead,
+      expenseFilterPaidBy,
+    ],
+  );
 
-  const searchedIncomes = useMemo(() => {
-    return filteredIncomes.filter((e) => {
-      const q = incomeSearch.toLowerCase();
-      const matchSearch =
-        !q ||
-        e.description.toLowerCase().includes(q) ||
-        (e.paidBy || "").toLowerCase().includes(q) ||
-        (e.budgetHead || "").toLowerCase().includes(q);
-      const matchBudgetHead =
-        !incomeFilterBudgetHead || e.budgetHead === incomeFilterBudgetHead;
-      const matchPaidBy =
-        !incomeFilterPaidBy || e.paidBy === incomeFilterPaidBy;
-      return matchSearch && matchBudgetHead && matchPaidBy;
-    });
-  }, [
-    filteredIncomes,
-    incomeSearch,
-    incomeFilterBudgetHead,
-    incomeFilterPaidBy,
-  ]);
+  const searchedIncomes = useMemo(
+    () =>
+      filteredIncomes.filter((e) => {
+        const q = incomeSearch.toLowerCase();
+        return (
+          (!q ||
+            e.description.toLowerCase().includes(q) ||
+            (e.paidBy || "").toLowerCase().includes(q) ||
+            (e.budgetHead || "").toLowerCase().includes(q)) &&
+          (!incomeFilterBudgetHead ||
+            e.budgetHead === incomeFilterBudgetHead) &&
+          (!incomeFilterPaidBy || e.paidBy === incomeFilterPaidBy)
+        );
+      }),
+    [filteredIncomes, incomeSearch, incomeFilterBudgetHead, incomeFilterPaidBy],
+  );
 
   const feesTotal = filteredFees.reduce((s, p) => s + (p.amount || 0), 0);
   const bookingsTotal = filteredBookings.reduce(
@@ -608,15 +717,51 @@ export default function AdminRevenueDashboard() {
     (s, e) => s + (e.amount || 0),
     0,
   );
-  const grossRevenue =
-    feesTotal + bookingsTotal + campFeesTotal + otherIncomeTotal;
-  const netRevenue = grossRevenue - expensesTotal;
   const monthlyPaidTotal = monthlyPayments
     .filter((p) => p.status === "PAID")
     .reduce((s, p) => s + (p.amount || 0), 0);
   const pendingBookings = bookings.filter(
     (b) => b.status === "PENDING_PAYMENT",
   ).length;
+
+  // ── NEW: Registration Fee totals ──
+  const regFeesTotal = regFees
+    .filter((r) => r.regFeePaid && inRange(r.regFeePaidOn || ""))
+    .reduce((s) => s + 1500, 0);
+  const regFeesPaidCount = regFees.filter((r) => r.regFeePaid).length;
+  const filteredRegFees = useMemo(
+    () =>
+      regFees.filter(
+        (r) =>
+          !regFeeSearch ||
+          r.playerName.toLowerCase().includes(regFeeSearch.toLowerCase()),
+      ),
+    [regFees, regFeeSearch],
+  );
+
+  const subRevenueTotal = subRevenue
+    .filter((r) => inRange(r.activatedAt || ""))
+    .reduce((s, r) => s + (r.pricePaid || 0), 0);
+
+  const filteredSubRevenue = useMemo(
+    () =>
+      subRevenue.filter(
+        (r) =>
+          !subRevenueSearch ||
+          r.userName.toLowerCase().includes(subRevenueSearch.toLowerCase()),
+      ),
+    [subRevenue, subRevenueSearch],
+  );
+
+  // ── grossRevenue now includes reg fees ──
+  const grossRevenue =
+    feesTotal +
+    bookingsTotal +
+    campFeesTotal +
+    otherIncomeTotal +
+    regFeesTotal +
+    subRevenueTotal;
+  const netRevenue = grossRevenue - expensesTotal;
 
   const rangeLabels: Record<DateRange, string> = {
     all: "All Time",
@@ -800,6 +945,24 @@ export default function AdminRevenueDashboard() {
         fmtMode(b.paymentMode),
       ]),
     );
+    // ── NEW: include reg fees in CSV ──
+    regFees
+      .filter((r) => r.regFeePaid && inRange(r.regFeePaidOn || ""))
+      .forEach((r) =>
+        rows.push([
+          "Reg Fee",
+          fmtDate(r.regFeePaidOn),
+          `${r.playerName} - Registration Fee`,
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          String(r.regFeeAmount),
+          fmtMode(r.regFeePaymentMode),
+        ]),
+      );
     if (isSuperAdmin) {
       filteredExpenses.forEach((e) =>
         rows.push([
@@ -926,7 +1089,7 @@ export default function AdminRevenueDashboard() {
   type TxRow = {
     key: string;
     date: string;
-    type: "fee" | "booking" | "expense" | "income";
+    type: "fee" | "booking" | "expense" | "income" | "regfee";
     name: string;
     description: string;
     amount: number;
@@ -960,6 +1123,29 @@ export default function AdminRevenueDashboard() {
       amount: b.amount,
       mode: fmtMode(b.paymentMode),
     }));
+    // ── NEW: reg fees in overview ──
+    const regs: TxRow[] = regFees
+      .filter((r) => r.regFeePaid && inRange(r.regFeePaidOn || ""))
+      .map((r) => ({
+        key: "reg-" + r.playerPublicId,
+        date: r.regFeePaidOn || "",
+        type: "regfee" as const,
+        name: r.playerName,
+        description: "Registration Fee",
+        amount: r.regFeeAmount,
+        mode: fmtMode(r.regFeePaymentMode),
+      }));
+    const subs: TxRow[] = subRevenue
+      .filter((r) => r.activatedAt && inRange(r.activatedAt))
+      .map((r) => ({
+        key: "sub-" + r.publicId,
+        date: r.activatedAt || "",
+        type: "fee" as const,
+        name: r.userName,
+        description: `Membership · ${r.sessionsPerMonth} sessions × ${r.planMonths}mo`,
+        amount: r.pricePaid,
+        mode: fmtMode(r.paymentMode),
+      }));
     const exps: TxRow[] = isSuperAdmin
       ? filteredExpenses.map((e) => ({
           key: "e-" + e.publicId,
@@ -982,16 +1168,20 @@ export default function AdminRevenueDashboard() {
           mode: "—",
         }))
       : [];
-    return [...fees, ...camps, ...bks, ...exps, ...incs]
+    return [...fees, ...camps, ...bks, ...regs, ...subs, ...exps, ...incs]
       .sort((a, b) => (b.date > a.date ? 1 : -1))
       .slice(0, 20);
   }, [
     filteredFees,
     filteredCampFees,
     filteredBookings,
+    regFees,
     filteredExpenses,
     filteredIncomes,
     isSuperAdmin,
+    from,
+    subRevenue,
+    to,
   ]);
 
   if (loading)
@@ -1021,6 +1211,133 @@ export default function AdminRevenueDashboard() {
 
   return (
     <div className="max-w-7xl mx-auto space-y-4 pb-20 px-3 sm:px-4 lg:px-0">
+      {/* ── NEW: Registration Fee Modal ── */}
+      {showRegFeeModal && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center">
+          <div className="bg-white rounded-t-2xl sm:rounded-xl shadow-xl w-full sm:max-w-sm">
+            <div className="flex items-center justify-between px-5 py-4 border-b bg-slate-50 rounded-t-2xl sm:rounded-t-xl">
+              <div>
+                <h3 className="font-bold text-slate-800">
+                  Mark Registration Fee Paid
+                </h3>
+                <p className="text-xs text-slate-500">
+                  {showRegFeeModal.playerName} · ₹1,500
+                </p>
+              </div>
+              <button onClick={() => setShowRegFeeModal(null)}>
+                <X size={18} className="text-slate-400" />
+              </button>
+            </div>
+            <div className="p-5 space-y-4">
+              <div className="bg-purple-50 rounded-xl p-3 text-center">
+                <p className="text-2xl font-bold text-purple-700">₹1,500</p>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  One-time registration fee
+                </p>
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-slate-600 block mb-1.5">
+                  Payment Date
+                </label>
+                <input
+                  type="date"
+                  value={regFeePaidOn}
+                  max={new Date().toISOString().split("T")[0]}
+                  onChange={(e) => setRegFeePaidOn(e.target.value)}
+                  className="w-full px-4 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-slate-600 block mb-1.5">
+                  Payment Mode
+                </label>
+                <select
+                  value={regFeeMode}
+                  onChange={(e) => setRegFeeMode(e.target.value)}
+                  className="w-full px-4 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
+                >
+                  {REG_FEE_PAYMENT_MODES.map((m) => (
+                    <option key={m.value} value={m.value}>
+                      {m.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="flex gap-2 pt-1 pb-4">
+                <button
+                  onClick={() => setShowRegFeeModal(null)}
+                  className="flex-1 py-2.5 text-sm font-medium text-slate-600 bg-slate-100 rounded-lg hover:bg-slate-200"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleMarkRegFeePaid}
+                  disabled={savingRegFee}
+                  className="flex-1 py-2.5 text-sm font-medium text-white bg-purple-600 rounded-lg hover:bg-purple-700 disabled:opacity-50 flex items-center justify-center gap-2"
+                >
+                  {savingRegFee ? (
+                    <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                  ) : (
+                    <CheckCircle2 size={14} />
+                  )}
+                  {savingRegFee ? "Saving…" : "Confirm Payment"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Edit Due Date Modal ── */}
+      {editDueDateRow && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center">
+          <div className="bg-white rounded-t-2xl sm:rounded-xl shadow-xl w-full sm:max-w-sm">
+            <div className="flex items-center justify-between px-5 py-4 border-b bg-slate-50 rounded-t-2xl sm:rounded-t-xl">
+              <div>
+                <h3 className="font-bold text-slate-800">Edit Due Date</h3>
+                <p className="text-xs text-slate-500">
+                  {editDueDateRow.playerName} · {editDueDateRow.feePlanName}
+                </p>
+              </div>
+              <button onClick={() => setEditDueDateRow(null)}>
+                <X size={18} className="text-slate-400" />
+              </button>
+            </div>
+            <div className="p-5 space-y-4">
+              <div>
+                <label className="text-xs font-semibold text-slate-600 block mb-1.5">
+                  New Due Date *
+                </label>
+                <input
+                  type="date"
+                  value={editDueDateValue}
+                  onChange={(e) => setEditDueDateValue(e.target.value)}
+                  className="w-full px-4 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+              <p className="text-xs text-amber-600 bg-amber-50 rounded-lg px-3 py-2">
+                This only changes the due date. It does not record a payment.
+              </p>
+              <div className="flex gap-2 pt-1 pb-4">
+                <button
+                  onClick={() => setEditDueDateRow(null)}
+                  className="flex-1 py-2.5 text-sm font-medium text-slate-600 bg-slate-100 rounded-lg hover:bg-slate-200"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleUpdateDueDate}
+                  disabled={savingDueDate || !editDueDateValue}
+                  className="flex-1 py-2.5 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-50"
+                >
+                  {savingDueDate ? "Saving…" : "Save Due Date"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ── Add/Edit Expense Modal ── */}
       {showExpenseModal && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40">
@@ -1504,12 +1821,11 @@ export default function AdminRevenueDashboard() {
               Revenue
             </h1>
             <p className="text-xs text-slate-500 hidden sm:block">
-              Fees + Camp Fees + Bookings{isSuperAdmin ? " + Expenses" : ""}
+              Fees + Camp Fees + Bookings + Reg Fees
+              {isSuperAdmin ? " + Expenses" : ""}
             </p>
           </div>
         </div>
-
-        {/* Desktop controls */}
         <div className="hidden sm:flex items-center gap-2 flex-wrap justify-end">
           <div className="relative">
             <button
@@ -1585,8 +1901,6 @@ export default function AdminRevenueDashboard() {
             CSV
           </button>
         </div>
-
-        {/* Mobile controls */}
         <div className="flex sm:hidden items-center gap-1.5 flex-shrink-0">
           <button
             onClick={() => setShowFilterSheet(true)}
@@ -1639,7 +1953,7 @@ export default function AdminRevenueDashboard() {
 
       {/* ── Summary Cards ── */}
       <div
-        className={`grid gap-2 sm:gap-3 ${isSuperAdmin ? "grid-cols-2 sm:grid-cols-3 lg:grid-cols-7" : "grid-cols-2 lg:grid-cols-4"}`}
+        className={`grid gap-2 sm:gap-3 ${isSuperAdmin ? "grid-cols-2 sm:grid-cols-3 lg:grid-cols-8" : "grid-cols-2 lg:grid-cols-5"}`}
       >
         {isSuperAdmin && (
           <SummaryCard
@@ -1679,6 +1993,25 @@ export default function AdminRevenueDashboard() {
           bg="bg-gradient-to-br from-orange-50 to-amber-50"
           border="border-orange-200"
           valueClass="text-orange-600"
+        />
+        {/* ── NEW: Reg Fees summary card ── */}
+        <SummaryCard
+          label="Reg Fees"
+          value={fmt(regFeesTotal)}
+          sub={`${regFeesPaidCount} of ${regFees.length} paid`}
+          icon={<CreditCard size={15} className="text-purple-600" />}
+          bg="bg-gradient-to-br from-purple-50 to-fuchsia-50"
+          border="border-purple-200"
+          valueClass="text-purple-700"
+        />
+        <SummaryCard
+          label="Bowling Machine Memberships"
+          value={fmt(subRevenueTotal)}
+          sub={`${subRevenue.filter((r) => inRange(r.activatedAt || "")).length} activated`}
+          icon={<CreditCard size={15} className="text-cyan-600" />}
+          bg="bg-gradient-to-br from-cyan-50 to-sky-50"
+          border="border-cyan-200"
+          valueClass="text-cyan-700"
         />
         {isSuperAdmin && (
           <SummaryCard
@@ -1725,6 +2058,8 @@ export default function AdminRevenueDashboard() {
             ["bookings", `Bookings (${filteredBookings.length})`],
             ["campfees", `Camp Fees (${filteredCampFees.length})`],
             ["feesummary", `Fee Summary (${feeSummary.length})`],
+            ["regfees", `Reg Fees (${regFees.length})`],
+            ["subscriptions", `Memberships (${subRevenue.length})`],
             ...(isSuperAdmin
               ? [
                   ["expenses", `Expenses (${filteredExpenses.length})`],
@@ -1763,7 +2098,7 @@ export default function AdminRevenueDashboard() {
                 >
                   <div className="flex items-center gap-2.5 min-w-0">
                     <div
-                      className={`w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 ${tx.type === "fee" ? "bg-blue-100" : tx.type === "booking" ? "bg-orange-100" : tx.type === "income" ? "bg-violet-100" : "bg-red-100"}`}
+                      className={`w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 ${tx.type === "fee" ? "bg-blue-100" : tx.type === "booking" ? "bg-orange-100" : tx.type === "income" ? "bg-violet-100" : tx.type === "regfee" ? "bg-purple-100" : "bg-red-100"}`}
                     >
                       {tx.type === "fee" ? (
                         <CreditCard size={12} className="text-blue-600" />
@@ -1771,6 +2106,8 @@ export default function AdminRevenueDashboard() {
                         <BookOpen size={12} className="text-orange-500" />
                       ) : tx.type === "income" ? (
                         <TrendingUp size={12} className="text-violet-500" />
+                      ) : tx.type === "regfee" ? (
+                        <IndianRupee size={12} className="text-purple-600" />
                       ) : (
                         <TrendingDown size={12} className="text-red-500" />
                       )}
@@ -1786,7 +2123,7 @@ export default function AdminRevenueDashboard() {
                   </div>
                   <div className="text-right flex-shrink-0 ml-2">
                     <p
-                      className={`text-sm font-bold ${tx.type === "expense" ? "text-red-600" : tx.type === "income" ? "text-violet-600" : "text-slate-900"}`}
+                      className={`text-sm font-bold ${tx.type === "expense" ? "text-red-600" : tx.type === "income" ? "text-violet-600" : tx.type === "regfee" ? "text-purple-600" : "text-slate-900"}`}
                     >
                       {tx.type === "expense"
                         ? "−"
@@ -1821,7 +2158,6 @@ export default function AdminRevenueDashboard() {
             <EmptyState message="No fee payments in this period" />
           ) : (
             <>
-              {/* Mobile cards */}
               <div className="sm:hidden divide-y divide-slate-100">
                 {filteredFees.map((p) => (
                   <div key={p.publicId} className="px-4 py-3.5">
@@ -1874,8 +2210,6 @@ export default function AdminRevenueDashboard() {
                   </span>
                 </div>
               </div>
-
-              {/* Desktop table */}
               <div className="hidden sm:block overflow-x-auto">
                 <table className="w-full">
                   <thead>
@@ -2030,7 +2364,6 @@ export default function AdminRevenueDashboard() {
                   </div>
                   {expandedUser === group.key && (
                     <div className="bg-slate-50 border-t border-slate-100">
-                      {/* Mobile: simple list */}
                       <div className="sm:hidden divide-y divide-slate-100">
                         {group.bookings
                           .sort((a, b) => (b.slotDate > a.slotDate ? 1 : -1))
@@ -2054,7 +2387,6 @@ export default function AdminRevenueDashboard() {
                             </div>
                           ))}
                       </div>
-                      {/* Desktop: table */}
                       <div className="hidden sm:block overflow-x-auto">
                         <table className="w-full">
                           <thead>
@@ -2126,471 +2458,6 @@ export default function AdminRevenueDashboard() {
         </div>
       )}
 
-      {/* ── FEE COLLECTION SUMMARY ── */}
-      {activeTab === "feesummary" &&
-        (() => {
-          const monthly = feeSummary.filter((r) => r.feeType === "MONTHLY");
-          const annual = feeSummary.filter((r) => r.feeType === "ANNUAL");
-          const overdue = feeSummary.filter((r) => r.feeStatus === "OVERDUE");
-          const due = feeSummary.filter((r) => r.feeStatus === "DUE");
-          const paid = feeSummary.filter((r) => r.feeStatus === "PAID");
-
-          const filtered = feeSummary.filter((r) => {
-            const matchType =
-              feeTypeFilter === "ALL" || r.feeType === feeTypeFilter;
-            const matchStatus =
-              feeStatusFilter === "ALL" ||
-              r.feeStatus === feeStatusFilter ||
-              (feeStatusFilter === "DUE" &&
-                (r.feeStatus === "DUE" || r.feeStatus === "OVERDUE"));
-            const matchSearch =
-              !feeSummarySearch ||
-              r.playerName
-                .toLowerCase()
-                .includes(feeSummarySearch.toLowerCase());
-            return matchType && matchStatus && matchSearch;
-          });
-
-          const whatsappHref = (row: FeeCollectionSummaryRow) => {
-            const phone = (row.parentsPhone || row.phone || "").replace(
-              /\D/g,
-              "",
-            );
-            const msg =
-              `Hi, this is a reminder that cricket academy fees are pending for ${row.playerName}. ` +
-              `${row.hasInstallmentPlan && row.installmentBalance ? `Balance due: ₹${row.installmentBalance}.` : `Due date: ${row.nextDueOn ? new Date(row.nextDueOn).toLocaleDateString("en-IN") : ""}.`} ` +
-              `Please pay at your earliest convenience. Thank you!`;
-            return `https://wa.me/91${phone}?text=${encodeURIComponent(msg)}`;
-          };
-
-          return (
-            <div className="space-y-4">
-              {/* ── Stat Cards — clickable type filter ── */}
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                {/* All */}
-                <button
-                  onClick={() => setFeeTypeFilter("ALL")}
-                  className={`rounded-xl p-4 border-2 text-left transition ${
-                    feeTypeFilter === "ALL"
-                      ? "bg-slate-800 border-slate-800 text-white"
-                      : "bg-white border-slate-200 hover:border-slate-400"
-                  }`}
-                >
-                  <p
-                    className={`text-xs font-semibold uppercase mb-1 ${feeTypeFilter === "ALL" ? "text-slate-300" : "text-slate-500"}`}
-                  >
-                    All Players
-                  </p>
-                  <p
-                    className={`text-2xl font-bold ${feeTypeFilter === "ALL" ? "text-white" : "text-slate-800"}`}
-                  >
-                    {feeSummary.length}
-                  </p>
-                  <p
-                    className={`text-xs mt-0.5 ${feeTypeFilter === "ALL" ? "text-slate-400" : "text-slate-400"}`}
-                  >
-                    {overdue.length + due.length} pending / overdue
-                  </p>
-                </button>
-
-                {/* Monthly */}
-                <button
-                  onClick={() =>
-                    setFeeTypeFilter(
-                      feeTypeFilter === "MONTHLY" ? "ALL" : "MONTHLY",
-                    )
-                  }
-                  className={`rounded-xl p-4 border-2 text-left transition ${
-                    feeTypeFilter === "MONTHLY"
-                      ? "bg-blue-600 border-blue-600 text-white"
-                      : "bg-blue-50 border-blue-200 hover:border-blue-400"
-                  }`}
-                >
-                  <p
-                    className={`text-xs font-semibold uppercase mb-1 ${feeTypeFilter === "MONTHLY" ? "text-blue-100" : "text-blue-500"}`}
-                  >
-                    Monthly
-                  </p>
-                  <p
-                    className={`text-2xl font-bold ${feeTypeFilter === "MONTHLY" ? "text-white" : "text-blue-700"}`}
-                  >
-                    {monthly.length}
-                  </p>
-                  <p
-                    className={`text-xs mt-0.5 ${feeTypeFilter === "MONTHLY" ? "text-blue-200" : "text-slate-400"}`}
-                  >
-                    {monthly.filter((r) => r.feeStatus !== "PAID").length}{" "}
-                    pending / overdue
-                  </p>
-                </button>
-
-                {/* Annual */}
-                <button
-                  onClick={() =>
-                    setFeeTypeFilter(
-                      feeTypeFilter === "ANNUAL" ? "ALL" : "ANNUAL",
-                    )
-                  }
-                  className={`rounded-xl p-4 border-2 text-left transition ${
-                    feeTypeFilter === "ANNUAL"
-                      ? "bg-indigo-600 border-indigo-600 text-white"
-                      : "bg-indigo-50 border-indigo-200 hover:border-indigo-400"
-                  }`}
-                >
-                  <p
-                    className={`text-xs font-semibold uppercase mb-1 ${feeTypeFilter === "ANNUAL" ? "text-indigo-100" : "text-indigo-500"}`}
-                  >
-                    Annual
-                  </p>
-                  <p
-                    className={`text-2xl font-bold ${feeTypeFilter === "ANNUAL" ? "text-white" : "text-indigo-700"}`}
-                  >
-                    {annual.length}
-                  </p>
-                  <p
-                    className={`text-xs mt-0.5 ${feeTypeFilter === "ANNUAL" ? "text-indigo-200" : "text-slate-400"}`}
-                  >
-                    {annual.filter((r) => r.feeStatus !== "PAID").length}{" "}
-                    pending / overdue
-                  </p>
-                </button>
-
-                {/* Overdue alert card */}
-                <button
-                  onClick={() =>
-                    setFeeStatusFilter(
-                      feeStatusFilter === "OVERDUE" ? "ALL" : "OVERDUE",
-                    )
-                  }
-                  className={`rounded-xl p-4 border-2 text-left transition ${
-                    feeStatusFilter === "OVERDUE"
-                      ? "bg-red-600 border-red-600 text-white"
-                      : "bg-red-50 border-red-200 hover:border-red-400"
-                  }`}
-                >
-                  <p
-                    className={`text-xs font-semibold uppercase mb-1 ${feeStatusFilter === "OVERDUE" ? "text-red-100" : "text-red-500"}`}
-                  >
-                    ⚠ Overdue
-                  </p>
-                  <p
-                    className={`text-2xl font-bold ${feeStatusFilter === "OVERDUE" ? "text-white" : "text-red-700"}`}
-                  >
-                    {overdue.length}
-                  </p>
-                  <p
-                    className={`text-xs mt-0.5 ${feeStatusFilter === "OVERDUE" ? "text-red-200" : "text-slate-400"}`}
-                  >
-                    {due.length} due soon
-                  </p>
-                </button>
-              </div>
-
-              {/* ── Main Table Card ── */}
-              <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-                {/* Table header with search + status tabs */}
-                <div className="px-4 py-3 border-b border-slate-100 bg-slate-50 space-y-3">
-                  {/* Search + count */}
-                  <div className="flex items-center justify-between gap-3 flex-wrap">
-                    <div className="relative flex-1 min-w-[180px]">
-                      <svg
-                        className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 w-3.5 h-3.5"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-                        />
-                      </svg>
-                      <input
-                        type="text"
-                        value={feeSummarySearch}
-                        onChange={(e) => setFeeSummarySearch(e.target.value)}
-                        placeholder="Search player…"
-                        className="w-full pl-8 pr-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-400 focus:outline-none"
-                      />
-                    </div>
-                    <span className="text-xs text-slate-400 flex-shrink-0">
-                      {filtered.length} players
-                    </span>
-                  </div>
-
-                  {/* Status tabs: All / Due & Overdue / Paid */}
-                  <div className="flex gap-1 bg-slate-100 rounded-lg p-1 w-fit">
-                    {(
-                      [
-                        [
-                          "ALL",
-                          `All (${feeSummary.filter((r) => feeTypeFilter === "ALL" || r.feeType === feeTypeFilter).length})`,
-                        ],
-                        [
-                          "DUE",
-                          `Due / Overdue (${feeSummary.filter((r) => (feeTypeFilter === "ALL" || r.feeType === feeTypeFilter) && (r.feeStatus === "DUE" || r.feeStatus === "OVERDUE")).length})`,
-                        ],
-                        [
-                          "PAID",
-                          `Paid (${feeSummary.filter((r) => (feeTypeFilter === "ALL" || r.feeType === feeTypeFilter) && r.feeStatus === "PAID").length})`,
-                        ],
-                      ] as [typeof feeStatusFilter, string][]
-                    ).map(([val, label]) => (
-                      <button
-                        key={val}
-                        onClick={() => setFeeStatusFilter(val)}
-                        className={`px-3 py-1.5 rounded-md text-xs font-semibold whitespace-nowrap transition ${
-                          feeStatusFilter === val
-                            ? val === "DUE"
-                              ? "bg-red-500 text-white shadow-sm"
-                              : val === "PAID"
-                                ? "bg-emerald-500 text-white shadow-sm"
-                                : "bg-white text-slate-900 shadow-sm"
-                            : "text-slate-500 hover:text-slate-700"
-                        }`}
-                      >
-                        {label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Empty state */}
-                {filtered.length === 0 ? (
-                  <div className="text-center py-12">
-                    <p className="text-slate-400 text-sm">
-                      No players match the current filters
-                    </p>
-                  </div>
-                ) : (
-                  <>
-                    {/* Mobile */}
-                    <div className="sm:hidden divide-y divide-slate-100">
-                      {filtered.map((row) => (
-                        <div key={row.playerPublicId} className="px-4 py-3.5">
-                          <div className="flex items-start justify-between gap-2 mb-1.5">
-                            <div className="min-w-0 flex-1">
-                              <p className="text-sm font-semibold text-slate-800 truncate">
-                                {row.playerName}
-                              </p>
-                              <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
-                                <span
-                                  className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                                    row.feeType === "ANNUAL"
-                                      ? "bg-indigo-100 text-indigo-700"
-                                      : row.feeType === "MONTHLY"
-                                        ? "bg-blue-100 text-blue-700"
-                                        : "bg-slate-100 text-slate-600"
-                                  }`}
-                                >
-                                  {row.feeType}
-                                </span>
-                                <span
-                                  className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                                    row.feeStatus === "PAID"
-                                      ? "bg-emerald-100 text-emerald-700"
-                                      : row.feeStatus === "OVERDUE"
-                                        ? "bg-red-100 text-red-700"
-                                        : "bg-amber-100 text-amber-700"
-                                  }`}
-                                >
-                                  {row.feeStatus}
-                                </span>
-                                <span className="text-[10px] text-slate-400">
-                                  {row.feePlanName}
-                                </span>
-                              </div>
-                            </div>
-                            {(row.feeStatus === "OVERDUE" ||
-                              row.feeStatus === "DUE") && (
-                              <a
-                                href={whatsappHref(row)}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="flex items-center gap-1 px-2.5 py-1.5 bg-green-500 text-white text-xs font-semibold rounded-lg hover:bg-green-600 transition flex-shrink-0"
-                              >
-                                <svg
-                                  viewBox="0 0 24 24"
-                                  className="w-3 h-3 fill-white"
-                                >
-                                  <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z" />
-                                  <path d="M12 0C5.373 0 0 5.373 0 12c0 2.123.553 4.112 1.523 5.838L.057 23.6l5.916-1.447A11.944 11.944 0 0012 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 21.894a9.888 9.888 0 01-5.032-1.372l-.361-.214-3.741.981.998-3.648-.235-.374A9.868 9.868 0 012.107 12C2.107 6.539 6.539 2.107 12 2.107S21.893 6.539 21.893 12 17.461 21.894 12 21.894z" />
-                                </svg>
-                                Remind
-                              </a>
-                            )}
-                          </div>
-                          {row.hasInstallmentPlan &&
-                            row.installmentBalance !== null && (
-                              <p className="text-xs text-slate-500 mt-1">
-                                Installment: ₹
-                                {row.installmentPaid?.toLocaleString("en-IN")}{" "}
-                                paid ·{" "}
-                                <span className="text-red-600 font-semibold">
-                                  ₹
-                                  {row.installmentBalance.toLocaleString(
-                                    "en-IN",
-                                  )}{" "}
-                                  balance
-                                </span>
-                              </p>
-                            )}
-                          <p className="text-xs text-slate-400 mt-0.5">
-                            Next due:{" "}
-                            {row.nextDueOn ? fmtDate(row.nextDueOn) : "—"}
-                          </p>
-                        </div>
-                      ))}
-                    </div>
-
-                    {/* Desktop */}
-                    <div className="hidden sm:block overflow-x-auto">
-                      <table className="w-full">
-                        <thead>
-                          <tr className="text-xs text-slate-500 uppercase tracking-wide border-b bg-slate-50/50">
-                            {[
-                              "Player",
-                              "Fee Type",
-                              "Plan",
-                              "Status",
-                              "Installment",
-                              "Next Due",
-                              "Remind",
-                            ].map((h) => (
-                              <th
-                                key={h}
-                                className="text-left px-4 py-3 whitespace-nowrap"
-                              >
-                                {h}
-                              </th>
-                            ))}
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-slate-100">
-                          {filtered.map((row) => (
-                            <tr
-                              key={row.playerPublicId}
-                              className={`hover:bg-slate-50 transition-colors ${
-                                row.feeStatus === "OVERDUE"
-                                  ? "bg-red-50/30"
-                                  : ""
-                              }`}
-                            >
-                              <td className="px-4 py-3">
-                                <p className="text-sm font-semibold text-slate-800">
-                                  {row.playerName}
-                                </p>
-                              </td>
-                              <td className="px-4 py-3">
-                                <span
-                                  className={`text-xs font-bold px-2.5 py-1 rounded-full ${
-                                    row.feeType === "ANNUAL"
-                                      ? "bg-indigo-100 text-indigo-700"
-                                      : row.feeType === "MONTHLY"
-                                        ? "bg-blue-100 text-blue-700"
-                                        : "bg-slate-100 text-slate-600"
-                                  }`}
-                                >
-                                  {row.feeType}
-                                </span>
-                              </td>
-                              <td className="px-4 py-3 text-sm text-slate-500">
-                                {row.feePlanName}
-                              </td>
-                              <td className="px-4 py-3">
-                                <span
-                                  className={`inline-flex items-center gap-1 text-xs font-bold px-2.5 py-1 rounded-full ${
-                                    row.feeStatus === "PAID"
-                                      ? "bg-emerald-100 text-emerald-700"
-                                      : row.feeStatus === "OVERDUE"
-                                        ? "bg-red-100 text-red-700"
-                                        : "bg-amber-100 text-amber-700"
-                                  }`}
-                                >
-                                  {row.feeStatus === "OVERDUE" && "⚠ "}
-                                  {row.feeStatus}
-                                </span>
-                              </td>
-                              <td className="px-4 py-3 text-sm">
-                                {row.hasInstallmentPlan &&
-                                row.installmentBalance !== null ? (
-                                  <div>
-                                    <span
-                                      className={
-                                        row.installmentBalance > 0
-                                          ? "text-red-600 font-semibold"
-                                          : "text-emerald-600 font-semibold"
-                                      }
-                                    >
-                                      {row.installmentBalance > 0
-                                        ? `₹${row.installmentBalance.toLocaleString("en-IN")} due`
-                                        : "✓ Fully paid"}
-                                    </span>
-                                    {row.installmentPaid !== null &&
-                                      row.installmentPaid > 0 && (
-                                        <p className="text-[10px] text-slate-400 mt-0.5">
-                                          ₹
-                                          {row.installmentPaid.toLocaleString(
-                                            "en-IN",
-                                          )}{" "}
-                                          paid
-                                        </p>
-                                      )}
-                                  </div>
-                                ) : (
-                                  <span className="text-slate-300">—</span>
-                                )}
-                              </td>
-                              <td className="px-4 py-3 text-sm">
-                                {row.nextDueOn ? (
-                                  <span
-                                    className={`font-medium ${
-                                      row.feeStatus === "OVERDUE"
-                                        ? "text-red-600"
-                                        : row.feeStatus === "DUE"
-                                          ? "text-amber-600"
-                                          : "text-slate-600"
-                                    }`}
-                                  >
-                                    {fmtDate(row.nextDueOn)}
-                                  </span>
-                                ) : (
-                                  "—"
-                                )}
-                              </td>
-                              <td className="px-4 py-3">
-                                {(row.feeStatus === "OVERDUE" ||
-                                  row.feeStatus === "DUE") && (
-                                  <a
-                                    href={whatsappHref(row)}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-green-500 text-white text-xs font-semibold rounded-lg hover:bg-green-600 transition"
-                                  >
-                                    <svg
-                                      viewBox="0 0 24 24"
-                                      className="w-3 h-3 fill-white"
-                                    >
-                                      <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z" />
-                                      <path d="M12 0C5.373 0 0 5.373 0 12c0 2.123.553 4.112 1.523 5.838L.057 23.6l5.916-1.447A11.944 11.944 0 0012 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 21.894a9.888 9.888 0 01-5.032-1.372l-.361-.214-3.741.981.998-3.648-.235-.374A9.868 9.868 0 012.107 12C2.107 6.539 6.539 2.107 12 2.107S21.893 6.539 21.893 12 17.461 21.894 12 21.894z" />
-                                    </svg>
-                                    WhatsApp
-                                  </a>
-                                )}
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  </>
-                )}
-              </div>
-            </div>
-          );
-        })()}
-
       {/* ── CAMP FEES ── */}
       {activeTab === "campfees" && (
         <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
@@ -2606,7 +2473,6 @@ export default function AdminRevenueDashboard() {
             <EmptyState message="No camp fee payments in this period" />
           ) : (
             <>
-              {/* Mobile */}
               <div className="sm:hidden divide-y divide-slate-100">
                 {filteredCampFees.map((p) => (
                   <div key={p.publicId} className="px-4 py-3.5">
@@ -2651,7 +2517,6 @@ export default function AdminRevenueDashboard() {
                   </span>
                 </div>
               </div>
-              {/* Desktop */}
               <div className="hidden sm:block overflow-x-auto">
                 <table className="w-full">
                   <thead>
@@ -2724,6 +2589,749 @@ export default function AdminRevenueDashboard() {
         </div>
       )}
 
+      {/* ── FEE COLLECTION SUMMARY ── */}
+      {activeTab === "feesummary" &&
+        (() => {
+          const monthly = feeSummary.filter((r) => r.feeType === "MONTHLY");
+          const annual = feeSummary.filter((r) => r.feeType === "ANNUAL");
+          const overdue = feeSummary.filter((r) => r.feeStatus === "OVERDUE");
+          const due = feeSummary.filter((r) => r.feeStatus === "DUE");
+          const filtered = feeSummary.filter((r) => {
+            const matchType =
+              feeTypeFilter === "ALL" || r.feeType === feeTypeFilter;
+            const matchStatus =
+              feeStatusFilter === "ALL" ||
+              r.feeStatus === feeStatusFilter ||
+              (feeStatusFilter === "DUE" &&
+                (r.feeStatus === "DUE" || r.feeStatus === "OVERDUE"));
+            const matchSearch =
+              !feeSummarySearch ||
+              r.playerName
+                .toLowerCase()
+                .includes(feeSummarySearch.toLowerCase());
+            return matchType && matchStatus && matchSearch;
+          });
+          const whatsappHref = (row: FeeCollectionSummaryRow) => {
+            const phone = (row.parentsPhone || row.phone || "").replace(
+              /\D/g,
+              "",
+            );
+            const msg = `Hi, this is a reminder that cricket academy fees are pending for ${row.playerName}. ${row.hasInstallmentPlan && row.installmentBalance ? `Balance due: ₹${row.installmentBalance}.` : `Due date: ${row.nextDueOn ? new Date(row.nextDueOn).toLocaleDateString("en-IN") : ""}.`} Please pay at your earliest convenience. Thank you!`;
+            return `https://wa.me/91${phone}?text=${encodeURIComponent(msg)}`;
+          };
+          const openEditDueDate = (row: FeeCollectionSummaryRow) => {
+            setEditDueDateValue(
+              row.nextDueOn ? row.nextDueOn.split("T")[0] : "",
+            );
+            setEditDueDateRow(row);
+          };
+          return (
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <button
+                  onClick={() => setFeeTypeFilter("ALL")}
+                  className={`rounded-xl p-4 border-2 text-left transition ${feeTypeFilter === "ALL" ? "bg-slate-800 border-slate-800 text-white" : "bg-white border-slate-200 hover:border-slate-400"}`}
+                >
+                  <p
+                    className={`text-xs font-semibold uppercase mb-1 ${feeTypeFilter === "ALL" ? "text-slate-300" : "text-slate-500"}`}
+                  >
+                    All Players
+                  </p>
+                  <p
+                    className={`text-2xl font-bold ${feeTypeFilter === "ALL" ? "text-white" : "text-slate-800"}`}
+                  >
+                    {feeSummary.length}
+                  </p>
+                  <p
+                    className={`text-xs mt-0.5 ${feeTypeFilter === "ALL" ? "text-slate-400" : "text-slate-400"}`}
+                  >
+                    {overdue.length + due.length} pending / overdue
+                  </p>
+                </button>
+                <button
+                  onClick={() =>
+                    setFeeTypeFilter(
+                      feeTypeFilter === "MONTHLY" ? "ALL" : "MONTHLY",
+                    )
+                  }
+                  className={`rounded-xl p-4 border-2 text-left transition ${feeTypeFilter === "MONTHLY" ? "bg-blue-600 border-blue-600 text-white" : "bg-blue-50 border-blue-200 hover:border-blue-400"}`}
+                >
+                  <p
+                    className={`text-xs font-semibold uppercase mb-1 ${feeTypeFilter === "MONTHLY" ? "text-blue-100" : "text-blue-500"}`}
+                  >
+                    Monthly
+                  </p>
+                  <p
+                    className={`text-2xl font-bold ${feeTypeFilter === "MONTHLY" ? "text-white" : "text-blue-700"}`}
+                  >
+                    {monthly.length}
+                  </p>
+                  <p
+                    className={`text-xs mt-0.5 ${feeTypeFilter === "MONTHLY" ? "text-blue-200" : "text-slate-400"}`}
+                  >
+                    {monthly.filter((r) => r.feeStatus !== "PAID").length}{" "}
+                    pending / overdue
+                  </p>
+                </button>
+                <button
+                  onClick={() =>
+                    setFeeTypeFilter(
+                      feeTypeFilter === "ANNUAL" ? "ALL" : "ANNUAL",
+                    )
+                  }
+                  className={`rounded-xl p-4 border-2 text-left transition ${feeTypeFilter === "ANNUAL" ? "bg-indigo-600 border-indigo-600 text-white" : "bg-indigo-50 border-indigo-200 hover:border-indigo-400"}`}
+                >
+                  <p
+                    className={`text-xs font-semibold uppercase mb-1 ${feeTypeFilter === "ANNUAL" ? "text-indigo-100" : "text-indigo-500"}`}
+                  >
+                    Annual
+                  </p>
+                  <p
+                    className={`text-2xl font-bold ${feeTypeFilter === "ANNUAL" ? "text-white" : "text-indigo-700"}`}
+                  >
+                    {annual.length}
+                  </p>
+                  <p
+                    className={`text-xs mt-0.5 ${feeTypeFilter === "ANNUAL" ? "text-indigo-200" : "text-slate-400"}`}
+                  >
+                    {annual.filter((r) => r.feeStatus !== "PAID").length}{" "}
+                    pending / overdue
+                  </p>
+                </button>
+                <button
+                  onClick={() =>
+                    setFeeStatusFilter(
+                      feeStatusFilter === "OVERDUE" ? "ALL" : "OVERDUE",
+                    )
+                  }
+                  className={`rounded-xl p-4 border-2 text-left transition ${feeStatusFilter === "OVERDUE" ? "bg-red-600 border-red-600 text-white" : "bg-red-50 border-red-200 hover:border-red-400"}`}
+                >
+                  <p
+                    className={`text-xs font-semibold uppercase mb-1 ${feeStatusFilter === "OVERDUE" ? "text-red-100" : "text-red-500"}`}
+                  >
+                    ⚠ Overdue
+                  </p>
+                  <p
+                    className={`text-2xl font-bold ${feeStatusFilter === "OVERDUE" ? "text-white" : "text-red-700"}`}
+                  >
+                    {overdue.length}
+                  </p>
+                  <p
+                    className={`text-xs mt-0.5 ${feeStatusFilter === "OVERDUE" ? "text-red-200" : "text-slate-400"}`}
+                  >
+                    {due.length} due soon
+                  </p>
+                </button>
+              </div>
+              <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+                <div className="px-4 py-3 border-b border-slate-100 bg-slate-50 space-y-3">
+                  <div className="flex items-center justify-between gap-3 flex-wrap">
+                    <div className="relative flex-1 min-w-[180px]">
+                      <svg
+                        className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 w-3.5 h-3.5"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+                        />
+                      </svg>
+                      <input
+                        type="text"
+                        value={feeSummarySearch}
+                        onChange={(e) => setFeeSummarySearch(e.target.value)}
+                        placeholder="Search player…"
+                        className="w-full pl-8 pr-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-400 focus:outline-none"
+                      />
+                    </div>
+                    <span className="text-xs text-slate-400 flex-shrink-0">
+                      {filtered.length} players
+                    </span>
+                  </div>
+                  <div className="flex gap-1 bg-slate-100 rounded-lg p-1 w-fit">
+                    {(
+                      [
+                        [
+                          "ALL",
+                          `All (${feeSummary.filter((r) => feeTypeFilter === "ALL" || r.feeType === feeTypeFilter).length})`,
+                        ],
+                        [
+                          "DUE",
+                          `Due / Overdue (${feeSummary.filter((r) => (feeTypeFilter === "ALL" || r.feeType === feeTypeFilter) && (r.feeStatus === "DUE" || r.feeStatus === "OVERDUE")).length})`,
+                        ],
+                        [
+                          "PAID",
+                          `Paid (${feeSummary.filter((r) => (feeTypeFilter === "ALL" || r.feeType === feeTypeFilter) && r.feeStatus === "PAID").length})`,
+                        ],
+                      ] as [typeof feeStatusFilter, string][]
+                    ).map(([val, label]) => (
+                      <button
+                        key={val}
+                        onClick={() => setFeeStatusFilter(val)}
+                        className={`px-3 py-1.5 rounded-md text-xs font-semibold whitespace-nowrap transition ${feeStatusFilter === val ? (val === "DUE" ? "bg-red-500 text-white shadow-sm" : val === "PAID" ? "bg-emerald-500 text-white shadow-sm" : "bg-white text-slate-900 shadow-sm") : "text-slate-500 hover:text-slate-700"}`}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                {filtered.length === 0 ? (
+                  <div className="text-center py-12">
+                    <p className="text-slate-400 text-sm">
+                      No players match the current filters
+                    </p>
+                  </div>
+                ) : (
+                  <>
+                    <div className="sm:hidden divide-y divide-slate-100">
+                      {filtered.map((row) => (
+                        <div key={row.playerPublicId} className="px-4 py-3.5">
+                          <div className="flex items-start justify-between gap-2 mb-1.5">
+                            <div className="min-w-0 flex-1">
+                              <p className="text-sm font-semibold text-slate-800 truncate">
+                                {row.playerName}
+                              </p>
+                              <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+                                <span
+                                  className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${row.feeType === "ANNUAL" ? "bg-indigo-100 text-indigo-700" : row.feeType === "MONTHLY" ? "bg-blue-100 text-blue-700" : "bg-slate-100 text-slate-600"}`}
+                                >
+                                  {row.feeType}
+                                </span>
+                                <span
+                                  className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${row.feeStatus === "PAID" ? "bg-emerald-100 text-emerald-700" : row.feeStatus === "OVERDUE" ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-700"}`}
+                                >
+                                  {row.feeStatus}
+                                </span>
+                                <span className="text-[10px] text-slate-400">
+                                  {row.feePlanName}
+                                </span>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-1.5 flex-shrink-0">
+                              {(row.feeStatus === "OVERDUE" ||
+                                row.feeStatus === "DUE") && (
+                                <a
+                                  href={whatsappHref(row)}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="flex items-center gap-1 px-2.5 py-1.5 bg-green-500 text-white text-xs font-semibold rounded-lg hover:bg-green-600 transition"
+                                >
+                                  <svg
+                                    viewBox="0 0 24 24"
+                                    className="w-3 h-3 fill-white"
+                                  >
+                                    <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z" />
+                                    <path d="M12 0C5.373 0 0 5.373 0 12c0 2.123.553 4.112 1.523 5.838L.057 23.6l5.916-1.447A11.944 11.944 0 0012 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 21.894a9.888 9.888 0 01-5.032-1.372l-.361-.214-3.741.981.998-3.648-.235-.374A9.868 9.868 0 012.107 12C2.107 6.539 6.539 2.107 12 2.107S21.893 6.539 21.893 12 17.461 21.894 12 21.894z" />
+                                  </svg>
+                                  Remind
+                                </a>
+                              )}
+                              {row.feeAccountPublicId && (
+                                <button
+                                  onClick={() => openEditDueDate(row)}
+                                  className="px-2.5 py-1.5 bg-slate-100 text-slate-600 text-xs font-semibold rounded-lg hover:bg-slate-200 transition"
+                                >
+                                  Edit Due
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                          {row.hasInstallmentPlan &&
+                            row.installmentBalance !== null && (
+                              <p className="text-xs text-slate-500 mt-1">
+                                Installment: ₹
+                                {row.installmentPaid?.toLocaleString("en-IN")}{" "}
+                                paid ·{" "}
+                                <span className="text-red-600 font-semibold">
+                                  ₹
+                                  {row.installmentBalance.toLocaleString(
+                                    "en-IN",
+                                  )}{" "}
+                                  balance
+                                </span>
+                              </p>
+                            )}
+                          <p className="text-xs text-slate-400 mt-0.5">
+                            Next due:{" "}
+                            {row.nextDueOn ? fmtDate(row.nextDueOn) : "—"}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="hidden sm:block overflow-x-auto">
+                      <table className="w-full">
+                        <thead>
+                          <tr className="text-xs text-slate-500 uppercase tracking-wide border-b bg-slate-50/50">
+                            {[
+                              "Player",
+                              "Fee Type",
+                              "Plan",
+                              "Status",
+                              "Installment",
+                              "Next Due",
+                              "Actions",
+                            ].map((h) => (
+                              <th
+                                key={h}
+                                className="text-left px-4 py-3 whitespace-nowrap"
+                              >
+                                {h}
+                              </th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100">
+                          {filtered.map((row) => (
+                            <tr
+                              key={row.playerPublicId}
+                              className={`hover:bg-slate-50 transition-colors ${row.feeStatus === "OVERDUE" ? "bg-red-50/30" : ""}`}
+                            >
+                              <td className="px-4 py-3">
+                                <p className="text-sm font-semibold text-slate-800">
+                                  {row.playerName}
+                                </p>
+                              </td>
+                              <td className="px-4 py-3">
+                                <span
+                                  className={`text-xs font-bold px-2.5 py-1 rounded-full ${row.feeType === "ANNUAL" ? "bg-indigo-100 text-indigo-700" : row.feeType === "MONTHLY" ? "bg-blue-100 text-blue-700" : "bg-slate-100 text-slate-600"}`}
+                                >
+                                  {row.feeType}
+                                </span>
+                              </td>
+                              <td className="px-4 py-3 text-sm text-slate-500">
+                                {row.feePlanName}
+                              </td>
+                              <td className="px-4 py-3">
+                                <span
+                                  className={`inline-flex items-center gap-1 text-xs font-bold px-2.5 py-1 rounded-full ${row.feeStatus === "PAID" ? "bg-emerald-100 text-emerald-700" : row.feeStatus === "OVERDUE" ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-700"}`}
+                                >
+                                  {row.feeStatus === "OVERDUE" && "⚠ "}
+                                  {row.feeStatus}
+                                </span>
+                              </td>
+                              <td className="px-4 py-3 text-sm">
+                                {row.hasInstallmentPlan &&
+                                row.installmentBalance !== null ? (
+                                  <div>
+                                    <span
+                                      className={
+                                        row.installmentBalance > 0
+                                          ? "text-red-600 font-semibold"
+                                          : "text-emerald-600 font-semibold"
+                                      }
+                                    >
+                                      {row.installmentBalance > 0
+                                        ? `₹${row.installmentBalance.toLocaleString("en-IN")} due`
+                                        : "✓ Fully paid"}
+                                    </span>
+                                    {row.installmentPaid !== null &&
+                                      row.installmentPaid > 0 && (
+                                        <p className="text-[10px] text-slate-400 mt-0.5">
+                                          ₹
+                                          {row.installmentPaid.toLocaleString(
+                                            "en-IN",
+                                          )}{" "}
+                                          paid
+                                        </p>
+                                      )}
+                                  </div>
+                                ) : (
+                                  <span className="text-slate-300">—</span>
+                                )}
+                              </td>
+                              <td className="px-4 py-3 text-sm">
+                                {row.nextDueOn ? (
+                                  <span
+                                    className={`font-medium ${row.feeStatus === "OVERDUE" ? "text-red-600" : row.feeStatus === "DUE" ? "text-amber-600" : "text-slate-600"}`}
+                                  >
+                                    {fmtDate(row.nextDueOn)}
+                                  </span>
+                                ) : (
+                                  "—"
+                                )}
+                              </td>
+                              <td className="px-4 py-3">
+                                <div className="flex items-center gap-2">
+                                  {(row.feeStatus === "OVERDUE" ||
+                                    row.feeStatus === "DUE") && (
+                                    <a
+                                      href={whatsappHref(row)}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-green-500 text-white text-xs font-semibold rounded-lg hover:bg-green-600 transition"
+                                    >
+                                      <svg
+                                        viewBox="0 0 24 24"
+                                        className="w-3 h-3 fill-white"
+                                      >
+                                        <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z" />
+                                        <path d="M12 0C5.373 0 0 5.373 0 12c0 2.123.553 4.112 1.523 5.838L.057 23.6l5.916-1.447A11.944 11.944 0 0012 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 21.894a9.888 9.888 0 01-5.032-1.372l-.361-.214-3.741.981.998-3.648-.235-.374A9.868 9.868 0 012.107 12C2.107 6.539 6.539 2.107 12 2.107S21.893 6.539 21.893 12 17.461 21.894 12 21.894z" />
+                                      </svg>
+                                      WhatsApp
+                                    </a>
+                                  )}
+                                  {row.feeAccountPublicId && (
+                                    <button
+                                      onClick={() => openEditDueDate(row)}
+                                      className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 text-slate-600 text-xs font-semibold rounded-lg hover:bg-slate-200 transition"
+                                    >
+                                      <Calendar size={11} />
+                                      Edit Due
+                                    </button>
+                                  )}
+                                </div>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
+          );
+        })()}
+
+      {/* ── NEW: REGISTRATION FEES TAB ── */}
+      {activeTab === "regfees" && (
+        <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+          <div className="px-4 py-3 border-b border-slate-100 bg-slate-50 flex items-center justify-between flex-wrap gap-2">
+            <div>
+              <h2 className="font-bold text-slate-800 text-sm sm:text-base">
+                Registration Fees
+              </h2>
+              <p className="text-xs text-slate-400">
+                {regFeesPaidCount} paid · {regFees.length - regFeesPaidCount}{" "}
+                pending · ₹1,500 each
+              </p>
+            </div>
+            <span className="text-sm font-semibold text-purple-600">
+              {fmt(regFeesTotal)}
+            </span>
+          </div>
+
+          {/* Search */}
+          <div className="px-4 py-2.5 border-b border-slate-100">
+            <input
+              type="text"
+              value={regFeeSearch}
+              onChange={(e) => setRegFeeSearch(e.target.value)}
+              placeholder="Search player…"
+              className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-purple-400 focus:outline-none"
+            />
+          </div>
+
+          {/* Stats row */}
+          <div className="grid grid-cols-3 gap-3 p-4 border-b border-slate-100">
+            <div className="bg-purple-50 border border-purple-200 rounded-xl p-3 text-center">
+              <p className="text-lg font-bold text-purple-700">
+                {regFees.length}
+              </p>
+              <p className="text-xs text-purple-500">Total</p>
+            </div>
+            <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3 text-center">
+              <p className="text-lg font-bold text-emerald-700">
+                {regFeesPaidCount}
+              </p>
+              <p className="text-xs text-emerald-500">Paid</p>
+            </div>
+            <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-center">
+              <p className="text-lg font-bold text-amber-700">
+                {regFees.length - regFeesPaidCount}
+              </p>
+              <p className="text-xs text-amber-500">Pending</p>
+            </div>
+          </div>
+
+          {/* Mobile list */}
+          <div className="sm:hidden divide-y divide-slate-100">
+            {filteredRegFees.map((r) => (
+              <div
+                key={r.playerPublicId}
+                className="px-4 py-3.5 flex items-center justify-between gap-3"
+              >
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-semibold text-slate-800 truncate">
+                    {r.playerName}
+                  </p>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    {r.regFeePaid
+                      ? `✓ Paid · ${fmtDate(r.regFeePaidOn)} · ${fmtMode(r.regFeePaymentMode)}`
+                      : "Not paid"}
+                  </p>
+                </div>
+                <div className="flex items-center gap-2 flex-shrink-0">
+                  <span
+                    className={`text-xs font-bold px-2 py-0.5 rounded-full ${r.regFeePaid ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}`}
+                  >
+                    {r.regFeePaid ? "Paid" : "Pending"}
+                  </span>
+                  {!r.regFeePaid ? (
+                    <button
+                      onClick={() => {
+                        setRegFeeMode("PHONE_PE");
+                        setRegFeePaidOn(new Date().toISOString().split("T")[0]);
+                        setShowRegFeeModal(r);
+                      }}
+                      className="px-2.5 py-1.5 bg-purple-600 text-white text-xs font-semibold rounded-lg hover:bg-purple-700 transition"
+                    >
+                      Mark Paid
+                    </button>
+                  ) : isSuperAdmin ? (
+                    <button
+                      onClick={() =>
+                        handleUnmarkRegFee(r.playerPublicId, r.playerName)
+                      }
+                      className="px-2.5 py-1.5 bg-slate-100 text-slate-600 text-xs font-semibold rounded-lg hover:bg-slate-200 transition"
+                    >
+                      Unmark
+                    </button>
+                  ) : null}
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Desktop table */}
+          <div className="hidden sm:block overflow-x-auto">
+            <table className="w-full">
+              <thead>
+                <tr className="text-xs text-slate-500 uppercase tracking-wide border-b bg-slate-50/50">
+                  {[
+                    "Player",
+                    "Status",
+                    "Paid On",
+                    "Mode",
+                    "Amount",
+                    "Action",
+                  ].map((h) => (
+                    <th
+                      key={h}
+                      className="text-left px-4 py-3 whitespace-nowrap"
+                    >
+                      {h}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {filteredRegFees.map((r) => (
+                  <tr key={r.playerPublicId} className="hover:bg-slate-50">
+                    <td className="px-4 py-3 text-sm font-semibold text-slate-800">
+                      {r.playerName}
+                    </td>
+                    <td className="px-4 py-3">
+                      <span
+                        className={`text-xs font-bold px-2.5 py-1 rounded-full ${r.regFeePaid ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}`}
+                      >
+                        {r.regFeePaid ? "✓ Paid" : "Pending"}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 text-sm text-slate-600">
+                      {fmtDate(r.regFeePaidOn)}
+                    </td>
+                    <td className="px-4 py-3 text-sm text-slate-600">
+                      {fmtMode(r.regFeePaymentMode)}
+                    </td>
+                    <td className="px-4 py-3 text-sm font-bold text-purple-700">
+                      {r.regFeePaid ? fmt(r.regFeeAmount) : "—"}
+                    </td>
+                    <td className="px-4 py-3">
+                      {!r.regFeePaid ? (
+                        <button
+                          onClick={() => {
+                            setRegFeeMode("PHONE_PE");
+                            setRegFeePaidOn(
+                              new Date().toISOString().split("T")[0],
+                            );
+                            setShowRegFeeModal(r);
+                          }}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-purple-600 text-white text-xs font-semibold rounded-lg hover:bg-purple-700 transition"
+                        >
+                          Mark as Paid
+                        </button>
+                      ) : isSuperAdmin ? (
+                        <button
+                          onClick={() =>
+                            handleUnmarkRegFee(r.playerPublicId, r.playerName)
+                          }
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 text-slate-600 text-xs font-semibold rounded-lg hover:bg-slate-200 transition"
+                        >
+                          Unmark
+                        </button>
+                      ) : null}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot>
+                <tr className="border-t-2 border-slate-200 bg-slate-50">
+                  <td
+                    colSpan={4}
+                    className="px-4 py-3 text-sm font-semibold text-slate-700"
+                  >
+                    Total Collected · {regFeesPaidCount} players
+                  </td>
+                  <td className="px-4 py-3 text-sm font-bold text-purple-700">
+                    {fmt(regFeesTotal)}
+                  </td>
+                  <td />
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* ── MEMBERSHIPS / SUBSCRIPTION REVENUE ── */}
+      {activeTab === "subscriptions" && (
+        <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+          <div className="px-4 py-3 border-b border-slate-100 bg-slate-50 flex items-center justify-between flex-wrap gap-2">
+            <div>
+              <h2 className="font-bold text-slate-800 text-sm sm:text-base">
+                Membership Revenue
+              </h2>
+              <p className="text-xs text-slate-400">
+                Bowling machine subscriptions
+              </p>
+            </div>
+            <span className="text-sm font-semibold text-cyan-600">
+              {fmt(subRevenueTotal)}
+            </span>
+          </div>
+
+          <div className="px-4 py-2.5 border-b border-slate-100">
+            <input
+              type="text"
+              value={subRevenueSearch}
+              onChange={(e) => setSubRevenueSearch(e.target.value)}
+              placeholder="Search member…"
+              className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-cyan-400 focus:outline-none"
+            />
+          </div>
+
+          {filteredSubRevenue.length === 0 ? (
+            <EmptyState message="No membership revenue in this period" />
+          ) : (
+            <>
+              {/* Mobile */}
+              <div className="sm:hidden divide-y divide-slate-100">
+                {filteredSubRevenue.map((r) => (
+                  <div key={r.publicId} className="px-4 py-3.5">
+                    <div className="flex items-center justify-between gap-2">
+                      <div>
+                        <p className="text-sm font-semibold text-slate-800">
+                          {r.userName}
+                        </p>
+                        <p className="text-xs text-slate-500 mt-0.5">
+                          {r.sessionsPerMonth} sessions × {r.planMonths}mo
+                          {r.activatedAt && ` · ${fmtDate(r.activatedAt)}`}
+                          {r.paymentMode && ` · ${fmtMode(r.paymentMode)}`}
+                        </p>
+                      </div>
+                      <p className="text-sm font-bold text-cyan-700 flex-shrink-0">
+                        {fmt(r.pricePaid)}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+                <div className="flex items-center justify-between px-4 py-3 bg-slate-50 border-t-2 border-slate-200">
+                  <span className="text-sm font-semibold text-slate-700">
+                    Total · {filteredSubRevenue.length}
+                  </span>
+                  <span className="text-sm font-bold text-cyan-700">
+                    {fmt(subRevenueTotal)}
+                  </span>
+                </div>
+              </div>
+
+              {/* Desktop */}
+              <div className="hidden sm:block overflow-x-auto">
+                <table className="w-full">
+                  <thead>
+                    <tr className="text-xs text-slate-500 uppercase tracking-wide border-b bg-slate-50/50">
+                      {[
+                        "Member",
+                        "Plan",
+                        "Activated On",
+                        "Mode",
+                        "Status",
+                        "Amount",
+                      ].map((h) => (
+                        <th
+                          key={h}
+                          className="text-left px-4 py-3 whitespace-nowrap"
+                        >
+                          {h}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {filteredSubRevenue.map((r) => (
+                      <tr key={r.publicId} className="hover:bg-slate-50">
+                        <td className="px-4 py-3">
+                          <p className="text-sm font-semibold text-slate-800">
+                            {r.userName}
+                          </p>
+                          <p className="text-xs text-slate-400">
+                            {r.userPhone}
+                          </p>
+                        </td>
+                        <td className="px-4 py-3 text-sm text-slate-600">
+                          {r.sessionsPerMonth} sessions × {r.planMonths} month
+                          {r.planMonths > 1 ? "s" : ""}
+                        </td>
+                        <td className="px-4 py-3 text-sm text-slate-600">
+                          {fmtDate(r.activatedAt)}
+                        </td>
+                        <td className="px-4 py-3 text-sm text-slate-600">
+                          {fmtMode(r.paymentMode)}
+                        </td>
+                        <td className="px-4 py-3">
+                          <span
+                            className={`text-xs font-bold px-2.5 py-1 rounded-full ${
+                              r.status === "ACTIVE"
+                                ? "bg-emerald-100 text-emerald-700"
+                                : r.status === "EXPIRED"
+                                  ? "bg-slate-100 text-slate-600"
+                                  : "bg-red-100 text-red-600"
+                            }`}
+                          >
+                            {r.status}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-sm font-bold text-cyan-700">
+                          {fmt(r.pricePaid)}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                  <tfoot>
+                    <tr className="border-t-2 border-slate-200 bg-slate-50">
+                      <td
+                        colSpan={5}
+                        className="px-4 py-3 text-sm font-semibold text-slate-700"
+                      >
+                        Total · {filteredSubRevenue.length} memberships
+                      </td>
+                      <td className="px-4 py-3 text-sm font-bold text-cyan-700">
+                        {fmt(subRevenueTotal)}
+                      </td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+            </>
+          )}
+        </div>
+      )}
+
       {/* ── EXPENSES (SUPER ADMIN) ── */}
       {activeTab === "expenses" && isSuperAdmin && (
         <div className="space-y-4">
@@ -2745,7 +3353,6 @@ export default function AdminRevenueDashboard() {
             ))}
           </div>
 
-          {/* SUMMARY */}
           {expenseSubTab === "summary" && (
             <div className="space-y-4">
               <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
@@ -2810,7 +3417,6 @@ export default function AdminRevenueDashboard() {
             </div>
           )}
 
-          {/* MONTHLY */}
           {expenseSubTab === "monthly" && (
             <div className="space-y-3">
               <div className="relative flex items-center justify-between bg-white rounded-xl border border-slate-200 px-4 py-3 shadow-sm">
@@ -2913,7 +3519,6 @@ export default function AdminRevenueDashboard() {
                       <p className="text-xs text-slate-500">Total</p>
                     </div>
                   </div>
-
                   <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
                     <div className="divide-y divide-slate-100">
                       {monthlyPayments.map((payment) => {
@@ -3001,7 +3606,6 @@ export default function AdminRevenueDashboard() {
             </div>
           )}
 
-          {/* ALL EXPENSES */}
           {expenseSubTab === "all" && (
             <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
               <div className="border-b border-slate-100">
@@ -3124,7 +3728,6 @@ export default function AdminRevenueDashboard() {
                 </div>
               ) : (
                 <>
-                  {/* Mobile cards */}
                   <div className="sm:hidden divide-y divide-slate-100">
                     {searchedExpenses.map((e) => (
                       <div key={e.publicId} className="px-4 py-3.5">
@@ -3189,8 +3792,6 @@ export default function AdminRevenueDashboard() {
                       </span>
                     </div>
                   </div>
-
-                  {/* Desktop table */}
                   <div className="hidden sm:block overflow-x-auto">
                     <table className="w-full">
                       <thead>
@@ -3398,7 +3999,6 @@ export default function AdminRevenueDashboard() {
               )}
             </div>
           </div>
-
           {searchedIncomes.length === 0 ? (
             <div className="text-center py-12">
               <TrendingUp className="mx-auto text-slate-200 mb-3" size={36} />
@@ -3430,7 +4030,6 @@ export default function AdminRevenueDashboard() {
             </div>
           ) : (
             <>
-              {/* Mobile cards */}
               <div className="sm:hidden divide-y divide-slate-100">
                 {searchedIncomes.map((e) => (
                   <div key={e.publicId} className="px-4 py-3.5">
@@ -3492,8 +4091,6 @@ export default function AdminRevenueDashboard() {
                   </span>
                 </div>
               </div>
-
-              {/* Desktop table */}
               <div className="hidden sm:block overflow-x-auto">
                 <table className="w-full">
                   <thead>

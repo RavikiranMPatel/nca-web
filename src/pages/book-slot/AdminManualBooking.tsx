@@ -27,6 +27,14 @@ type PaymentStatus = "CONFIRMED" | "PENDING_PAYMENT";
 
 const RESOURCES = ["TURF", "ASTRO", "BOWLING_MACHINE"];
 
+const PAYMENT_MODES = [
+  { value: "PHONE_PE", label: "PhonePe" },
+  { value: "GOOGLE_PAY", label: "Google Pay" },
+  { value: "CASH", label: "Cash" },
+  { value: "ONLINE", label: "Online / Bank Transfer" },
+  { value: "OTHER", label: "Other" },
+];
+
 const SLOT_GROUPS = [
   { key: "MORNING", label: "☀️ Morning", sub: "Before 12 PM" },
   { key: "AFTERNOON", label: "🌤️ Afternoon", sub: "12 PM – 5 PM" },
@@ -36,7 +44,6 @@ const SLOT_GROUPS = [
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 const fmt = (t: string) => t.substring(0, 5);
-
 const today = () => new Date().toLocaleDateString("en-CA");
 
 // ─── Main Component ───────────────────────────────────────────────────────────
@@ -44,20 +51,29 @@ const today = () => new Date().toLocaleDateString("en-CA");
 export default function AdminManualBooking() {
   const navigate = useNavigate();
 
-  // Step state
   const [step, setStep] = useState<1 | 2 | 3>(1);
-
   const [mode, setMode] = useState<"FUTURE" | "PAST">("FUTURE");
 
-  // Mode B — past session fields
+  // ── Mode B — past session fields ──────────────────────────────────────────
   const [pastDate, setPastDate] = useState("");
   const [pastTime, setPastTime] = useState("");
   const [pastResource, setPastResource] = useState("");
   const [pastSlots, setPastSlots] = useState<
-    { startTime: string; endTime: string }[]
+    {
+      startTime: string;
+      endTime: string;
+      price: number;
+      price60Balls: number | null;
+      price120Balls: number | null;
+    }[]
   >([]);
   const [pastSlotsLoading, setPastSlotsLoading] = useState(false);
-  // Step 1 – slot selection
+  // ── NEW: past session extra fields ──
+  const [pastBallCount, setPastBallCount] = useState<60 | 120 | null>(null);
+  const [pastAmount, setPastAmount] = useState("");
+  const [pastPaymentMode, setPastPaymentMode] = useState("CASH");
+
+  // ── Step 1 – slot selection ───────────────────────────────────────────────
   const [date, setDate] = useState(today());
   const [resource, setResource] = useState("");
   const [slots, setSlots] = useState<Slot[]>([]);
@@ -66,21 +82,17 @@ export default function AdminManualBooking() {
   const [slotsError, setSlotsError] = useState("");
   const [closedMsg, setClosedMsg] = useState("");
 
-  // Step 2 – booker details
+  // ── Step 2 – booker details ───────────────────────────────────────────────
   const [bookerType, setBookerType] = useState<BookerType>("GUEST");
-
-  // Registered user search
   const [userSearch, setUserSearch] = useState("");
   const [suggestions, setSuggestions] = useState<UserSuggestion[]>([]);
   const [selectedUser, setSelectedUser] = useState<UserSuggestion | null>(null);
   const [searchLoading, setSearchLoading] = useState(false);
-
-  // Guest fields
   const [guestName, setGuestName] = useState("");
   const [guestPhone, setGuestPhone] = useState("");
   const [guestEmail, setGuestEmail] = useState("");
 
-  // Step 3 – confirm
+  // ── Step 3 – confirm ─────────────────────────────────────────────────────
   const [paymentStatus, setPaymentStatus] =
     useState<PaymentStatus>("CONFIRMED");
   const [ballCount, setBallCount] = useState<60 | 120 | null>(null);
@@ -89,18 +101,38 @@ export default function AdminManualBooking() {
   const [submitError, setSubmitError] = useState("");
   const [success, setSuccess] = useState(false);
 
-  // Reset ball count when resource changes
+  // ── Reset ball count when resource changes ────────────────────────────────
   useEffect(() => {
     setBallCount(null);
     setSelectedSlot(null);
     setSlots([]);
   }, [resource]);
 
-  // Fetch past slots when date + resource selected in Mode B
+  // ── Reset past ball count + amount when resource changes in past mode ─────
+  useEffect(() => {
+    setPastBallCount(null);
+    setPastAmount("");
+    setPastTime("");
+  }, [pastResource]);
+
+  // ── Auto-fill past amount from slot price when ball count selected ─────────
+  useEffect(() => {
+    if (!pastBallCount || pastSlots.length === 0 || !pastTime) return;
+    const slot = pastSlots.find((s) => s.startTime + ":00" === pastTime);
+    if (!slot) return;
+    if (pastBallCount === 60 && slot.price60Balls) {
+      setPastAmount(String(slot.price60Balls));
+    } else if (pastBallCount === 120 && slot.price120Balls) {
+      setPastAmount(String(slot.price120Balls));
+    }
+  }, [pastBallCount, pastTime, pastSlots]);
+
+  // ── Fetch past slots ──────────────────────────────────────────────────────
   useEffect(() => {
     if (mode !== "PAST" || !pastDate || !pastResource) {
       setPastSlots([]);
-      setBallCount(null);
+      setPastBallCount(null);
+      setPastAmount("");
       setPastTime("");
       return;
     }
@@ -115,6 +147,9 @@ export default function AdminManualBooking() {
             res.data.slots.map((s: any) => ({
               startTime: fmt(s.startTime),
               endTime: fmt(s.endTime),
+              price: s.price,
+              price60Balls: s.price60Balls ?? null,
+              price120Balls: s.price120Balls ?? null,
             })),
           );
         } else {
@@ -129,9 +164,14 @@ export default function AdminManualBooking() {
     run();
   }, [mode, pastDate, pastResource]);
 
-  // ── Fetch slots ──────────────────────────────────────────────────────────────
+  // ── Auto-fill amount when time selected (non-bowling) ─────────────────────
+  useEffect(() => {
+    if (!pastTime || pastResource === "BOWLING_MACHINE") return;
+    const slot = pastSlots.find((s) => s.startTime + ":00" === pastTime);
+    if (slot?.price) setPastAmount(String(slot.price));
+  }, [pastTime, pastSlots, pastResource]);
 
-  // Reset slots and selection when ball count changes
+  // ── Fetch future slots ────────────────────────────────────────────────────
   useEffect(() => {
     setSlots([]);
     setSelectedSlot(null);
@@ -146,13 +186,10 @@ export default function AdminManualBooking() {
       setClosedMsg("");
       return;
     }
-
-    // Don't fetch for bowling machine until ball count selected
     if (resource === "BOWLING_MACHINE" && !ballCount) {
       setSlots([]);
       return;
     }
-
     const run = async () => {
       setSlotsLoading(true);
       setSlotsError("");
@@ -177,7 +214,6 @@ export default function AdminManualBooking() {
           setSlots([]);
           return;
         }
-
         setSlots(
           res.data.slots.map((s: any) => ({
             time: `${fmt(s.startTime)} - ${fmt(s.endTime)}`,
@@ -205,8 +241,7 @@ export default function AdminManualBooking() {
     run();
   }, [date, resource]);
 
-  // ── User search ──────────────────────────────────────────────────────────────
-
+  // ── User search ───────────────────────────────────────────────────────────
   const searchUsers = useCallback(async (q: string) => {
     if (q.length < 2) {
       setSuggestions([]);
@@ -228,8 +263,7 @@ export default function AdminManualBooking() {
     return () => clearTimeout(t);
   }, [userSearch, searchUsers]);
 
-  // ── Submit ───────────────────────────────────────────────────────────────────
-
+  // ── Submit ────────────────────────────────────────────────────────────────
   const handleSubmit = async () => {
     setSubmitting(true);
     setSubmitError("");
@@ -246,6 +280,12 @@ export default function AdminManualBooking() {
               guestPhone,
               paymentStatus: "CONFIRMED",
               notes,
+              // ── NEW fields ──
+              ...(pastResource === "BOWLING_MACHINE" && pastBallCount
+                ? { ballCount: pastBallCount }
+                : {}),
+              ...(pastAmount ? { amount: parseFloat(pastAmount) } : {}),
+              paymentMode: pastPaymentMode,
             }
           : {
               date,
@@ -272,8 +312,7 @@ export default function AdminManualBooking() {
     }
   };
 
-  // ── Validation ───────────────────────────────────────────────────────────────
-
+  // ── Validation ────────────────────────────────────────────────────────────
   const step1Valid =
     !!selectedSlot && (resource !== "BOWLING_MACHINE" || ballCount !== null);
   const step2Valid =
@@ -281,10 +320,17 @@ export default function AdminManualBooking() {
       ? !!selectedUser
       : guestName.trim().length > 1 && guestPhone.trim().length >= 10;
 
-  // ─────────────────────────────────────────────────────────────────────────────
-  // Success screen
-  // ─────────────────────────────────────────────────────────────────────────────
+  const pastValid =
+    !!pastDate &&
+    !!pastTime &&
+    !!pastResource &&
+    guestName.trim().length > 1 &&
+    guestPhone.trim().length >= 10 &&
+    (pastResource !== "BOWLING_MACHINE" || pastBallCount !== null) &&
+    !!pastAmount &&
+    !!pastPaymentMode;
 
+  // ── Success screen ────────────────────────────────────────────────────────
   if (success) {
     return (
       <div className="max-w-lg mx-auto mt-20 text-center space-y-6 px-4">
@@ -297,7 +343,7 @@ export default function AdminManualBooking() {
             <>
               Past session recorded for <strong>{guestName}</strong> on{" "}
               <strong>{pastDate}</strong> ({pastResource} ·{" "}
-              {pastTime.substring(0, 5)})
+              {pastTime.substring(0, 5)}){pastAmount && <> · ₹{pastAmount}</>}
             </>
           ) : (
             <>
@@ -323,10 +369,13 @@ export default function AdminManualBooking() {
               setGuestEmail("");
               setUserSearch("");
               setNotes("");
-              setPastDate(""); // ← add
-              setPastTime(""); // ← add
-              setPastResource(""); // ← add
+              setPastDate("");
+              setPastTime("");
+              setPastResource("");
               setPastSlots([]);
+              setPastBallCount(null);
+              setPastAmount("");
+              setPastPaymentMode("CASH");
             }}
             className="px-5 py-2.5 rounded-xl border border-gray-300 font-medium hover:bg-gray-50 transition"
           >
@@ -343,10 +392,7 @@ export default function AdminManualBooking() {
     );
   }
 
-  // ─────────────────────────────────────────────────────────────────────────────
-  // Main layout
-  // ─────────────────────────────────────────────────────────────────────────────
-
+  // ── Main layout ───────────────────────────────────────────────────────────
   return (
     <div className="max-w-4xl mx-auto px-4 py-8 space-y-8">
       {/* Header */}
@@ -364,7 +410,6 @@ export default function AdminManualBooking() {
           </p>
         </div>
 
-        {/* Step indicator — only show for future mode */}
         {mode === "FUTURE" && (
           <div className="hidden md:flex items-center gap-2">
             {(["Slot", "Booker", "Confirm"] as const).map((label, i) => {
@@ -374,8 +419,7 @@ export default function AdminManualBooking() {
               return (
                 <div key={label} className="flex items-center gap-2">
                   <div
-                    className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold transition-all
-              ${done ? "bg-green-500 text-white" : active ? "bg-blue-600 text-white" : "bg-gray-200 text-gray-500"}`}
+                    className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold transition-all ${done ? "bg-green-500 text-white" : active ? "bg-blue-600 text-white" : "bg-gray-200 text-gray-500"}`}
                   >
                     {done ? "✓" : n}
                   </div>
@@ -406,15 +450,14 @@ export default function AdminManualBooking() {
               setMode(m.value);
               setStep(1);
             }}
-            className={`px-5 py-2.5 text-sm font-medium transition
-        ${mode === m.value ? "bg-blue-600 text-white" : "bg-white text-gray-600 hover:bg-gray-50"}`}
+            className={`px-5 py-2.5 text-sm font-medium transition ${mode === m.value ? "bg-blue-600 text-white" : "bg-white text-gray-600 hover:bg-gray-50"}`}
           >
             {m.label}
           </button>
         ))}
       </div>
 
-      {/* ── MODE B: Past Session ─────────────────────────────────────────── */}
+      {/* ── MODE B: Past Session ──────────────────────────────────────────────── */}
       {mode === "PAST" && (
         <div className="space-y-6">
           <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 text-sm text-amber-800">
@@ -426,6 +469,7 @@ export default function AdminManualBooking() {
           <div className="bg-white rounded-2xl border border-gray-200 p-6 shadow-sm space-y-4">
             <p className="font-semibold text-gray-900">Session Details</p>
             <div className="grid md:grid-cols-2 gap-4">
+              {/* Date */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Date *
@@ -439,6 +483,54 @@ export default function AdminManualBooking() {
                 />
               </div>
 
+              {/* Resource */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Resource *
+                </label>
+                <div className="flex flex-wrap gap-2">
+                  {RESOURCES.map((r) => (
+                    <button
+                      key={r}
+                      onClick={() => setPastResource(r)}
+                      className={`px-4 py-2 rounded-xl border font-semibold text-sm transition-all ${pastResource === r ? "bg-blue-600 text-white border-blue-600" : "border-gray-300 hover:bg-gray-50"}`}
+                    >
+                      {r}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Ball count — bowling machine only */}
+              {pastResource === "BOWLING_MACHINE" && (
+                <div className="md:col-span-2">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Session *
+                  </label>
+                  <div className="grid grid-cols-2 gap-3 max-w-xs">
+                    {([60, 120] as const).map((b) => (
+                      <button
+                        key={b}
+                        onClick={() => setPastBallCount(b)}
+                        className={`py-3 rounded-xl border-2 text-center transition ${pastBallCount === b ? "border-blue-600 bg-blue-50" : "border-gray-200 hover:border-blue-300"}`}
+                      >
+                        <p
+                          className={`text-lg font-bold ${pastBallCount === b ? "text-blue-700" : "text-gray-800"}`}
+                        >
+                          {b} balls
+                        </p>
+                        <p className="text-xs text-gray-500 mt-0.5">
+                          {b === 60
+                            ? "15 mins · 1 session"
+                            : "30 mins · 2 sessions"}
+                        </p>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Start Time */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Start Time *
@@ -465,20 +557,37 @@ export default function AdminManualBooking() {
                 )}
               </div>
 
+              {/* Amount */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Resource *
+                  Amount (₹) *
+                  <span className="text-xs text-gray-400 font-normal ml-1">
+                    auto-filled from slot price
+                  </span>
                 </label>
+                <input
+                  type="number"
+                  inputMode="numeric"
+                  value={pastAmount}
+                  onChange={(e) => setPastAmount(e.target.value)}
+                  placeholder="e.g. 500"
+                  className="w-full border border-gray-300 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
 
-                <div className="flex flex-col sm:flex-row gap-3">
-                  {RESOURCES.map((r) => (
+              {/* Payment Mode */}
+              <div className="md:col-span-2">
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Payment Mode *
+                </label>
+                <div className="flex flex-wrap gap-2">
+                  {PAYMENT_MODES.map((m) => (
                     <button
-                      key={r}
-                      onClick={() => setPastResource(r)}
-                      className={`px-6 py-2.5 rounded-xl border font-semibold transition-all
-                  ${pastResource === r ? "bg-blue-600 text-white border-blue-600" : "border-gray-300 hover:bg-gray-50"}`}
+                      key={m.value}
+                      onClick={() => setPastPaymentMode(m.value)}
+                      className={`px-4 py-2 rounded-xl border text-sm font-medium transition ${pastPaymentMode === m.value ? "bg-blue-600 text-white border-blue-600" : "border-gray-300 text-gray-700 hover:bg-gray-50"}`}
                     >
-                      {r}
+                      {m.label}
                     </button>
                   ))}
                 </div>
@@ -486,7 +595,7 @@ export default function AdminManualBooking() {
             </div>
           </div>
 
-          {/* Booker details — inline, no step 2 needed */}
+          {/* Booker details */}
           <div className="bg-white rounded-2xl border border-gray-200 p-6 shadow-sm space-y-4">
             <p className="font-semibold text-gray-900">Booker Details</p>
             <div className="grid md:grid-cols-2 gap-4">
@@ -511,12 +620,7 @@ export default function AdminManualBooking() {
                   placeholder="e.g. 9876543210"
                   value={guestPhone}
                   onChange={(e) => setGuestPhone(e.target.value)}
-                  className={`w-full border rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500
-      ${
-        guestPhone.length > 0 && guestPhone.trim().length < 10
-          ? "border-red-400 bg-red-50"
-          : "border-gray-300"
-      }`}
+                  className={`w-full border rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${guestPhone.length > 0 && guestPhone.trim().length < 10 ? "border-red-400 bg-red-50" : "border-gray-300"}`}
                 />
                 {guestPhone.length > 0 && guestPhone.trim().length < 10 && (
                   <p className="text-xs text-red-500 mt-1">
@@ -540,6 +644,33 @@ export default function AdminManualBooking() {
             </div>
           </div>
 
+          {/* Summary preview */}
+          {pastAmount && pastPaymentMode && (
+            <div className="bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm text-slate-700 space-y-1">
+              <p className="font-semibold text-slate-800">Session Summary</p>
+              <div className="flex flex-wrap gap-x-6 gap-y-1 text-xs text-slate-600">
+                {pastDate && <span>📅 {pastDate}</span>}
+                {pastResource && <span>🏏 {pastResource}</span>}
+                {pastTime && <span>🕐 {pastTime.substring(0, 5)}</span>}
+                {pastResource === "BOWLING_MACHINE" && pastBallCount && (
+                  <span>🎯 {pastBallCount} balls</span>
+                )}
+                {pastAmount && (
+                  <span>₹{parseFloat(pastAmount).toLocaleString("en-IN")}</span>
+                )}
+                {pastPaymentMode && (
+                  <span>
+                    💳{" "}
+                    {
+                      PAYMENT_MODES.find((m) => m.value === pastPaymentMode)
+                        ?.label
+                    }
+                  </span>
+                )}
+              </div>
+            </div>
+          )}
+
           {submitError && (
             <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3 text-sm text-red-700">
               {submitError}
@@ -548,14 +679,7 @@ export default function AdminManualBooking() {
 
           <div className="flex justify-end">
             <button
-              disabled={
-                !pastDate ||
-                !pastTime ||
-                !pastResource ||
-                !guestName ||
-                guestPhone.trim().length < 10 ||
-                submitting
-              }
+              disabled={!pastValid || submitting}
               onClick={handleSubmit}
               className="px-7 py-3 rounded-xl bg-blue-600 text-white font-semibold hover:bg-blue-700 transition shadow-sm disabled:opacity-40 flex items-center gap-2"
             >
@@ -586,10 +710,9 @@ export default function AdminManualBooking() {
         </div>
       )}
 
-      {/* ── STEP 1: Slot Selection ─────────────────────────────────────────────── */}
+      {/* ── STEP 1: Slot Selection ────────────────────────────────────────────── */}
       {mode === "FUTURE" && step === 1 && (
         <div className="space-y-6">
-          {/* Date + Resource */}
           <div className="grid md:grid-cols-2 gap-5">
             <div className="bg-white rounded-2xl border border-gray-200 p-5 shadow-sm">
               <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -608,14 +731,12 @@ export default function AdminManualBooking() {
               <label className="block text-sm font-medium text-gray-700 mb-3">
                 Select Resource
               </label>
-
               <div className="flex flex-col sm:flex-row gap-3">
                 {RESOURCES.map((r) => (
                   <button
                     key={r}
                     onClick={() => setResource(r)}
-                    className={`px-6 py-2.5 rounded-xl border font-semibold transition-all
-                      ${resource === r ? "bg-blue-600 text-white border-blue-600 shadow" : "border-gray-300 hover:bg-gray-50"}`}
+                    className={`px-6 py-2.5 rounded-xl border font-semibold transition-all ${resource === r ? "bg-blue-600 text-white border-blue-600 shadow" : "border-gray-300 hover:bg-gray-50"}`}
                   >
                     {r}
                   </button>
@@ -624,47 +745,30 @@ export default function AdminManualBooking() {
             </div>
           </div>
 
-          {/* Ball count selector — only for bowling machine */}
           {resource === "BOWLING_MACHINE" && (
             <div className="bg-white rounded-2xl border border-gray-200 p-5 shadow-sm">
               <label className="block text-sm font-medium text-gray-700 mb-3">
                 Select Session *
               </label>
               <div className="grid grid-cols-2 gap-3">
-                <button
-                  onClick={() => setBallCount(60)}
-                  className={`py-4 rounded-xl border-2 text-center transition ${
-                    ballCount === 60
-                      ? "border-blue-600 bg-blue-50"
-                      : "border-gray-200 hover:border-blue-300"
-                  }`}
-                >
-                  <p className="text-xl font-bold text-blue-700">60</p>
-                  <p className="text-xs text-gray-500 mt-0.5">
-                    balls · 15 mins
-                  </p>
-                </button>
-                <button
-                  onClick={() => setBallCount(120)}
-                  className={`py-4 rounded-xl border-2 text-center transition ${
-                    ballCount === 120
-                      ? "border-blue-600 bg-blue-50"
-                      : "border-gray-200 hover:border-blue-300"
-                  }`}
-                >
-                  <p className="text-xl font-bold text-blue-700">120</p>
-                  <p className="text-xs text-gray-500 mt-0.5">
-                    balls · 30 mins
-                  </p>
-                </button>
+                {([60, 120] as const).map((b) => (
+                  <button
+                    key={b}
+                    onClick={() => setBallCount(b)}
+                    className={`py-4 rounded-xl border-2 text-center transition ${ballCount === b ? "border-blue-600 bg-blue-50" : "border-gray-200 hover:border-blue-300"}`}
+                  >
+                    <p className="text-xl font-bold text-blue-700">{b}</p>
+                    <p className="text-xs text-gray-500 mt-0.5">
+                      {b === 60 ? "balls · 15 mins" : "balls · 30 mins"}
+                    </p>
+                  </button>
+                ))}
               </div>
             </div>
           )}
 
-          {/* Slot grid */}
           <div className="bg-white rounded-2xl border border-gray-200 p-6 shadow-sm space-y-6">
             <h2 className="font-semibold text-gray-900">Available Slots</h2>
-
             {!date || !resource ? (
               <p className="text-gray-400 text-sm">
                 Select a date and resource above
@@ -738,14 +842,7 @@ export default function AdminManualBooking() {
                             onClick={() =>
                               setSelectedSlot(selected ? null : slot)
                             }
-                            className={`rounded-xl border p-3 text-left transition-all duration-150
-  ${
-    disabled
-      ? "bg-gray-100 border-gray-200 cursor-not-allowed opacity-50"
-      : selected
-        ? "bg-blue-600 border-blue-600 text-white shadow-md scale-[1.02]"
-        : "bg-white border-gray-200 hover:border-blue-300 hover:shadow-sm cursor-pointer"
-  }`}
+                            className={`rounded-xl border p-3 text-left transition-all duration-150 ${disabled ? "bg-gray-100 border-gray-200 cursor-not-allowed opacity-50" : selected ? "bg-blue-600 border-blue-600 text-white shadow-md scale-[1.02]" : "bg-white border-gray-200 hover:border-blue-300 hover:shadow-sm cursor-pointer"}`}
                           >
                             <p
                               className={`text-sm font-bold ${disabled ? "line-through text-gray-400" : selected ? "text-white" : "text-gray-900"}`}
@@ -787,7 +884,6 @@ export default function AdminManualBooking() {
             )}
           </div>
 
-          {/* Next */}
           <div className="flex justify-end">
             <button
               disabled={!step1Valid}
@@ -800,17 +896,15 @@ export default function AdminManualBooking() {
         </div>
       )}
 
-      {/* ── STEP 2: Booker Details ─────────────────────────────────────────────── */}
+      {/* ── STEP 2: Booker Details ────────────────────────────────────────────── */}
       {mode === "FUTURE" && step === 2 && (
         <div className="space-y-6">
-          {/* Slot summary pill */}
           <SlotSummaryBadge
             date={date}
             resource={resource}
             slot={selectedSlot}
           />
 
-          {/* Toggle */}
           <div className="bg-white rounded-2xl border border-gray-200 p-6 shadow-sm space-y-5">
             <div>
               <p className="font-semibold text-gray-900 mb-3">
@@ -825,8 +919,7 @@ export default function AdminManualBooking() {
                       setSelectedUser(null);
                       setUserSearch("");
                     }}
-                    className={`px-5 py-2.5 text-sm font-medium transition
-                      ${bookerType === t ? "bg-blue-600 text-white" : "bg-white text-gray-600 hover:bg-gray-50"}`}
+                    className={`px-5 py-2.5 text-sm font-medium transition ${bookerType === t ? "bg-blue-600 text-white" : "bg-white text-gray-600 hover:bg-gray-50"}`}
                   >
                     {t === "GUEST"
                       ? "👤 Guest / Walk-in"
@@ -853,12 +946,7 @@ export default function AdminManualBooking() {
                     placeholder="e.g. 9876543210"
                     value={guestPhone}
                     onChange={(e) => setGuestPhone(e.target.value)}
-                    className={`w-full border rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500
-      ${
-        guestPhone.length > 0 && guestPhone.trim().length < 10
-          ? "border-red-400 bg-red-50"
-          : "border-gray-300"
-      }`}
+                    className={`w-full border rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${guestPhone.length > 0 && guestPhone.trim().length < 10 ? "border-red-400 bg-red-50" : "border-gray-300"}`}
                   />
                   {guestPhone.length > 0 && guestPhone.trim().length < 10 && (
                     <p className="text-xs text-red-500 mt-1">
@@ -891,8 +979,6 @@ export default function AdminManualBooking() {
                     className="w-full border border-gray-300 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
                 </FormField>
-
-                {/* Dropdown */}
                 {userSearch.length >= 2 && !selectedUser && (
                   <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-xl shadow-lg max-h-52 overflow-auto">
                     {searchLoading ? (
@@ -925,7 +1011,6 @@ export default function AdminManualBooking() {
                     )}
                   </div>
                 )}
-
                 {selectedUser && (
                   <div className="mt-3 flex items-center justify-between bg-blue-50 border border-blue-200 rounded-xl px-4 py-3">
                     <div>
@@ -969,7 +1054,7 @@ export default function AdminManualBooking() {
         </div>
       )}
 
-      {/* ── STEP 3: Confirm ───────────────────────────────────────────────────── */}
+      {/* ── STEP 3: Confirm ──────────────────────────────────────────────────── */}
       {mode === "FUTURE" && step === 3 && (
         <div className="space-y-6">
           <SlotSummaryBadge
@@ -979,7 +1064,6 @@ export default function AdminManualBooking() {
           />
 
           <div className="bg-white rounded-2xl border border-gray-200 p-6 shadow-sm space-y-6">
-            {/* Summary table */}
             <div>
               <p className="font-semibold text-gray-900 mb-4">
                 Booking Summary
@@ -996,17 +1080,7 @@ export default function AdminManualBooking() {
                 )}
                 <SummaryRow
                   label="Amount"
-                  value={`₹${
-                    resource === "BOWLING_MACHINE"
-                      ? ballCount === 60
-                        ? (selectedSlot?.price60Balls ??
-                          selectedSlot?.price ??
-                          0)
-                        : (selectedSlot?.price120Balls ??
-                          selectedSlot?.price ??
-                          0)
-                      : (selectedSlot?.price ?? 0)
-                  }`}
+                  value={`₹${resource === "BOWLING_MACHINE" ? (ballCount === 60 ? (selectedSlot?.price60Balls ?? selectedSlot?.price ?? 0) : (selectedSlot?.price120Balls ?? selectedSlot?.price ?? 0)) : (selectedSlot?.price ?? 0)}`}
                 />
                 <SummaryRow
                   label="Booker"
@@ -1027,12 +1101,10 @@ export default function AdminManualBooking() {
               </div>
             </div>
 
-            {/* Payment status */}
             <div>
               <p className="text-sm font-medium text-gray-700 mb-2">
                 Payment Status
               </p>
-
               <div className="flex flex-col sm:flex-row gap-3">
                 {(
                   [
@@ -1051,23 +1123,10 @@ export default function AdminManualBooking() {
                   <button
                     key={opt.value}
                     onClick={() => setPaymentStatus(opt.value)}
-                    className={`flex-1 rounded-xl border p-4 text-left transition
-                      ${
-                        paymentStatus === opt.value
-                          ? opt.value === "CONFIRMED"
-                            ? "border-green-500 bg-green-50"
-                            : "border-orange-400 bg-orange-50"
-                          : "border-gray-200 hover:bg-gray-50"
-                      }`}
+                    className={`flex-1 rounded-xl border p-4 text-left transition ${paymentStatus === opt.value ? (opt.value === "CONFIRMED" ? "border-green-500 bg-green-50" : "border-orange-400 bg-orange-50") : "border-gray-200 hover:bg-gray-50"}`}
                   >
                     <p
-                      className={`text-sm font-semibold ${
-                        paymentStatus === opt.value
-                          ? opt.value === "CONFIRMED"
-                            ? "text-green-800"
-                            : "text-orange-800"
-                          : "text-gray-700"
-                      }`}
+                      className={`text-sm font-semibold ${paymentStatus === opt.value ? (opt.value === "CONFIRMED" ? "text-green-800" : "text-orange-800") : "text-gray-700"}`}
                     >
                       {opt.label}
                     </p>
@@ -1077,7 +1136,6 @@ export default function AdminManualBooking() {
               </div>
             </div>
 
-            {/* Notes */}
             <div>
               <p className="text-sm font-medium text-gray-700 mb-1">
                 Admin Notes (optional)
