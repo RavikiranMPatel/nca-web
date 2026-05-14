@@ -31,6 +31,8 @@ function AdminUsers() {
   const { userRole } = useAuth();
   const isSuperAdmin = userRole === "ROLE_SUPER_ADMIN";
 
+  console.log("userRole:", userRole, "isSuperAdmin:", isSuperAdmin);
+
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [deleteTarget, setDeleteTarget] = useState<User | null>(null);
@@ -338,18 +340,16 @@ function AdminUsers() {
                     onClick={() =>
                       navigate(
                         `/admin/users/${encodeURIComponent(u.publicId)}/edit`,
-                        {
-                          state: { user: u },
-                        },
+                        { state: { user: u } },
                       )
                     }
-                    className="py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-all"
+                    className="no-min-h py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-all"
                   >
                     Edit
                   </button>
                   <button
                     onClick={() => toggleUser(u)}
-                    className={`py-2 rounded-lg text-sm font-medium transition-all ${
+                    className={`no-min-h py-2 rounded-lg text-sm font-medium transition-all ${
                       u.active
                         ? "bg-amber-100 text-amber-700 hover:bg-amber-200"
                         : "bg-emerald-100 text-emerald-700 hover:bg-emerald-200"
@@ -359,7 +359,7 @@ function AdminUsers() {
                   </button>
                   <button
                     onClick={() => setDeleteTarget(u)}
-                    className="py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg text-sm font-medium transition-all"
+                    className="no-min-h py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg text-sm font-medium transition-all"
                   >
                     Delete
                   </button>
@@ -452,6 +452,7 @@ function AdminUsers() {
                               `/admin/users/${encodeURIComponent(
                                 u.publicId,
                               )}/edit`,
+                              { state: { user: u } },
                             )
                           }
                           className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-all"

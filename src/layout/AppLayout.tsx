@@ -91,7 +91,7 @@ function AppLayout({ children }: Props) {
       <main
         className={`flex-1 ${
           isHome ? "pt-16" : "pt-20 px-4 sm:px-6 py-4 max-w-7xl mx-auto w-full"
-        } pb-16 sm:pb-0`}
+        } pb-20 sm:pb-6`}
       >
         {children}
       </main>

@@ -366,7 +366,6 @@ function Home() {
     todayPresent: number;
     weekPresent: number;
   } | null>(null);
-  const [liveCount, setLiveCount] = useState<number | null>(null);
 
   // ── LIVE MATCHES STATE ──────────────────────────────────────────────────────
   const [liveMatches, setLiveMatches] = useState<LiveMatch[]>([]);
@@ -449,28 +448,6 @@ function Home() {
     shadowIntensity === "none"
       ? "border border-gray-200"
       : `shadow-${shadowIntensity}`;
-
-  // Live visitor count
-  useEffect(() => {
-    let mounted = true;
-    let sid = sessionStorage.getItem("nca_sid");
-    if (!sid) {
-      sid = Math.random().toString(36).slice(2);
-      sessionStorage.setItem("nca_sid", sid);
-    }
-    const ping = async () => {
-      try {
-        const res = await publicApi.get(`/public/live-count?sid=${sid}`);
-        if (mounted) setLiveCount(res.data.count);
-      } catch {}
-    };
-    ping();
-    const interval = setInterval(ping, 60_000);
-    return () => {
-      mounted = false;
-      clearInterval(interval);
-    };
-  }, []);
 
   // ── LIVE MATCHES POLL ──────────────────────────────────────────────────────
   useEffect(() => {
@@ -1751,20 +1728,6 @@ function Home() {
           © 2026 {academyName}. All rights reserved.
         </p>
       </footer>
-
-      {/* ── LIVE VISITOR BADGE ── */}
-      {liveCount !== null && (
-        <div
-          className="fixed bottom-20 sm:bottom-6 right-4 z-50 flex items-center gap-2 px-3 py-2 rounded-full shadow-lg text-white text-xs font-semibold backdrop-blur-sm"
-          style={{ backgroundColor: `${primaryColor}ee` }}
-        >
-          <span className="relative flex h-2 w-2">
-            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-white opacity-75" />
-            <span className="relative inline-flex rounded-full h-2 w-2 bg-white" />
-          </span>
-          {liveCount} people viewing
-        </div>
-      )}
 
       <LoginPromptModal
         open={showLoginPrompt}

@@ -436,7 +436,7 @@ function UserFormPage() {
       </main>
 
       {/* ── Mobile sticky bottom bar ────────────────────────────────────────── */}
-      <div className="sm:hidden fixed bottom-0 inset-x-0 z-30 bg-white border-t border-slate-200 px-4 py-3">
+      <div className="sm:hidden fixed bottom-16 inset-x-0 z-[60] bg-white border-t border-slate-200 px-4 py-3">
         <button
           onClick={handleSubmit}
           disabled={saving}

@@ -366,8 +366,8 @@ function BookSlot() {
       {/* STICKY BOTTOM BAR — shown when slot selected */}
       {selectedSlot && selectedSlotData && (
         <div
-          className="fixed bottom-0 left-0 right-0 z-50 bg-white border-t border-gray-200 
-                      shadow-2xl px-4 pt-4 pb-20"
+          className="fixed bottom-16 left-0 right-0 z-[60] bg-white border-t border-gray-200 
+                      shadow-2xl px-4 pt-4 pb-4 sm:bottom-0"
         >
           <div className="max-w-2xl mx-auto">
             <div className="flex items-center justify-between mb-3">
