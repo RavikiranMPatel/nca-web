@@ -13,6 +13,7 @@ import {
   Image as ImageIcon,
   FileText,
   Eye,
+  Pencil,
   ChevronDown,
   Calendar,
 } from "lucide-react";
@@ -1691,6 +1692,11 @@ function InstallmentSection({ playerPublicId }: { playerPublicId: string }) {
   const [savingInst, setSavingInst] = useState(false);
   const [showPayInstallment, setShowPayInstallment] =
     useState<Installment | null>(null);
+  const [editAmountPlan, setEditAmountPlan] = useState<InstallmentPlan | null>(
+    null,
+  );
+  const [editAmountValue, setEditAmountValue] = useState("");
+  const [savingAmount, setSavingAmount] = useState(false);
   const [payInstForm, setPayInstForm] = useState({
     amount: "",
     paymentMode: "CASH",
@@ -1776,6 +1782,27 @@ function InstallmentSection({ playerPublicId }: { playerPublicId: string }) {
       toast.error(err.response?.data?.message || "Failed to record payment");
     } finally {
       setSavingPayInst(false);
+    }
+  };
+
+  const handleEditAmount = async () => {
+    if (!editAmountPlan || !editAmountValue) return;
+    setSavingAmount(true);
+    try {
+      await api.patch(
+        `/admin/fee-installments/plans/${editAmountPlan.publicId}/amount`,
+        {
+          totalAmount: parseFloat(editAmountValue),
+        },
+      );
+      toast.success("Plan amount updated!");
+      setEditAmountPlan(null);
+      setEditAmountValue("");
+      loadPlans();
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || "Failed to update amount");
+    } finally {
+      setSavingAmount(false);
     }
   };
 
@@ -1883,11 +1910,25 @@ function InstallmentSection({ playerPublicId }: { playerPublicId: string }) {
                       </div>
                     </div>
                     <div className="text-right flex-shrink-0">
-                      <p className="text-sm font-bold text-slate-800">
-                        ₹{plan.totalAmount.toLocaleString("en-IN")}
-                      </p>
+                      <div className="flex items-center gap-2 justify-end">
+                        <p className="text-sm font-bold text-slate-800">
+                          ₹{plan.totalAmount.toLocaleString("en-IN")}
+                        </p>
+                        {plan.status === "ACTIVE" && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setEditAmountPlan(plan);
+                              setEditAmountValue(String(plan.totalAmount));
+                            }}
+                            className="p-1 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded transition"
+                          >
+                            <Pencil size={12} />
+                          </button>
+                        )}
+                      </div>
                       <p className="text-[10px] text-slate-400 mt-0.5">
-                        {plan.installments?.length || 0} installments
+                        {(plan.installments ?? []).length} installments
                       </p>
                       <ChevronDown
                         size={14}
@@ -1898,12 +1939,12 @@ function InstallmentSection({ playerPublicId }: { playerPublicId: string }) {
                 </div>
                 {isExpanded && (
                   <div className="bg-slate-50 border-t border-slate-100 px-4 py-3 space-y-2">
-                    {plan.installments?.length === 0 ? (
+                    {(plan.installments ?? []).length === 0 ? (
                       <p className="text-xs text-slate-400 text-center py-2">
                         No installments added yet
                       </p>
                     ) : (
-                      plan.installments.map((inst) => {
+                      (plan.installments ?? []).map((inst) => {
                         const sc = getInstallmentStatusConfig(inst.status);
                         return (
                           <div
@@ -1941,7 +1982,11 @@ function InstallmentSection({ playerPublicId }: { playerPublicId: string }) {
                                   onClick={(e) => {
                                     e.stopPropagation();
                                     setPayInstForm({
-                                      amount: String(inst.balanceAmount),
+                                      amount: String(
+                                        inst.balanceAmount ??
+                                          inst.dueAmount ??
+                                          "",
+                                      ),
                                       paymentMode: "CASH",
                                       referenceNumber: "",
                                     });
@@ -2133,7 +2178,10 @@ function InstallmentSection({ playerPublicId }: { playerPublicId: string }) {
               <div className="bg-blue-50 rounded-xl p-3 text-center">
                 <p className="text-xs text-slate-500">Balance Due</p>
                 <p className="text-2xl font-bold text-blue-700">
-                  ₹{showPayInstallment.balanceAmount.toLocaleString("en-IN")}
+                  ₹
+                  {(showPayInstallment.balanceAmount ?? 0).toLocaleString(
+                    "en-IN",
+                  )}
                 </p>
               </div>
               <div>
@@ -2201,6 +2249,57 @@ function InstallmentSection({ playerPublicId }: { playerPublicId: string }) {
                   className="flex-1 py-2.5 text-sm font-medium text-white bg-emerald-600 rounded-lg hover:bg-emerald-700 disabled:opacity-50"
                 >
                   {savingPayInst ? "Processing…" : "Confirm Payment"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {editAmountPlan && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center">
+          <div className="bg-white rounded-t-2xl sm:rounded-xl shadow-xl w-full sm:max-w-sm">
+            <div className="flex items-center justify-between px-5 py-4 border-b bg-slate-50 rounded-t-2xl sm:rounded-t-xl">
+              <div>
+                <h3 className="font-bold text-slate-800">Edit Plan Amount</h3>
+                <p className="text-xs text-slate-500">
+                  {editAmountPlan.description || "Installment Plan"}
+                </p>
+              </div>
+              <button onClick={() => setEditAmountPlan(null)}>
+                <X size={18} className="text-slate-400" />
+              </button>
+            </div>
+            <div className="p-5 space-y-4">
+              <div>
+                <label className="text-xs font-semibold text-slate-600 block mb-1.5">
+                  Total Amount (₹) *
+                </label>
+                <input
+                  type="number"
+                  inputMode="numeric"
+                  value={editAmountValue}
+                  onChange={(e) => setEditAmountValue(e.target.value)}
+                  className="w-full px-4 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+              <p className="text-xs text-amber-600 bg-amber-50 rounded-lg px-3 py-2">
+                This updates the total plan amount. Individual installment
+                amounts are not affected.
+              </p>
+              <div className="flex gap-2 pt-1 pb-4">
+                <button
+                  onClick={() => setEditAmountPlan(null)}
+                  className="flex-1 py-2.5 text-sm font-medium text-slate-600 bg-slate-100 rounded-lg hover:bg-slate-200"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleEditAmount}
+                  disabled={savingAmount || !editAmountValue}
+                  className="flex-1 py-2.5 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-50"
+                >
+                  {savingAmount ? "Saving…" : "Save Amount"}
                 </button>
               </div>
             </div>
