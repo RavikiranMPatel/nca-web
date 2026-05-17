@@ -125,3 +125,15 @@ export const linkMatchToFixture = (
     `/admin/cricket/tournaments/${tournamentPublicId}/fixtures/${fixturePublicId}/link-match`,
     { matchPublicId },
   );
+
+export const advanceToPlayoffs = (
+  publicId: string,
+  topN: number,
+  bracketType: string,
+) =>
+  api
+    .post(`/admin/cricket/tournaments/${publicId}/advance-playoffs`, {
+      topN,
+      bracketType,
+    })
+    .then((r) => r.data);

@@ -46,6 +46,7 @@ export interface BallResponse {
   lastBall?: BallDTO;
   overComplete: boolean;
   inningsComplete: boolean;
+  lastDeliveryPublicId?: string;
 }
 
 export interface Delivery {
@@ -66,4 +67,5 @@ export interface ScoringPlayer {
   bowlingStyle?: string;
   isWicketkeeper?: boolean;
   isCaptain?: boolean;
+  playerRole?: string;
 }

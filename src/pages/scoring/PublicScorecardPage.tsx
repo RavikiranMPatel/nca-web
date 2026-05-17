@@ -1,8 +1,8 @@
 import { useState, useEffect, useCallback } from "react";
-import { useParams } from "react-router-dom";
 import { getPublicScorecard } from "../../api/scoring/publicApi";
 import publicApi from "../../api/publicApi";
 import { FieldSVG, ZONES } from "./WagonWheelModal";
+import { useParams, useNavigate } from "react-router-dom";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 interface BattingLine {
@@ -74,6 +74,21 @@ interface InningsScorecard {
   overBreakdown: OverSummary[];
 }
 
+interface PlayingXIPlayer {
+  playerPublicId: string;
+  playerName: string;
+  battingOrder: number;
+  isCaptain: boolean;
+  isWicketkeeper: boolean;
+  isForeign: boolean;
+}
+
+interface PlayingXITeam {
+  teamId: string;
+  teamName: string;
+  players: PlayingXIPlayer[];
+}
+
 interface Scorecard {
   matchPublicId: string;
   title: string;
@@ -90,8 +105,10 @@ interface Scorecard {
   playerOfMatchPublicId?: string;
   tournamentName?: string;
   tournamentPublicId?: string;
+  ballName?: string;
   officials: { role: string; name: string; kscaId?: string }[];
   innings: InningsScorecard[];
+  playingXI: PlayingXITeam[];
 }
 
 interface Shot {
@@ -129,14 +146,142 @@ const roleLabel: Record<string, string> = {
   SCORER: "Scorer",
 };
 
-const shotColor = (r: number) => {
-  if (r === 6) return "#a855f7";
-  if (r === 4) return "#22c55e";
-  if (r >= 2) return "#3b82f6";
-  return "#ffffff";
+// ── Playing XI Tab ────────────────────────────────────────────────────────────
+const PlayingXITab = ({ playingXI }: { playingXI: PlayingXITeam[] }) => {
+  if (!playingXI || playingXI.length === 0) {
+    return (
+      <div className="px-4 py-12 text-center text-gray-400 text-sm">
+        Playing XI not yet announced
+      </div>
+    );
+  }
+
+  const renderPlayerName = (p: PlayingXIPlayer) => (
+    <span className="font-medium text-gray-900 dark:text-gray-100 text-sm">
+      {p.playerName}
+      {p.isCaptain && (
+        <span className="text-gray-500 dark:text-gray-400 font-normal">
+          {" "}
+          (c)
+        </span>
+      )}
+      {p.isWicketkeeper && (
+        <span className="text-gray-500 dark:text-gray-400 font-normal"> †</span>
+      )}
+      {p.isForeign && <span className="text-orange-500 ml-1 text-xs">✈</span>}
+    </span>
+  );
+
+  // Two columns side by side like Cricinfo
+  if (playingXI.length >= 2) {
+    const home = playingXI[0];
+    const away = playingXI[1];
+    const maxLen = Math.max(home.players.length, away.players.length);
+
+    return (
+      <div className="px-4 py-4">
+        {/* Header row */}
+        <div className="grid grid-cols-2 gap-2 mb-3">
+          <div className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
+            {home.teamName}
+          </div>
+          <div className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
+            {away.teamName}
+          </div>
+        </div>
+
+        {/* Player rows */}
+        <div className="space-y-0 border border-gray-100 dark:border-gray-800 rounded-xl overflow-hidden">
+          {Array.from({ length: maxLen }).map((_, idx) => {
+            const hp = home.players[idx];
+            const ap = away.players[idx];
+            return (
+              <div
+                key={idx}
+                className={`grid grid-cols-2 gap-0 ${
+                  idx % 2 === 0
+                    ? "bg-white dark:bg-gray-900"
+                    : "bg-gray-50/60 dark:bg-gray-800/40"
+                }`}
+              >
+                {/* Home player */}
+                <div className="px-3 py-2.5 border-r border-gray-100 dark:border-gray-800">
+                  {hp ? (
+                    <div>
+                      <div className="flex items-center gap-1">
+                        <span className="text-xs text-gray-400 w-4 flex-shrink-0">
+                          {hp.battingOrder}.
+                        </span>
+                        {renderPlayerName(hp)}
+                      </div>
+                    </div>
+                  ) : null}
+                </div>
+                {/* Away player */}
+                <div className="px-3 py-2.5">
+                  {ap ? (
+                    <div>
+                      <div className="flex items-center gap-1">
+                        <span className="text-xs text-gray-400 w-4 flex-shrink-0">
+                          {ap.battingOrder}.
+                        </span>
+                        {renderPlayerName(ap)}
+                      </div>
+                    </div>
+                  ) : null}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Legend */}
+        <div className="flex gap-4 mt-3 text-xs text-gray-400">
+          <span>(c) Captain</span>
+          <span>† Wicket-keeper</span>
+          <span>✈ Overseas</span>
+        </div>
+      </div>
+    );
+  }
+
+  // Single team fallback
+  return (
+    <div className="px-4 py-4">
+      {playingXI.map((team) => (
+        <div key={team.teamId} className="mb-6">
+          <div className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-2">
+            {team.teamName}
+          </div>
+          <div className="border border-gray-100 dark:border-gray-800 rounded-xl overflow-hidden">
+            {team.players.map((p, idx) => (
+              <div
+                key={p.playerPublicId}
+                className={`flex items-center gap-2 px-3 py-2.5 ${
+                  idx % 2 === 0
+                    ? "bg-white dark:bg-gray-900"
+                    : "bg-gray-50/60 dark:bg-gray-800/40"
+                } ${idx < team.players.length - 1 ? "border-b border-gray-100 dark:border-gray-800" : ""}`}
+              >
+                <span className="text-xs text-gray-400 w-5">
+                  {p.battingOrder}.
+                </span>
+                {renderPlayerName(p)}
+              </div>
+            ))}
+          </div>
+        </div>
+      ))}
+      <div className="flex gap-4 mt-2 text-xs text-gray-400">
+        <span>(c) Captain</span>
+        <span>† Wicket-keeper</span>
+        <span>✈ Overseas</span>
+      </div>
+    </div>
+  );
 };
 
-// ── Wagon Wheel Modal (scorecard version) ────────────────────────────────────
+// ── Wagon Wheel Modal ─────────────────────────────────────────────────────────
 const WagonWheelModal = ({
   batter,
   matchId,
@@ -183,10 +328,7 @@ const WagonWheelModal = ({
         className="w-full max-w-sm bg-gray-900 rounded-t-2xl md:rounded-2xl max-h-[90vh] overflow-y-auto"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Handle */}
         <div className="w-10 h-1 bg-gray-700 rounded-full mx-auto mt-3 mb-2 md:hidden" />
-
-        {/* Header */}
         <div className="px-4 pb-3 pt-2 border-b border-gray-800">
           <div className="flex items-center justify-between">
             <div>
@@ -205,8 +347,6 @@ const WagonWheelModal = ({
               ✕
             </button>
           </div>
-
-          {/* LHB / RHB toggle */}
           <div className="flex items-center gap-2 mt-2">
             <span className="text-xs text-gray-500">View as:</span>
             <div className="flex bg-gray-800 rounded-lg p-0.5 gap-0.5">
@@ -225,8 +365,6 @@ const WagonWheelModal = ({
             </div>
           </div>
         </div>
-
-        {/* Field */}
         <div className="px-4 py-3 bg-gray-900">
           {loading ? (
             <div className="flex items-center justify-center h-48">
@@ -240,7 +378,6 @@ const WagonWheelModal = ({
           ) : (
             <>
               <FieldSVG isLHB={isLHBView} interactive={false} shots={shots} />
-              {/* Legend */}
               <div className="flex gap-3 mt-2 justify-center flex-wrap">
                 {[
                   { color: "bg-white", label: `1s/3s (${singles})` },
@@ -254,8 +391,6 @@ const WagonWheelModal = ({
                   </div>
                 ))}
               </div>
-
-              {/* Zone breakdown */}
               {shots.length > 0 && (
                 <div className="mt-3 bg-gray-800 rounded-xl overflow-hidden">
                   <div className="px-3 py-2 border-b border-gray-700">
@@ -293,7 +428,6 @@ const WagonWheelModal = ({
             </>
           )}
         </div>
-
         <div
           className="px-4 pb-5 pt-1"
           style={{ paddingBottom: "max(20px, env(safe-area-inset-bottom))" }}
@@ -320,7 +454,6 @@ const WormChart = ({ innings }: { innings: InningsScorecard[] }) => {
     PAD = 36;
   const maxOvers = Math.max(...innings.map((i) => i.overBreakdown.length), 1);
   const maxRuns = Math.max(...allOvers.map((o) => o.cumulativeRuns), 1);
-
   const toX = (over: number) => PAD + (over / maxOvers) * (W - PAD * 2);
   const toY = (runs: number) => H - PAD - (runs / maxRuns) * (H - PAD * 2);
   const colors = ["#3b82f6", "#f97316"];
@@ -410,7 +543,7 @@ const WormChart = ({ innings }: { innings: InningsScorecard[] }) => {
   );
 };
 
-// ── Over breakdown table ──────────────────────────────────────────────────────
+// ── Over breakdown ────────────────────────────────────────────────────────────
 const OverBreakdown = ({ overs }: { overs: OverSummary[] }) => (
   <div className="overflow-x-auto">
     <table className="w-full text-sm min-w-[360px]">
@@ -485,7 +618,6 @@ const InningsCard = ({
       </div>
     </div>
 
-    {/* Batting table */}
     <div className="overflow-x-auto">
       <table className="w-full text-sm min-w-[460px]">
         <thead>
@@ -530,7 +662,6 @@ const InningsCard = ({
                       </span>
                     )}
                   </div>
-                  {/* Wagon wheel hint icon */}
                   <span className="text-gray-300 dark:text-gray-600 text-xs">
                     🎯
                   </span>
@@ -558,7 +689,6 @@ const InningsCard = ({
             </tr>
           ))}
 
-          {/* Extras */}
           <tr className="border-b border-gray-100 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-900/20">
             <td
               className="py-2 px-4 text-xs text-gray-500 dark:text-gray-400"
@@ -578,7 +708,6 @@ const InningsCard = ({
             </td>
           </tr>
 
-          {/* Total */}
           <tr className="bg-gray-50 dark:bg-gray-900/40">
             <td className="py-2.5 px-4 font-semibold text-gray-900 dark:text-white text-sm">
               Total
@@ -597,14 +726,12 @@ const InningsCard = ({
       </table>
     </div>
 
-    {/* Tap hint */}
     <div className="px-4 py-2 bg-blue-50/50 dark:bg-blue-950/10 border-t border-blue-100 dark:border-blue-900/20">
       <p className="text-xs text-blue-500 dark:text-blue-400">
         🎯 Tap any batter to view wagon wheel
       </p>
     </div>
 
-    {/* Did not bat */}
     {inn.didNotBat.length > 0 && (
       <div className="px-4 py-2.5 border-t border-gray-100 dark:border-gray-800">
         <span className="text-xs font-medium text-gray-400 uppercase tracking-wide">
@@ -616,7 +743,6 @@ const InningsCard = ({
       </div>
     )}
 
-    {/* Fall of wickets */}
     {inn.fallOfWickets.length > 0 && (
       <div className="px-4 py-2.5 border-t border-gray-100 dark:border-gray-800">
         <span className="text-xs font-medium text-gray-400 uppercase tracking-wide">
@@ -633,7 +759,6 @@ const InningsCard = ({
       </div>
     )}
 
-    {/* Bowling table */}
     <div className="overflow-x-auto border-t border-gray-100 dark:border-gray-800">
       <table className="w-full text-sm min-w-[460px]">
         <thead>
@@ -705,13 +830,14 @@ const InningsCard = ({
 // ── MAIN PAGE ─────────────────────────────────────────────────────────────────
 export default function PublicScorecardPage() {
   const { matchId } = useParams<{ matchId: string }>();
+  const navigate = useNavigate();
   const [scorecard, setScorecard] = useState<Scorecard | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [activeTab, setActiveTab] = useState<number | "flow" | "info">(0);
+  const [activeTab, setActiveTab] = useState<number | "xi" | "flow" | "info">(
+    0,
+  );
   const [copied, setCopied] = useState(false);
-
-  // Wagon wheel state
   const [selectedBatter, setSelectedBatter] = useState<BattingLine | null>(
     null,
   );
@@ -802,9 +928,19 @@ export default function PublicScorecardPage() {
       {/* NCA header */}
       <div className="bg-blue-700 dark:bg-blue-900 px-4 py-3">
         <div className="max-w-4xl mx-auto flex items-center justify-between">
-          <div>
-            <div className="text-white font-bold text-sm">NCA Mysuru</div>
-            <div className="text-blue-200 text-xs">NextGen Cricket Academy</div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => navigate(-1)}
+              className="text-white/80 hover:text-white transition p-1 -ml-1 active:scale-95"
+            >
+              ←
+            </button>
+            <div>
+              <div className="text-white font-bold text-sm">NCA Mysuru</div>
+              <div className="text-blue-200 text-xs">
+                NextGen Cricket Academy
+              </div>
+            </div>
           </div>
           <div className="flex gap-2">
             <button
@@ -914,6 +1050,17 @@ export default function PublicScorecardPage() {
               {inn.battingTeamName} Innings
             </button>
           ))}
+          {/* Playing XI tab */}
+          <button
+            onClick={() => setActiveTab("xi")}
+            className={`flex-shrink-0 px-4 py-3 text-sm font-medium border-b-2 transition-colors ${
+              activeTab === "xi"
+                ? "border-blue-600 text-blue-600 dark:text-blue-400"
+                : "border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700"
+            }`}
+          >
+            Playing XI
+          </button>
           <button
             onClick={() => setActiveTab("flow")}
             className={`flex-shrink-0 px-4 py-3 text-sm font-medium border-b-2 transition-colors ${
@@ -952,6 +1099,12 @@ export default function PublicScorecardPage() {
           </div>
         )}
 
+        {/* ── Playing XI tab ─────────────────────────────────────────────────── */}
+        {activeTab === "xi" && (
+          <PlayingXITab playingXI={scorecard.playingXI ?? []} />
+        )}
+
+        {/* ── Match Flow tab ──────────────────────────────────────────────────── */}
         {activeTab === "flow" && (
           <div className="px-4 py-5 space-y-6">
             <div>
@@ -978,6 +1131,7 @@ export default function PublicScorecardPage() {
           </div>
         )}
 
+        {/* ── Info tab ─────────────────────────────────────────────────────────── */}
         {activeTab === "info" && (
           <div className="px-4 py-5">
             <div className="border border-gray-100 dark:border-gray-800 rounded-xl overflow-hidden divide-y divide-gray-100 dark:divide-gray-800">
@@ -999,6 +1153,10 @@ export default function PublicScorecardPage() {
                   label: "Player of the Match",
                   value: scorecard.playerOfMatchName ?? "—",
                 },
+                // Ball name — only shown if tournament has flag set
+                ...(scorecard.ballName
+                  ? [{ label: "Ball Used", value: scorecard.ballName }]
+                  : []),
               ].map(({ label, value }) => (
                 <div
                   key={label}
@@ -1012,11 +1170,13 @@ export default function PublicScorecardPage() {
                   </span>
                 </div>
               ))}
+
+              {/* Officials section */}
               {scorecard.officials.length > 0 && (
                 <>
                   <div className="px-4 py-2 bg-gray-50 dark:bg-gray-900">
                     <span className="text-xs font-semibold text-gray-400 uppercase tracking-wide">
-                      Officials
+                      Match Officials
                     </span>
                   </div>
                   {scorecard.officials.map((o, i) => (
@@ -1042,14 +1202,12 @@ export default function PublicScorecardPage() {
         )}
       </div>
 
-      {/* Live refresh notice */}
       {isLive && (
         <div className="fixed bottom-4 left-1/2 -translate-x-1/2 bg-gray-900 text-green-400 text-xs px-4 py-2 rounded-full border border-green-800 shadow-lg">
           🔴 Live · refreshing every 15s
         </div>
       )}
 
-      {/* Wagon Wheel Modal */}
       {selectedBatter && matchId && (
         <WagonWheelModal
           batter={selectedBatter}

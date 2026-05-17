@@ -5,15 +5,15 @@ import {
   Award,
   ArrowRight,
   Star,
-  Facebook,
-  Twitter,
-  Instagram,
-  Youtube,
-  Linkedin,
   X,
   Megaphone,
   ChevronLeft,
   ChevronRight,
+  Youtube,
+  Linkedin,
+  Twitter,
+  Instagram,
+  Facebook,
 } from "lucide-react";
 import LoginPromptModal from "../components/LoginPromptModal";
 import publicApi from "../api/publicApi";
@@ -93,6 +93,7 @@ type AcademySettings = {
   INSTAGRAM_POST_3?: string;
   INSTAGRAM_POST_4?: string;
   INSTAGRAM_POST_5?: string;
+  SECTION_CRICKET_STATS_ENABLED?: string;
 };
 type TeamMember = {
   id: string;
@@ -137,6 +138,36 @@ type GalleryImage = {
   imageUrl: string;
   caption?: string;
   active: boolean;
+};
+type InningsSummary = {
+  inningsNumber: number;
+  battingTeamName: string;
+  totalRuns: number;
+  totalWickets: number;
+  totalBalls: number;
+  status: string;
+  target?: number;
+};
+
+type ScorecardSummary = {
+  innings: InningsSummary[];
+  resultDescription?: string;
+};
+
+type RecentMatch = LiveMatch & {
+  resultDescription?: string;
+};
+
+type TopPerformer = {
+  playerName: string;
+  photoUrl?: string;
+  matches: number;
+  runs?: number;
+  highScore?: number;
+  average?: number;
+  wickets?: number;
+  bestFigures?: string;
+  economy?: number;
 };
 type LiveMatch = {
   matchPublicId: string;
@@ -247,14 +278,17 @@ function InstagramGrid({
   instagramUrl?: string;
 }) {
   useEffect(() => {
-    if ((window as any).instgrm) {
-      (window as any).instgrm.Embeds.process();
+    const win = window as Window & {
+      instgrm?: { Embeds: { process: () => void } };
+    };
+    if (win.instgrm) {
+      win.instgrm.Embeds.process();
     } else {
       const script = document.createElement("script");
       script.src = "https://www.instagram.com/embed.js";
       script.async = true;
       script.onload = () => {
-        if ((window as any).instgrm) (window as any).instgrm.Embeds.process();
+        if (win.instgrm) win.instgrm.Embeds.process();
       };
       document.body.appendChild(script);
     }
@@ -368,11 +402,17 @@ function Home() {
   } | null>(null);
 
   // ── LIVE MATCHES STATE ──────────────────────────────────────────────────────
-  const [liveMatches, setLiveMatches] = useState<LiveMatch[]>([]);
-  const [liveScores, setLiveScores] = useState<Record<string, any>>({});
+  const [liveMatches] = useState<LiveMatch[]>([]);
+  const [liveScores, setLiveScores] = useState<
+    Record<string, ScorecardSummary>
+  >({});
+  const [recentMatches, setRecentMatches] = useState<RecentMatch[]>([]);
+  const [recentScores, setRecentScores] = useState<
+    Record<string, ScorecardSummary>
+  >({});
   const [topPerformers, setTopPerformers] = useState<{
-    topBatters: any[];
-    topBowlers: any[];
+    topBatters: TopPerformer[];
+    topBowlers: TopPerformer[];
   } | null>(null);
   const academyName = settings.ACADEMY_NAME || "NextGen Cricket Academy";
   const logoUrl = settings.LOGO_URL;
@@ -454,8 +494,8 @@ function Home() {
     const fetchLive = async () => {
       try {
         const res = await publicApi.get("/public/live-matches");
-        const matches: LiveMatch[] = res.data;
-        setLiveMatches(matches);
+        const matches: RecentMatch[] = res.data;
+        setRecentMatches(matches);
         for (const m of matches) {
           try {
             const sc = await publicApi.get(
@@ -473,6 +513,32 @@ function Home() {
     fetchLive();
     const interval = setInterval(fetchLive, 30_000);
     return () => clearInterval(interval);
+  }, []);
+
+  useEffect(() => {
+    const fetchRecent = async () => {
+      try {
+        const res = await publicApi.get("/public/recent-matches?limit=3");
+        const matches: RecentMatch[] = res.data;
+        setRecentMatches(matches);
+        for (const m of matches) {
+          try {
+            const sc = await publicApi.get(
+              `/public/matches/${m.matchPublicId}/scorecard`,
+            );
+            setRecentScores((prev) => ({
+              ...prev,
+              [m.matchPublicId]: sc.data,
+            }));
+          } catch {
+            /* silent */
+          }
+        }
+      } catch {
+        /* silent */
+      }
+    };
+    fetchRecent();
   }, []);
 
   useEffect(() => {
@@ -629,7 +695,7 @@ function Home() {
                     </div>
                     {innings.length > 0 ? (
                       <div className="space-y-1">
-                        {innings.map((inn: any) => (
+                        {innings.map((inn) => (
                           <div key={inn.inningsNumber}>
                             <div className="flex items-baseline justify-between">
                               <span
@@ -669,6 +735,80 @@ function Home() {
                     )}
                     <div className="mt-2 text-xs text-red-500 font-medium">
                       View Scorecard →
+                    </div>
+                  </a>
+                );
+              })}
+            </div>
+          </div>
+        </section>
+      )}
+
+      {/* ── RECENT MATCHES ── */}
+      {recentMatches.length > 0 && (
+        <section className="py-4 px-4 bg-white border-b border-gray-100">
+          <div className="max-w-6xl mx-auto">
+            <div className="flex items-center gap-2 mb-3">
+              <Trophy size={14} className="text-gray-400" />
+              <span className="text-sm font-bold text-gray-500 uppercase tracking-wide">
+                Recent Matches
+              </span>
+            </div>
+            <div className="flex gap-3 overflow-x-auto pb-1 -mx-1 px-1">
+              {recentMatches.map((match) => {
+                const sc = recentScores[match.matchPublicId];
+                const innings = sc?.innings ?? [];
+                const resultDesc =
+                  match.resultDescription || sc?.resultDescription;
+                return (
+                  <a
+                    key={match.matchPublicId}
+                    href={`/match/${match.matchPublicId}/scorecard`}
+                    className="flex-shrink-0 bg-white border border-gray-200 rounded-2xl p-3 min-w-[220px] max-w-[260px] shadow-sm hover:shadow-md transition-shadow active:scale-95"
+                  >
+                    {match.tournamentName && (
+                      <div className="text-xs text-gray-400 font-medium mb-1 truncate">
+                        🏆 {match.tournamentName}
+                      </div>
+                    )}
+                    <div className="text-xs font-semibold text-gray-800 mb-2 leading-tight truncate">
+                      {match.title}
+                    </div>
+                    {innings.length > 0 ? (
+                      <div className="space-y-1 mb-2">
+                        {innings.map((inn) => (
+                          <div
+                            key={inn.inningsNumber}
+                            className="flex items-baseline justify-between"
+                          >
+                            <span className="text-xs truncate max-w-[120px] text-gray-500">
+                              {inn.battingTeamName}
+                            </span>
+                            <span className="text-sm font-black ml-2 text-gray-700">
+                              {inn.totalRuns}/{inn.totalWickets}
+                              <span className="text-xs font-normal text-gray-400 ml-1">
+                                ({Math.floor(inn.totalBalls / 6)}.
+                                {inn.totalBalls % 6} ov)
+                              </span>
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="text-xs text-gray-400 mb-2">
+                        Loading scores…
+                      </div>
+                    )}
+                    {resultDesc && (
+                      <div
+                        className="text-xs font-semibold truncate"
+                        style={{ color: secondaryColor }}
+                      >
+                        {resultDesc}
+                      </div>
+                    )}
+                    <div className="mt-1.5 text-xs text-gray-400 font-medium">
+                      Full Scorecard →
                     </div>
                   </a>
                 );
@@ -1287,8 +1427,8 @@ function Home() {
                   }
                 >
                   <div
-                    className="w-16 h-16 md:w-20 md:h-20 rounded-full overflow-hidden mx-auto mb-3 ring-4"
-                    style={{ ringColor: `${primaryColor}30` }}
+                    className="w-16 h-16 md:w-20 md:h-20 rounded-full overflow-hidden mx-auto mb-3"
+                    style={{ border: `3px solid ${primaryColor}30` }}
                   >
                     {member.photoUrl ? (
                       <img

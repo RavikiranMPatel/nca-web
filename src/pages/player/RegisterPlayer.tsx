@@ -36,6 +36,7 @@ function RegisterPlayer() {
   const [invalidFields, setInvalidFields] = useState<Record<string, boolean>>(
     {},
   );
+  const [playerRole, setPlayerRole] = useState("ALL_ROUNDER");
 
   // Fee plan states
   const [feePlans, setFeePlans] = useState<FeePlanOption[]>([]);
@@ -301,6 +302,7 @@ function RegisterPlayer() {
         batchIds,
         active: true,
         status: "ACTIVE",
+        playerRole,
       };
 
       // Only send branchId if super admin explicitly selected one
@@ -367,6 +369,7 @@ function RegisterPlayer() {
     setShowCropper(false);
     setCrop({ x: 0, y: 0 });
     setZoom(1);
+    setPlayerRole("ALL_ROUNDER");
   };
 
   return (
@@ -401,6 +404,8 @@ function RegisterPlayer() {
           feePlans={feePlans}
           selectedFeePlan={selectedFeePlan}
           onFeePlanChange={setSelectedFeePlan}
+          playerRole={playerRole}
+          onPlayerRoleChange={setPlayerRole}
           // Branch — only passed for super admin
           {...(isSuperAdmin && {
             branches,

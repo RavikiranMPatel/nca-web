@@ -63,6 +63,7 @@ export interface PlayerOption {
   displayName: string;
   battingStyle?: string;
   bowlingStyle?: string;
+  playerRole?: string;
 }
 
 export interface CreateMatchRequest {

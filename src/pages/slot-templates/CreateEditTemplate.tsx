@@ -342,7 +342,7 @@ function CreateEditTemplate() {
   };
 
   return (
-    <div className="max-w-4xl mx-auto space-y-4 sm:space-y-6 pb-24">
+    <div className="max-w-4xl mx-auto space-y-4 sm:space-y-6 pb-40">
       {/* SUCCESS TOAST */}
       {showSuccessToast && (
         <div className="fixed top-4 right-4 left-4 sm:left-auto z-50">
@@ -703,7 +703,7 @@ function CreateEditTemplate() {
         </div>
 
         {/* ACTIONS - sticky bottom */}
-        <div className="fixed bottom-0 left-0 right-0 sm:static bg-white px-4 py-3 sm:p-4 border-t sm:border sm:rounded-lg sm:shadow-lg flex gap-3 justify-end z-40">
+        <div className="fixed bottom-16 left-0 right-0 sm:static bg-white px-4 py-3 sm:p-4 border-t sm:border sm:rounded-lg sm:shadow-lg flex gap-3 justify-end z-[60] sm:bottom-0">
           <button
             type="button"
             onClick={() => navigate("/admin/slot-templates")}

@@ -43,7 +43,7 @@ function Login() {
     setError("");
 
     try {
-      const res = await loginApi({ email, password });
+      const res = await loginApi({ email: email.trim(), password });
 
       // ✅ Fat response — no JWT decode needed
       login({

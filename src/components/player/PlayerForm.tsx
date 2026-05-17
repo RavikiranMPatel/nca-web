@@ -38,6 +38,8 @@ type Props = {
   branches?: Branch[];
   selectedBranchId?: string;
   onBranchChange?: (branchId: string) => void;
+  playerRole?: string;
+  onPlayerRoleChange?: (role: string) => void;
 };
 
 // ── Reusable field wrapper ──────────────────────────────────────
@@ -114,6 +116,8 @@ function PlayerForm({
   branches = [],
   selectedBranchId = "",
   onBranchChange,
+  playerRole = "ALL_ROUNDER",
+  onPlayerRoleChange,
 }: Props) {
   const [availableBatches, setAvailableBatches] = useState<Batch[]>([]);
   const [loadingBatches, setLoadingBatches] = useState(true);
@@ -525,6 +529,34 @@ function PlayerForm({
       {/* ── CRICKET PROFILE ── */}
       <Section title="Cricket Profile">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {/* Playing Role */}
+          <div className="md:col-span-2">
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Playing Role
+            </label>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+              {[
+                { val: "BATSMAN", label: "🏏 Batsman" },
+                { val: "BOWLER", label: "⚾ Bowler" },
+                { val: "ALL_ROUNDER", label: "⭐ All Rounder" },
+                { val: "WK_BATSMAN", label: "🧤 Wicketkeeper" },
+              ].map(({ val, label }) => (
+                <button
+                  key={val}
+                  type="button"
+                  onClick={() => onPlayerRoleChange?.(val)}
+                  className={`py-2.5 px-3 rounded-xl border text-sm font-medium transition-all active:scale-95 ${
+                    playerRole === val
+                      ? "bg-blue-600 text-white border-blue-600"
+                      : "bg-white text-gray-600 border-gray-200 hover:border-blue-300"
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+
           <Field label="KSCA ID">
             <input
               type="text"

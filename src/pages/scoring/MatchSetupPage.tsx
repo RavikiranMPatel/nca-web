@@ -18,7 +18,14 @@ import type {
 } from "../../types/match";
 import api from "../../api/axios";
 
-const STEPS = ["Match Details", "Team A", "Team B", "Toss", "Review"];
+const STEPS = [
+  "Match Details",
+  "Team A",
+  "Team B",
+  "Toss",
+  "Officials",
+  "Review",
+];
 
 const Check = () => (
   <svg
@@ -62,18 +69,31 @@ const X = () => (
   </svg>
 );
 
+// ── Official roles ────────────────────────────────────────────────────────────
+const OFFICIAL_ROLES = [
+  { role: "UMPIRE_1", label: "Umpire 1", required: false },
+  { role: "UMPIRE_2", label: "Umpire 2", required: false },
+  { role: "TV_UMPIRE", label: "TV / Third Umpire", required: false },
+  { role: "SCORER", label: "Scorer", required: false },
+  { role: "REFEREE", label: "Match Referee", required: false },
+];
+
 const PlayerCard = ({
   player,
   selected,
   onToggle,
   onRoleToggle,
+  onForeignToggle,
   isInSquad,
+  squadIsForeign,
 }: {
   player: PlayerOption;
   selected: PlayerSelection[];
   onToggle: () => void;
   onRoleToggle: (role: "isCaptain" | "isWicketkeeper") => void;
+  onForeignToggle: () => void;
   isInSquad?: boolean;
+  squadIsForeign?: boolean;
 }) => {
   const sel = selected.find((s) => s.playerPublicId === player.publicId);
   const isSelected = !!sel;
@@ -111,10 +131,28 @@ const PlayerCard = ({
                 Squad
               </span>
             )}
+            {/* Show ✈ if squad marks them as foreign */}
+            {isInSquad && squadIsForeign && !isSelected && (
+              <span className="text-xs text-orange-500">✈</span>
+            )}
           </div>
-          {(player.battingStyle || player.bowlingStyle) && (
+          {(player.battingStyle ||
+            player.bowlingStyle ||
+            player.playerRole) && (
             <div className="text-xs text-gray-400">
-              {[player.battingStyle, player.bowlingStyle]
+              {[
+                player.playerRole === "WK_BATSMAN"
+                  ? "🧤 WK"
+                  : player.playerRole === "BATSMAN"
+                    ? "🏏 Bat"
+                    : player.playerRole === "BOWLER"
+                      ? "⚾ Bowl"
+                      : player.playerRole === "ALL_ROUNDER"
+                        ? "⭐ AR"
+                        : null,
+                player.battingStyle,
+                player.bowlingStyle,
+              ]
                 .filter(Boolean)
                 .join(" · ")}
             </div>
@@ -122,7 +160,7 @@ const PlayerCard = ({
         </div>
       </button>
       {isSelected && (
-        <div className="flex gap-2 ml-2">
+        <div className="flex gap-1.5 ml-2 flex-wrap justify-end">
           <button
             onClick={() => onRoleToggle("isCaptain")}
             className={`text-xs px-2 py-1 rounded-lg font-medium transition-colors ${
@@ -143,6 +181,17 @@ const PlayerCard = ({
           >
             WK
           </button>
+          <button
+            onClick={onForeignToggle}
+            className={`text-xs px-2 py-1 rounded-lg font-medium transition-colors ${
+              sel!.isForeign
+                ? "bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400"
+                : "bg-gray-100 text-gray-500 dark:bg-gray-700 dark:text-gray-400"
+            }`}
+            title="Mark as foreign/overseas player"
+          >
+            ✈
+          </button>
         </div>
       )}
     </div>
@@ -158,7 +207,6 @@ export default function MatchSetupPage() {
   const [allPlayers, setAllPlayers] = useState<PlayerOption[]>([]);
   const creatingRef = useRef(false);
 
-  // ── Wagon wheel toggle (pre-match setting, persisted in localStorage) ──────
   const [wagonWheelEnabled, setWagonWheelEnabled] = useState(
     () => localStorage.getItem("nca_ww_enabled") !== "false",
   );
@@ -181,6 +229,25 @@ export default function MatchSetupPage() {
   const [awaySquadIds, setAwaySquadIds] = useState<Set<string>>(new Set());
   const [homeSquadPlayers, setHomeSquadPlayers] = useState<PlayerOption[]>([]);
   const [awaySquadPlayers, setAwaySquadPlayers] = useState<PlayerOption[]>([]);
+  // Track which squad players are foreign
+  const [homeSquadForeign, setHomeSquadForeign] = useState<Set<string>>(
+    new Set(),
+  );
+  const [awaySquadForeign, setAwaySquadForeign] = useState<Set<string>>(
+    new Set(),
+  );
+
+  // ── Officials state ───────────────────────────────────────────────────────
+  // Map of role → official search text + selected official publicId
+  const [officialSearch, setOfficialSearch] = useState<Record<string, string>>(
+    {},
+  );
+  const [officialResults, setOfficialResults] = useState<Record<string, any[]>>(
+    {},
+  );
+  const [officialSelections, setOfficialSelections] = useState<
+    Record<string, { publicId: string; name: string }>
+  >({});
 
   const [matchDetails, setMatchDetails] = useState({
     title: "",
@@ -211,6 +278,7 @@ export default function MatchSetupPage() {
             displayName: p.displayName,
             battingStyle: p.battingStyle,
             bowlingStyle: p.bowlingStyle,
+            playerRole: p.playerRole,
           })),
         );
       })
@@ -257,10 +325,24 @@ export default function MatchSetupPage() {
         }),
       );
 
+      // Track foreign players from squad
+      const homeForeign = new Set<string>(
+        (data.homeTeam?.squad ?? [])
+          .filter((p: any) => p.isForeign)
+          .map((p: any) => p.publicId as string),
+      );
+      const awayForeign = new Set<string>(
+        (data.awayTeam?.squad ?? [])
+          .filter((p: any) => p.isForeign)
+          .map((p: any) => p.publicId as string),
+      );
+
       setHomeSquadIds(new Set(homePlayers.map((p) => p.publicId)));
       setAwaySquadIds(new Set(awayPlayers.map((p) => p.publicId)));
       setHomeSquadPlayers(homePlayers);
       setAwaySquadPlayers(awayPlayers);
+      setHomeSquadForeign(homeForeign);
+      setAwaySquadForeign(awayForeign);
 
       setAllPlayers((prev) => {
         const existingIds = new Set(prev.map((p) => p.publicId));
@@ -284,6 +366,83 @@ export default function MatchSetupPage() {
       })
       .catch(() => setError("Failed to load match"));
   }, []);
+
+  // ── Official search ───────────────────────────────────────────────────────
+  const searchOfficials = async (role: string, query: string) => {
+    setOfficialSearch((prev) => ({ ...prev, [role]: query }));
+    if (!query.trim() || query.length < 2) {
+      setOfficialResults((prev) => ({ ...prev, [role]: [] }));
+      return;
+    }
+    try {
+      const res = await api.get(
+        `/admin/cricket/officials?search=${encodeURIComponent(query)}`,
+      );
+      setOfficialResults((prev) => ({ ...prev, [role]: res.data ?? [] }));
+    } catch {
+      setOfficialResults((prev) => ({ ...prev, [role]: [] }));
+    }
+  };
+
+  const selectOfficial = (
+    role: string,
+    official: { publicId: string; name: string },
+  ) => {
+    setOfficialSelections((prev) => ({ ...prev, [role]: official }));
+    setOfficialSearch((prev) => ({ ...prev, [role]: official.name }));
+    setOfficialResults((prev) => ({ ...prev, [role]: [] }));
+  };
+
+  const clearOfficial = (role: string) => {
+    setOfficialSelections((prev) => {
+      const next = { ...prev };
+      delete next[role];
+      return next;
+    });
+    setOfficialSearch((prev) => ({ ...prev, [role]: "" }));
+  };
+
+  const saveOfficials = async () => {
+    if (!createdMatch) return;
+
+    // Tournament — save selected from dropdown
+    for (const [role, official] of Object.entries(officialSelections)) {
+      try {
+        await api.post(
+          `/admin/cricket/matches/${createdMatch.publicId}/officials`,
+          {
+            role,
+            officialPublicId: official.publicId,
+          },
+        );
+      } catch {
+        /* non-fatal */
+      }
+    }
+
+    // Internal match — create official on-the-fly from free text
+    if (!fixtureId) {
+      for (const [role, name] of Object.entries(officialSearch)) {
+        if (!name.trim() || officialSelections[role]) continue;
+        try {
+          const res = await api.post("/admin/cricket/officials", {
+            name: name.trim(),
+            defaultRole: "UMPIRE",
+            isActive: true,
+          });
+          await api.post(
+            `/admin/cricket/matches/${createdMatch.publicId}/officials`,
+            {
+              role,
+              officialPublicId: res.data.publicId,
+            },
+          );
+        } catch {
+          /* non-fatal */
+        }
+      }
+    }
+  };
 
   const selectedAIds = teamAPlayers.map((p) => p.playerPublicId);
   const selectedBIds = teamBPlayers.map((p) => p.playerPublicId);
@@ -314,6 +473,7 @@ export default function MatchSetupPage() {
     player: PlayerOption,
     selected: PlayerSelection[],
     setSelected: (s: PlayerSelection[]) => void,
+    squadForeignIds: Set<string>,
   ) => {
     const exists = selected.find((s) => s.playerPublicId === player.publicId);
     if (exists) {
@@ -333,8 +493,9 @@ export default function MatchSetupPage() {
           playerPublicId: player.publicId,
           battingOrder: selected.length + 1,
           isCaptain: false,
-          isWicketkeeper: false,
+          isWicketkeeper: player.playerRole === "WK_BATSMAN",
           isImpactPlayer: false,
+          isForeign: squadForeignIds.has(player.publicId),
         },
       ]);
     }
@@ -385,6 +546,7 @@ export default function MatchSetupPage() {
           isCaptain: false,
           isWicketkeeper: false,
           isImpactPlayer: false,
+          isForeign: false,
         },
       ]);
       setTeamAExternalName("");
@@ -426,6 +588,7 @@ export default function MatchSetupPage() {
           isCaptain: false,
           isWicketkeeper: false,
           isImpactPlayer: false,
+          isForeign: false,
         },
       ]);
       setTeamBExternalName("");
@@ -449,6 +612,18 @@ export default function MatchSetupPage() {
           : role === "isCaptain"
             ? { ...p, isCaptain: false }
             : p,
+      ),
+    );
+  };
+
+  const toggleForeign = (
+    publicId: string,
+    selected: PlayerSelection[],
+    setSelected: (s: PlayerSelection[]) => void,
+  ) => {
+    setSelected(
+      selected.map((p) =>
+        p.playerPublicId === publicId ? { ...p, isForeign: !p.isForeign } : p,
       ),
     );
   };
@@ -549,7 +724,7 @@ export default function MatchSetupPage() {
         winnerTeamPublicId: tossWinner,
         decision: tossDecision,
       });
-      setStep(4);
+      setStep(4); // → Officials
     } catch (e: any) {
       setError(e.response?.data?.message || "Failed to record toss");
     } finally {
@@ -562,6 +737,9 @@ export default function MatchSetupPage() {
     setLoading(true);
     setError("");
     try {
+      // Save officials first (non-fatal)
+      await saveOfficials();
+
       if (fixtureId && tournamentId) {
         try {
           await linkMatchToFixture(
@@ -573,7 +751,6 @@ export default function MatchSetupPage() {
           /* non-fatal */
         }
       }
-      // Persist wagon wheel setting for the live scorer
       localStorage.setItem("nca_ww_enabled", String(wagonWheelEnabled));
       await startMatch(createdMatch.publicId);
       navigate(`/admin/cricket/matches/${createdMatch.publicId}/score`);
@@ -587,9 +764,10 @@ export default function MatchSetupPage() {
   const currentPlayers = step === 1 ? teamAPlayers : teamBPlayers;
   const setCurrentPlayers = step === 1 ? setTeamAPlayers : setTeamBPlayers;
   const currentSquadIds = step === 1 ? homeSquadIds : awaySquadIds;
+  const currentSquadForeign = step === 1 ? homeSquadForeign : awaySquadForeign;
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-950 pb-32">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-950 pb-48">
       {/* Header + progress */}
       <div className="sticky top-0 z-10 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 px-4 py-3">
         <div className="flex items-center gap-3">
@@ -764,8 +942,6 @@ export default function MatchSetupPage() {
                 ))}
               </div>
             </div>
-
-            {/* ── Wagon Wheel toggle — only for live scoring ──────────────────── */}
             {matchDetails.dataSource === "BALL_BY_BALL" && (
               <div className="flex items-center justify-between p-4 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl">
                 <div>
@@ -782,16 +958,10 @@ export default function MatchSetupPage() {
                     setWagonWheelEnabled(next);
                     localStorage.setItem("nca_ww_enabled", String(next));
                   }}
-                  className={`w-12 h-6 rounded-full transition-all relative flex-shrink-0 ${
-                    wagonWheelEnabled
-                      ? "bg-blue-600"
-                      : "bg-gray-300 dark:bg-gray-600"
-                  }`}
+                  className={`w-12 h-6 rounded-full transition-all relative flex-shrink-0 ${wagonWheelEnabled ? "bg-blue-600" : "bg-gray-300 dark:bg-gray-600"}`}
                 >
                   <div
-                    className={`w-5 h-5 bg-white rounded-full absolute top-0.5 shadow transition-all ${
-                      wagonWheelEnabled ? "left-6" : "left-0.5"
-                    }`}
+                    className={`w-5 h-5 bg-white rounded-full absolute top-0.5 shadow transition-all ${wagonWheelEnabled ? "left-6" : "left-0.5"}`}
                   />
                 </button>
               </div>
@@ -821,15 +991,16 @@ export default function MatchSetupPage() {
             {fixtureId && currentSquadIds.size > 0 && (
               <div className="px-3 py-2 bg-blue-50 dark:bg-blue-900/20 border border-blue-100 dark:border-blue-900 rounded-xl text-xs text-blue-600 dark:text-blue-400">
                 💡 {currentSquadIds.size} squad members shown — select your
-                playing XI
+                playing XI. Tap ✈ to mark overseas players.
               </div>
             )}
 
-            <p className="text-xs text-gray-400 dark:text-gray-500">
-              {step === 1
-                ? "Add players by name if not in your academy DB, or search below."
-                : "Add opposition players by name, or search academy players below."}
-            </p>
+            {!fixtureId && (
+              <div className="px-3 py-2 bg-gray-50 dark:bg-gray-800 border border-gray-100 dark:border-gray-700 rounded-xl text-xs text-gray-500 dark:text-gray-400">
+                Tap <strong>C</strong> for captain, <strong>WK</strong> for
+                keeper, <strong>✈</strong> for overseas player.
+              </div>
+            )}
 
             {/* Guest player input */}
             <div className="flex gap-2 items-center">
@@ -857,13 +1028,7 @@ export default function MatchSetupPage() {
                       ? setTeamAExternalBattingStyle("RIGHT_HAND_BAT")
                       : setTeamBExternalBattingStyle("RIGHT_HAND_BAT")
                   }
-                  className={`px-2.5 py-2 text-xs font-bold rounded-lg transition-all ${
-                    (step === 1
-                      ? teamAExternalBattingStyle
-                      : teamBExternalBattingStyle) === "RIGHT_HAND_BAT"
-                      ? "bg-blue-600 text-white"
-                      : "text-gray-500 dark:text-gray-400"
-                  }`}
+                  className={`px-2.5 py-2 text-xs font-bold rounded-lg transition-all ${(step === 1 ? teamAExternalBattingStyle : teamBExternalBattingStyle) === "RIGHT_HAND_BAT" ? "bg-blue-600 text-white" : "text-gray-500 dark:text-gray-400"}`}
                 >
                   RHB
                 </button>
@@ -873,13 +1038,7 @@ export default function MatchSetupPage() {
                       ? setTeamAExternalBattingStyle("LEFT_HAND_BAT")
                       : setTeamBExternalBattingStyle("LEFT_HAND_BAT")
                   }
-                  className={`px-2.5 py-2 text-xs font-bold rounded-lg transition-all ${
-                    (step === 1
-                      ? teamAExternalBattingStyle
-                      : teamBExternalBattingStyle) === "LEFT_HAND_BAT"
-                      ? "bg-blue-600 text-white"
-                      : "text-gray-500 dark:text-gray-400"
-                  }`}
+                  className={`px-2.5 py-2 text-xs font-bold rounded-lg transition-all ${(step === 1 ? teamAExternalBattingStyle : teamBExternalBattingStyle) === "LEFT_HAND_BAT" ? "bg-blue-600 text-white" : "text-gray-500 dark:text-gray-400"}`}
                 >
                   LHB
                 </button>
@@ -926,6 +1085,7 @@ export default function MatchSetupPage() {
                           isCaptain: false,
                           isWicketkeeper: false,
                           isImpactPlayer: false,
+                          isForeign: currentSquadForeign.has(p.publicId),
                         })),
                       );
                     }
@@ -936,11 +1096,7 @@ export default function MatchSetupPage() {
                   {currentPlayers.length > 0 ? "Clear All" : "Select All"}
                 </button>
                 <span
-                  className={`text-xs font-semibold px-2.5 py-1 rounded-full ${
-                    currentPlayers.length === 11
-                      ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
-                      : "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400"
-                  }`}
+                  className={`text-xs font-semibold px-2.5 py-1 rounded-full ${currentPlayers.length === 11 ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400" : "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400"}`}
                 >
                   {currentPlayers.length}/11
                 </span>
@@ -966,13 +1122,26 @@ export default function MatchSetupPage() {
                   player={player}
                   selected={currentPlayers}
                   isInSquad={currentSquadIds.has(player.publicId)}
+                  squadIsForeign={currentSquadForeign.has(player.publicId)}
                   onToggle={() =>
-                    togglePlayer(player, currentPlayers, setCurrentPlayers)
+                    togglePlayer(
+                      player,
+                      currentPlayers,
+                      setCurrentPlayers,
+                      currentSquadForeign,
+                    )
                   }
                   onRoleToggle={(role) =>
                     toggleRole(
                       player.publicId,
                       role,
+                      currentPlayers,
+                      setCurrentPlayers,
+                    )
+                  }
+                  onForeignToggle={() =>
+                    toggleForeign(
+                      player.publicId,
                       currentPlayers,
                       setCurrentPlayers,
                     )
@@ -1004,6 +1173,7 @@ export default function MatchSetupPage() {
                         {sel.battingOrder}. {p?.displayName}
                         {sel.isCaptain ? " (C)" : ""}
                         {sel.isWicketkeeper ? " (WK)" : ""}
+                        {sel.isForeign ? " ✈" : ""}
                         <button
                           onClick={() =>
                             removePlayer(
@@ -1088,8 +1258,114 @@ export default function MatchSetupPage() {
           </div>
         )}
 
-        {/* ── STEP 4: Review ────────────────────────────────────────────────── */}
-        {step === 4 && createdMatch && (
+        {/* ── STEP 4: Officials ─────────────────────────────────────────────── */}
+        {step === 4 && (
+          <div className="space-y-4">
+            <div className="text-center mb-2">
+              <div className="w-14 h-14 bg-blue-100 dark:bg-blue-900/20 rounded-full flex items-center justify-center mx-auto mb-2">
+                <span className="text-2xl">🦺</span>
+              </div>
+              <h2 className="text-base font-semibold text-gray-900 dark:text-white">
+                Match Officials
+              </h2>
+              <p className="text-xs text-gray-400 mt-1">
+                Optional — skip if not applicable
+              </p>
+            </div>
+
+            {OFFICIAL_ROLES.map(({ role, label }) => {
+              const selected = officialSelections[role];
+              const query = officialSearch[role] ?? "";
+              const results = officialResults[role] ?? [];
+              const isTournament = !!fixtureId; // tournament → search, else → free text
+
+              return (
+                <div key={role} className="space-y-1">
+                  <label className="block text-xs font-medium text-gray-500 dark:text-gray-400">
+                    {label}
+                  </label>
+
+                  {isTournament ? (
+                    // ── TOURNAMENT: search dropdown ──────────────────────────────
+                    <div className="relative">
+                      <input
+                        type="text"
+                        className={`w-full px-4 py-3 bg-white dark:bg-gray-800 border rounded-xl text-sm text-gray-900 dark:text-gray-100 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                          selected
+                            ? "border-blue-300 dark:border-blue-600"
+                            : "border-gray-200 dark:border-gray-700"
+                        }`}
+                        placeholder={`Search ${label.toLowerCase()}...`}
+                        value={query}
+                        onChange={(e) => {
+                          if (selected) clearOfficial(role);
+                          searchOfficials(role, e.target.value);
+                        }}
+                      />
+                      {selected && (
+                        <button
+                          onClick={() => clearOfficial(role)}
+                          className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-red-500"
+                        >
+                          <X />
+                        </button>
+                      )}
+                      {!selected && results.length > 0 && (
+                        <div className="absolute z-20 w-full mt-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-lg overflow-hidden">
+                          {results.slice(0, 5).map((o: any) => (
+                            <button
+                              key={o.publicId}
+                              onClick={() =>
+                                selectOfficial(role, {
+                                  publicId: o.publicId,
+                                  name: o.name,
+                                })
+                              }
+                              className="w-full px-4 py-2.5 text-left text-sm hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors border-b border-gray-100 dark:border-gray-700 last:border-0"
+                            >
+                              <div className="font-medium text-gray-900 dark:text-gray-100">
+                                {o.name}
+                              </div>
+                              {o.kscaId && (
+                                <div className="text-xs text-gray-400">
+                                  KSCA: {o.kscaId}
+                                </div>
+                              )}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                      {selected && (
+                        <div className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 dark:bg-blue-900/20 rounded-lg mt-1">
+                          <span className="text-xs text-blue-600 dark:text-blue-400">
+                            ✓ {selected.name}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    // ── INTERNAL MATCH: free text ────────────────────────────────
+                    <input
+                      type="text"
+                      className="w-full px-4 py-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm text-gray-900 dark:text-gray-100 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      placeholder={`Enter ${label.toLowerCase()} name`}
+                      value={query}
+                      onChange={(e) =>
+                        setOfficialSearch((prev) => ({
+                          ...prev,
+                          [role]: e.target.value,
+                        }))
+                      }
+                    />
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {/* ── STEP 5: Review ────────────────────────────────────────────────── */}
+        {step === 5 && createdMatch && (
           <div className="space-y-4">
             <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 divide-y divide-gray-100 dark:divide-gray-700">
               {[
@@ -1142,15 +1418,48 @@ export default function MatchSetupPage() {
                     setError("");
                   },
                 },
+                {
+                  label: "Officials",
+                  value: (() => {
+                    const roleLabel = (role: string) =>
+                      role === "UMPIRE_1"
+                        ? "U1"
+                        : role === "UMPIRE_2"
+                          ? "U2"
+                          : role === "TV_UMPIRE"
+                            ? "TV"
+                            : role === "SCORER"
+                              ? "SC"
+                              : "RF";
+
+                    const fromSelected = Object.entries(officialSelections).map(
+                      ([role, o]) => `${roleLabel(role)}: ${o.name}`,
+                    );
+
+                    const fromFreeText = fixtureId
+                      ? []
+                      : Object.entries(officialSearch)
+                          .filter(
+                            ([role, q]) =>
+                              q.trim() && !officialSelections[role],
+                          )
+                          .map(
+                            ([role, q]) => `${roleLabel(role)}: ${q.trim()}`,
+                          );
+
+                    const all = [...fromSelected, ...fromFreeText];
+                    return all.length > 0 ? all.join(" · ") : "None";
+                  })(),
+                  onEdit: () => {
+                    setStep(4);
+                    setError("");
+                  },
+                },
               ].map(({ label, value, onEdit }) => (
                 <div
                   key={label}
                   onClick={onEdit}
-                  className={`px-4 py-3 flex justify-between items-start gap-3 ${
-                    onEdit
-                      ? "active:bg-gray-50 dark:active:bg-gray-700/50 cursor-pointer"
-                      : ""
-                  }`}
+                  className={`px-4 py-3 flex justify-between items-start gap-3 ${onEdit ? "active:bg-gray-50 dark:active:bg-gray-700/50 cursor-pointer" : ""}`}
                 >
                   <span className="text-sm text-gray-500 dark:text-gray-400 flex-shrink-0">
                     {label}
@@ -1167,7 +1476,6 @@ export default function MatchSetupPage() {
               ))}
             </div>
 
-            {/* Wagon wheel setting summary */}
             {matchDetails.dataSource === "BALL_BY_BALL" && (
               <div className="flex items-center justify-between px-4 py-3 bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700">
                 <div className="flex items-center gap-2">
@@ -1175,11 +1483,7 @@ export default function MatchSetupPage() {
                     🎯 Wagon Wheel
                   </span>
                   <span
-                    className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
-                      wagonWheelEnabled
-                        ? "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400"
-                        : "bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-500"
-                    }`}
+                    className={`text-xs font-semibold px-2 py-0.5 rounded-full ${wagonWheelEnabled ? "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400" : "bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-500"}`}
                   >
                     {wagonWheelEnabled ? "Enabled" : "Disabled"}
                   </span>
@@ -1206,7 +1510,7 @@ export default function MatchSetupPage() {
 
       {/* Bottom action bar */}
       <div
-        className="fixed bottom-0 left-0 right-0 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-800 px-4 pt-3 flex gap-3"
+        className="fixed bottom-16 left-0 right-0 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-800 px-4 pt-3 flex gap-3 z-[60] sm:bottom-0"
         style={{ paddingBottom: "max(12px, env(safe-area-inset-bottom))" }}
       >
         {step > 0 && (
@@ -1231,11 +1535,11 @@ export default function MatchSetupPage() {
                   ? handleSetTeams
                   : step === 3
                     ? handleToss
-                    : handleStartMatch
+                    : step === 4
+                      ? () => setStep(5) // Officials → Review (no API call yet)
+                      : handleStartMatch
           }
-          className={`flex-1 py-3 rounded-xl text-sm font-semibold text-white transition-all active:scale-95 flex items-center justify-center gap-2 ${
-            loading ? "bg-blue-400" : "bg-blue-600 hover:bg-blue-700"
-          }`}
+          className={`flex-1 py-3 rounded-xl text-sm font-semibold text-white transition-all active:scale-95 flex items-center justify-center gap-2 ${loading ? "bg-blue-400" : "bg-blue-600 hover:bg-blue-700"}`}
         >
           {loading && (
             <svg
@@ -1262,7 +1566,8 @@ export default function MatchSetupPage() {
           {step === 1 && "Next: Team B →"}
           {step === 2 && "Next: Toss →"}
           {step === 3 && "Record Toss"}
-          {step === 4 && "🏏 Start Match"}
+          {step === 4 && "Next: Review →"}
+          {step === 5 && "🏏 Start Match"}
         </button>
       </div>
     </div>

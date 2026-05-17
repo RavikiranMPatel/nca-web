@@ -13,6 +13,7 @@ import {
   updateTournamentStatus,
   declareWinner,
   advanceToKnockout,
+  advanceToPlayoffs,
   getSquad,
   addToSquad,
   removeFromSquad,
@@ -22,7 +23,17 @@ import {
 import { getBranchPlayers } from "../../api/scoring/matchApi";
 import api from "../../api/axios";
 
-const TABS = ["Overview", "Teams", "Players", "Fixtures", "Standings", "Stats"];
+const TABS = [
+  "Overview",
+  "Teams",
+  "Players",
+  "Venues",
+  "Officials",
+  "Fixtures",
+  "Standings",
+  "Stats",
+  "Settings",
+];
 const ROLES = ["BATSMAN", "BOWLER", "ALL_ROUNDER", "WK_BATSMAN"];
 const ROLE_LABELS: Record<string, string> = {
   BATSMAN: "Bat",
@@ -30,6 +41,22 @@ const ROLE_LABELS: Record<string, string> = {
   ALL_ROUNDER: "AR",
   WK_BATSMAN: "WK",
 };
+
+const OFFICIAL_ROLES = [
+  "UMPIRE",
+  "THIRD_UMPIRE",
+  "SCORER",
+  "REFEREE",
+  "MATCH_REFEREE",
+];
+const OFFICIAL_ROLE_LABELS: Record<string, string> = {
+  UMPIRE: "Umpire",
+  THIRD_UMPIRE: "3rd Umpire",
+  SCORER: "Scorer",
+  REFEREE: "Referee",
+  MATCH_REFEREE: "Match Referee",
+};
+const DAY_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
 const statusBadge: Record<string, string> = {
   DRAFT: "bg-gray-100 text-gray-600",
@@ -60,6 +87,30 @@ export default function TournamentDetailPage() {
   const [posting, setPosting] = useState(false);
   const [error, setError] = useState("");
   const [toast, setToast] = useState("");
+  // Venues
+  const [venues, setVenues] = useState<any[]>([]);
+  const [showAddVenue, setShowAddVenue] = useState(false);
+  const [venueForm, setVenueForm] = useState({ name: "", maxMatchesPerDay: 2 });
+  const [editingVenue, setEditingVenue] = useState<any>(null);
+
+  // Officials pool
+  const [officialsPool, setOfficialsPool] = useState<any[]>([]);
+  const [showAddOfficial, setShowAddOfficial] = useState(false);
+  const [officialForm, setOfficialForm] = useState({
+    name: "",
+    role: "UMPIRE",
+  });
+
+  const [settingsForm, setSettingsForm] = useState({
+    oversPerInnings: 20,
+    minsPerOver: 4.5,
+    inningsBreakMins: 20,
+    groundGapMins: 40,
+    dayStartTime: "09:30",
+    dayEndTime: "18:30",
+    maxMatchesPerDay: 2,
+  });
+  const [setSettingsSaved] = useState(false);
 
   const [showAddTeam, setShowAddTeam] = useState(false);
   const [teamForm, setTeamForm] = useState({
@@ -83,10 +134,18 @@ export default function TournamentDetailPage() {
   const [externalGender, setExternalGender] = useState("MALE");
   const [externalRole, setExternalRole] = useState("ALL_ROUNDER");
 
+  const [fixtureGroundFilter] = useState<string>("ALL");
+
   const [showGenerate, setShowGenerate] = useState(false);
   const [genForm, setGenForm] = useState({
     teamsPerGroup: 4,
     teamsAdvancingPerGroup: 2,
+    scheduleStartDate: "",
+    scheduleStartTime: "09:00",
+    autoAssignVenues: true,
+    selectedVenueIds: [] as string[],
+    playDays: [] as number[],
+    maxMatchesPerDay: 2,
   });
 
   const [showManualFixture, setShowManualFixture] = useState(false);
@@ -95,9 +154,15 @@ export default function TournamentDetailPage() {
     homeTeamPublicId: "",
     awayTeamPublicId: "",
     venue: "",
+    venueId: "",
+    scheduledDate: "",
+    scheduledTime: "",
   });
 
   const [showDeclareWinner, setShowDeclareWinner] = useState(false);
+  const [showAdvancePlayoffs, setShowAdvancePlayoffs] = useState(false);
+  const [playoffTopN, setPlayoffTopN] = useState(4);
+  const [playoffBracketType, setPlayoffBracketType] = useState("IPL");
   const [winnerTeam, setWinnerTeam] = useState("");
 
   const [showEditFixture, setShowEditFixture] = useState(false);
@@ -107,7 +172,10 @@ export default function TournamentDetailPage() {
     homeTeamPublicId: "",
     awayTeamPublicId: "",
     venue: "",
+    venueId: "",
     status: "SCHEDULED",
+    scheduledDate: "",
+    scheduledTime: "",
   });
 
   // ── STATS STATE (NEW) ─────────────────────────────────────────────────────
@@ -123,6 +191,41 @@ export default function TournamentDetailPage() {
   const showToast = (msg: string) => {
     setToast(msg);
     setTimeout(() => setToast(""), 2500);
+  };
+
+  const computeMatchDuration = () => {
+    return (
+      Math.round(settingsForm.oversPerInnings * settingsForm.minsPerOver * 2) +
+      settingsForm.inningsBreakMins
+    );
+  };
+
+  const computeMaxMatchesPerGround = () => {
+    const duration = computeMatchDuration();
+    const slotMins = duration + settingsForm.groundGapMins;
+    const [sh, sm] = settingsForm.dayStartTime.split(":").map(Number);
+    const [eh, em] = settingsForm.dayEndTime.split(":").map(Number);
+    const dayMins = eh * 60 + em - (sh * 60 + sm);
+    return slotMins > 0 ? Math.floor(dayMins / slotMins) : 1;
+  };
+
+  const computeSchedulePreview = () => {
+    const duration = computeMatchDuration();
+    const total = duration + settingsForm.groundGapMins;
+    const [h, m] = settingsForm.dayStartTime.split(":").map(Number);
+    const startMins = h * 60 + m;
+    const maxMatches = computeMaxMatchesPerGround();
+
+    const slots = [];
+    for (let i = 0; i < maxMatches; i++) {
+      const s = startMins + i * total;
+      const e = s + duration;
+      slots.push({
+        start: `${String(Math.floor(s / 60)).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`,
+        end: `${String(Math.floor(e / 60)).padStart(2, "0")}:${String(e % 60).padStart(2, "0")}`,
+      });
+    }
+    return { duration, slots };
   };
 
   const loadAll = async () => {
@@ -143,6 +246,15 @@ export default function TournamentDetailPage() {
       setFixtures(fx);
       setStandings(sd);
       setAllTournamentPlayers(tp);
+      setSettingsForm({
+        oversPerInnings: t.oversPerInnings ?? 20,
+        minsPerOver: t.minsPerOver ?? 4.5,
+        inningsBreakMins: t.inningsBreakMins ?? 20,
+        groundGapMins: t.groundGapMins ?? 40,
+        dayStartTime: t.dayStartTime ?? "09:30",
+        dayEndTime: t.dayEndTime ?? "18:30",
+        maxMatchesPerDay: t.maxMatchesPerDay ?? 2,
+      });
       const squadEntries = await Promise.all(
         tm.map((team: any) =>
           getSquad(publicId, team.publicId)
@@ -156,6 +268,139 @@ export default function TournamentDetailPage() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const loadVenues = async () => {
+    try {
+      const res = await api.get(
+        `/admin/cricket/tournaments/${publicId}/venues`,
+      );
+      setVenues(res.data ?? []);
+    } catch {
+      /* silent */
+    }
+  };
+
+  const loadOfficialsPool = async () => {
+    try {
+      const res = await api.get(
+        `/admin/cricket/tournaments/${publicId}/officials-pool`,
+      );
+      setOfficialsPool(res.data ?? []);
+    } catch {
+      /* silent */
+    }
+  };
+
+  const handleAddVenue = async () => {
+    if (!venueForm.name.trim()) return;
+    setPosting(true);
+    try {
+      await api.post(
+        `/admin/cricket/tournaments/${publicId}/venues`,
+        venueForm,
+      );
+      setShowAddVenue(false);
+      setVenueForm({ name: "", maxMatchesPerDay: 2 });
+      await loadVenues();
+      showToast("✓ Venue added");
+    } catch (e: any) {
+      setError(e.response?.data?.message ?? "Failed to add venue");
+    } finally {
+      setPosting(false);
+    }
+  };
+
+  const handleEditVenue = async () => {
+    if (!editingVenue) return;
+    setPosting(true);
+    try {
+      await api.patch(
+        `/admin/cricket/tournaments/${publicId}/venues/${editingVenue.id}`,
+        {
+          name: editingVenue.name,
+          maxMatchesPerDay: editingVenue.maxMatchesPerDay,
+        },
+      );
+      setEditingVenue(null);
+      await loadVenues();
+      showToast("✓ Venue updated");
+    } catch (e: any) {
+      setError(e.response?.data?.message ?? "Failed to update venue");
+    } finally {
+      setPosting(false);
+    }
+  };
+
+  const handleSaveSettings = async () => {
+    setPosting(true);
+    try {
+      await api.patch(
+        `/admin/cricket/tournaments/${publicId}/settings`,
+        settingsForm,
+      );
+      await loadAll();
+      setSettingsSaved(true);
+      setTimeout(() => setSettingsSaved(false), 2500);
+      showToast("✓ Settings saved");
+    } catch (e: any) {
+      setError(e.response?.data?.message ?? "Failed to save settings");
+    } finally {
+      setPosting(false);
+    }
+  };
+
+  const handleDeleteVenue = async (venueId: string) => {
+    if (!confirm("Delete this venue?")) return;
+    try {
+      await api.delete(
+        `/admin/cricket/tournaments/${publicId}/venues/${venueId}`,
+      );
+      await loadVenues();
+      showToast("✓ Venue deleted");
+    } catch (e: any) {
+      setError(e.response?.data?.message ?? "Failed to delete venue");
+    }
+  };
+
+  const handleAddOfficial = async () => {
+    if (!officialForm.name.trim()) return;
+    setPosting(true);
+    try {
+      await api.post(
+        `/admin/cricket/tournaments/${publicId}/officials-pool`,
+        officialForm,
+      );
+      setShowAddOfficial(false);
+      setOfficialForm({ name: "", role: "UMPIRE" });
+      await loadOfficialsPool();
+      showToast("✓ Official added");
+    } catch (e: any) {
+      setError(e.response?.data?.message ?? "Failed to add official");
+    } finally {
+      setPosting(false);
+    }
+  };
+
+  const handleDeleteOfficial = async (entryId: string) => {
+    try {
+      await api.delete(
+        `/admin/cricket/tournaments/${publicId}/officials-pool/${entryId}`,
+      );
+      await loadOfficialsPool();
+      showToast("✓ Official removed");
+    } catch (e: any) {
+      setError(e.response?.data?.message ?? "Failed to remove official");
+    }
+  };
+
+  const togglePlayDay = (day: number) => {
+    setGenForm((p) => ({
+      ...p,
+      playDays: p.playDays.includes(day)
+        ? p.playDays.filter((d) => d !== day)
+        : [...p.playDays, day].sort(),
+    }));
   };
 
   // ── LOAD STATS (NEW) ──────────────────────────────────────────────────────
@@ -186,7 +431,14 @@ export default function TournamentDetailPage() {
   };
 
   useEffect(() => {
-    if (tab === 5) loadStats();
+    if (tab === 7) loadStats();
+  }, [tab]);
+
+  useEffect(() => {
+    if (tab === 3) loadVenues();
+  }, [tab]);
+  useEffect(() => {
+    if (tab === 4) loadOfficialsPool();
   }, [tab]);
 
   useEffect(() => {
@@ -206,6 +458,7 @@ export default function TournamentDetailPage() {
 
   useEffect(() => {
     loadAll();
+    loadVenues();
   }, [publicId]);
 
   const loadSquad = async (teamPublicId: string) => {
@@ -350,9 +603,27 @@ export default function TournamentDetailPage() {
   };
 
   const handleGenerate = async () => {
+    if (fixtures.length > 0) {
+      const confirmed = window.confirm(
+        `⚠️ This will permanently delete all ${fixtures.length} existing fixture${fixtures.length !== 1 ? "s" : ""} and regenerate from scratch.\n\nAre you sure?`,
+      );
+      if (!confirmed) return;
+    }
     setPosting(true);
     try {
-      await generateFixtures(publicId!, genForm);
+      const payload: any = {
+        teamsPerGroup: genForm.teamsPerGroup,
+        teamsAdvancingPerGroup: genForm.teamsAdvancingPerGroup,
+        autoAssignVenues: genForm.autoAssignVenues,
+        venueIds: genForm.selectedVenueIds,
+        playDays: genForm.playDays,
+        maxMatchesPerDay: genForm.maxMatchesPerDay,
+      };
+      if (genForm.scheduleStartDate) {
+        payload.scheduleStartDate = genForm.scheduleStartDate;
+        payload.scheduleStartTime = genForm.scheduleStartTime;
+      }
+      await generateFixtures(publicId!, payload);
       setShowGenerate(false);
       await loadAll();
       showToast("✓ Fixtures generated");
@@ -374,7 +645,13 @@ export default function TournamentDetailPage() {
     }
     setPosting(true);
     try {
-      await addManualFixture(publicId!, fixtureForm);
+      const payload: any = { ...fixtureForm };
+      if (fixtureForm.scheduledDate && fixtureForm.scheduledTime) {
+        payload.scheduledAt = new Date(
+          `${fixtureForm.scheduledDate}T${fixtureForm.scheduledTime}:00`,
+        ).toISOString();
+      }
+      await addManualFixture(publicId!, payload);
       setShowManualFixture(false);
       await loadAll();
       showToast("✓ Fixture added");
@@ -423,14 +700,38 @@ export default function TournamentDetailPage() {
     }
   };
 
+  const handleAdvancePlayoffs = async () => {
+    setPosting(true);
+    try {
+      await advanceToPlayoffs(publicId!, playoffTopN, playoffBracketType);
+      setShowAdvancePlayoffs(false);
+      await loadAll();
+      showToast("✓ Playoff fixtures generated");
+    } catch (e: any) {
+      setError(e.response?.data?.message ?? "Failed to advance to playoffs");
+    } finally {
+      setPosting(false);
+    }
+  };
+
   const openEditFixture = (f: any) => {
     setEditingFixture(f);
+    let schedDate = "",
+      schedTime = "";
+    if (f.scheduledAt) {
+      const d = new Date(f.scheduledAt);
+      schedDate = d.toISOString().split("T")[0];
+      schedTime = d.toTimeString().substring(0, 5);
+    }
     setEditFixtureForm({
       roundNumber: f.roundNumber,
       homeTeamPublicId: f.homeTeam?.publicId ?? "",
       awayTeamPublicId: f.awayTeam?.publicId ?? "",
       venue: f.venue ?? "",
+      venueId: f.tournamentVenue?.id ?? "",
       status: f.status,
+      scheduledDate: schedDate,
+      scheduledTime: schedTime,
     });
     setShowEditFixture(true);
   };
@@ -439,9 +740,15 @@ export default function TournamentDetailPage() {
     if (!editingFixture) return;
     setPosting(true);
     try {
+      const payload: any = { ...editFixtureForm };
+      if (editFixtureForm.scheduledDate && editFixtureForm.scheduledTime) {
+        payload.scheduledAt = new Date(
+          `${editFixtureForm.scheduledDate}T${editFixtureForm.scheduledTime}:00`,
+        ).toISOString();
+      }
       await api.patch(
         `/admin/cricket/tournaments/${publicId}/fixtures/${editingFixture.publicId}`,
-        editFixtureForm,
+        payload,
       );
       setShowEditFixture(false);
       setEditingFixture(null);
@@ -495,13 +802,6 @@ export default function TournamentDetailPage() {
         <p className="text-gray-400 text-sm">Tournament not found</p>
       </div>
     );
-
-  const groupedFixtures = fixtures.reduce((acc: any, f: any) => {
-    const key = f.stage?.stageName ?? "Fixtures";
-    if (!acc[key]) acc[key] = [];
-    acc[key].push(f);
-    return acc;
-  }, {});
 
   const playersByTeam = allTournamentPlayers.reduce((acc: any, p: any) => {
     const key = p.teamPublicId;
@@ -900,16 +1200,268 @@ export default function TournamentDetailPage() {
           </div>
         )}
 
-        {/* ── FIXTURES ── */}
+        {/* ── VENUES ── */}
         {tab === 3 && (
+          <div className="space-y-3">
+            <div className="flex justify-between items-center">
+              <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                {venues.length} venue{venues.length !== 1 ? "s" : ""}
+              </span>
+              <button
+                onClick={() => setShowAddVenue(true)}
+                className="px-3 py-1.5 bg-blue-600 text-white text-xs font-semibold rounded-xl active:scale-95"
+              >
+                + Add Venue
+              </button>
+            </div>
+
+            {venues.length === 0 && (
+              <div className="text-center py-12">
+                <div className="text-3xl mb-2">🏟</div>
+                <p className="text-sm text-gray-400 mb-1">
+                  No venues added yet.
+                </p>
+                <p className="text-xs text-gray-400">
+                  Add grounds before generating fixtures to enable
+                  auto-scheduling.
+                </p>
+              </div>
+            )}
+
+            {venues.map((v: any) => (
+              <div
+                key={v.id}
+                className="bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 rounded-2xl p-4"
+              >
+                {editingVenue?.id === v.id ? (
+                  <div className="space-y-3">
+                    <input
+                      type="text"
+                      className="w-full px-3 py-2 bg-gray-100 dark:bg-gray-800 rounded-xl text-sm outline-none"
+                      value={editingVenue.name}
+                      onChange={(e) =>
+                        setEditingVenue((p: any) => ({
+                          ...p,
+                          name: e.target.value,
+                        }))
+                      }
+                    />
+                    <div className="flex items-center gap-3">
+                      <label className="text-xs text-gray-400 flex-shrink-0">
+                        Max matches/day
+                      </label>
+                      <input
+                        type="number"
+                        min={1}
+                        max={10}
+                        className="w-20 px-3 py-2 bg-gray-100 dark:bg-gray-800 rounded-xl text-sm outline-none text-center"
+                        value={editingVenue.maxMatchesPerDay}
+                        onChange={(e) =>
+                          setEditingVenue((p: any) => ({
+                            ...p,
+                            maxMatchesPerDay: Number(e.target.value),
+                          }))
+                        }
+                      />
+                    </div>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => setEditingVenue(null)}
+                        className="flex-1 py-2 border border-gray-200 dark:border-gray-700 rounded-xl text-xs text-gray-500"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        onClick={handleEditVenue}
+                        disabled={posting}
+                        className="flex-1 py-2 bg-blue-600 text-white rounded-xl text-xs font-semibold disabled:opacity-40"
+                      >
+                        Save
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <div className="text-sm font-semibold text-gray-900 dark:text-gray-100">
+                        {v.name}
+                      </div>
+                      <div className="text-xs text-gray-400 mt-0.5">
+                        Max {v.maxMatchesPerDay} match
+                        {v.maxMatchesPerDay !== 1 ? "es" : ""}/day
+                      </div>
+                    </div>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => setEditingVenue({ ...v })}
+                        className="p-2 text-blue-500 active:scale-90"
+                      >
+                        <svg
+                          className="w-4 h-4"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
+                          />
+                        </svg>
+                      </button>
+                      <button
+                        onClick={() => handleDeleteVenue(v.id)}
+                        className="p-2 text-red-400 active:scale-90"
+                      >
+                        <svg
+                          className="w-4 h-4"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                          />
+                        </svg>
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* ── MATCH OFFICIALS ── */}
+        {tab === 4 && (
+          <div className="space-y-3">
+            <div className="flex justify-between items-center">
+              <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                {officialsPool.length} official
+                {officialsPool.length !== 1 ? "s" : ""} in pool
+              </span>
+              <button
+                onClick={() => setShowAddOfficial(true)}
+                className="px-3 py-1.5 bg-blue-600 text-white text-xs font-semibold rounded-xl active:scale-95"
+              >
+                + Add Official
+              </button>
+            </div>
+
+            <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-100 dark:border-blue-900 rounded-xl px-3 py-2.5 text-xs text-blue-600 dark:text-blue-400">
+              Officials added here are available when assigning umpires and
+              scorers to each match.
+            </div>
+
+            {OFFICIAL_ROLES.map((role) => {
+              const group = officialsPool.filter((o: any) => o.role === role);
+              if (group.length === 0) return null;
+              return (
+                <div
+                  key={role}
+                  className="bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 rounded-2xl overflow-hidden"
+                >
+                  <div className="px-4 py-2.5 bg-gray-50 dark:bg-gray-800/50 border-b border-gray-100 dark:border-gray-800">
+                    <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                      {OFFICIAL_ROLE_LABELS[role] ?? role}
+                    </span>
+                  </div>
+                  <div className="divide-y divide-gray-50 dark:divide-gray-800/50">
+                    {group.map((o: any) => (
+                      <div
+                        key={o.id}
+                        className="flex items-center justify-between px-4 py-2.5"
+                      >
+                        <span className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                          {o.name}
+                        </span>
+                        <button
+                          onClick={() => handleDeleteOfficial(o.id)}
+                          className="p-1.5 text-red-400 active:scale-90"
+                        >
+                          <svg
+                            className="w-3.5 h-3.5"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M6 18L18 6M6 6l12 12"
+                            />
+                          </svg>
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
+
+            {officialsPool.length === 0 && (
+              <div className="text-center py-12">
+                <div className="text-3xl mb-2">🦺</div>
+                <p className="text-sm text-gray-400">No officials added yet.</p>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ── FIXTURES ── */}
+        {tab === 5 && (
           <div className="space-y-4">
             <div className="flex gap-2 flex-wrap">
               <button
-                onClick={() => setShowGenerate(true)}
+                onClick={() => {
+                  setGenForm((p) => ({
+                    ...p,
+                    scheduleStartDate: tournament.startDate ?? "",
+                    scheduleStartTime: tournament.dayStartTime ?? "09:30",
+                    maxMatchesPerDay: tournament.maxMatchesPerDay ?? 2,
+                  }));
+                  setShowGenerate(true);
+                }}
                 className="px-3 py-1.5 bg-blue-600 text-white text-xs font-semibold rounded-xl active:scale-95"
               >
                 ⚡ Auto Generate
               </button>
+              {fixtures.length > 0 && (
+                <button
+                  onClick={async () => {
+                    if (
+                      !confirm(
+                        `Delete all ${fixtures.length} fixtures? This cannot be undone.`,
+                      )
+                    )
+                      return;
+                    setPosting(true);
+                    try {
+                      await api.delete(
+                        `/admin/cricket/tournaments/${publicId}/fixtures`,
+                      );
+                      await loadAll();
+                      showToast("✓ All fixtures deleted");
+                    } catch (e: any) {
+                      setError(
+                        e.response?.data?.message ??
+                          "Failed to delete fixtures",
+                      );
+                    } finally {
+                      setPosting(false);
+                    }
+                  }}
+                  disabled={posting}
+                  className="px-3 py-1.5 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 border border-red-200 dark:border-red-800 text-xs font-semibold rounded-xl active:scale-95 disabled:opacity-40"
+                >
+                  🗑 Delete All
+                </button>
+              )}
               <button
                 onClick={() => setShowManualFixture(true)}
                 className="px-3 py-1.5 bg-gray-700 text-white text-xs font-semibold rounded-xl active:scale-95"
@@ -925,104 +1477,246 @@ export default function TournamentDetailPage() {
                   🏆 Advance to Knockout
                 </button>
               )}
-            </div>
-            {Object.entries(groupedFixtures).map(
-              ([stageName, stageFixtures]: [string, any]) => (
-                <div key={stageName}>
-                  <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
-                    {stageName}
-                  </h3>
-                  <div className="space-y-2">
-                    {(stageFixtures as any[]).map((f: any) => (
-                      <div
-                        key={f.publicId}
-                        className="bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 rounded-2xl p-3"
+              {tournament.format === "LEAGUE_PLAYOFFS" &&
+                (() => {
+                  const leagueFixtures = fixtures.filter(
+                    (f: any) =>
+                      f.stage?.stageType === "LEAGUE" ||
+                      f.stage?.stageName === "League Stage",
+                  );
+                  const hasLeagueFixtures = leagueFixtures.length > 0;
+                  const allLeagueCompleted =
+                    hasLeagueFixtures &&
+                    leagueFixtures.every((f: any) => f.status === "COMPLETED");
+
+                  const btnLabel = !hasLeagueFixtures
+                    ? "Generate league fixtures first"
+                    : !allLeagueCompleted
+                      ? `${leagueFixtures.filter((f: any) => f.status === "COMPLETED").length}/${leagueFixtures.length} matches done`
+                      : null;
+
+                  return (
+                    <div className="flex flex-col items-start gap-1">
+                      <button
+                        onClick={() => {
+                          if (!allLeagueCompleted) return;
+                          setShowAdvancePlayoffs(true);
+                        }}
+                        disabled={posting || !allLeagueCompleted}
+                        className={`px-3 py-1.5 text-white text-xs font-semibold rounded-xl transition-all ${
+                          allLeagueCompleted
+                            ? "bg-purple-600 active:scale-95"
+                            : "bg-gray-300 dark:bg-gray-700 cursor-not-allowed"
+                        }`}
                       >
-                        <div className="flex items-center justify-between mb-1">
-                          <span
-                            className={`text-xs font-medium ${fixtureStatusColor[f.status] ?? "text-gray-400"}`}
-                          >
-                            {f.status}
-                          </span>
-                          <div className="flex items-center gap-2">
-                            <span className="text-xs text-gray-400">
-                              Round {f.roundNumber}
-                            </span>
-                            <button
-                              onClick={() => openEditFixture(f)}
-                              className="p-1 rounded-lg bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 active:scale-90 transition-all"
-                              title="Edit fixture"
-                            >
-                              <svg
-                                className="w-3.5 h-3.5"
-                                fill="none"
-                                stroke="currentColor"
-                                viewBox="0 0 24 24"
-                              >
-                                <path
-                                  strokeLinecap="round"
-                                  strokeLinejoin="round"
-                                  strokeWidth={2}
-                                  d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
-                                />
-                              </svg>
-                            </button>
-                          </div>
-                        </div>
-                        <div className="flex items-center justify-between mb-2">
-                          <div className="text-sm font-semibold text-gray-900 dark:text-gray-100">
-                            {f.homeTeam?.name ?? "TBD"}
-                          </div>
-                          <div className="text-xs text-gray-400 px-2">vs</div>
-                          <div className="text-sm font-semibold text-gray-900 dark:text-gray-100 text-right">
-                            {f.awayTeam?.name ?? "TBD"}
-                          </div>
-                        </div>
-                        {f.venue && (
-                          <div className="text-xs text-gray-400 mb-2">
-                            📍 {f.venue}
-                          </div>
-                        )}
-                        <div className="flex gap-2 mt-1">
-                          {f.status === "SCHEDULED" &&
-                            f.homeTeam &&
-                            f.awayTeam && (
-                              <button
-                                onClick={() => handleStartMatch(f)}
-                                className="px-3 py-1.5 bg-green-600 text-white text-xs font-semibold rounded-lg active:scale-95"
-                              >
-                                🏏 Start Match
-                              </button>
-                            )}
-                          {f.status === "IN_PROGRESS" && f.match && (
-                            <button
-                              onClick={() =>
-                                navigate(
-                                  `/admin/cricket/matches/${f.match.publicId}/score`,
-                                )
-                              }
-                              className="px-3 py-1.5 bg-red-600 text-white text-xs font-semibold rounded-lg active:scale-95"
-                            >
-                              🔴 Live Scorer
-                            </button>
-                          )}
-                          {f.status === "COMPLETED" && f.match && (
-                            <button
-                              onClick={() =>
-                                navigate(`/match/${f.match.publicId}/scorecard`)
-                              }
-                              className="px-3 py-1.5 bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 text-xs font-semibold rounded-lg active:scale-95"
-                            >
-                              📊 Scorecard
-                            </button>
-                          )}
-                        </div>
-                      </div>
-                    ))}
+                        🏆 Advance to Playoffs
+                      </button>
+                      {btnLabel && (
+                        <span className="text-xs text-gray-400 px-1">
+                          {btnLabel}
+                        </span>
+                      )}
+                    </div>
+                  );
+                })()}
+            </div>
+
+            {/* ── DATE+GROUND VIEW ── */}
+            {(() => {
+              // Group fixtures by date
+              const byDate: Record<string, any[]> = {};
+              fixtures.forEach((f: any) => {
+                const dateKey = f.scheduledAt
+                  ? new Date(f.scheduledAt).toLocaleDateString("en-IN", {
+                      day: "2-digit",
+                      month: "short",
+                      year: "numeric",
+                      weekday: "short",
+                    })
+                  : "Unscheduled";
+                if (!byDate[dateKey]) byDate[dateKey] = [];
+                byDate[dateKey].push(f);
+              });
+
+              // Apply ground filter
+              const filteredByDate: Record<string, any[]> = {};
+              Object.entries(byDate).forEach(([date, dayFixtures]) => {
+                const filtered = dayFixtures.filter((f: any) => {
+                  if (
+                    fixtureGroundFilter !== "ALL" &&
+                    f.tournamentVenue?.id !== fixtureGroundFilter
+                  )
+                    return false;
+                  return true;
+                });
+                if (filtered.length > 0) filteredByDate[date] = filtered;
+              });
+
+              if (Object.keys(filteredByDate).length === 0)
+                return (
+                  <div className="text-center py-12">
+                    <div className="text-3xl mb-2">📅</div>
+                    <p className="text-sm text-gray-400">No fixtures yet.</p>
                   </div>
-                </div>
-              ),
-            )}
+                );
+
+              return Object.entries(filteredByDate).map(
+                ([dateStr, dayFixtures]) => {
+                  // Group by ground within the day
+                  const byGround: Record<string, any[]> = {};
+                  dayFixtures.forEach((f: any) => {
+                    const groundKey = f.venue ?? "No Venue";
+                    if (!byGround[groundKey]) byGround[groundKey] = [];
+                    byGround[groundKey].push(f);
+                  });
+
+                  return (
+                    <div key={dateStr} className="space-y-2">
+                      {/* Date header */}
+                      <div className="flex items-center gap-2 mt-2">
+                        <div className="h-px flex-1 bg-gray-100 dark:bg-gray-800" />
+                        <span className="text-xs font-semibold text-gray-500 dark:text-gray-400 px-2">
+                          📅 {dateStr} · {dayFixtures.length} match
+                          {dayFixtures.length !== 1 ? "es" : ""}
+                        </span>
+                        <div className="h-px flex-1 bg-gray-100 dark:bg-gray-800" />
+                      </div>
+
+                      {/* Per-ground columns */}
+                      {Object.entries(byGround).map(
+                        ([groundName, groundFixtures]) => (
+                          <div
+                            key={groundName}
+                            className="bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 rounded-2xl overflow-hidden"
+                          >
+                            {/* Ground header */}
+                            <div className="flex items-center gap-2 px-4 py-2 bg-gray-50 dark:bg-gray-800/50 border-b border-gray-100 dark:border-gray-800">
+                              <span className="text-xs">📍</span>
+                              <span className="text-xs font-semibold text-gray-700 dark:text-gray-300">
+                                {groundName}
+                              </span>
+                              <span className="ml-auto text-xs text-gray-400">
+                                {groundFixtures.length} match
+                                {groundFixtures.length !== 1 ? "es" : ""}
+                              </span>
+                            </div>
+
+                            {/* Fixtures on this ground */}
+                            <div className="divide-y divide-gray-50 dark:divide-gray-800/50">
+                              {groundFixtures
+                                .sort(
+                                  (a: any, b: any) =>
+                                    new Date(a.scheduledAt).getTime() -
+                                    new Date(b.scheduledAt).getTime(),
+                                )
+                                .map((f: any) => (
+                                  <div key={f.publicId} className="p-3">
+                                    <div className="flex items-center justify-between mb-1">
+                                      <span
+                                        className={`text-xs font-medium ${fixtureStatusColor[f.status] ?? "text-gray-400"}`}
+                                      >
+                                        {f.status}
+                                      </span>
+                                      <div className="flex items-center gap-2">
+                                        <span className="text-xs text-gray-400">
+                                          {f.label
+                                            ? f.label
+                                            : `Round ${f.roundNumber}`}
+                                        </span>
+                                        <button
+                                          onClick={() => openEditFixture(f)}
+                                          className="p-1 rounded-lg bg-gray-100 dark:bg-gray-800 text-gray-500 active:scale-90"
+                                        >
+                                          <svg
+                                            className="w-3.5 h-3.5"
+                                            fill="none"
+                                            stroke="currentColor"
+                                            viewBox="0 0 24 24"
+                                          >
+                                            <path
+                                              strokeLinecap="round"
+                                              strokeLinejoin="round"
+                                              strokeWidth={2}
+                                              d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
+                                            />
+                                          </svg>
+                                        </button>
+                                      </div>
+                                    </div>
+
+                                    <div className="flex items-center justify-between mb-1.5">
+                                      <div className="text-sm font-semibold text-gray-900 dark:text-gray-100">
+                                        {f.homeTeam?.name ?? "TBD"}
+                                      </div>
+                                      <div className="text-xs text-gray-400 px-2">
+                                        vs
+                                      </div>
+                                      <div className="text-sm font-semibold text-gray-900 dark:text-gray-100 text-right">
+                                        {f.awayTeam?.name ?? "TBD"}
+                                      </div>
+                                    </div>
+
+                                    {f.scheduledAt && (
+                                      <div className="text-xs text-gray-400 mb-1">
+                                        🕐{" "}
+                                        {new Date(
+                                          f.scheduledAt,
+                                        ).toLocaleTimeString("en-IN", {
+                                          hour: "2-digit",
+                                          minute: "2-digit",
+                                          hour12: true,
+                                        })}
+                                      </div>
+                                    )}
+
+                                    <div className="flex gap-2 mt-1">
+                                      {f.status === "SCHEDULED" &&
+                                        f.homeTeam &&
+                                        f.awayTeam && (
+                                          <button
+                                            onClick={() => handleStartMatch(f)}
+                                            className="px-3 py-1.5 bg-green-600 text-white text-xs font-semibold rounded-lg active:scale-95"
+                                          >
+                                            🏏 Start Match
+                                          </button>
+                                        )}
+                                      {f.status === "IN_PROGRESS" &&
+                                        f.match && (
+                                          <button
+                                            onClick={() =>
+                                              navigate(
+                                                `/admin/cricket/matches/${f.match.publicId}/score`,
+                                              )
+                                            }
+                                            className="px-3 py-1.5 bg-red-600 text-white text-xs font-semibold rounded-lg active:scale-95"
+                                          >
+                                            🔴 Live Scorer
+                                          </button>
+                                        )}
+                                      {f.status === "COMPLETED" && f.match && (
+                                        <button
+                                          onClick={() =>
+                                            navigate(
+                                              `/match/${f.match.publicId}/scorecard`,
+                                            )
+                                          }
+                                          className="px-3 py-1.5 bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 text-xs font-semibold rounded-lg active:scale-95"
+                                        >
+                                          📊 Scorecard
+                                        </button>
+                                      )}
+                                    </div>
+                                  </div>
+                                ))}
+                            </div>
+                          </div>
+                        ),
+                      )}
+                    </div>
+                  );
+                },
+              );
+            })()}
             {fixtures.length === 0 && (
               <div className="text-center py-12">
                 <div className="text-3xl mb-2">📅</div>
@@ -1033,7 +1727,7 @@ export default function TournamentDetailPage() {
         )}
 
         {/* ── STANDINGS ── */}
-        {tab === 4 && (
+        {tab === 6 && (
           <div>
             {standings.length === 0 ? (
               <div className="text-center py-12">
@@ -1122,7 +1816,7 @@ export default function TournamentDetailPage() {
         )}
 
         {/* ── STATS (NEW) ── */}
-        {tab === 5 && (
+        {tab === 7 && (
           <div className="space-y-4">
             {/* Sub-tab selector */}
             <div className="flex bg-gray-100 dark:bg-gray-800 rounded-xl p-1 gap-1">
@@ -1414,6 +2108,268 @@ export default function TournamentDetailPage() {
                   </div>
                 </div>
               ))}
+          </div>
+        )}
+
+        {/* ── SETTINGS ── */}
+        {tab === 8 && (
+          <div className="space-y-5">
+            {/* Match Format */}
+            <div className="bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 rounded-2xl p-4 space-y-4">
+              <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                🏏 Match Format
+              </h3>
+
+              {/* Overs preset buttons */}
+              <div>
+                <label className="text-xs text-gray-400 mb-2 block">
+                  Overs per Innings
+                </label>
+                <div className="flex gap-2 flex-wrap mb-2">
+                  {[6, 8, 10, 20, 50].map((o) => (
+                    <button
+                      key={o}
+                      onClick={() =>
+                        setSettingsForm((p) => ({
+                          ...p,
+                          oversPerInnings: o,
+                          minsPerOver: o === 50 ? 4.0 : o <= 10 ? 4.0 : 4.5,
+                          maxMatchesPerDay: o === 50 ? 1 : o <= 10 ? 4 : 2,
+                        }))
+                      }
+                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all active:scale-95 ${
+                        settingsForm.oversPerInnings === o
+                          ? "bg-blue-600 border-blue-600 text-white"
+                          : "bg-gray-100 dark:bg-gray-800 border-transparent text-gray-600 dark:text-gray-400"
+                      }`}
+                    >
+                      {o === 50 ? "50-over" : o === 20 ? "T20" : `${o}-over`}
+                    </button>
+                  ))}
+                </div>
+                <input
+                  type="number"
+                  min={1}
+                  max={50}
+                  className="w-full px-3 py-2.5 bg-gray-100 dark:bg-gray-800 rounded-xl text-sm outline-none"
+                  value={settingsForm.oversPerInnings}
+                  onChange={(e) =>
+                    setSettingsForm((p) => ({
+                      ...p,
+                      oversPerInnings: Number(e.target.value),
+                    }))
+                  }
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs text-gray-400 mb-1 block">
+                    Mins per Over
+                  </label>
+                  <input
+                    type="number"
+                    min={1}
+                    max={10}
+                    step={0.5}
+                    className="w-full px-3 py-2.5 bg-gray-100 dark:bg-gray-800 rounded-xl text-sm outline-none"
+                    value={settingsForm.minsPerOver}
+                    onChange={(e) =>
+                      setSettingsForm((p) => ({
+                        ...p,
+                        minsPerOver: Number(e.target.value),
+                      }))
+                    }
+                  />
+                </div>
+                <div>
+                  <label className="text-xs text-gray-400 mb-1 block">
+                    Innings Break (mins)
+                  </label>
+                  <input
+                    type="number"
+                    min={5}
+                    max={60}
+                    className="w-full px-3 py-2.5 bg-gray-100 dark:bg-gray-800 rounded-xl text-sm outline-none"
+                    value={settingsForm.inningsBreakMins}
+                    onChange={(e) =>
+                      setSettingsForm((p) => ({
+                        ...p,
+                        inningsBreakMins: Number(e.target.value),
+                      }))
+                    }
+                  />
+                </div>
+              </div>
+
+              {/* Computed duration */}
+              <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-100 dark:border-blue-900 rounded-xl px-4 py-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-blue-600 dark:text-blue-400">
+                    Full match duration
+                  </span>
+                  <span className="text-sm font-bold text-blue-700 dark:text-blue-300">
+                    {computeMatchDuration()} mins
+                  </span>
+                </div>
+                <p className="text-xs text-blue-400 mt-0.5">
+                  ({settingsForm.oversPerInnings} ov ×{" "}
+                  {settingsForm.minsPerOver} min × 2 innings) +{" "}
+                  {settingsForm.inningsBreakMins} min break
+                </p>
+              </div>
+            </div>
+
+            <div className="bg-green-50 dark:bg-green-900/20 border border-green-100 dark:border-green-900 rounded-xl px-4 py-3">
+              <div className="flex items-center justify-between">
+                <span className="text-xs text-green-600 dark:text-green-400">
+                  Max matches per ground per day
+                </span>
+                <span className="text-sm font-bold text-green-700 dark:text-green-300">
+                  {computeMaxMatchesPerGround()} matches
+                </span>
+              </div>
+              <p className="text-xs text-green-500 mt-0.5">
+                Auto-calculated · all venues updated on Save
+              </p>
+            </div>
+
+            {/* Daily Schedule */}
+            <div className="bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 rounded-2xl p-4 space-y-4">
+              <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                📅 Daily Schedule
+              </h3>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-xs text-gray-400 mb-1 block">
+                      First Match Time
+                    </label>
+                    <input
+                      type="time"
+                      className="w-full px-3 py-2.5 bg-gray-100 dark:bg-gray-800 rounded-xl text-sm outline-none"
+                      value={settingsForm.dayStartTime}
+                      onChange={(e) =>
+                        setSettingsForm((p) => ({
+                          ...p,
+                          dayStartTime: e.target.value,
+                        }))
+                      }
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs text-gray-400 mb-1 block">
+                      Last Match Ends By
+                    </label>
+                    <input
+                      type="time"
+                      className="w-full px-3 py-2.5 bg-gray-100 dark:bg-gray-800 rounded-xl text-sm outline-none"
+                      value={settingsForm.dayEndTime}
+                      onChange={(e) =>
+                        setSettingsForm((p) => ({
+                          ...p,
+                          dayEndTime: e.target.value,
+                        }))
+                      }
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="text-xs text-gray-400 mb-1 block">
+                    Gap Between Matches (mins)
+                  </label>
+                  <input
+                    type="number"
+                    min={0}
+                    max={120}
+                    className="w-full px-3 py-2.5 bg-gray-100 dark:bg-gray-800 rounded-xl text-sm outline-none"
+                    value={settingsForm.groundGapMins}
+                    onChange={(e) =>
+                      setSettingsForm((p) => ({
+                        ...p,
+                        groundGapMins: Number(e.target.value),
+                      }))
+                    }
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="text-xs text-gray-400 mb-1 block">
+                  Max Matches per Ground per Day
+                </label>
+                <div className="flex gap-2">
+                  {[1, 2, 3, 4].map((n) => (
+                    <button
+                      key={n}
+                      onClick={() =>
+                        setSettingsForm((p) => ({ ...p, maxMatchesPerDay: n }))
+                      }
+                      className={`flex-1 py-2 rounded-xl text-xs font-semibold border transition-all active:scale-95 ${
+                        settingsForm.maxMatchesPerDay === n
+                          ? "bg-blue-600 border-blue-600 text-white"
+                          : "bg-gray-100 dark:bg-gray-800 border-transparent text-gray-600 dark:text-gray-400"
+                      }`}
+                    >
+                      {n}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Schedule Preview */}
+              {(() => {
+                const { duration, slots } = computeSchedulePreview();
+                return (
+                  <div className="bg-gray-50 dark:bg-gray-800/50 rounded-xl p-3 space-y-2">
+                    <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
+                      Preview — per ground
+                    </p>
+                    {slots.map((slot, i) => (
+                      <div key={i} className="flex items-center gap-3">
+                        <div className="w-5 h-5 rounded-full bg-green-100 dark:bg-green-900/30 flex items-center justify-center flex-shrink-0">
+                          <span className="text-xs font-bold text-green-700 dark:text-green-400">
+                            {i + 1}
+                          </span>
+                        </div>
+                        <div className="flex-1">
+                          <div className="text-sm font-semibold text-gray-900 dark:text-gray-100">
+                            Match {i + 1}
+                          </div>
+                          <div className="text-xs text-gray-400">
+                            {slot.start} → {slot.end}
+                            <span className="ml-2 text-gray-300">
+                              ({duration} mins)
+                            </span>
+                          </div>
+                        </div>
+                        {i < slots.length - 1 && (
+                          <span className="text-xs text-orange-400 font-medium">
+                            +{settingsForm.groundGapMins}m gap
+                          </span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                );
+              })()}
+            </div>
+
+            {/* Save */}
+            <button
+              onClick={handleSaveSettings}
+              disabled={posting}
+              className="w-full py-3 bg-blue-600 text-white rounded-xl text-sm font-semibold disabled:opacity-40 active:scale-95 transition-all"
+            >
+              {posting ? "Saving..." : "💾 Save Settings"}
+            </button>
+
+            <p className="text-xs text-gray-400 text-center">
+              These settings are used when auto-generating fixtures. Re-generate
+              fixtures after changing.
+            </p>
           </div>
         )}
       </div>
@@ -1729,72 +2685,256 @@ export default function TournamentDetailPage() {
 
       {/* ── GENERATE FIXTURES MODAL ── */}
       {showGenerate && (
-        <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-6">
-          <div className="w-full max-w-sm bg-white dark:bg-gray-900 rounded-2xl p-5">
-            <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-4">
-              ⚡ Auto Generate Fixtures
-            </h3>
-            <p className="text-xs text-gray-400 mb-4">
-              Format: <b>{tournament.format?.replace(/_/g, " ")}</b> ·{" "}
-              {teams.length} teams
-            </p>
-            {tournament.format === "GROUP_KNOCKOUT" && (
-              <div className="space-y-3 mb-4">
-                <div>
-                  <label className="text-xs text-gray-400 mb-1 block">
-                    Teams per Group
-                  </label>
-                  <input
-                    type="number"
-                    min={2}
-                    max={8}
-                    className="w-full px-3 py-2.5 bg-gray-100 dark:bg-gray-800 rounded-xl text-sm outline-none"
-                    value={genForm.teamsPerGroup}
-                    onChange={(e) =>
-                      setGenForm((p) => ({
-                        ...p,
-                        teamsPerGroup: Number(e.target.value),
-                      }))
-                    }
-                  />
+        <div className="fixed inset-0 z-50 bg-black/60 flex items-end">
+          <div className="w-full bg-white dark:bg-gray-900 rounded-t-2xl max-h-[90vh] overflow-y-auto">
+            <div className="p-5">
+              <div className="w-10 h-1 bg-gray-300 rounded-full mx-auto mb-4" />
+              <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-1">
+                ⚡ Auto Generate Fixtures
+              </h3>
+              <p className="text-xs text-gray-400 mb-4">
+                Format: <b>{tournament.format?.replace(/_/g, " ")}</b> ·{" "}
+                {teams.length} teams
+              </p>
+              {tournament.format === "GROUP_KNOCKOUT" && (
+                <div className="space-y-3 mb-4">
+                  <div>
+                    <label className="text-xs text-gray-400 mb-1 block">
+                      Teams per Group
+                    </label>
+                    <input
+                      type="number"
+                      min={2}
+                      max={8}
+                      className="w-full px-3 py-2.5 bg-gray-100 dark:bg-gray-800 rounded-xl text-sm outline-none"
+                      value={genForm.teamsPerGroup}
+                      onChange={(e) =>
+                        setGenForm((p) => ({
+                          ...p,
+                          teamsPerGroup: Number(e.target.value),
+                        }))
+                      }
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs text-gray-400 mb-1 block">
+                      Teams advancing per Group
+                    </label>
+                    <input
+                      type="number"
+                      min={1}
+                      max={4}
+                      className="w-full px-3 py-2.5 bg-gray-100 dark:bg-gray-800 rounded-xl text-sm outline-none"
+                      value={genForm.teamsAdvancingPerGroup}
+                      onChange={(e) =>
+                        setGenForm((p) => ({
+                          ...p,
+                          teamsAdvancingPerGroup: Number(e.target.value),
+                        }))
+                      }
+                    />
+                  </div>
+                </div>
+              )}
+
+              <p className="text-xs text-red-400 mb-4">
+                ⚠ This will delete and regenerate all existing fixtures.
+              </p>
+              {/* Scheduling */}
+              <div className="space-y-4 mb-4">
+                <p className="text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wide">
+                  📅 Schedule
+                </p>
+                <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-100 dark:border-blue-900 rounded-xl px-3 py-2 text-xs text-blue-600 dark:text-blue-400">
+                  Leave dates blank to assign manually later.
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-xs text-gray-400 mb-1 block">
+                      Start Date
+                    </label>
+                    <input
+                      type="date"
+                      className="w-full px-3 py-2.5 bg-gray-100 dark:bg-gray-800 rounded-xl text-sm outline-none"
+                      value={genForm.scheduleStartDate}
+                      onChange={(e) =>
+                        setGenForm((p) => ({
+                          ...p,
+                          scheduleStartDate: e.target.value,
+                        }))
+                      }
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs text-gray-400 mb-1 block">
+                      First Match Time
+                    </label>
+                    <input
+                      type="time"
+                      className="w-full px-3 py-2.5 bg-gray-100 dark:bg-gray-800 rounded-xl text-sm outline-none"
+                      value={genForm.scheduleStartTime}
+                      onChange={(e) =>
+                        setGenForm((p) => ({
+                          ...p,
+                          scheduleStartTime: e.target.value,
+                        }))
+                      }
+                    />
+                  </div>
                 </div>
                 <div>
-                  <label className="text-xs text-gray-400 mb-1 block">
-                    Teams advancing per Group
+                  <label className="text-xs text-gray-400 mb-2 block">
+                    Play Days
                   </label>
-                  <input
-                    type="number"
-                    min={1}
-                    max={4}
-                    className="w-full px-3 py-2.5 bg-gray-100 dark:bg-gray-800 rounded-xl text-sm outline-none"
-                    value={genForm.teamsAdvancingPerGroup}
-                    onChange={(e) =>
-                      setGenForm((p) => ({
-                        ...p,
-                        teamsAdvancingPerGroup: Number(e.target.value),
-                      }))
-                    }
-                  />
+                  <div className="flex gap-1.5 flex-wrap">
+                    {DAY_LABELS.map((label, idx) => {
+                      const day = idx + 1;
+                      const active = genForm.playDays.includes(day);
+                      return (
+                        <button
+                          key={day}
+                          onClick={() => togglePlayDay(day)}
+                          className={`px-2.5 py-1.5 rounded-lg text-xs font-semibold border transition-all active:scale-95 ${
+                            active
+                              ? "bg-blue-600 border-blue-600 text-white"
+                              : "bg-gray-100 dark:bg-gray-800 border-transparent text-gray-500"
+                          }`}
+                        >
+                          {label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  {genForm.playDays.length === 0 && (
+                    <p className="text-xs text-red-400 mt-1">
+                      Select at least one play day.
+                    </p>
+                  )}
                 </div>
+
+                {venues.length > 0 && (
+                  <div>
+                    <label className="text-xs text-gray-400 mb-2 block">
+                      Ground Assignment
+                    </label>
+                    <div className="grid grid-cols-2 gap-2 mb-3">
+                      <button
+                        onClick={() =>
+                          setGenForm((p) => ({ ...p, autoAssignVenues: true }))
+                        }
+                        className={`p-2.5 rounded-xl border text-left transition-all active:scale-95 ${
+                          genForm.autoAssignVenues
+                            ? "bg-blue-50 dark:bg-blue-900/20 border-blue-300 dark:border-blue-700"
+                            : "bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700"
+                        }`}
+                      >
+                        <div className="text-xs font-semibold text-gray-900 dark:text-gray-100">
+                          🔄 Auto
+                        </div>
+                        <div className="text-xs text-gray-400">
+                          Round-robin across grounds
+                        </div>
+                      </button>
+                      <button
+                        onClick={() =>
+                          setGenForm((p) => ({ ...p, autoAssignVenues: false }))
+                        }
+                        className={`p-2.5 rounded-xl border text-left transition-all active:scale-95 ${
+                          !genForm.autoAssignVenues
+                            ? "bg-blue-50 dark:bg-blue-900/20 border-blue-300 dark:border-blue-700"
+                            : "bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700"
+                        }`}
+                      >
+                        <div className="text-xs font-semibold text-gray-900 dark:text-gray-100">
+                          ✋ Manual
+                        </div>
+                        <div className="text-xs text-gray-400">
+                          Assign venues later
+                        </div>
+                      </button>
+                    </div>
+                    {genForm.autoAssignVenues && (
+                      <div className="space-y-1.5">
+                        {venues.map((v: any) => {
+                          const selected =
+                            genForm.selectedVenueIds.length === 0 ||
+                            genForm.selectedVenueIds.includes(v.id);
+                          return (
+                            <button
+                              key={v.id}
+                              onClick={() =>
+                                setGenForm((p) => ({
+                                  ...p,
+                                  selectedVenueIds: p.selectedVenueIds.includes(
+                                    v.id,
+                                  )
+                                    ? p.selectedVenueIds.filter(
+                                        (id) => id !== v.id,
+                                      )
+                                    : [...p.selectedVenueIds, v.id],
+                                }))
+                              }
+                              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl border text-left transition-all ${
+                                selected
+                                  ? "bg-blue-50 dark:bg-blue-900/20 border-blue-300 dark:border-blue-700"
+                                  : "bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700"
+                              }`}
+                            >
+                              <div
+                                className={`w-4 h-4 rounded border-2 flex-shrink-0 flex items-center justify-center ${selected ? "border-blue-600 bg-blue-600" : "border-gray-300"}`}
+                              >
+                                {selected && (
+                                  <svg
+                                    className="w-3 h-3 text-white"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    viewBox="0 0 24 24"
+                                  >
+                                    <path
+                                      strokeLinecap="round"
+                                      strokeLinejoin="round"
+                                      strokeWidth={3}
+                                      d="M5 13l4 4L19 7"
+                                    />
+                                  </svg>
+                                )}
+                              </div>
+                              <div>
+                                <div className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                                  {v.name}
+                                </div>
+                                <div className="text-xs text-gray-400">
+                                  Max {v.maxMatchesPerDay}/day
+                                </div>
+                              </div>
+                            </button>
+                          );
+                        })}
+                        {genForm.selectedVenueIds.length === 0 && (
+                          <p className="text-xs text-blue-500 px-1">
+                            All venues selected by default.
+                          </p>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
-            )}
-            <p className="text-xs text-red-400 mb-4">
-              ⚠ This will delete and regenerate all existing fixtures.
-            </p>
-            <div className="flex gap-3">
-              <button
-                onClick={() => setShowGenerate(false)}
-                className="flex-1 py-2.5 border border-gray-200 dark:border-gray-700 rounded-xl text-sm text-gray-600 dark:text-gray-400"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleGenerate}
-                disabled={posting}
-                className="flex-1 py-2.5 bg-blue-600 text-white rounded-xl text-sm font-semibold disabled:opacity-40"
-              >
-                Generate
-              </button>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setShowGenerate(false)}
+                  className="flex-1 py-2.5 border border-gray-200 dark:border-gray-700 rounded-xl text-sm text-gray-600 dark:text-gray-400"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleGenerate}
+                  disabled={posting || genForm.playDays.length === 0}
+                  className="flex-1 py-2.5 bg-blue-600 text-white rounded-xl text-sm font-semibold disabled:opacity-40"
+                >
+                  Generate
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -1892,6 +3032,40 @@ export default function TournamentDetailPage() {
                     setFixtureForm((p) => ({ ...p, venue: e.target.value }))
                   }
                 />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs text-gray-400 mb-1 block">
+                    Date (optional)
+                  </label>
+                  <input
+                    type="date"
+                    className="w-full px-3 py-2.5 bg-gray-100 dark:bg-gray-800 rounded-xl text-sm outline-none"
+                    value={fixtureForm.scheduledDate}
+                    onChange={(e) =>
+                      setFixtureForm((p) => ({
+                        ...p,
+                        scheduledDate: e.target.value,
+                      }))
+                    }
+                  />
+                </div>
+                <div>
+                  <label className="text-xs text-gray-400 mb-1 block">
+                    Time (optional)
+                  </label>
+                  <input
+                    type="time"
+                    className="w-full px-3 py-2.5 bg-gray-100 dark:bg-gray-800 rounded-xl text-sm outline-none"
+                    value={fixtureForm.scheduledTime}
+                    onChange={(e) =>
+                      setFixtureForm((p) => ({
+                        ...p,
+                        scheduledTime: e.target.value,
+                      }))
+                    }
+                  />
+                </div>
               </div>
               <div className="flex gap-3 pt-2">
                 <button
@@ -2045,15 +3219,72 @@ export default function TournamentDetailPage() {
                 <label className="text-xs text-gray-400 mb-1 block">
                   Venue (optional)
                 </label>
+                {venues.length > 0 && (
+                  <select
+                    className="w-full px-3 py-2.5 bg-gray-100 dark:bg-gray-800 rounded-xl text-sm outline-none mb-2"
+                    value={editFixtureForm.venueId}
+                    onChange={(e) => {
+                      const v = venues.find(
+                        (vv: any) => vv.id === e.target.value,
+                      );
+                      setEditFixtureForm((p) => ({
+                        ...p,
+                        venueId: e.target.value,
+                        venue: v?.name ?? p.venue,
+                      }));
+                    }}
+                  >
+                    <option value="">Select from tournament venues...</option>
+                    {venues.map((v: any) => (
+                      <option key={v.id} value={v.id}>
+                        {v.name}
+                      </option>
+                    ))}
+                  </select>
+                )}
                 <input
                   type="text"
                   className="w-full px-3 py-2.5 bg-gray-100 dark:bg-gray-800 rounded-xl text-sm outline-none"
-                  placeholder="e.g. NCA Ground A"
+                  placeholder="Or type venue name..."
                   value={editFixtureForm.venue}
                   onChange={(e) =>
                     setEditFixtureForm((p) => ({ ...p, venue: e.target.value }))
                   }
                 />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs text-gray-400 mb-1 block">
+                    Date
+                  </label>
+                  <input
+                    type="date"
+                    className="w-full px-3 py-2.5 bg-gray-100 dark:bg-gray-800 rounded-xl text-sm outline-none"
+                    value={editFixtureForm.scheduledDate}
+                    onChange={(e) =>
+                      setEditFixtureForm((p) => ({
+                        ...p,
+                        scheduledDate: e.target.value,
+                      }))
+                    }
+                  />
+                </div>
+                <div>
+                  <label className="text-xs text-gray-400 mb-1 block">
+                    Time
+                  </label>
+                  <input
+                    type="time"
+                    className="w-full px-3 py-2.5 bg-gray-100 dark:bg-gray-800 rounded-xl text-sm outline-none"
+                    value={editFixtureForm.scheduledTime}
+                    onChange={(e) =>
+                      setEditFixtureForm((p) => ({
+                        ...p,
+                        scheduledTime: e.target.value,
+                      }))
+                    }
+                  />
+                </div>
               </div>
               <div>
                 <label className="text-xs text-gray-400 mb-1 block">
@@ -2102,6 +3333,217 @@ export default function TournamentDetailPage() {
                   🗑 Delete Fixture
                 </button>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── ADVANCE TO PLAYOFFS MODAL ── */}
+      {showAdvancePlayoffs && (
+        <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-6">
+          <div className="w-full max-w-sm bg-white dark:bg-gray-900 rounded-2xl p-5">
+            <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-1">
+              🏆 Advance to Playoffs
+            </h3>
+            <p className="text-xs text-gray-400 mb-4">
+              Top teams from the league stage advance to playoffs.
+            </p>
+            <div className="space-y-4">
+              <div>
+                <label className="text-xs text-gray-400 mb-1 block">
+                  Teams advancing to playoffs
+                </label>
+                <div className="grid grid-cols-4 gap-2">
+                  {[2, 3, 4, 6].map((n) => (
+                    <button
+                      key={n}
+                      onClick={() => setPlayoffTopN(n)}
+                      className={`py-2 rounded-xl text-xs font-semibold border transition-all active:scale-95 ${
+                        playoffTopN === n
+                          ? "bg-blue-600 border-blue-600 text-white"
+                          : "bg-gray-100 dark:bg-gray-800 border-transparent text-gray-600 dark:text-gray-400"
+                      }`}
+                    >
+                      Top {n}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <label className="text-xs text-gray-400 mb-1 block">
+                  Bracket Type
+                </label>
+                <div className="grid grid-cols-2 gap-2">
+                  {[
+                    {
+                      val: "IPL",
+                      label: "🏏 IPL Fixed",
+                      desc: "Q1, Eliminator, Q2, Final",
+                    },
+                    {
+                      val: "CUSTOM",
+                      label: "⚙️ Custom",
+                      desc: "Admin sets each round",
+                    },
+                  ].map(({ val, label, desc }) => (
+                    <button
+                      key={val}
+                      onClick={() => setPlayoffBracketType(val)}
+                      className={`p-2.5 rounded-xl border text-left transition-all active:scale-95 ${
+                        playoffBracketType === val
+                          ? "bg-blue-50 dark:bg-blue-900/20 border-blue-300 dark:border-blue-700"
+                          : "bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700"
+                      }`}
+                    >
+                      <div className="text-xs font-semibold text-gray-900 dark:text-gray-100">
+                        {label}
+                      </div>
+                      <div className="text-xs text-gray-400 mt-0.5">{desc}</div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+              {playoffTopN === 4 && playoffBracketType === "IPL" && (
+                <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-100 dark:border-blue-900 rounded-xl px-3 py-2.5 text-xs text-blue-600 dark:text-blue-400">
+                  <strong>IPL bracket:</strong> Qualifier 1 (1v2) + Eliminator
+                  (3v4) will be created. Q2 and Final are added after results.
+                </div>
+              )}
+              <div className="flex gap-3 pt-1">
+                <button
+                  onClick={() => setShowAdvancePlayoffs(false)}
+                  className="flex-1 py-2.5 border border-gray-200 dark:border-gray-700 rounded-xl text-sm text-gray-600 dark:text-gray-400"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleAdvancePlayoffs}
+                  disabled={posting}
+                  className="flex-1 py-2.5 bg-purple-600 text-white rounded-xl text-sm font-semibold disabled:opacity-40"
+                >
+                  {posting ? "Generating..." : "Generate Playoffs"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showAddVenue && (
+        <div className="fixed inset-0 z-50 bg-black/60 flex items-end">
+          <div className="w-full bg-white dark:bg-gray-900 rounded-t-2xl p-5">
+            <div className="w-10 h-1 bg-gray-300 rounded-full mx-auto mb-4" />
+            <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-4">
+              🏟 Add Venue
+            </h3>
+            <div className="space-y-3">
+              <div>
+                <label className="text-xs text-gray-400 mb-1 block">
+                  Ground Name *
+                </label>
+                <input
+                  type="text"
+                  className="w-full px-3 py-2.5 bg-gray-100 dark:bg-gray-800 rounded-xl text-sm outline-none"
+                  placeholder="e.g. NCA Ground A"
+                  value={venueForm.name}
+                  onChange={(e) =>
+                    setVenueForm((p) => ({ ...p, name: e.target.value }))
+                  }
+                />
+              </div>
+              <div>
+                <label className="text-xs text-gray-400 mb-1 block">
+                  Max Matches per Day
+                </label>
+                <input
+                  type="number"
+                  min={1}
+                  max={10}
+                  className="w-full px-3 py-2.5 bg-gray-100 dark:bg-gray-800 rounded-xl text-sm outline-none text-center"
+                  value={venueForm.maxMatchesPerDay}
+                  onChange={(e) =>
+                    setVenueForm((p) => ({
+                      ...p,
+                      maxMatchesPerDay: Number(e.target.value),
+                    }))
+                  }
+                />
+              </div>
+              <div className="flex gap-3 pt-2">
+                <button
+                  onClick={() => setShowAddVenue(false)}
+                  className="flex-1 py-2.5 border border-gray-200 dark:border-gray-700 rounded-xl text-sm text-gray-600 dark:text-gray-400"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleAddVenue}
+                  disabled={posting || !venueForm.name.trim()}
+                  className="flex-1 py-2.5 bg-blue-600 text-white rounded-xl text-sm font-semibold disabled:opacity-40"
+                >
+                  Add Venue
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showAddOfficial && (
+        <div className="fixed inset-0 z-50 bg-black/60 flex items-end">
+          <div className="w-full bg-white dark:bg-gray-900 rounded-t-2xl p-5">
+            <div className="w-10 h-1 bg-gray-300 rounded-full mx-auto mb-4" />
+            <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-4">
+              🦺 Add Match Official
+            </h3>
+            <div className="space-y-3">
+              <div>
+                <label className="text-xs text-gray-400 mb-1 block">
+                  Name *
+                </label>
+                <input
+                  type="text"
+                  className="w-full px-3 py-2.5 bg-gray-100 dark:bg-gray-800 rounded-xl text-sm outline-none"
+                  placeholder="e.g. Ravi Kumar"
+                  value={officialForm.name}
+                  onChange={(e) =>
+                    setOfficialForm((p) => ({ ...p, name: e.target.value }))
+                  }
+                />
+              </div>
+              <div>
+                <label className="text-xs text-gray-400 mb-2 block">Role</label>
+                <div className="grid grid-cols-3 gap-2">
+                  {OFFICIAL_ROLES.map((role) => (
+                    <button
+                      key={role}
+                      onClick={() => setOfficialForm((p) => ({ ...p, role }))}
+                      className={`py-2 rounded-xl text-xs font-semibold border transition-all active:scale-95 ${
+                        officialForm.role === role
+                          ? "bg-blue-600 border-blue-600 text-white"
+                          : "bg-gray-100 dark:bg-gray-800 border-transparent text-gray-600 dark:text-gray-400"
+                      }`}
+                    >
+                      {OFFICIAL_ROLE_LABELS[role]}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="flex gap-3 pt-2">
+                <button
+                  onClick={() => setShowAddOfficial(false)}
+                  className="flex-1 py-2.5 border border-gray-200 dark:border-gray-700 rounded-xl text-sm text-gray-600 dark:text-gray-400"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleAddOfficial}
+                  disabled={posting || !officialForm.name.trim()}
+                  className="flex-1 py-2.5 bg-blue-600 text-white rounded-xl text-sm font-semibold disabled:opacity-40"
+                >
+                  Add Official
+                </button>
+              </div>
             </div>
           </div>
         </div>

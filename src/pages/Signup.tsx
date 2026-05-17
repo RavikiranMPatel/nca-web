@@ -42,7 +42,7 @@ function Signup() {
     }
 
     try {
-      const res = await signupApi({ name, email, password });
+      const res = await signupApi({ name, email: email.trim(), password });
 
       // 🔐 Decode JWT to get role
       const base64Payload = res.accessToken.split(".")[1];

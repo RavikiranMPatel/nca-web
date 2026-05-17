@@ -126,8 +126,23 @@ const PlayerSelector = ({
                 <div className="text-sm font-medium text-white">
                   {p.displayName}
                 </div>
-                {p.battingStyle && (
-                  <div className="text-xs text-gray-400">{p.battingStyle}</div>
+                {(p.battingStyle || p.playerRole) && (
+                  <div className="text-xs text-gray-400">
+                    {[
+                      p.playerRole === "WK_BATSMAN"
+                        ? "🧤 WK"
+                        : p.playerRole === "BATSMAN"
+                          ? "🏏 Bat"
+                          : p.playerRole === "BOWLER"
+                            ? "⚾ Bowl"
+                            : p.playerRole === "ALL_ROUNDER"
+                              ? "⭐ AR"
+                              : null,
+                      p.battingStyle,
+                    ]
+                      .filter(Boolean)
+                      .join(" · ")}
+                  </div>
                 )}
               </div>
             </button>
@@ -351,6 +366,7 @@ export default function LiveScorerPage() {
             bowlingStyle: mtp.bowlingStyle as string | undefined,
             isWicketkeeper: !!mtp.isWicketkeeper,
             isCaptain: !!mtp.isCaptain,
+            playerRole: mtp.playerRole as string | undefined,
           }));
       }
 
@@ -409,6 +425,36 @@ export default function LiveScorerPage() {
         setBowlerOversMap(oversMap);
         setLastBowlerPublicId(overBowlers[currentOverIndex - 1] ?? null);
 
+        // ── Restore current bowler's in-progress over stats ──────────────────────
+        const currentBowlerPid = overBowlers[currentOverIndex];
+        if (currentBowlerPid) {
+          const currentOverDeliveries = deliveries.filter((d) => {
+            const overNum = d.overNumber as number;
+            const bowlerPid =
+              (d.bowlerPublicId as string) ??
+              ((d.bowler as Record<string, unknown>)?.publicId as string);
+            return (
+              overNum === currentOverIndex && bowlerPid === currentBowlerPid
+            );
+          });
+          setBowlerBalls(
+            currentOverDeliveries.filter((d) => d.isLegalBall as boolean)
+              .length,
+          );
+          setBowlerRuns(
+            currentOverDeliveries.reduce(
+              (s, d) =>
+                s +
+                ((d.runsBatsman as number) ?? 0) +
+                ((d.runsExtras as number) ?? 0),
+              0,
+            ),
+          );
+          setBowlerWickets(
+            currentOverDeliveries.filter((d) => d.isWicket as boolean).length,
+          );
+        }
+
         const statsMap: Record<string, BatterStats> = {};
         deliveries.forEach((d) => {
           const batsmanPid =
@@ -451,6 +497,27 @@ export default function LiveScorerPage() {
           );
           setBowler(allBowlers.find((p) => p.publicId === bowlerPid) ?? null);
 
+          // Restore partnership — balls/runs since last wicket
+          const lastWicketIndex = deliveries.reduce(
+            (lastIdx, d, idx) => (d.isWicket ? idx : lastIdx),
+            -1,
+          );
+          const partnershipDeliveries = deliveries.slice(lastWicketIndex + 1);
+          const pRuns = partnershipDeliveries.reduce(
+            (s, d) => s + ((d.runsBatsman as number) ?? 0),
+            0,
+          );
+          const pBalls = partnershipDeliveries.filter(
+            (d) => d.isLegalBall as boolean,
+          ).length;
+          setPartnershipRuns(pRuns);
+          setPartnershipBalls(pBalls);
+
+          // Restore free hit — last ball was a no ball?
+          const lastDel = deliveries[deliveries.length - 1];
+          const lastExtra = (lastDel?.extraType as string) ?? null;
+          setIsFreeHit(lastExtra === "NO_BALL");
+
           const dismissed = new Set<string>();
           deliveries.forEach((d) => {
             if (d.isWicket) {
@@ -492,7 +559,9 @@ export default function LiveScorerPage() {
     if (!matchId) return;
     try {
       const over = await getThisOver(matchId);
-      setThisOver((over as Record<string, unknown>[]).map(mapToBallDTO));
+      setThisOver(
+        (over as unknown as Record<string, unknown>[]).map(mapToBallDTO),
+      );
     } catch {
       /* silent */
     }
@@ -575,17 +644,6 @@ export default function LiveScorerPage() {
               balls: existing.balls + (isLegalBall ? 1 : 0),
               fours: existing.fours + (runs === 4 ? 1 : 0),
               sixes: existing.sixes + (runs === 6 ? 1 : 0),
-            },
-          };
-        });
-      } else if (isLegalBall) {
-        setBatterStatsMap((prev) => {
-          const existing = prev[currentStriker.publicId] ?? emptyStats();
-          return {
-            ...prev,
-            [currentStriker.publicId]: {
-              ...existing,
-              balls: existing.balls + 1,
             },
           };
         });
@@ -683,6 +741,7 @@ export default function LiveScorerPage() {
 
     const capturedStriker = striker;
     const capturedNonStriker = nonStriker;
+    const capturedDismissedPlayer = dismissedPlayer;
 
     const wicketBallForSummary: BallDTO = {
       runsBatsman: pendingRuns,
@@ -748,11 +807,6 @@ export default function LiveScorerPage() {
         setShowWagonWheel(true);
       }
 
-      setDismissedPlayerIds((prev) => {
-        const next = new Set(prev);
-        if (dismissedPlayer?.publicId) next.add(dismissedPlayer.publicId);
-        return next;
-      });
       setDismissalType("");
       setDismissedPlayer(null);
       setFielder(null);
@@ -791,11 +845,16 @@ export default function LiveScorerPage() {
         }
       }
 
+      const nextDismissedIds = new Set(dismissedPlayerIds);
+      if (capturedDismissedPlayer?.publicId)
+        // ← use captured value
+        nextDismissedIds.add(capturedDismissedPlayer.publicId);
+      setDismissedPlayerIds(nextDismissedIds);
+
       const availableBatters = battingPlayers.filter(
         (p) =>
-          !dismissedPlayerIds.has(p.publicId) &&
-          p.publicId !== dismissedPlayer?.publicId &&
-          p.publicId !== nonStriker?.publicId,
+          !nextDismissedIds.has(p.publicId) &&
+          p.publicId !== capturedNonStriker?.publicId,
       );
 
       if (!state.inningsComplete && availableBatters.length > 0) {
@@ -819,7 +878,7 @@ export default function LiveScorerPage() {
       const state = await undoLastBall(matchId);
       await refreshOver();
       setInnings(state.inningsState);
-      setDismissedPlayerIds(new Set());
+
       const deliveries = await api
         .get(`/admin/cricket/matches/${matchId}/scoring/deliveries`)
         .then((r) => r.data as Record<string, unknown>[])
@@ -845,6 +904,105 @@ export default function LiveScorerPage() {
         }
       });
       setBatterStatsMap(statsMap);
+      // Restore partnership after undo
+      const lastWicketIndex = deliveries.reduce(
+        (lastIdx, d, idx) => ((d.isWicket as boolean) ? idx : lastIdx),
+        -1,
+      );
+      const partnershipDeliveries = deliveries.slice(lastWicketIndex + 1);
+      setPartnershipRuns(
+        partnershipDeliveries.reduce(
+          (s, d) => s + ((d.runsBatsman as number) ?? 0),
+          0,
+        ),
+      );
+      setPartnershipBalls(
+        partnershipDeliveries.filter((d) => d.isLegalBall as boolean).length,
+      );
+      // Restore free hit flag after undo
+      if (deliveries.length > 0) {
+        const lastDel = deliveries[deliveries.length - 1];
+        setIsFreeHit((lastDel?.extraType as string) === "NO_BALL");
+      } else {
+        setIsFreeHit(false);
+      }
+      // Restore bowler current over stats after undo
+      if (deliveries.length > 0) {
+        const last = deliveries[deliveries.length - 1];
+        const lastBowlerPid =
+          (last.bowlerPublicId as string) ??
+          ((last.bowler as Record<string, unknown>)?.publicId as string);
+        const lastOverNum = last.overNumber as number;
+
+        if (lastBowlerPid && lastOverNum !== undefined) {
+          const currentOverDeliveries = deliveries.filter((d) => {
+            const overNum = d.overNumber as number;
+            const bowlerPid =
+              (d.bowlerPublicId as string) ??
+              ((d.bowler as Record<string, unknown>)?.publicId as string);
+            return overNum === lastOverNum && bowlerPid === lastBowlerPid;
+          });
+          setBowlerBalls(
+            currentOverDeliveries.filter((d) => d.isLegalBall as boolean)
+              .length,
+          );
+          setBowlerRuns(
+            currentOverDeliveries.reduce(
+              (s, d) =>
+                s +
+                ((d.runsBatsman as number) ?? 0) +
+                ((d.runsExtras as number) ?? 0),
+              0,
+            ),
+          );
+          setBowlerWickets(
+            currentOverDeliveries.filter((d) => d.isWicket as boolean).length,
+          );
+        }
+      }
+      // Restore striker/nonStriker/bowler from deliveries after undo
+      if (deliveries.length > 0) {
+        const last = deliveries[deliveries.length - 1];
+        const batsmanPid =
+          (last.batsmanPublicId as string) ??
+          ((last.batsman as Record<string, unknown>)?.publicId as string);
+        const nonStrikerPid =
+          (last.nonStrikerPublicId as string) ??
+          ((last.nonStriker as Record<string, unknown>)?.publicId as string);
+        const bowlerPid =
+          (last.bowlerPublicId as string) ??
+          ((last.bowler as Record<string, unknown>)?.publicId as string);
+        setStriker(
+          (battingPlayers.length > 0 ? battingPlayers : []).find(
+            (p) => p.publicId === batsmanPid,
+          ) ?? null,
+        );
+        setNonStriker(
+          (battingPlayers.length > 0 ? battingPlayers : []).find(
+            (p) => p.publicId === nonStrikerPid,
+          ) ?? null,
+        );
+        setBowler(
+          (bowlingPlayers.length > 0 ? bowlingPlayers : []).find(
+            (p) => p.publicId === bowlerPid,
+          ) ?? null,
+        );
+      } else {
+        setStriker(null);
+        setNonStriker(null);
+        setBowler(null);
+      }
+      const dismissedAfterUndo = new Set<string>();
+      deliveries.forEach((d) => {
+        if (d.isWicket) {
+          const pid =
+            (d.dismissedPlayerPublicId as string) ??
+            ((d.dismissedPlayer as Record<string, unknown>)
+              ?.publicId as string);
+          if (pid) dismissedAfterUndo.add(pid);
+        }
+      });
+      setDismissedPlayerIds(dismissedAfterUndo);
       showToast("✓ Undone");
     } catch (e: unknown) {
       const msg =
