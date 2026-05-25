@@ -15,6 +15,7 @@ export type LoginData = {
   userEmail?: string;
   userPublicId?: string;
   academyId?: string;
+  academyPublicId?: string;
   academyName?: string;
   branchId?: string;
   branchName?: string;
@@ -27,6 +28,7 @@ type AuthContextType = {
   userEmail: string | null;
   userPublicId: string | null;
   academyId: string | null;
+  academyPublicId: string | null;
   academyName: string | null;
   branchId: string | null;
   branchName: string | null;
@@ -59,6 +61,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [academyId, setAcademyId] = useState<string | null>(
     localStorage.getItem("academyId"),
   );
+  const [academyPublicId, setAcademyPublicId] = useState<string | null>(
+    localStorage.getItem("academyPublicId"),
+  );
   const [academyName, setAcademyName] = useState<string | null>(
     localStorage.getItem("academyName"),
   );
@@ -76,6 +81,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUserEmail(data.userEmail ?? null);
     setUserPublicId(data.userPublicId ?? null);
     setAcademyId(data.academyId ?? null);
+    setAcademyPublicId(data.academyPublicId ?? null);
     setAcademyName(data.academyName ?? null);
     setBranchId(data.branchId ?? null);
     setBranchName(data.branchName ?? null);
@@ -87,6 +93,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (data.userPublicId)
       localStorage.setItem("userPublicId", data.userPublicId);
     if (data.academyId) localStorage.setItem("academyId", data.academyId);
+    if (data.academyPublicId) localStorage.setItem("academyPublicId", data.academyPublicId);
     if (data.academyName) localStorage.setItem("academyName", data.academyName);
     if (data.branchId) localStorage.setItem("branchId", data.branchId);
     if (data.branchName) localStorage.setItem("branchName", data.branchName);
@@ -107,6 +114,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUserEmail(null);
     setUserPublicId(null);
     setAcademyId(null);
+    setAcademyPublicId(null);
     setAcademyName(null);
     setBranchId(null);
     setBranchName(null);
@@ -117,6 +125,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     localStorage.removeItem("userEmail");
     localStorage.removeItem("userPublicId");
     localStorage.removeItem("academyId");
+    localStorage.removeItem("academyPublicId");
     localStorage.removeItem("academyName");
     localStorage.removeItem("branchId");
     localStorage.removeItem("branchName");
@@ -147,6 +156,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         userEmail,
         userPublicId,
         academyId,
+        academyPublicId,
         academyName,
         branchId,
         branchName,

@@ -380,6 +380,7 @@ function SectionHeading({
 
 function Home() {
   const navigate = useNavigate();
+  const academyPublicId = localStorage.getItem("academyPublicId");
   const [showLoginPrompt, setShowLoginPrompt] = useState(false);
   const [expandedMemberId, setExpandedMemberId] = useState<string | null>(null);
   const [announcementVisible, setAnnouncementVisible] = useState(true);
@@ -491,15 +492,16 @@ function Home() {
 
   // ── LIVE MATCHES POLL ──────────────────────────────────────────────────────
   useEffect(() => {
+    if (!academyPublicId) return;
     const fetchLive = async () => {
       try {
-        const res = await publicApi.get("/public/live-matches");
+        const res = await publicApi.get(`/public/live-matches?academyPublicId=${academyPublicId}`);
         const matches: RecentMatch[] = res.data;
         setRecentMatches(matches);
         for (const m of matches) {
           try {
             const sc = await publicApi.get(
-              `/public/scorecard/${m.matchPublicId}`,
+              `/public/scorecard/${m.matchPublicId}?academyPublicId=${academyPublicId}`,
             );
             setLiveScores((prev) => ({ ...prev, [m.matchPublicId]: sc.data }));
           } catch {
@@ -516,15 +518,16 @@ function Home() {
   }, []);
 
   useEffect(() => {
+    if (!academyPublicId) return;
     const fetchRecent = async () => {
       try {
-        const res = await publicApi.get("/public/recent-matches?limit=3");
+        const res = await publicApi.get(`/public/recent-matches?limit=3&academyPublicId=${academyPublicId}`);
         const matches: RecentMatch[] = res.data;
         setRecentMatches(matches);
         for (const m of matches) {
           try {
             const sc = await publicApi.get(
-              `/public/matches/${m.matchPublicId}/scorecard`,
+              `/public/matches/${m.matchPublicId}/scorecard?academyPublicId=${academyPublicId}`,
             );
             setRecentScores((prev) => ({
               ...prev,
@@ -542,6 +545,7 @@ function Home() {
   }, []);
 
   useEffect(() => {
+    if (!academyPublicId) { setLoading(false); return; }
     const loadAllData = async () => {
       const [
         settingsRes,
@@ -554,15 +558,15 @@ function Home() {
         statsRes,
         topPerformersRes,
       ] = await Promise.allSettled([
-        publicApi.get("/settings/public"),
-        publicApi.get("/cms/gallery"),
-        publicApi.get("/home-slider"),
-        publicApi.get("/cms/facilities"),
-        publicApi.get("/cms/testimonials"),
-        publicApi.get("/team"),
-        publicApi.get("/cms/news?status=PUBLISHED"),
-        publicApi.get("/public/stats"),
-        publicApi.get("/public/cricket-stats/top-performers?period=alltime"),
+        publicApi.get(`/settings/public?academyPublicId=${academyPublicId}`),
+        publicApi.get(`/cms/gallery?academyPublicId=${academyPublicId}`),
+        publicApi.get(`/home-slider?academyPublicId=${academyPublicId}`),
+        publicApi.get(`/cms/facilities?academyPublicId=${academyPublicId}`),
+        publicApi.get(`/cms/testimonials?academyPublicId=${academyPublicId}`),
+        publicApi.get(`/team?academyPublicId=${academyPublicId}`),
+        publicApi.get(`/cms/news?status=PUBLISHED&academyPublicId=${academyPublicId}`),
+        publicApi.get(`/public/stats?academyPublicId=${academyPublicId}`),
+        publicApi.get(`/public/cricket-stats/top-performers?period=alltime&academyPublicId=${academyPublicId}`),
       ]);
       if (settingsRes.status === "fulfilled")
         setSettings(settingsRes.value.data);

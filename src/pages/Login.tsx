@@ -28,9 +28,12 @@ function Login() {
   const { login } = useAuth();
   const navigate = useNavigate();
 
+  const academyPublicId = localStorage.getItem("academyPublicId");
+
   useEffect(() => {
+    if (!academyPublicId) return;
     publicApi
-      .get("/settings/public")
+      .get(`/settings/public?academyPublicId=${academyPublicId}`)
       .then((res) => {
         setLogoUrl(res.data?.LOGO_URL || null);
         setAcademyNameDisplay(res.data?.ACADEMY_NAME || "Cricket Academy");

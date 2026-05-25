@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import api from "../api/axios";
+import publicApi from "../api/publicApi";
 import { Swiper, SwiperSlide } from "swiper/react";
 import { Autoplay } from "swiper/modules";
 import "swiper/css";
@@ -14,7 +14,9 @@ function HomeSlider() {
   const [images, setImages] = useState<SliderImage[]>([]);
 
   useEffect(() => {
-    api.get("/home-slider") // ✅ PUBLIC API
+    const academyPublicId = localStorage.getItem("academyPublicId");
+    if (!academyPublicId) return;
+    publicApi.get(`/home-slider?academyPublicId=${academyPublicId}`)
       .then(res => setImages(res.data))
       .catch(() => setImages([]));
   }, []);

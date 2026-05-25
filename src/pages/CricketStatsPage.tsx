@@ -26,6 +26,7 @@ type TopPerformers = {
 
 export default function CricketStatsPage() {
   const navigate = useNavigate();
+  const academyPublicId = localStorage.getItem("academyPublicId");
   const [period, setPeriod] = useState<"alltime" | "season">("alltime");
   const [subTab, setSubTab] = useState<"batting" | "bowling">("batting");
   const [topPerformers, setTopPerformers] = useState<TopPerformers | null>(null);
@@ -35,17 +36,19 @@ export default function CricketStatsPage() {
   const [primaryColor, setPrimaryColor] = useState("#2563eb");
 
   useEffect(() => {
-    publicApi.get("/settings/public").then(r => {
+    if (!academyPublicId) return;
+    publicApi.get(`/settings/public?academyPublicId=${academyPublicId}`).then(r => {
       setPrimaryColor(r.data.PRIMARY_COLOR || "#2563eb");
     }).catch(() => {});
   }, []);
 
   useEffect(() => {
+    if (!academyPublicId) { setLoading(false); return; }
     setLoading(true);
     Promise.allSettled([
-      publicApi.get(`/public/cricket-stats/top-performers?period=${period}`),
-      publicApi.get(`/public/cricket-stats/leaderboard/batting?period=${period}`),
-      publicApi.get(`/public/cricket-stats/leaderboard/bowling?period=${period}`),
+      publicApi.get(`/public/cricket-stats/top-performers?period=${period}&academyPublicId=${academyPublicId}`),
+      publicApi.get(`/public/cricket-stats/leaderboard/batting?period=${period}&academyPublicId=${academyPublicId}`),
+      publicApi.get(`/public/cricket-stats/leaderboard/bowling?period=${period}&academyPublicId=${academyPublicId}`),
     ]).then(([top, bat, bowl]) => {
       if (top.status === "fulfilled") setTopPerformers(top.value.data);
       if (bat.status === "fulfilled") setBattingList(bat.value.data);

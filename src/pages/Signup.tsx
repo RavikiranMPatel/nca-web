@@ -18,10 +18,13 @@ function Signup() {
   const { login } = useAuth();
   const navigate = useNavigate();
 
+  const academyPublicId = localStorage.getItem("academyPublicId");
+
   useEffect(() => {
     const loadSettings = async () => {
+      if (!academyPublicId) return;
       try {
-        const res = await publicApi.get("/settings/public");
+        const res = await publicApi.get(`/settings/public?academyPublicId=${academyPublicId}`);
         setLogoUrl(res.data?.LOGO_URL || null);
         setAcademyName(res.data?.ACADEMY_NAME || "NextGen Cricket Academy");
       } catch (err) {

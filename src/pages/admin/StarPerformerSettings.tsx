@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from "react";
 import { Star, Upload, Save, AlertCircle, CheckCircle } from "lucide-react";
-import publicApi from "../../api/publicApi";
 import api from "../../api/axios";
 import { getImageUrl } from "../../utils/imageUrl";
 import PresenceBanner from "../../components/PresenceBanner";
@@ -28,7 +27,7 @@ const StarPerformerSettings = () => {
 
   const loadSettings = async () => {
     try {
-      const response = await publicApi.get("/settings/public");
+      const response = await api.get("/admin/settings");
       const data = response.data;
 
       setSettings({

@@ -9,6 +9,7 @@ export type AuthResponse = {
   userEmail: string;
   role: string;
   academyId: string;
+  academyPublicId: string;
   academyName: string;
   branchId: string;
   branchName: string;

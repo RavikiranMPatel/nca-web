@@ -191,6 +191,7 @@ export default function OnboardingPage() {
         userEmail: res.userEmail,
         userPublicId: res.userPublicId,
         academyId: res.academyId,
+        academyPublicId: res.academyPublicId,
         academyName: res.academyName,
         branchId: res.branchId,
         branchName: res.branchName,

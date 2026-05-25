@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Star, Trophy, ArrowLeft } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-import publicApi from "../../api/publicApi";
+import api from "../../api/axios";
 import { getImageUrl } from "../../utils/imageUrl";
 
 type StarPerformerData = {
@@ -21,7 +21,7 @@ function StarPerformer() {
   useEffect(() => {
     const loadStarPerformer = async () => {
       try {
-        const response = await publicApi.get("/settings/public");
+        const response = await api.get("/admin/settings");
         const settings = response.data;
 
         setData({

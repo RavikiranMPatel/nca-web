@@ -155,9 +155,12 @@ function Navbar() {
   const userMenuRef = useRef<HTMLDivElement>(null);
   const moreMenuRef = useRef<HTMLDivElement>(null);
 
+  const academyPublicId = localStorage.getItem("academyPublicId");
+
   useEffect(() => {
+    if (!academyPublicId) return;
     publicApi
-      .get("/settings/public")
+      .get(`/settings/public?academyPublicId=${academyPublicId}`)
       .then((res) => {
         const d = res.data;
         setLogoUrl(d.LOGO_URL || null);

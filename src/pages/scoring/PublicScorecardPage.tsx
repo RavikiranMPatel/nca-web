@@ -301,8 +301,10 @@ const WagonWheelModal = ({
   useEffect(() => {
     const fetch = async () => {
       try {
+        const academyPublicId = localStorage.getItem("academyPublicId");
+        if (!academyPublicId) { setShots([]); setLoading(false); return; }
         const res = await publicApi.get(
-          `/public/scorecard/${matchId}/shots/${batter.playerPublicId}?innings=${inningsNumber}`,
+          `/public/scorecard/${matchId}/shots/${batter.playerPublicId}?innings=${inningsNumber}&academyPublicId=${academyPublicId}`,
         );
         setShots(res.data ?? []);
       } catch {

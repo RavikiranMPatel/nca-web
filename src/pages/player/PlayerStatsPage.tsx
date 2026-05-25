@@ -463,10 +463,12 @@ function PlayerStatsPage() {
     if (!playerPublicId) return;
     try {
       setLoading(true);
+      const academyPublicId = localStorage.getItem("academyPublicId");
+      if (!academyPublicId) { setLoading(false); return; }
       const [statsRes, infoRes, careerRes] = await Promise.allSettled([
         api.get(`/admin/cricket-stats/${playerPublicId}`),
         api.get(`/admin/players/${playerPublicId}/info`),
-        publicApi.get(`/public/cricket-stats/player/${playerPublicId}`),
+        publicApi.get(`/public/cricket-stats/player/${playerPublicId}?academyPublicId=${academyPublicId}`),
       ]);
       if (statsRes.status === "fulfilled") {
         setStats(statsRes.value.data);

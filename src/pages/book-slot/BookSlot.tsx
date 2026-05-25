@@ -90,15 +90,17 @@ function BookSlot() {
       setLoading(true);
       setError("");
       setClosedMessage("");
+      const academyPublicId = localStorage.getItem("academyPublicId");
+      if (!academyPublicId) { setError("Academy not configured"); setLoading(false); return; }
 
       try {
         const res =
           resource === "BOWLING_MACHINE"
             ? await api.get("/slot/bowling/availability", {
-                params: { date, ballCount },
+                params: { date, ballCount, academyPublicId },
               })
             : await api.get("/slot/availability", {
-                params: { date, resourceType: resource },
+                params: { date, resourceType: resource, academyPublicId },
               });
 
         if (!res.data.available) {

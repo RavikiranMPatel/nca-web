@@ -24,6 +24,7 @@ type Props = {
 };
 
 export default function ContactForm({ primaryColor, settings }: Props) {
+  const academyPublicId = localStorage.getItem("academyPublicId");
   const [form, setForm] = useState({
     name: "",
     email: "",
@@ -53,7 +54,7 @@ export default function ContactForm({ primaryColor, settings }: Props) {
     }
     setSubmitting(true);
     try {
-      await publicApi.post("/contact", form);
+      await publicApi.post("/contact", { ...form, academyPublicId });
       setSubmitted(true);
       setForm({ name: "", email: "", phone: "", message: "" });
     } catch {

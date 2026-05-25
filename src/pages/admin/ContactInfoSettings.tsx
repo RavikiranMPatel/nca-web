@@ -9,7 +9,6 @@ import {
   CheckCircle,
   Eye,
 } from "lucide-react";
-import publicApi from "../../api/publicApi";
 import api from "../../api/axios";
 import PresenceBanner from "../../components/PresenceBanner";
 import { useAuth } from "../../auth/useAuth";
@@ -34,7 +33,7 @@ const ContactInfoSettings = () => {
 
   const loadSettings = async () => {
     try {
-      const response = await publicApi.get("/settings/public");
+      const response = await api.get("/admin/settings");
       const data = response.data;
 
       setSettings({

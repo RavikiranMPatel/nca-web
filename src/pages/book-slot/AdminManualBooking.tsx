@@ -139,8 +139,10 @@ export default function AdminManualBooking() {
     const run = async () => {
       setPastSlotsLoading(true);
       try {
+        const academyPublicId = localStorage.getItem("academyPublicId");
+        if (!academyPublicId) { setPastSlots([]); return; }
         const res = await api.get("/slot/availability", {
-          params: { date: pastDate, resourceType: pastResource },
+          params: { date: pastDate, resourceType: pastResource, academyPublicId },
         });
         if (res.data.slots?.length) {
           setPastSlots(
@@ -196,13 +198,15 @@ export default function AdminManualBooking() {
       setClosedMsg("");
       setSelectedSlot(null);
       try {
+        const academyPublicId = localStorage.getItem("academyPublicId");
+        if (!academyPublicId) { setSlots([]); return; }
         const res =
           resource === "BOWLING_MACHINE"
             ? await api.get("/slot/bowling/availability", {
-                params: { date, ballCount },
+                params: { date, ballCount, academyPublicId },
               })
             : await api.get("/slot/availability", {
-                params: { date, resourceType: resource },
+                params: { date, resourceType: resource, academyPublicId },
               });
         if (!res.data.available) {
           setClosedMsg(res.data.message || "Facility closed");
