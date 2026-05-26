@@ -748,6 +748,10 @@ export default function AdminRevenueDashboard() {
     .filter((r) => inRange(r.activatedAt || ""))
     .reduce((s, r) => s + (r.pricePaid || 0), 0);
 
+  const membershipBookingsTotal = filteredBookings
+    .filter((b) => b.resourceType === "BOWLING_MACHINE_MEMBERSHIP")
+    .reduce((s, b) => s + (b.amount || 0), 0);
+
   const filteredSubRevenue = useMemo(
     () =>
       subRevenue.filter(
@@ -2025,8 +2029,8 @@ export default function AdminRevenueDashboard() {
         />
         <SummaryCard
           label="Bowling Machine Memberships"
-          value={fmt(subRevenueTotal)}
-          sub={`${subRevenue.filter((r) => inRange(r.activatedAt || "")).length} activated`}
+          value={fmt(subRevenueTotal + membershipBookingsTotal)}
+          sub={`${subRevenue.filter((r) => inRange(r.activatedAt || "")).length} activated · ${fmt(membershipBookingsTotal)} historical`}
           icon={<CreditCard size={15} className="text-cyan-600" />}
           bg="bg-gradient-to-br from-cyan-50 to-sky-50"
           border="border-cyan-200"
@@ -2347,37 +2351,44 @@ export default function AdminRevenueDashboard() {
             className="px-4 py-2 border-b border-slate-100 flex gap-1 overflow-x-auto"
             style={{ scrollbarWidth: "none" }}
           >
-            {(["ALL", "BOWLING_MACHINE", "TENNIS_BALL", "ASTRO"] as const).map(
-              (rt) => {
-                const count =
-                  rt === "ALL"
-                    ? filteredBookings.length
-                    : filteredBookings.filter((b) => b.resourceType === rt)
-                        .length;
-                const labels: Record<string, string> = {
-                  ALL: "All",
-                  BOWLING_MACHINE: "Bowling Machine",
-                  TENNIS_BALL: "Tennis Ball",
-                  ASTRO: "Astro Turf",
-                };
-                return (
-                  <button
-                    key={rt}
-                    onClick={() => {
-                      setBookingResourceFilter(rt);
-                      setExpandedUser(null);
-                    }}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap transition ${
-                      bookingResourceFilter === rt
-                        ? "bg-orange-100 text-orange-700 font-semibold"
-                        : "text-slate-500 hover:text-slate-700 hover:bg-slate-100"
-                    }`}
-                  >
-                    {labels[rt]} ({count})
-                  </button>
-                );
-              },
-            )}
+            {(
+              [
+                "ALL",
+                "BOWLING_MACHINE",
+                "BOWLING_MACHINE_MEMBERSHIP",
+                "TENNIS_BALL",
+                "ASTRO",
+              ] as const
+            ).map((rt) => {
+              const count =
+                rt === "ALL"
+                  ? filteredBookings.length
+                  : filteredBookings.filter((b) => b.resourceType === rt)
+                      .length;
+              const labels: Record<string, string> = {
+                ALL: "All",
+                BOWLING_MACHINE: "Bowling Machine",
+                BOWLING_MACHINE_MEMBERSHIP: "BM Memberships",
+                TENNIS_BALL: "Tennis Ball",
+                ASTRO: "Astro Turf",
+              };
+              return (
+                <button
+                  key={rt}
+                  onClick={() => {
+                    setBookingResourceFilter(rt);
+                    setExpandedUser(null);
+                  }}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap transition ${
+                    bookingResourceFilter === rt
+                      ? "bg-orange-100 text-orange-700 font-semibold"
+                      : "text-slate-500 hover:text-slate-700 hover:bg-slate-100"
+                  }`}
+                >
+                  {labels[rt]} ({count})
+                </button>
+              );
+            })}
           </div>
           {groupedBookings.length === 0 ? (
             <EmptyState message="No booking payments in this period" />

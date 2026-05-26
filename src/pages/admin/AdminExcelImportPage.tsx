@@ -17,7 +17,11 @@ import { toast } from "react-hot-toast";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-type ResourceType = "BOWLING_MACHINE" | "TENNIS_BALL" | "ASTRO";
+type ResourceType =
+  | "BOWLING_MACHINE"
+  | "BOWLING_MACHINE_MEMBERSHIP"
+  | "TENNIS_BALL"
+  | "ASTRO";
 
 type BulkImportRow = {
   sessionDate: string;
@@ -39,22 +43,33 @@ type ImportResult = {
   errors: string[];
 };
 
-type SheetKey = "BOWLING_MACHINE" | "TENNIS_BALL" | "ASTRO";
+type SheetKey =
+  | "BOWLING_MACHINE"
+  | "BOWLING_MACHINE_3500_OLD"
+  | "BOWLING_MACHINE_3500_MAY"
+  | "TENNIS_BALL"
+  | "ASTRO";
 
 const SHEET_NAMES: Record<SheetKey, string> = {
   BOWLING_MACHINE: "Bowling machine Payments",
+  BOWLING_MACHINE_3500_OLD: "3500 Bowling Machine plan (old)",
+  BOWLING_MACHINE_3500_MAY: "3500 Bowling machine (may)",
   TENNIS_BALL: "Tennis Ball Payments",
   ASTRO: "Astro turf rent",
 };
 
 const SHEET_LABELS: Record<SheetKey, string> = {
   BOWLING_MACHINE: "Bowling Machine",
+  BOWLING_MACHINE_3500_OLD: "Bowling Machine (3500 Old)",
+  BOWLING_MACHINE_3500_MAY: "Bowling Machine (3500 May)",
   TENNIS_BALL: "Tennis Ball",
   ASTRO: "Astro Turf",
 };
 
 const SHEET_COLORS: Record<SheetKey, string> = {
   BOWLING_MACHINE: "bg-orange-100 text-orange-700 border-orange-200",
+  BOWLING_MACHINE_3500_OLD: "bg-amber-100 text-amber-700 border-amber-200",
+  BOWLING_MACHINE_3500_MAY: "bg-yellow-100 text-yellow-700 border-yellow-200",
   TENNIS_BALL: "bg-green-100 text-green-700 border-green-200",
   ASTRO: "bg-blue-100 text-blue-700 border-blue-200",
 };
@@ -157,6 +172,45 @@ function parseBallSheet(
         startTime: null,
         endTime: null,
         notes: null,
+      };
+    })
+    .filter((r): r is BulkImportRow => r !== null);
+}
+
+function parseSubscriptionSheet(ws: XLSX.WorkSheet): BulkImportRow[] {
+  // Columns: Name(0) | Payment(1) | Start Date(2) | End Date(3) | Sessions left(4) | Paid To(5) | phone number(6)
+  const raw = XLSX.utils.sheet_to_json<unknown[]>(ws, {
+    header: 1,
+    defval: null,
+    raw: true,
+  });
+
+  return raw
+    .slice(1)
+    .map((row): BulkImportRow | null => {
+      const nameVal = (row as unknown[])[0];
+      const paymentVal = (row as unknown[])[1];
+      const startDateVal = (row as unknown[])[2];
+      const phoneVal = (row as unknown[])[6];
+
+      const sessionDate = parseExcelDate(startDateVal);
+      const playerName = str(nameVal);
+      const amount = num(paymentVal);
+
+      if (!sessionDate || !playerName || amount <= 0) return null;
+
+      return {
+        sessionDate,
+        playerName,
+        phone: phoneVal ? str(phoneVal).slice(0, 15) : null,
+        resourceType: "BOWLING_MACHINE_MEMBERSHIP",
+        amount,
+        paymentMode: "CASH",
+        receivedBy: null,
+        ballCount: null,
+        startTime: null,
+        endTime: null,
+        notes: "3500 plan",
       };
     })
     .filter((r): r is BulkImportRow => r !== null);
@@ -317,6 +371,11 @@ export default function AdminExcelImportPage() {
 
           if (key === "ASTRO") {
             rows = parseAstroSheet(ws);
+          } else if (
+            key === "BOWLING_MACHINE_3500_OLD" ||
+            key === "BOWLING_MACHINE_3500_MAY"
+          ) {
+            rows = parseSubscriptionSheet(ws);
           } else {
             rows = parseBallSheet(ws, key);
           }
