@@ -2710,7 +2710,7 @@ export default function AdminRevenueDashboard() {
               /\D/g,
               "",
             );
-            const msg = `Hi, this is a reminder that cricket academy fees are pending for ${row.playerName}. ${row.hasInstallmentPlan && row.installmentBalance ? `Balance due: ₹${row.installmentBalance}.` : `Due date: ${row.nextDueOn ? new Date(row.nextDueOn).toLocaleDateString("en-IN") : ""}.`} Please pay at your earliest convenience. Thank you!`;
+            const msg = `Hi, this is a reminder that NextGen Cricket Academy fees are pending for ${row.playerName}. ${row.hasInstallmentPlan && row.installmentBalance ? `Balance due: ₹${row.installmentBalance}.` : `Due date: ${row.nextDueOn ? new Date(row.nextDueOn).toLocaleDateString("en-IN") : ""}.`} Please pay at your earliest convenience. Thank you!`;
             return `https://wa.me/91${phone}?text=${encodeURIComponent(msg)}`;
           };
           const openEditDueDate = (row: FeeCollectionSummaryRow) => {
