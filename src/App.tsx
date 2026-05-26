@@ -60,6 +60,7 @@ import AdminMembersPage from "./pages/admin/AdminMembersPage";
 import MySubscription from "./pages/book-slot/MySubscription";
 import UserProfilePage from "./pages/UserProfilePage";
 import AdminRevenueDashboard from "./pages/admin/AdminRevenueDashboard";
+import AdminExcelImportPage from "./pages/admin/AdminExcelImportPage";
 import PlayerCoachingPage from "./pages/player/PlayerCoachingPage";
 import CoachingDashboardPage from "./pages/coaching/CoachingDashboardPage";
 import PlayerCoachingViewPage from "./pages/player/PlayerCoachingViewPage";
@@ -463,6 +464,16 @@ function App() {
           <ProtectedRoute roles={["ROLE_SUPER_ADMIN"]}>
             <AppLayout>
               <AdminRevenueDashboard />
+            </AppLayout>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/revenue/import"
+        element={
+          <ProtectedRoute roles={["ROLE_SUPER_ADMIN"]}>
+            <AppLayout>
+              <AdminExcelImportPage />
             </AppLayout>
           </ProtectedRoute>
         }
