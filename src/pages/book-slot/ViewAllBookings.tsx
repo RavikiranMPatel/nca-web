@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Calendar, Clock, ArrowLeft, Search, Download } from "lucide-react";
 import api from "../../api/axios";
@@ -69,6 +69,20 @@ function ViewAllBookings() {
       sessionsRemaining: booking.sessionsRemaining,
     });
   };
+
+  // Add this hook near the top of the component, after useState declarations:
+  const isSuperAdmin = useMemo(() => {
+    try {
+      const token = localStorage.getItem("accessToken");
+      if (!token) return false;
+      const payload = JSON.parse(atob(token.split(".")[1]));
+      const roles: string[] = payload.roles || payload.authorities || [];
+      const role: string = payload.role || "";
+      return roles.includes("ROLE_SUPER_ADMIN") || role === "ROLE_SUPER_ADMIN";
+    } catch {
+      return false;
+    }
+  }, []);
 
   const confirmMarkAsPlayed = async () => {
     if (!playedModal) return;
@@ -305,18 +319,22 @@ function ViewAllBookings() {
             <span>🔄</span>
             <span className="hidden sm:inline">Refresh</span>
           </button>
-          <button
-            onClick={exportToCSV}
-            className="flex items-center gap-1.5 px-2.5 py-2 bg-green-600 text-white rounded-lg text-xs font-semibold hover:bg-green-700 transition"
-          >
-            <Download size={14} />
-            <span className="hidden sm:inline">Export CSV</span>
-          </button>
+          {isSuperAdmin && (
+            <button
+              onClick={exportToCSV}
+              className="flex items-center gap-1.5 px-2.5 py-2 bg-green-600 text-white rounded-lg text-xs font-semibold hover:bg-green-700 transition"
+            >
+              <Download size={14} />
+              <span className="hidden sm:inline">Export CSV</span>
+            </button>
+          )}
         </div>
       </div>
 
       {/* ── STATS — 2-col on mobile, 4-col on desktop ── */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+      <div
+        className={`grid gap-3 ${isSuperAdmin ? "grid-cols-2 md:grid-cols-4" : "grid-cols-3"}`}
+      >
         <div className="bg-white rounded-xl border border-gray-200 p-3 md:p-4">
           <p className="text-xs text-gray-500">Total Bookings</p>
           <p className="text-xl md:text-2xl font-bold text-gray-900">
@@ -335,16 +353,18 @@ function ViewAllBookings() {
             {pendingCount}
           </p>
         </div>
-        <div className="bg-white rounded-xl border border-gray-200 p-3 md:p-4">
-          <p className="text-xs text-gray-500">Total Revenue</p>
-          <p className="text-xl md:text-2xl font-bold text-blue-600">
-            ₹
-            {bookings
-              .filter((b) => b.paymentStatus === "PAID")
-              .reduce((sum, b) => sum + (b.amount || 0), 0)
-              .toLocaleString()}
-          </p>
-        </div>
+        {isSuperAdmin && (
+          <div className="bg-white rounded-xl border border-gray-200 p-3 md:p-4">
+            <p className="text-xs text-gray-500">Total Revenue</p>
+            <p className="text-xl md:text-2xl font-bold text-blue-600">
+              ₹
+              {bookings
+                .filter((b) => b.paymentStatus === "PAID")
+                .reduce((sum, b) => sum + (b.amount || 0), 0)
+                .toLocaleString()}
+            </p>
+          </div>
+        )}
       </div>
 
       {/* ── FILTERS ── */}
@@ -433,9 +453,11 @@ function ViewAllBookings() {
                     <th className="text-left p-4 text-xs font-semibold text-gray-600 uppercase tracking-wide">
                       Resource
                     </th>
-                    <th className="text-left p-4 text-xs font-semibold text-gray-600 uppercase tracking-wide">
-                      Amount
-                    </th>
+                    {isSuperAdmin && (
+                      <th className="text-left p-4 text-xs font-semibold text-gray-600 uppercase tracking-wide">
+                        Amount
+                      </th>
+                    )}
                     <th className="text-left p-4 text-xs font-semibold text-gray-600 uppercase tracking-wide">
                       Status
                     </th>
@@ -480,11 +502,13 @@ function ViewAllBookings() {
                           {booking.resourceType || "N/A"}
                         </p>
                       </td>
-                      <td className="p-4">
-                        <p className="font-semibold text-gray-900 text-sm">
-                          ₹{booking.amount?.toLocaleString() || 0}
-                        </p>
-                      </td>
+                      {isSuperAdmin && (
+                        <td className="p-4">
+                          <p className="font-semibold text-gray-900 text-sm">
+                            ₹{booking.amount?.toLocaleString() || 0}
+                          </p>
+                        </td>
+                      )}
                       <td className="p-4">{getStatusBadge(booking.status)}</td>
                       <td className="p-4">
                         {getPaymentBadge(booking.paymentStatus)}
@@ -560,9 +584,11 @@ function ViewAllBookings() {
                     <span className="text-xs text-gray-500">
                       {booking.resourceType}
                     </span>
-                    <span className="font-bold text-gray-900">
-                      ₹{booking.amount?.toLocaleString()}
-                    </span>
+                    {isSuperAdmin && (
+                      <span className="font-bold text-gray-900">
+                        ₹{booking.amount?.toLocaleString()}
+                      </span>
+                    )}
                   </div>
                   <div className="flex items-center gap-2">
                     {getPaymentBadge(booking.paymentStatus)}

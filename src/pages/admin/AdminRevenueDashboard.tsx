@@ -647,9 +647,7 @@ export default function AdminRevenueDashboard() {
     >();
     filteredBookings.forEach((b) => {
       const contact =
-        b.slotDate === null
-          ? b.playerName || "unknown"
-          : b.bookedByEmail || b.playerName || "unknown";
+        b.playerName?.trim().toLowerCase() || b.bookedByEmail || "unknown";
       if (groups.has(contact)) {
         const g = groups.get(contact)!;
         g.bookings.push(b);
@@ -732,7 +730,7 @@ export default function AdminRevenueDashboard() {
   // ── NEW: Registration Fee totals ──
   const regFeesTotal = regFees
     .filter((r) => r.regFeePaid && inRange(r.regFeePaidOn || ""))
-    .reduce((s) => s + 1500, 0);
+    .reduce((s, r) => s + (r.regFeeAmount || 1500), 0);
   const regFeesPaidCount = regFees.filter((r) => r.regFeePaid).length;
   const filteredRegFees = useMemo(
     () =>
@@ -745,12 +743,47 @@ export default function AdminRevenueDashboard() {
   );
 
   const subRevenueTotal = subRevenue
-    .filter((r) => inRange(r.activatedAt || ""))
+    .filter((r) => r.activatedAt && inRange(r.activatedAt))
     .reduce((s, r) => s + (r.pricePaid || 0), 0);
+
+  const subRevenueInRangeCount = subRevenue.filter(
+    (r) => r.activatedAt && inRange(r.activatedAt),
+  ).length;
+
+  const bmCount = filteredBookings.filter(
+    (b) => b.resourceType === "BOWLING_MACHINE",
+  ).length;
+  const astroCount = filteredBookings.filter(
+    (b) => b.resourceType === "ASTRO",
+  ).length;
+  const tennisCount = filteredBookings.filter(
+    (b) => b.resourceType === "TENNIS_BALL",
+  ).length;
 
   const membershipBookingsTotal = filteredBookings
     .filter((b) => b.resourceType === "BOWLING_MACHINE_MEMBERSHIP")
     .reduce((s, b) => s + (b.amount || 0), 0);
+
+  const astroTurfTotal = filteredBookings
+    .filter((b) => b.resourceType === "ASTRO")
+    .reduce((s, b) => s + (b.amount || 0), 0);
+
+  const tennisBallTotal = filteredBookings
+    .filter((b) => b.resourceType === "TENNIS_BALL")
+    .reduce((s, b) => s + (b.amount || 0), 0);
+
+  const bowlingMachineTotal = filteredBookings
+    .filter((b) => b.resourceType === "BOWLING_MACHINE")
+    .reduce((s, b) => s + (b.amount || 0), 0);
+
+  const filteredBookingsTotal = useMemo(() => {
+    if (bookingResourceFilter === "ALL") {
+      return filteredBookings.reduce((s, b) => s + (b.amount || 0), 0);
+    }
+    return filteredBookings
+      .filter((b) => b.resourceType === bookingResourceFilter)
+      .reduce((s, b) => s + (b.amount || 0), 0);
+  }, [filteredBookings, bookingResourceFilter]);
 
   const filteredSubRevenue = useMemo(
     () =>
@@ -1128,7 +1161,7 @@ export default function AdminRevenueDashboard() {
       date: b.slotDate,
       type: "booking",
       name: b.playerName || b.bookedByEmail || "User",
-      description: `${b.resourceType} · ${b.startTime}–${b.endTime}`,
+      description: `${b.resourceType}${b.startTime && b.endTime ? ` · ${b.startTime}–${b.endTime}` : ""}`,
       amount: b.amount,
       mode: fmtMode(b.paymentMode),
     }));
@@ -1976,7 +2009,7 @@ export default function AdminRevenueDashboard() {
 
       {/* ── Summary Cards ── */}
       <div
-        className={`grid gap-2 sm:gap-3 ${isSuperAdmin ? "grid-cols-2 sm:grid-cols-3 lg:grid-cols-8" : "grid-cols-2 lg:grid-cols-5"}`}
+        className={`grid gap-2 sm:gap-3 ${isSuperAdmin ? "grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6" : "grid-cols-2 sm:grid-cols-3 lg:grid-cols-4"}`}
       >
         {isSuperAdmin && (
           <SummaryCard
@@ -2010,12 +2043,40 @@ export default function AdminRevenueDashboard() {
         />
         <SummaryCard
           label="Bookings"
-          value={fmt(bookingsTotal)}
-          sub={`${filteredBookings.length} paid`}
+          value={fmt(bookingsTotal + subRevenueTotal)}
+          sub={`${filteredBookings.length} bookings · ${subRevenueInRangeCount} subscription${subRevenueInRangeCount !== 1 ? "s" : ""}`}
           icon={<BookOpen size={15} className="text-orange-500" />}
           bg="bg-gradient-to-br from-orange-50 to-amber-50"
           border="border-orange-200"
           valueClass="text-orange-600"
+        />
+
+        <SummaryCard
+          label="Bowling Machine"
+          value={fmt(bowlingMachineTotal)}
+          sub={`${bmCount} paid`}
+          icon={<BookOpen size={15} className="text-orange-500" />}
+          bg="bg-gradient-to-br from-orange-50 to-amber-50"
+          border="border-orange-200"
+          valueClass="text-orange-600"
+        />
+        <SummaryCard
+          label="Astro Turf"
+          value={fmt(astroTurfTotal)}
+          sub={`${astroCount} paid`}
+          icon={<BookOpen size={15} className="text-green-600" />}
+          bg="bg-gradient-to-br from-green-50 to-emerald-50"
+          border="border-green-200"
+          valueClass="text-green-700"
+        />
+        <SummaryCard
+          label="Tennis Ball"
+          value={fmt(tennisBallTotal)}
+          sub={`${tennisCount} paid`}
+          icon={<BookOpen size={15} className="text-yellow-600" />}
+          bg="bg-gradient-to-br from-yellow-50 to-lime-50"
+          border="border-yellow-200"
+          valueClass="text-yellow-700"
         />
         {/* ── NEW: Reg Fees summary card ── */}
         <SummaryCard
@@ -2030,7 +2091,7 @@ export default function AdminRevenueDashboard() {
         <SummaryCard
           label="Bowling Machine Memberships"
           value={fmt(subRevenueTotal + membershipBookingsTotal)}
-          sub={`${subRevenue.filter((r) => inRange(r.activatedAt || "")).length} activated · ${fmt(membershipBookingsTotal)} historical`}
+          sub={`${subRevenueInRangeCount} activated · ${fmt(membershipBookingsTotal)} historical`}
           icon={<CreditCard size={15} className="text-cyan-600" />}
           bg="bg-gradient-to-br from-cyan-50 to-sky-50"
           border="border-cyan-200"
@@ -2343,7 +2404,7 @@ export default function AdminRevenueDashboard() {
               Booking Payments
             </h2>
             <span className="text-sm font-semibold text-orange-600">
-              {fmt(bookingsTotal)}
+              {fmt(filteredBookingsTotal)}
             </span>
           </div>
           {/* Resource type sub-tabs */}
@@ -2513,7 +2574,9 @@ export default function AdminRevenueDashboard() {
                                       {fmtDate(b.slotDate)}
                                     </td>
                                     <td className="px-5 py-2.5 text-sm text-slate-600">
-                                      {b.startTime}–{b.endTime}
+                                      {b.startTime && b.endTime
+                                        ? `${b.startTime}–${b.endTime}`
+                                        : "—"}
                                     </td>
                                     <td className="px-5 py-2.5 text-sm text-slate-600">
                                       {b.resourceType}
@@ -2539,12 +2602,21 @@ export default function AdminRevenueDashboard() {
                     )}
                   </div>
                 ))}
+
               <div className="flex items-center justify-between px-4 sm:px-5 py-3.5 bg-slate-50 border-t-2 border-slate-200">
                 <span className="text-sm font-semibold text-slate-700">
-                  Total · {groupedBookings.length} users
+                  Total ·{" "}
+                  {bookingResourceFilter === "ALL"
+                    ? groupedBookings.length
+                    : groupedBookings.filter((g) =>
+                        g.bookings.some(
+                          (b) => b.resourceType === bookingResourceFilter,
+                        ),
+                      ).length}{" "}
+                  users
                 </span>
                 <span className="text-sm font-bold text-orange-600">
-                  {fmt(bookingsTotal)}
+                  {fmt(filteredBookingsTotal)}
                 </span>
               </div>
             </div>
@@ -4317,7 +4389,9 @@ function SummaryCard({
       <p className={`text-lg sm:text-2xl font-bold ${valueClass} truncate`}>
         {value}
       </p>
-      <p className="text-xs text-slate-400 mt-0.5 truncate">{sub}</p>
+      <p className="text-xs text-slate-400 mt-0.5 truncate" title={sub}>
+        {sub}
+      </p>
     </div>
   );
 }

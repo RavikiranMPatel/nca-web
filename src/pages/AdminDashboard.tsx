@@ -329,14 +329,16 @@ function AdminDashboard() {
             gradient="bg-gradient-to-br from-orange-500 to-orange-600"
             textLight="text-orange-100"
           />
-          <ActionCard
-            icon={Clock}
-            title="Batches"
-            description="Create and manage training batches with custom timings"
-            onClick={() => navigate("/admin/batches")}
-            gradient="bg-gradient-to-br from-purple-500 to-purple-600"
-            textLight="text-purple-100"
-          />
+          {isSuperAdmin && (
+            <ActionCard
+              icon={Clock}
+              title="Batches"
+              description="Create and manage training batches with custom timings"
+              onClick={() => navigate("/admin/batches")}
+              gradient="bg-gradient-to-br from-purple-500 to-purple-600"
+              textLight="text-purple-100"
+            />
+          )}
           <ActionCard
             icon={MessageCircle}
             title="Enquiries"
@@ -361,14 +363,16 @@ function AdminDashboard() {
             gradient="bg-gradient-to-br from-cyan-500 to-blue-600"
             textLight="text-cyan-100"
           />
-          <ActionCard
-            icon={Trophy}
-            title="Tournaments"
-            description="Create and manage tournaments, fixtures and standings"
-            onClick={() => navigate("/admin/cricket/tournaments")}
-            gradient="bg-gradient-to-br from-yellow-500 to-orange-500"
-            textLight="text-yellow-100"
-          />
+          {isSuperAdmin && (
+            <ActionCard
+              icon={Trophy}
+              title="Tournaments"
+              description="Create and manage tournaments, fixtures and standings"
+              onClick={() => navigate("/admin/cricket/tournaments")}
+              gradient="bg-gradient-to-br from-yellow-500 to-orange-500"
+              textLight="text-yellow-100"
+            />
+          )}
         </div>
       </section>
 
@@ -380,14 +384,16 @@ function AdminDashboard() {
           iconColor="text-purple-600"
         />
         <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-4 gap-3">
-          <ActionCard
-            icon={Clock}
-            title="Slot Templates"
-            description="Configure slot timings and pricing for different schedules"
-            onClick={() => navigate("/admin/slot-templates")}
-            gradient="bg-gradient-to-br from-purple-500 to-purple-600"
-            textLight="text-purple-100"
-          />
+          {isSuperAdmin && (
+            <ActionCard
+              icon={Clock}
+              title="Slot Templates"
+              description="Configure slot timings and pricing for different schedules"
+              onClick={() => navigate("/admin/slot-templates")}
+              gradient="bg-gradient-to-br from-purple-500 to-purple-600"
+              textLight="text-purple-100"
+            />
+          )}
           <ActionCard
             icon={List}
             title="All Bookings"
@@ -435,13 +441,15 @@ function AdminDashboard() {
             onClick={() => navigate("/admin/slider")}
             iconColor="text-blue-600"
           />
-          <PlainCard
-            icon={Users}
-            title="Users"
-            description="Manage players, parents and admins"
-            onClick={() => navigate("/admin/users")}
-            iconColor="text-blue-600"
-          />
+          {isSuperAdmin && (
+            <PlainCard
+              icon={Users}
+              title="Users"
+              description="Manage players, parents and admins"
+              onClick={() => navigate("/admin/users")}
+              iconColor="text-blue-600"
+            />
+          )}
           <PlainCard
             icon={CheckCircle}
             title="Attendance"
