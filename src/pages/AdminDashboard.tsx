@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { useFlag } from "../components/FeatureFlagContext";
 import {
   Activity,
   Calendar,
@@ -142,6 +143,22 @@ function AdminDashboard() {
   const [error, setError] = useState<string | null>(null);
   const role = localStorage.getItem("userRole");
   const isSuperAdmin = role === "ROLE_SUPER_ADMIN";
+
+  const showPerformance = useFlag("MODULE_PERFORMANCE_ENABLED");
+  const showCricketStats = useFlag("SECTION_CRICKET_STATS_ENABLED");
+  const showBatches = useFlag("MODULE_BATCHES_ENABLED");
+  const showEnquiries = useFlag("MODULE_ENQUIRIES_ENABLED");
+  const showCoaching = useFlag("MODULE_COACHING_ENABLED");
+  const showMatches = useFlag("MODULE_MATCHES_ENABLED");
+  const showTournaments = useFlag("MODULE_TOURNAMENTS_ENABLED");
+  const showSlotTemplates = useFlag("MODULE_SLOT_TEMPLATES_ENABLED");
+  const showBookings = useFlag("MODULE_BOOKINGS_ENABLED");
+  const showBmMembers = useFlag("MODULE_BM_MEMBERS_ENABLED");
+  const showCalendar = useFlag("MODULE_CALENDAR_OVERRIDES_ENABLED");
+  const showResources = useFlag("MODULE_RESOURCES_ENABLED");
+  const showHomeSlider = useFlag("MODULE_HOME_SLIDER_ENABLED");
+  const showCamps = useFlag("SUMMER_CAMP_ENABLED");
+  const showRevenue = useFlag("MODULE_REVENUE_ENABLED");
 
   useEffect(() => {
     setLoading(true);
@@ -313,23 +330,27 @@ function AdminDashboard() {
             gradient="bg-gradient-to-br from-green-500 to-green-600"
             textLight="text-green-100"
           />
-          <ActionCard
-            icon={ClipboardList}
-            title="Performance"
-            description="Assess player skills, fitness, diet & mental performance"
-            onClick={() => navigate("/admin/player-assessment")}
-            gradient="bg-gradient-to-br from-teal-500 to-teal-600"
-            textLight="text-teal-100"
-          />
-          <ActionCard
-            icon={BarChart}
-            title="Cricket Stats"
-            description="Record match performance for players"
-            onClick={() => navigate("/admin/cricket-stats/add")}
-            gradient="bg-gradient-to-br from-orange-500 to-orange-600"
-            textLight="text-orange-100"
-          />
-          {isSuperAdmin && (
+          {showPerformance && (
+            <ActionCard
+              icon={ClipboardList}
+              title="Performance"
+              description="Assess player skills, fitness, diet & mental performance"
+              onClick={() => navigate("/admin/player-assessment")}
+              gradient="bg-gradient-to-br from-teal-500 to-teal-600"
+              textLight="text-teal-100"
+            />
+          )}
+          {showCricketStats && (
+            <ActionCard
+              icon={BarChart}
+              title="Cricket Stats"
+              description="Record match performance for players"
+              onClick={() => navigate("/admin/cricket-stats/add")}
+              gradient="bg-gradient-to-br from-orange-500 to-orange-600"
+              textLight="text-orange-100"
+            />
+          )}
+          {isSuperAdmin && showBatches && (
             <ActionCard
               icon={Clock}
               title="Batches"
@@ -339,31 +360,37 @@ function AdminDashboard() {
               textLight="text-purple-100"
             />
           )}
-          <ActionCard
-            icon={MessageCircle}
-            title="Enquiries"
-            description="Track and manage player enquiries and follow-ups"
-            onClick={() => navigate("/admin/enquiries")}
-            gradient="bg-gradient-to-br from-pink-500 to-pink-600"
-            textLight="text-pink-100"
-          />
-          <ActionCard
-            icon={UserCheck}
-            title="1-on-1 Coaching"
-            description="Track practice, goals & match performance for individual players"
-            onClick={() => navigate("/admin/coaching")}
-            gradient="bg-gradient-to-br from-indigo-500 to-indigo-600"
-            textLight="text-indigo-100"
-          />
-          <ActionCard
-            icon={Activity}
-            title="Matches & Scoring"
-            description="Score live matches, view scorecards and share with players"
-            onClick={() => navigate("/admin/cricket/matches")}
-            gradient="bg-gradient-to-br from-cyan-500 to-blue-600"
-            textLight="text-cyan-100"
-          />
-          {isSuperAdmin && (
+          {showEnquiries && (
+            <ActionCard
+              icon={MessageCircle}
+              title="Enquiries"
+              description="Track and manage player enquiries and follow-ups"
+              onClick={() => navigate("/admin/enquiries")}
+              gradient="bg-gradient-to-br from-pink-500 to-pink-600"
+              textLight="text-pink-100"
+            />
+          )}
+          {showCoaching && (
+            <ActionCard
+              icon={UserCheck}
+              title="1-on-1 Coaching"
+              description="Track practice, goals & match performance for individual players"
+              onClick={() => navigate("/admin/coaching")}
+              gradient="bg-gradient-to-br from-indigo-500 to-indigo-600"
+              textLight="text-indigo-100"
+            />
+          )}
+          {showMatches && (
+            <ActionCard
+              icon={Activity}
+              title="Matches & Scoring"
+              description="Score live matches, view scorecards and share with players"
+              onClick={() => navigate("/admin/cricket/matches")}
+              gradient="bg-gradient-to-br from-cyan-500 to-blue-600"
+              textLight="text-cyan-100"
+            />
+          )}
+          {isSuperAdmin && showTournaments && (
             <ActionCard
               icon={Trophy}
               title="Tournaments"
@@ -384,7 +411,7 @@ function AdminDashboard() {
           iconColor="text-purple-600"
         />
         <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-4 gap-3">
-          {isSuperAdmin && (
+          {isSuperAdmin && showSlotTemplates && (
             <ActionCard
               icon={Clock}
               title="Slot Templates"
@@ -394,38 +421,46 @@ function AdminDashboard() {
               textLight="text-purple-100"
             />
           )}
-          <ActionCard
-            icon={List}
-            title="All Bookings"
-            description="See all user bookings and payments"
-            onClick={() => navigate("/admin/bookings")}
-            gradient="bg-gradient-to-br from-green-500 to-green-600"
-            textLight="text-green-100"
-          />
-          <ActionCard
-            icon={UserCheck}
-            title="BM Members"
-            description="Manage bowling machine subscribers, logged-in users and guests"
-            onClick={() => navigate("/admin/members")}
-            gradient="bg-gradient-to-br from-teal-500 to-teal-600"
-            textLight="text-teal-100"
-          />
-          <ActionCard
-            icon={Calendar}
-            title="Calendar View"
-            description="Override specific dates for holidays and events"
-            onClick={() => navigate("/admin/date-overrides")}
-            gradient="bg-gradient-to-br from-orange-500 to-orange-600"
-            textLight="text-orange-100"
-          />
-          <ActionCard
-            icon={Power}
-            title="Resources"
-            description="Enable/disable wickets and courts"
-            onClick={() => navigate("/admin/resources")}
-            gradient="bg-gradient-to-br from-blue-500 to-blue-600"
-            textLight="text-blue-100"
-          />
+          {showBookings && (
+            <ActionCard
+              icon={List}
+              title="All Bookings"
+              description="See all user bookings and payments"
+              onClick={() => navigate("/admin/bookings")}
+              gradient="bg-gradient-to-br from-green-500 to-green-600"
+              textLight="text-green-100"
+            />
+          )}
+          {showBmMembers && (
+            <ActionCard
+              icon={UserCheck}
+              title="BM Members"
+              description="Manage bowling machine subscribers, logged-in users and guests"
+              onClick={() => navigate("/admin/members")}
+              gradient="bg-gradient-to-br from-teal-500 to-teal-600"
+              textLight="text-teal-100"
+            />
+          )}
+          {showCalendar && (
+            <ActionCard
+              icon={Calendar}
+              title="Calendar View"
+              description="Override specific dates for holidays and events"
+              onClick={() => navigate("/admin/date-overrides")}
+              gradient="bg-gradient-to-br from-orange-500 to-orange-600"
+              textLight="text-orange-100"
+            />
+          )}
+          {showResources && (
+            <ActionCard
+              icon={Power}
+              title="Resources"
+              description="Enable/disable wickets and courts"
+              onClick={() => navigate("/admin/resources")}
+              gradient="bg-gradient-to-br from-blue-500 to-blue-600"
+              textLight="text-blue-100"
+            />
+          )}
         </div>
       </section>
 
@@ -434,13 +469,15 @@ function AdminDashboard() {
         <SectionHeader title="Other Management" />
         {/* Plain white cards — 2-col on mobile */}
         <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-4 gap-3">
-          <PlainCard
-            icon={Image}
-            title="Home Slider"
-            description="Manage homepage banners and announcements"
-            onClick={() => navigate("/admin/slider")}
-            iconColor="text-blue-600"
-          />
+          {showHomeSlider && (
+            <PlainCard
+              icon={Image}
+              title="Home Slider"
+              description="Manage homepage banners and announcements"
+              onClick={() => navigate("/admin/slider")}
+              iconColor="text-blue-600"
+            />
+          )}
           {isSuperAdmin && (
             <PlainCard
               icon={Users}
@@ -457,14 +494,16 @@ function AdminDashboard() {
             onClick={() => navigate("/admin/attendance")}
             iconColor="text-green-600"
           />
-          <ActionCard
-            icon={Calendar}
-            title="Camps"
-            description="Manage camp programs and enrollments"
-            onClick={() => navigate("/admin/summer-camps")}
-            gradient="bg-gradient-to-br from-orange-500 to-orange-600"
-            textLight="text-orange-100"
-          />
+          {showCamps && (
+            <ActionCard
+              icon={Calendar}
+              title="Camps"
+              description="Manage camp programs and enrollments"
+              onClick={() => navigate("/admin/summer-camps")}
+              gradient="bg-gradient-to-br from-orange-500 to-orange-600"
+              textLight="text-orange-100"
+            />
+          )}
           {isSuperAdmin && (
             <PlainCard
               icon={Settings}
@@ -474,7 +513,7 @@ function AdminDashboard() {
               iconColor="text-indigo-600"
             />
           )}
-          {isSuperAdmin && (
+          {isSuperAdmin && showRevenue && (
             <ActionCard
               icon={TrendingUp}
               title="Revenue"
