@@ -51,9 +51,7 @@ export async function getAdminBranches(): Promise<Branch[]> {
 }
 
 export async function getPublicBranches(): Promise<Branch[]> {
-  const academyPublicId = localStorage.getItem("academyPublicId");
-  if (!academyPublicId) return [];
-  const res = await publicApi.get(`/public/branches?academyPublicId=${academyPublicId}`);
+  const res = await publicApi.get("/public/branches");
   return res.data;
 }
 

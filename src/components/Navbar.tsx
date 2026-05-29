@@ -155,12 +155,9 @@ function Navbar() {
   const userMenuRef = useRef<HTMLDivElement>(null);
   const moreMenuRef = useRef<HTMLDivElement>(null);
 
-  const academyPublicId = localStorage.getItem("academyPublicId");
-
   useEffect(() => {
-    if (!academyPublicId) return;
     publicApi
-      .get(`/settings/public?academyPublicId=${academyPublicId}`)
+      .get("/settings/public")
       .then((res) => {
         const d = res.data;
         setLogoUrl(d.LOGO_URL || null);
@@ -179,7 +176,9 @@ function Navbar() {
         sections.push({ id: "contact", label: "Contact" });
         setEnabledSections(sections);
       })
-      .catch(() => {});
+      .catch(() => {
+        // Tenant not resolved or fresh DB — fail silently, navbar still renders
+      });
   }, []);
 
   useEffect(() => {

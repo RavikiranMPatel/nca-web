@@ -16,7 +16,7 @@ type Facility = {
 
 const FacilitiesManager = () => {
   const { academyId } = useAuth();
-  const academyPublicId = localStorage.getItem("academyPublicId");
+
   const [facilities, setFacilities] = useState<Facility[]>([]);
   const [loading, setLoading] = useState(true);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -43,7 +43,7 @@ const FacilitiesManager = () => {
   useEffect(() => {
     const loadFacilities = async () => {
       try {
-        const response = await publicApi.get(`/cms/facilities?academyPublicId=${academyPublicId}`);
+        const response = await publicApi.get("/cms/facilities");
         setFacilities(response.data);
       } catch (error) {
         console.error("Error loading facilities:", error);

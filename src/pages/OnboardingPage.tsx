@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/useAuth";
+import { useTenant } from "../context/TenantContext";
 import { onboardingSetupApi } from "../api/auth.api";
 import toast from "react-hot-toast";
 import {
@@ -57,6 +58,7 @@ export default function OnboardingPage() {
   const [branchErrors, setBranchErrors] = useState<BranchErrors[]>([{}]);
 
   const { login } = useAuth();
+  const { refetch } = useTenant();
   const navigate = useNavigate();
 
   const set =
@@ -185,19 +187,19 @@ export default function OnboardingPage() {
       });
 
       login({
-        token: res.token,
+        token: res.accessToken,
         role: res.role,
         userName: res.userName,
         userEmail: res.userEmail,
         userPublicId: res.userPublicId,
         academyId: res.academyId,
-        academyPublicId: res.academyPublicId,
         academyName: res.academyName,
         branchId: res.branchId,
         branchName: res.branchName,
       });
 
       toast.success(`Welcome to ${res.academyName}! Setup complete.`);
+      refetch();
       navigate("/admin");
     } catch (err: any) {
       const msg =

@@ -24,7 +24,6 @@ function Payment() {
   const isMemberBooking = state?.isMemberBooking === true;
   const bookingId = localStorage.getItem("activeBookingId");
   const isGuestBooking = localStorage.getItem("isGuestBooking") === "true";
-  const academyPublicId = localStorage.getItem("academyPublicId");
 
   const [booking, setBooking] = useState<BookingDetails | null>(null);
   const [timeLeft, setTimeLeft] = useState(0);
@@ -46,9 +45,9 @@ function Payment() {
   // ── UPI settings (only needed for non-members) ────────────────────────
   useEffect(() => {
     if (isMemberBooking) return;
-    if (!academyPublicId) return;
+
     publicApi
-      .get(`/settings/public?academyPublicId=${academyPublicId}`)
+      .get("/settings/public")
       .then((res) => {
         setUpiQrUrl(res.data.UPI_QR_URL || "");
         setUpiId(res.data.UPI_ID || "");

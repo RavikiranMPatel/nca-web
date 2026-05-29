@@ -301,10 +301,8 @@ const WagonWheelModal = ({
   useEffect(() => {
     const fetch = async () => {
       try {
-        const academyPublicId = localStorage.getItem("academyPublicId");
-        if (!academyPublicId) { setShots([]); setLoading(false); return; }
         const res = await publicApi.get(
-          `/public/scorecard/${matchId}/shots/${batter.playerPublicId}?innings=${inningsNumber}&academyPublicId=${academyPublicId}`,
+          `/public/scorecard/${matchId}/shots/${batter.playerPublicId}?innings=${inningsNumber}`,
         );
         setShots(res.data ?? []);
       } catch {
@@ -938,9 +936,9 @@ export default function PublicScorecardPage() {
               ←
             </button>
             <div>
-              <div className="text-white font-bold text-sm">NCA Mysuru</div>
+              <div className="text-white font-bold text-sm">CricMaidan</div>
               <div className="text-blue-200 text-xs">
-                NextGen Cricket Academy
+                Powered by RKMP Tech
               </div>
             </div>
           </div>
@@ -1197,7 +1195,7 @@ export default function PublicScorecardPage() {
             </div>
             <div className="mt-6 text-center">
               <p className="text-xs text-gray-300 dark:text-gray-700">
-                Powered by NCA Mysuru · ncamysuru.com
+                Powered by CricMaidan · cricmaidan.com
               </p>
             </div>
           </div>

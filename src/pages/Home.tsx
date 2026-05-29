@@ -184,12 +184,14 @@ function YoutubeGrid({
   getShadowClass,
   getCardStyle,
   getButtonStyle,
+  youtubeChannelUrl,
 }: {
   videos: string[];
   primaryColor: string;
   getShadowClass: () => string;
   getCardStyle: () => object;
   getButtonStyle: () => object;
+  youtubeChannelUrl?: string;
 }) {
   const getVideoInfo = (
     url: string,
@@ -247,7 +249,7 @@ function YoutubeGrid({
       </div>
       <div className="text-center mt-8">
         <a
-          href="https://www.youtube.com/@nextgencricketacademy-j9t"
+          href={youtubeChannelUrl || "https://www.youtube.com"}
           target="_blank"
           rel="noopener noreferrer"
           className="inline-flex items-center gap-2 px-6 py-3 text-white font-semibold text-sm hover:opacity-90 transition shadow"
@@ -380,7 +382,6 @@ function SectionHeading({
 
 function Home() {
   const navigate = useNavigate();
-  const academyPublicId = localStorage.getItem("academyPublicId");
   const [showLoginPrompt, setShowLoginPrompt] = useState(false);
   const [expandedMemberId, setExpandedMemberId] = useState<string | null>(null);
   const [announcementVisible, setAnnouncementVisible] = useState(true);
@@ -415,7 +416,7 @@ function Home() {
     topBatters: TopPerformer[];
     topBowlers: TopPerformer[];
   } | null>(null);
-  const academyName = settings.ACADEMY_NAME || "NextGen Cricket Academy";
+  const academyName = settings.ACADEMY_NAME || "";
   const logoUrl = settings.LOGO_URL;
   const primaryColor = settings.PRIMARY_COLOR || "#2563eb";
   const secondaryColor = settings.SECONDARY_COLOR || "#10b981";
@@ -492,16 +493,15 @@ function Home() {
 
   // ── LIVE MATCHES POLL ──────────────────────────────────────────────────────
   useEffect(() => {
-    if (!academyPublicId) return;
     const fetchLive = async () => {
       try {
-        const res = await publicApi.get(`/public/live-matches?academyPublicId=${academyPublicId}`);
+        const res = await publicApi.get("/public/live-matches");
         const matches: RecentMatch[] = res.data;
         setRecentMatches(matches);
         for (const m of matches) {
           try {
             const sc = await publicApi.get(
-              `/public/scorecard/${m.matchPublicId}?academyPublicId=${academyPublicId}`,
+              `/public/scorecard/${m.matchPublicId}`,
             );
             setLiveScores((prev) => ({ ...prev, [m.matchPublicId]: sc.data }));
           } catch {
@@ -518,16 +518,15 @@ function Home() {
   }, []);
 
   useEffect(() => {
-    if (!academyPublicId) return;
     const fetchRecent = async () => {
       try {
-        const res = await publicApi.get(`/public/recent-matches?limit=3&academyPublicId=${academyPublicId}`);
+        const res = await publicApi.get("/public/recent-matches?limit=3");
         const matches: RecentMatch[] = res.data;
         setRecentMatches(matches);
         for (const m of matches) {
           try {
             const sc = await publicApi.get(
-              `/public/matches/${m.matchPublicId}/scorecard?academyPublicId=${academyPublicId}`,
+              `/public/matches/${m.matchPublicId}/scorecard`,
             );
             setRecentScores((prev) => ({
               ...prev,
@@ -545,7 +544,6 @@ function Home() {
   }, []);
 
   useEffect(() => {
-    if (!academyPublicId) { setLoading(false); return; }
     const loadAllData = async () => {
       const [
         settingsRes,
@@ -558,16 +556,17 @@ function Home() {
         statsRes,
         topPerformersRes,
       ] = await Promise.allSettled([
-        publicApi.get(`/settings/public?academyPublicId=${academyPublicId}`),
-        publicApi.get(`/cms/gallery?academyPublicId=${academyPublicId}`),
-        publicApi.get(`/home-slider?academyPublicId=${academyPublicId}`),
-        publicApi.get(`/cms/facilities?academyPublicId=${academyPublicId}`),
-        publicApi.get(`/cms/testimonials?academyPublicId=${academyPublicId}`),
-        publicApi.get(`/team?academyPublicId=${academyPublicId}`),
-        publicApi.get(`/cms/news?status=PUBLISHED&academyPublicId=${academyPublicId}`),
-        publicApi.get(`/public/stats?academyPublicId=${academyPublicId}`),
-        publicApi.get(`/public/cricket-stats/top-performers?period=alltime&academyPublicId=${academyPublicId}`),
+        publicApi.get("/settings/public"),
+        publicApi.get("/cms/gallery"),
+        publicApi.get("/home-slider"),
+        publicApi.get("/cms/facilities"),
+        publicApi.get("/cms/testimonials"),
+        publicApi.get("/team"),
+        publicApi.get("/cms/news?status=PUBLISHED"),
+        publicApi.get("/public/stats"),
+        publicApi.get("/public/cricket-stats/top-performers?period=alltime"),
       ]);
+
       if (settingsRes.status === "fulfilled")
         setSettings(settingsRes.value.data);
       if (galleryRes.status === "fulfilled") setGallery(galleryRes.value.data);
@@ -1351,36 +1350,9 @@ function Home() {
               subtitle="State-of-the-art infrastructure designed to bring out the best in every player"
               primaryColor={primaryColor}
             />
+            {facilities.length > 0 ? (
             <div className="flex md:grid md:grid-cols-3 gap-4 overflow-x-auto pb-2 md:overflow-visible md:pb-0 -mx-4 px-4 md:mx-0 md:px-0 snap-x snap-mandatory scroll-smooth">
-              {(facilities.length > 0
-                ? facilities
-                : [
-                    {
-                      id: "1",
-                      title: "Professional Turf Wickets",
-                      description:
-                        "International-standard cricket pitches for match-like practice",
-                      displayOrder: 1,
-                      active: true,
-                    },
-                    {
-                      id: "2",
-                      title: "Premium Astro Turf",
-                      description:
-                        "All-weather synthetic surface for consistent training",
-                      displayOrder: 2,
-                      active: true,
-                    },
-                    {
-                      id: "3",
-                      title: "Flexible Timing",
-                      description:
-                        "Morning, evening, and weekend slots to fit your schedule",
-                      displayOrder: 3,
-                      active: true,
-                    },
-                  ]
-              ).map((facility) => (
+              {facilities.map((facility) => (
                 <div
                   key={facility.id}
                   className={`bg-white p-5 md:p-7 border-t-4 ${getShadowClass()} flex-shrink-0 w-[72vw] md:w-auto snap-start`}
@@ -1401,6 +1373,7 @@ function Home() {
                 </div>
               ))}
             </div>
+            ) : null}
           </div>
         </section>
       )}
@@ -1415,7 +1388,7 @@ function Home() {
           <div className="max-w-6xl mx-auto">
             <SectionHeading
               title="Meet Our Team"
-              subtitle="The coaches and management team behind NextGen Cricket Academy"
+              subtitle={`The coaches and management team${academyName ? ` behind ${academyName}` : ""}`}
               primaryColor={primaryColor}
             />
             <div className="flex md:grid md:grid-cols-3 gap-4 overflow-x-auto pb-2 md:overflow-visible md:pb-0 -mx-4 px-4 md:mx-0 md:px-0 snap-x snap-mandatory scroll-smooth">
@@ -1507,35 +1480,8 @@ function Home() {
               primaryColor={primaryColor}
             />
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              {(testimonials.length > 0
-                ? testimonials.slice(0, 3)
-                : [
-                    {
-                      id: "1",
-                      name: "Rahul Sharma",
-                      role: "U-16 Player",
-                      text: "The coaching here is exceptional! I improved my batting average by 40% in just 6 months.",
-                      rating: 5,
-                      active: true,
-                    },
-                    {
-                      id: "2",
-                      name: "Priya Patel",
-                      role: "Parent",
-                      text: "My daughter absolutely loves training here. The coaches are professional and genuinely care.",
-                      rating: 5,
-                      active: true,
-                    },
-                    {
-                      id: "3",
-                      name: "Amit Kumar",
-                      role: "U-19 Player",
-                      text: "Best academy in the city! Got selected for state trials thanks to the coaching here.",
-                      rating: 5,
-                      active: true,
-                    },
-                  ]
-              ).map((t) => (
+              {testimonials.length > 0
+                ? testimonials.slice(0, 3).map((t) => (
                 <div
                   key={t.id}
                   className={`bg-white p-7 hover:shadow-xl transition-shadow flex flex-col ${getShadowClass()}`}
@@ -1577,7 +1523,8 @@ function Home() {
                     </div>
                   </div>
                 </div>
-              ))}
+              ))
+                : null}
             </div>
           </div>
         </section>
@@ -1597,41 +1544,8 @@ function Home() {
               primaryColor={primaryColor}
             />
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              {(news.length > 0
-                ? news
-                : [
-                    {
-                      id: "1",
-                      title: "Summer Camp 2026 Registration Open",
-                      publishedAt: "2026-01-25",
-                      category: "Announcement",
-                      shortDescription:
-                        "Join our intensive 6-week summer training program.",
-                      slug: "",
-                      status: "PUBLISHED",
-                    },
-                    {
-                      id: "2",
-                      title: "Students Win District Championship",
-                      publishedAt: "2026-01-20",
-                      category: "Achievement",
-                      shortDescription:
-                        "Our U-16 team clinched the district championship.",
-                      slug: "",
-                      status: "PUBLISHED",
-                    },
-                    {
-                      id: "3",
-                      title: "New Indoor Practice Facility",
-                      publishedAt: "2026-01-15",
-                      category: "Facility Update",
-                      shortDescription:
-                        "We're launching a new climate-controlled indoor practice center.",
-                      slug: "",
-                      status: "PUBLISHED",
-                    },
-                  ]
-              ).map((article) => (
+              {news.length > 0
+                ? news.map((article) => (
                 <div
                   key={article.id}
                   className={`bg-white overflow-hidden hover:shadow-xl transition-shadow ${getShadowClass()}`}
@@ -1675,7 +1589,8 @@ function Home() {
                     </p>
                   </div>
                 </div>
-              ))}
+              ))
+                : null}
             </div>
           </div>
         </section>
@@ -1696,6 +1611,7 @@ function Home() {
               getShadowClass={getShadowClass}
               getCardStyle={getCardStyle}
               getButtonStyle={getButtonStyle}
+              youtubeChannelUrl={socialLinks.youtube}
             />
           </div>
         </section>
@@ -1869,7 +1785,7 @@ function Home() {
           </div>
         )}
         <p className="text-gray-400 text-sm">
-          © 2026 {academyName}. All rights reserved.
+          © {new Date().getFullYear()} {academyName}. All rights reserved.
         </p>
       </footer>
 

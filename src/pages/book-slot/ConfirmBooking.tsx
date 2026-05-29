@@ -36,7 +36,6 @@ function ConfirmBooking() {
   const [notifyEmail, setNotifyEmail] = useState("");
 
   const isLoggedIn = !!localStorage.getItem("accessToken");
-  const academyPublicId = localStorage.getItem("academyPublicId");
   const isBowlingMachine = draft?.resource === "BOWLING_MACHINE";
 
   useEffect(() => {
@@ -122,11 +121,6 @@ function ConfirmBooking() {
           return;
         }
 
-        if (!academyPublicId) {
-          setError("Academy not configured. Please refresh and try again.");
-          setLoading(false);
-          return;
-        }
         const res = await publicApi.post("/bookings/guest", {
           date,
           startTime,
@@ -134,7 +128,6 @@ function ConfirmBooking() {
           guestPhone,
           guestEmail,
           guestName,
-          academyPublicId,
           ...(ballCount ? { ballCount } : {}),
         });
         bookingId = res.data.bookingPublicId;

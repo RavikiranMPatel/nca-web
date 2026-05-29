@@ -14,10 +14,9 @@ function HomeSlider() {
   const [images, setImages] = useState<SliderImage[]>([]);
 
   useEffect(() => {
-    const academyPublicId = localStorage.getItem("academyPublicId");
-    if (!academyPublicId) return;
-    publicApi.get(`/home-slider?academyPublicId=${academyPublicId}`)
-      .then(res => setImages(res.data))
+    publicApi
+      .get("/home-slider")
+      .then((res) => setImages(res.data))
       .catch(() => setImages([]));
   }, []);
 
@@ -30,7 +29,7 @@ function HomeSlider() {
         autoplay={{ delay: 3000, disableOnInteraction: false }}
         loop
       >
-        {images.map(img => (
+        {images.map((img) => (
           <SwiperSlide key={img.id}>
             <img
               src={img.imageUrl}

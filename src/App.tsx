@@ -51,6 +51,7 @@ import PlayerFeesTab from "./pages/player/PlayerFeesTab";
 import PlayerMediaPage from "./pages/player/PlayerMediaPage";
 import OnboardingPage from "./pages/OnboardingPage";
 import { checkOnboardingStatus } from "./api/auth.api";
+import { useTenant } from "./context/TenantContext";
 import TeamMembersAdmin from "./pages/admin/TeamMembersAdmin";
 import GenerateSlots from "./pages/slot-templates/GenerateSlots";
 import ManageUsersPage from "./pages/ManageUsersPage";
@@ -74,6 +75,7 @@ import TournamentCreatePage from "./pages/scoring/TournamentCreatePage";
 import TournamentDetailPage from "./pages/scoring/TournamentDetailPage";
 import TournamentListPage from "./pages/scoring/TournamentListPage";
 import CricketStatsPage from "./pages/CricketStatsPage";
+import PlatformAdminPage from "./pages/platform/PlatformAdminPage";
 
 // Add route after /my-bookings route:
 <Route
@@ -88,8 +90,38 @@ import CricketStatsPage from "./pages/CricketStatsPage";
 />;
 
 function App() {
+  const { loading: tenantLoading, error: tenantError, tenant } = useTenant();
   const [onboarded, setOnboarded] = useState<boolean | null>(null);
   const navigate = useNavigate();
+
+  useEffect(() => {
+    if (!tenant) return;
+    const name = tenant.name || "Cricket Academy";
+    const city = tenant.city ? ` ${tenant.city}` : "";
+    document.title = `${name}${city} | Cricket Academy`;
+
+    const descEl = document.querySelector('meta[name="description"]');
+    if (descEl) {
+      descEl.setAttribute(
+        "content",
+        `${name} — professional cricket coaching${city ? ` in${city}` : ""}.`,
+      );
+    }
+
+    const ogTitle = document.querySelector('meta[property="og:title"]');
+    if (ogTitle) ogTitle.setAttribute("content", `${name}${city}`);
+
+    const ogDesc = document.querySelector('meta[property="og:description"]');
+    if (ogDesc) {
+      ogDesc.setAttribute(
+        "content",
+        `${name} — professional cricket coaching${city ? ` in${city}` : ""}.`,
+      );
+    }
+
+    const twitterTitle = document.querySelector('meta[name="twitter:title"]');
+    if (twitterTitle) twitterTitle.setAttribute("content", `${name}${city}`);
+  }, [tenant]);
 
   // ── Check onboarding status once on app load ─────────────────────────────
   useEffect(() => {
@@ -107,7 +139,31 @@ function App() {
   }, []);
 
   // Show nothing while checking — avoids flash of login page
-  if (onboarded === null) {
+  // Show spinner while tenant resolves or onboarding check runs
+  useEffect(() => {
+    if (
+      tenantError &&
+      !window.location.pathname.startsWith("/onboarding") &&
+      !window.location.pathname.startsWith("/platform")
+    ) {
+      window.location.href = "/onboarding";
+    }
+  }, [tenantError]);
+
+  // Show spinner while tenant resolves or onboarding check runs
+  if (tenantLoading || onboarded === null) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
+      </div>
+    );
+  }
+
+  if (
+    tenantError &&
+    !window.location.pathname.startsWith("/onboarding") &&
+    !window.location.pathname.startsWith("/platform")
+  ) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
@@ -759,6 +815,7 @@ function App() {
       />
 
       {/* CATCH-ALL */}
+      <Route path="/platform" element={<PlatformAdminPage />} />
       <Route path="*" element={<Navigate to="/home" replace />} />
     </Routes>
   );
