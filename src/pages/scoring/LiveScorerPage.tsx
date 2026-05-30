@@ -178,11 +178,11 @@ const mapToBallDTO = (d: Record<string, unknown>): BallDTO => ({
     : d.extraType === "WIDE"
       ? "Wd"
       : d.extraType === "NO_BALL"
-        ? "Nb"
+        ? `Nb${(d.runsExtras as number) > 1 ? `+${(d.runsExtras as number) - 1}b` : ""}${(d.runsBatsman as number) > 0 ? `+${d.runsBatsman}` : ""}`
         : d.extraType === "LEG_BYE"
-          ? "Lb"
+          ? `Lb${(d.runsExtras as number) > 1 ? d.runsExtras : ""}`
           : d.extraType === "BYE"
-            ? "B"
+            ? `B${(d.runsExtras as number) > 1 ? d.runsExtras : ""}`
             : (d.runsBatsman as number) === 0
               ? "·"
               : String(d.runsBatsman),
@@ -202,17 +202,17 @@ const mapToBallDTO = (d: Record<string, unknown>): BallDTO => ({
 });
 
 const shouldRotateMidOver = (
-  runs: number,
+  runs: number, // batsman runs only — physical crossing indicator
   isLegalBall: boolean,
   extra?: string,
 ): boolean => {
+  // For wides: rotate if batters physically ran odd number of runs
+  if (extra === "WIDE") return runs % 2 !== 0;
   if (!isLegalBall) return false;
-  if (extra === "WIDE") return false;
   return runs % 2 !== 0;
 };
 
-const shouldRotateEndOfOver = (runs: number, extra?: string): boolean => {
-  if (extra === "WIDE") return true;
+const shouldRotateEndOfOver = (runs: number): boolean => {
   return runs % 2 === 0;
 };
 
@@ -253,9 +253,23 @@ export default function LiveScorerPage() {
     new Set(),
   );
 
+  // Missing — add with other useState declarations:
+  const [runOutEnd, setRunOutEnd] = useState<"striker" | "nonstriker" | null>(
+    null,
+  );
+
   // ── Wagon wheel — read from localStorage (set during match setup) ──────────
   const wagonWheelEnabled = localStorage.getItem("nca_ww_enabled") !== "false";
   const [showWagonWheel, setShowWagonWheel] = useState(false);
+  const [pendingExtra, setPendingExtra] = useState<
+    | "BYE"
+    | "LEG_BYE"
+    | "WIDE"
+    | "NO_BALL_BYE"
+    | "NO_BALL_LB"
+    | "NO_BALL_RUNS"
+    | null
+  >(null);
   const [lastDeliveryPublicId, setLastDeliveryPublicId] = useState<
     string | null
   >(null);
@@ -315,6 +329,9 @@ export default function LiveScorerPage() {
     useState<InningsState | null>(null);
 
   const loadingRef = useRef(false);
+
+  const battingPlayersRef = useRef<ScoringPlayer[]>([]);
+  const bowlingPlayersRef = useRef<ScoringPlayer[]>([]);
 
   const showToast = (msg: string) => {
     setToast(msg);
@@ -384,14 +401,18 @@ export default function LiveScorerPage() {
         setBattingTeamId(batTeamId);
         setBowlingTeamId(bowlTeamId);
         setBattingPlayers(teamPlayers[batTeamId] ?? []);
+        battingPlayersRef.current = teamPlayers[batTeamId] ?? [];
         setBowlingPlayers(teamPlayers[bowlTeamId] ?? []);
+        bowlingPlayersRef.current = teamPlayers[bowlTeamId] ?? [];
       } else {
         const t0 = (ts as CricketTeam[])[0]?.publicId;
         const t1 = (ts as CricketTeam[])[1]?.publicId;
         setBattingTeamId(t0 ?? null);
         setBowlingTeamId(t1 ?? null);
         setBattingPlayers(teamPlayers[t0] ?? []);
+        battingPlayersRef.current = teamPlayers[t0] ?? [];
         setBowlingPlayers(teamPlayers[t1] ?? []);
+        bowlingPlayersRef.current = teamPlayers[t1] ?? [];
       }
 
       try {
@@ -503,10 +524,14 @@ export default function LiveScorerPage() {
             -1,
           );
           const partnershipDeliveries = deliveries.slice(lastWicketIndex + 1);
-          const pRuns = partnershipDeliveries.reduce(
-            (s, d) => s + ((d.runsBatsman as number) ?? 0),
-            0,
-          );
+          const pRuns = partnershipDeliveries.reduce((s, d) => {
+            const extraType = d.extraType as string | undefined;
+            const byeRuns =
+              extraType === "BYE" || extraType === "LEG_BYE"
+                ? ((d.runsExtras as number) ?? 0)
+                : 0;
+            return s + ((d.runsBatsman as number) ?? 0) + byeRuns;
+          }, 0);
           const pBalls = partnershipDeliveries.filter(
             (d) => d.isLegalBall as boolean,
           ).length;
@@ -581,6 +606,7 @@ export default function LiveScorerPage() {
 
     const isLegalBall = !extra || !["WIDE", "NO_BALL"].includes(extra);
     const nextFreeHit = extra === "NO_BALL";
+    const totalRunsScored = runs + (extra ? extraRuns : 0);
 
     const currentBallForSummary: BallDTO = {
       runsBatsman: runs,
@@ -593,11 +619,11 @@ export default function LiveScorerPage() {
         extra === "WIDE"
           ? "Wd"
           : extra === "NO_BALL"
-            ? "Nb"
+            ? `Nb${extraRuns > 1 ? `+${extraRuns - 1}b` : ""}${runs > 0 ? `+${runs}` : ""}`
             : extra === "LEG_BYE"
-              ? "Lb"
+              ? `Lb${extraRuns > 1 ? extraRuns : ""}`
               : extra === "BYE"
-                ? "B"
+                ? `B${extraRuns > 1 ? extraRuns : ""}`
                 : runs === 0
                   ? "·"
                   : String(runs),
@@ -655,7 +681,12 @@ export default function LiveScorerPage() {
 
       if (isLegalBall) {
         setPartnershipBalls((b) => b + 1);
-        setPartnershipRuns((r) => r + runs);
+        setPartnershipRuns(
+          (r) =>
+            r +
+            runs +
+            (["BYE", "LEG_BYE"].includes(extra ?? "") ? extraRuns : 0),
+        );
       }
 
       setThisOver((prev) => [...prev, currentBallForSummary]);
@@ -674,7 +705,7 @@ export default function LiveScorerPage() {
       }
 
       if (state.overComplete) {
-        const rotateEndOfOver = shouldRotateEndOfOver(runs, extra);
+        const rotateEndOfOver = shouldRotateEndOfOver(totalRunsScored);
         if (rotateEndOfOver) {
           setStriker(currentNonStriker);
           setNonStriker(currentStriker);
@@ -700,6 +731,7 @@ export default function LiveScorerPage() {
         }
         setShowBowlerSelect(true);
       } else {
+        // Pass batsman runs for mid-over, totalRunsScored only for end-of-over
         const rotateMidOver = shouldRotateMidOver(runs, isLegalBall, extra);
         if (rotateMidOver) {
           setStriker(currentNonStriker);
@@ -810,11 +842,15 @@ export default function LiveScorerPage() {
       setDismissalType("");
       setDismissedPlayer(null);
       setFielder(null);
+      setRunOutEnd(null);
       setIsFreeHit(false);
 
       setThisOver((prev) => [...prev, wicketBallForSummary]);
       applyState(state);
       showToast("✓ Wicket saved");
+
+      const nonStrikerWasOut =
+        capturedDismissedPlayer?.publicId === capturedNonStriker?.publicId;
 
       if (state.overComplete) {
         setStriker(capturedNonStriker);
@@ -840,14 +876,26 @@ export default function LiveScorerPage() {
         }
         setShowBowlerSelect(true);
       } else {
-        if (pendingRuns % 2 !== 0) {
-          setNonStriker(capturedNonStriker);
+        if (nonStrikerWasOut) {
+          if (runOutEnd === "nonstriker") {
+            // Out at non-striker end — Rahul crossed, now at striker end
+            setStriker(capturedStriker);
+            setNonStriker(null);
+          } else {
+            // Out at striker end — no crossing, Rahul stays at non-striker end
+            setStriker(null);
+            setNonStriker(capturedStriker);
+          }
+        } else {
+          // Striker was out
+          if (pendingRuns % 2 !== 0) {
+            setNonStriker(capturedNonStriker);
+          }
         }
       }
 
       const nextDismissedIds = new Set(dismissedPlayerIds);
       if (capturedDismissedPlayer?.publicId)
-        // ← use captured value
         nextDismissedIds.add(capturedDismissedPlayer.publicId);
       setDismissedPlayerIds(nextDismissedIds);
 
@@ -858,7 +906,11 @@ export default function LiveScorerPage() {
       );
 
       if (!state.inningsComplete && availableBatters.length > 0) {
-        setShowBatterSelect("striker");
+        if (nonStrikerWasOut && runOutEnd === "nonstriker") {
+          setShowBatterSelect("nonstriker");
+        } else {
+          setShowBatterSelect("striker");
+        }
       }
     } catch (e: unknown) {
       const msg =
@@ -911,10 +963,14 @@ export default function LiveScorerPage() {
       );
       const partnershipDeliveries = deliveries.slice(lastWicketIndex + 1);
       setPartnershipRuns(
-        partnershipDeliveries.reduce(
-          (s, d) => s + ((d.runsBatsman as number) ?? 0),
-          0,
-        ),
+        partnershipDeliveries.reduce((s, d) => {
+          const extraType = d.extraType as string | undefined;
+          const byeRuns =
+            extraType === "BYE" || extraType === "LEG_BYE"
+              ? ((d.runsExtras as number) ?? 0)
+              : 0;
+          return s + ((d.runsBatsman as number) ?? 0) + byeRuns;
+        }, 0),
       );
       setPartnershipBalls(
         partnershipDeliveries.filter((d) => d.isLegalBall as boolean).length,
@@ -973,19 +1029,16 @@ export default function LiveScorerPage() {
           (last.bowlerPublicId as string) ??
           ((last.bowler as Record<string, unknown>)?.publicId as string);
         setStriker(
-          (battingPlayers.length > 0 ? battingPlayers : []).find(
-            (p) => p.publicId === batsmanPid,
-          ) ?? null,
+          battingPlayersRef.current.find((p) => p.publicId === batsmanPid) ??
+            null,
         );
         setNonStriker(
-          (battingPlayers.length > 0 ? battingPlayers : []).find(
-            (p) => p.publicId === nonStrikerPid,
-          ) ?? null,
+          battingPlayersRef.current.find((p) => p.publicId === nonStrikerPid) ??
+            null,
         );
         setBowler(
-          (bowlingPlayers.length > 0 ? bowlingPlayers : []).find(
-            (p) => p.publicId === bowlerPid,
-          ) ?? null,
+          bowlingPlayersRef.current.find((p) => p.publicId === bowlerPid) ??
+            null,
         );
       } else {
         setStriker(null);
@@ -1025,7 +1078,9 @@ export default function LiveScorerPage() {
       setBattingTeamId(bowlingTeamId);
       setBowlingTeamId(battingTeamId);
       setBattingPlayers(bowlingPlayers);
+      battingPlayersRef.current = bowlingPlayers;
       setBowlingPlayers(battingPlayers);
+      bowlingPlayersRef.current = battingPlayers;
       setStriker(null);
       setNonStriker(null);
       setBowler(null);
@@ -1360,11 +1415,39 @@ export default function LiveScorerPage() {
               extra: "PENALTY",
               cls: "text-gray-400 border-gray-700",
             },
+            {
+              label: "NB + Bye",
+              extra: "NO_BALL_BYE",
+              cls: "text-orange-400 border-orange-900",
+            },
+            {
+              label: "NB + LB",
+              extra: "NO_BALL_LB",
+              cls: "text-orange-400 border-orange-900",
+            },
+            {
+              label: "NB + Runs",
+              extra: "NO_BALL_RUNS",
+              cls: "text-orange-400 border-orange-900",
+            },
           ].map(({ label, extra, cls, runs }) => (
             <button
               key={label}
               disabled={posting}
-              onClick={() => score(runs ?? 0, extra)}
+              onClick={() => {
+                if (
+                  extra === "BYE" ||
+                  extra === "LEG_BYE" ||
+                  extra === "WIDE" ||
+                  extra === "NO_BALL_BYE" ||
+                  extra === "NO_BALL_LB" ||
+                  extra === "NO_BALL_RUNS"
+                ) {
+                  setPendingExtra(extra as typeof pendingExtra);
+                } else {
+                  score(runs ?? 0, extra);
+                }
+              }}
               className={`h-11 rounded-xl text-xs font-semibold bg-gray-900 border transition-all active:scale-90 disabled:opacity-40 ${cls}`}
             >
               {label}
@@ -1658,6 +1741,37 @@ export default function LiveScorerPage() {
                   >
                     {fielder?.displayName ?? "Tap to select fielder →"}
                   </button>
+
+                  {dismissalType === "Run Out" &&
+                    dismissedPlayer?.publicId === nonStriker?.publicId && (
+                      <div>
+                        <div className="text-xs text-gray-500 uppercase mb-2">
+                          Run out at which end?
+                        </div>
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => setRunOutEnd("striker")}
+                            className={`flex-1 py-2.5 rounded-xl text-sm border transition-all active:scale-95 ${
+                              runOutEnd === "striker"
+                                ? "bg-blue-700 border-blue-500 text-white"
+                                : "bg-gray-800 border-gray-700 text-gray-300"
+                            }`}
+                          >
+                            Striker end
+                          </button>
+                          <button
+                            onClick={() => setRunOutEnd("nonstriker")}
+                            className={`flex-1 py-2.5 rounded-xl text-sm border transition-all active:scale-95 ${
+                              runOutEnd === "nonstriker"
+                                ? "bg-blue-700 border-blue-500 text-white"
+                                : "bg-gray-800 border-gray-700 text-gray-300"
+                            }`}
+                          >
+                            Non-striker end
+                          </button>
+                        </div>
+                      </div>
+                    )}
                 </div>
               )}
               <div>
@@ -1692,6 +1806,7 @@ export default function LiveScorerPage() {
                   setShowWicket(false);
                   setDismissalType("");
                   setFielder(null);
+                  setRunOutEnd(null);
                 }}
                 className="w-full py-2 text-gray-500 text-sm"
               >
@@ -1769,6 +1884,72 @@ export default function LiveScorerPage() {
                 Cancel
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Bye / Leg Bye runs picker */}
+      {pendingExtra && (
+        <div className="fixed inset-0 z-50 bg-black/80 flex items-end">
+          <div className="w-full bg-gray-900 rounded-t-2xl p-5 border-t border-gray-800">
+            <div className="w-10 h-1 bg-gray-700 rounded-full mx-auto mb-4" />
+            <h3 className="text-sm font-semibold text-white text-center mb-4">
+              {pendingExtra === "LEG_BYE"
+                ? "Leg Bye"
+                : pendingExtra === "WIDE"
+                  ? "Wide"
+                  : pendingExtra === "NO_BALL_BYE"
+                    ? "No Ball + Bye"
+                    : pendingExtra === "NO_BALL_LB"
+                      ? "No Ball + Leg Bye"
+                      : pendingExtra === "NO_BALL_RUNS"
+                        ? "No Ball + Runs"
+                        : "Bye"}{" "}
+              — How many runs?
+            </h3>
+            <div className="flex gap-2 mb-4">
+              {(pendingExtra === "WIDE"
+                ? [1, 2, 3, 4, 5, 6]
+                : pendingExtra === "NO_BALL_BYE" ||
+                    pendingExtra === "NO_BALL_LB"
+                  ? [0, 1, 2, 3, 4]
+                  : pendingExtra === "NO_BALL_RUNS"
+                    ? [1, 2, 3, 4, 6]
+                    : [1, 2, 3, 4, 5]
+              ).map((r) => (
+                <button
+                  key={r}
+                  disabled={posting}
+                  onClick={() => {
+                    if (
+                      pendingExtra === "NO_BALL_BYE" ||
+                      pendingExtra === "NO_BALL_LB"
+                    ) {
+                      // extraType stays NO_BALL on the backend
+                      // runsExtras = 1 (no ball penalty) + bye runs
+                      score(0, "NO_BALL", r + 1);
+                    } else if (pendingExtra === "WIDE") {
+                      score(0, "WIDE", r + 1);
+                    } else if (pendingExtra === "NO_BALL_RUNS") {
+                      // runsBatsman = r, extraType = NO_BALL, extraRuns = 1 (no ball penalty)
+                      score(r, "NO_BALL", 1);
+                    } else {
+                      score(0, pendingExtra!, r);
+                    }
+                    setPendingExtra(null);
+                  }}
+                  className="flex-1 h-14 rounded-xl text-xl font-bold bg-gray-800 border border-gray-700 text-gray-200 active:scale-90 transition-all disabled:opacity-40"
+                >
+                  {r}
+                </button>
+              ))}
+            </div>
+            <button
+              onClick={() => setPendingExtra(null)}
+              className="w-full py-2 text-gray-500 text-sm"
+            >
+              Cancel
+            </button>
           </div>
         </div>
       )}
