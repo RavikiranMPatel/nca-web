@@ -91,7 +91,7 @@ function isEligibleForGroup(
   // e.g. U-19 upper = 1 Sep (seasonYear - 16) → too old for U-16
   const prevGroup = AGE_GROUPS[groupIndex - 1];
   const upperCutoff = prevGroup
-    ? new Date(seasonYear - prevGroup.age, 8, 1)
+    ? new Date(seasonYear - prevGroup.age + 1, 8, 1)
     : null;
 
   return (
