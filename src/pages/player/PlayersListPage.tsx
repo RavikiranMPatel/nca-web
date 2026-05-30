@@ -65,7 +65,7 @@ function getPlayerAgeGroup(dob?: string): string | null {
   if (isNaN(dobDate.getTime())) return null;
   const seasonYear = getSeasonYear();
   for (const group of AGE_GROUPS) {
-    const cutoff = new Date(seasonYear - group.age, 8, 1);
+    const cutoff = new Date(seasonYear - group.age + 1, 8, 1);
     if (dobDate >= cutoff) return group.value;
   }
   return "Senior";
@@ -84,7 +84,8 @@ function isEligibleForGroup(
 
   const group = AGE_GROUPS[groupIndex];
   // Lower bound: born on/after this → eligible for this group
-  const lowerCutoff = new Date(seasonYear - group.age, 8, 1);
+
+  const lowerCutoff = new Date(seasonYear - group.age + 1, 8, 1);
 
   // Upper bound: born before the next smaller group's cutoff
   // e.g. U-19 upper = 1 Sep (seasonYear - 16) → too old for U-16
