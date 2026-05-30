@@ -402,10 +402,10 @@ function Home() {
   } | null>(null);
 
   // ── LIVE MATCHES STATE ──────────────────────────────────────────────────────
-  const [liveMatches] = useState<LiveMatch[]>([]);
   const [liveScores, setLiveScores] = useState<
     Record<string, ScorecardSummary>
   >({});
+  const [liveMatches, setLiveMatches] = useState<LiveMatch[]>([]);
   const [recentMatches, setRecentMatches] = useState<RecentMatch[]>([]);
   const [recentScores, setRecentScores] = useState<
     Record<string, ScorecardSummary>
@@ -495,7 +495,7 @@ function Home() {
       try {
         const res = await publicApi.get("/public/live-matches");
         const matches: RecentMatch[] = res.data;
-        setRecentMatches(matches);
+        setLiveMatches(matches);
         for (const m of matches) {
           try {
             const sc = await publicApi.get(
