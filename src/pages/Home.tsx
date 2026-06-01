@@ -15,8 +15,8 @@ import {
   Instagram,
   Facebook,
 } from "lucide-react";
+import publicApi, { baseApi } from "../api/scoring/publicApi";
 import LoginPromptModal from "../components/LoginPromptModal";
-import publicApi from "../api/publicApi";
 import { getImageUrl } from "../utils/imageUrl";
 import ContactForm from "../components/ContactForm";
 import { Swiper, SwiperSlide } from "swiper/react";
@@ -493,14 +493,15 @@ function Home() {
   useEffect(() => {
     const fetchLive = async () => {
       try {
-        const res = await publicApi.get("/public/live-matches");
+        const res = await publicApi.get("/live-matches");
         const matches: RecentMatch[] = res.data;
         setLiveMatches(matches);
         for (const m of matches) {
           try {
             const sc = await publicApi.get(
-              `/public/scorecard/${m.matchPublicId}`,
+              `/matches/${m.matchPublicId}/scorecard`,
             );
+
             setLiveScores((prev) => ({ ...prev, [m.matchPublicId]: sc.data }));
           } catch {
             /* silent */
@@ -518,13 +519,13 @@ function Home() {
   useEffect(() => {
     const fetchRecent = async () => {
       try {
-        const res = await publicApi.get("/public/recent-matches?limit=3");
+        const res = await publicApi.get("/recent-matches?limit=3");
         const matches: RecentMatch[] = res.data;
         setRecentMatches(matches);
         for (const m of matches) {
           try {
             const sc = await publicApi.get(
-              `/public/matches/${m.matchPublicId}/scorecard`,
+              `/matches/${m.matchPublicId}/scorecard`,
             );
             setRecentScores((prev) => ({
               ...prev,
@@ -554,15 +555,15 @@ function Home() {
         statsRes,
         topPerformersRes,
       ] = await Promise.allSettled([
-        publicApi.get("/settings/public"),
-        publicApi.get("/cms/gallery"),
-        publicApi.get("/home-slider"),
-        publicApi.get("/cms/facilities"),
-        publicApi.get("/cms/testimonials"),
-        publicApi.get("/team"),
-        publicApi.get("/cms/news?status=PUBLISHED"),
-        publicApi.get("/public/stats"),
-        publicApi.get("/public/cricket-stats/top-performers?period=alltime"),
+        baseApi.get("/settings/public"),
+        baseApi.get("/cms/gallery"),
+        baseApi.get("/home-slider"),
+        baseApi.get("/cms/facilities"),
+        baseApi.get("/cms/testimonials"),
+        baseApi.get("/team"),
+        baseApi.get("/cms/news?status=PUBLISHED"),
+        baseApi.get("/public/stats"),
+        baseApi.get("/public/cricket-stats/top-performers?period=alltime"),
       ]);
       if (settingsRes.status === "fulfilled")
         setSettings(settingsRes.value.data);

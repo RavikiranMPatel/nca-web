@@ -61,6 +61,7 @@ export interface Delivery {
 }
 
 export interface ScoringPlayer {
+  id?: string;
   publicId: string;
   displayName: string;
   battingStyle?: string;

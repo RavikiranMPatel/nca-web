@@ -30,3 +30,14 @@ export const recordResult = (
   },
 ) =>
   api.post(`/admin/cricket/matches/${matchId}/result`, req).then((r) => r.data);
+
+export const awardPenalty = async (
+  matchId: string,
+  awardedTo: "BATTING" | "FIELDING",
+): Promise<BallResponse> => {
+  const res = await api.post(
+    `/admin/cricket/matches/${matchId}/scoring/penalty`,
+    { awardedTo },
+  );
+  return res.data;
+};
