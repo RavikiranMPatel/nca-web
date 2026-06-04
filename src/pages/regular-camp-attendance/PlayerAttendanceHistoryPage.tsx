@@ -8,6 +8,7 @@ import {
   Minus,
 } from "lucide-react";
 import { toast } from "react-hot-toast";
+import { getImageUrl } from "../../utils/imageUrl";
 
 import api from "../../api/axios";
 import {
@@ -44,6 +45,7 @@ type PlayerSummary = {
   batchNames: string;
   joiningDate: string;
   active: boolean;
+  photoUrl?: string;
 };
 
 type GroupedData = {
@@ -282,6 +284,19 @@ function PlayerAttendanceHistoryPage() {
         >
           <ArrowLeft size={20} />
         </button>
+        {player.photoUrl ? (
+          <img
+            src={getImageUrl(player.photoUrl) || undefined}
+            alt={player.displayName}
+            className="w-10 h-10 rounded-full object-cover object-top border-2 border-slate-200 flex-shrink-0"
+          />
+        ) : (
+          <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-100 to-blue-200 flex items-center justify-center border-2 border-slate-200 flex-shrink-0">
+            <span className="text-sm font-bold text-blue-600">
+              {player.displayName.charAt(0)}
+            </span>
+          </div>
+        )}
         <div className="flex-1 min-w-0">
           <h1 className="text-base md:text-xl font-semibold text-gray-900 truncate">
             {player.displayName}
@@ -381,7 +396,7 @@ function PlayerAttendanceHistoryPage() {
       )}
 
       {/* ── HISTORY CALENDAR ── */}
-      <div className="space-y-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {history.length === 0 && (
           <p className="text-sm text-gray-500">No attendance records found</p>
         )}
@@ -443,7 +458,7 @@ function PlayerAttendanceHistoryPage() {
               </div>
 
               {group.calendar && (
-                <div className="max-w-xs">
+                <div className="w-full">
                   <div className="grid grid-cols-7 gap-0.5 text-xs">
                     {["M", "T", "W", "T", "F", "S", "S"].map((day, i) => (
                       <div
@@ -478,7 +493,7 @@ function PlayerAttendanceHistoryPage() {
                           title={cal.tooltip || ""}
                           onClick={() => openDayHistory(cal.date)}
                           disabled={cal.status === "NONE"}
-                          className={`w-8 h-8 rounded text-[11px] font-semibold ${bgColor} ${
+                          className={`aspect-square w-full rounded text-[11px] font-semibold ${bgColor} ${
                             cal.status !== "NONE"
                               ? "hover:scale-105 cursor-pointer"
                               : "opacity-30 cursor-default"

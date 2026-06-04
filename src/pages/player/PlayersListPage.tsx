@@ -714,7 +714,7 @@ function PlayersListPage() {
                       <img
                         src={getImageUrl(p.photoUrl) || undefined}
                         alt={p.displayName}
-                        className="w-12 h-12 rounded-full object-cover border-2 border-slate-200"
+                        className="w-12 h-12 rounded-full object-cover object-top border-2 border-slate-200"
                         onError={(e) => {
                           e.currentTarget.style.display = "none";
                           (
@@ -849,7 +849,7 @@ function PlayersListPage() {
                           <img
                             src={getImageUrl(p.photoUrl) || undefined}
                             alt={p.displayName}
-                            className="w-10 h-10 rounded-full object-cover border-2 border-slate-200"
+                            className="w-10 h-10 rounded-full object-cover object-top border-2 border-slate-200"
                             onError={(e) => {
                               e.currentTarget.style.display = "none";
                               (

@@ -5,6 +5,7 @@ import { toast } from "react-hot-toast";
 import api from "../../api/axios";
 import PlayerForm from "../../components/player/PlayerForm";
 import type { PlayerFormData } from "../../api/playerService/playerService";
+import { getImageUrl } from "../../utils/imageUrl";
 
 function UpdatePlayer() {
   const navigate = useNavigate();
@@ -76,7 +77,7 @@ function UpdatePlayer() {
         }
 
         if (res.data.photoUrl) {
-          setPhotoPreview(res.data.photoUrl);
+          setPhotoPreview(getImageUrl(res.data.photoUrl) || "");
         }
       })
       .catch(() => {
