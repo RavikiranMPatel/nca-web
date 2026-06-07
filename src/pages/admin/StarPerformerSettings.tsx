@@ -137,99 +137,103 @@ const StarPerformerSettings = () => {
   const isEnabled = settings.SECTION_STAR_PERFORMER_ENABLED === "true";
 
   return (
-    <div className="max-w-4xl mx-auto">
-      <div className="bg-white rounded-lg shadow-md p-6">
-        <div className="mb-6">
-          <h2 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
-            <Star className="w-6 h-6 text-yellow-500" />
-            Star Performer Settings
-          </h2>
-          <PresenceBanner
-            entity="branches-tab"
-            id={academyId ?? undefined}
-          />{" "}
-          <p className="text-gray-600 mt-1">
-            Showcase your academy's outstanding performer
-          </p>
+    <div className="space-y-5">
+      {/* Header */}
+      <div>
+        <h2 className="text-base sm:text-lg font-bold text-gray-900 flex items-center gap-2 tracking-tight">
+          <Star className="w-5 h-5 text-yellow-500 flex-shrink-0" />
+          Star Performer Settings
+        </h2>
+        <PresenceBanner
+          entity="branches-tab"
+          id={academyId ?? undefined}
+        />
+        <p className="text-sm text-gray-500 mt-0.5">
+          Showcase your academy's outstanding performer
+        </p>
+      </div>
+
+      {/* Message Alert */}
+      {message.text && (
+        <div
+          className={`p-4 rounded-xl flex items-center gap-3 text-sm shadow-sm ${
+            message.type === "success"
+              ? "bg-green-50 text-green-800 border border-green-200"
+              : "bg-red-50 text-red-800 border border-red-200"
+          }`}
+        >
+          {message.type === "success" ? (
+            <CheckCircle className="w-5 h-5 flex-shrink-0" />
+          ) : (
+            <AlertCircle className="w-5 h-5 flex-shrink-0" />
+          )}
+          <span className="font-medium">{message.text}</span>
         </div>
+      )}
 
-        {/* Message Alert */}
-        {message.text && (
-          <div
-            className={`mb-6 p-4 rounded-lg flex items-center gap-3 animate-fade-in ${
-              message.type === "success"
-                ? "bg-green-50 text-green-800 border border-green-200"
-                : "bg-red-50 text-red-800 border border-red-200"
-            }`}
-          >
-            {message.type === "success" ? (
-              <CheckCircle className="w-5 h-5 flex-shrink-0" />
-            ) : (
-              <AlertCircle className="w-5 h-5 flex-shrink-0" />
-            )}
-            <span className="font-medium">{message.text}</span>
-          </div>
-        )}
-
-        <div className="space-y-6">
-          {/* Enable/Disable Toggle */}
-
-          <label className="flex items-center justify-between p-4 border rounded-lg bg-gray-50 cursor-pointer">
-            <div>
-              <span className="font-medium">Section Enabled</span>
-              <p className="text-sm text-gray-500">
-                Star Performer section is visible on home page
-              </p>
-            </div>
-            <input
-              type="checkbox"
-              checked={isEnabled}
-              onChange={(e) =>
-                handleChange("SECTION_STAR_PERFORMER_ENABLED", e.target.checked)
-              }
-              className="w-5 h-5 text-blue-600 rounded"
-            />
-          </label>
-
-          {/* Heading */}
+      <div className="bg-white rounded-xl border border-gray-200 shadow-sm divide-y divide-gray-100">
+        {/* Toggle */}
+        <label className="flex items-center justify-between p-4 sm:p-5 cursor-pointer hover:bg-gray-50 transition rounded-t-xl">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Page Heading (Customizable)
-            </label>
-            <input
-              type="text"
-              value={settings.STAR_PERFORMER_HEADING}
-              onChange={(e) =>
-                handleChange("STAR_PERFORMER_HEADING", e.target.value)
-              }
-              placeholder="Star Performer of the Week"
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-            />
-            <p className="text-xs text-gray-500 mt-1">
-              Examples: "Star Performer of the Week", "Player of the Month",
-              "Champion of the Year"
+            <span className="font-semibold text-sm text-gray-800 block">Section Enabled</span>
+            <p className="text-xs text-gray-500 mt-0.5">
+              Star Performer section is visible on home page
             </p>
           </div>
+          <input
+            type="checkbox"
+            checked={isEnabled}
+            onChange={(e) =>
+              handleChange("SECTION_STAR_PERFORMER_ENABLED", e.target.checked)
+            }
+            className="w-5 h-5 text-blue-600 rounded accent-blue-600 flex-shrink-0"
+          />
+        </label>
 
-          {/* Subheading */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Subheading
-            </label>
-            <input
-              type="text"
-              value={settings.STAR_PERFORMER_SUBHEADING}
-              onChange={(e) =>
-                handleChange("STAR_PERFORMER_SUBHEADING", e.target.value)
-              }
-              placeholder="Celebrating excellence and dedication"
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-            />
+        {/* Heading & Subheading */}
+        <div className="p-4 sm:p-5 space-y-4">
+          <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wide">Section Labels</h3>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-xs font-semibold text-gray-600 mb-1.5">
+                Page Heading
+              </label>
+              <input
+                type="text"
+                value={settings.STAR_PERFORMER_HEADING}
+                onChange={(e) =>
+                  handleChange("STAR_PERFORMER_HEADING", e.target.value)
+                }
+                placeholder="Star Performer of the Week"
+                className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:outline-none text-sm transition"
+              />
+              <p className="text-xs text-gray-400 mt-1">
+                e.g. "Player of the Month", "Champion of the Year"
+              </p>
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-gray-600 mb-1.5">
+                Subheading
+              </label>
+              <input
+                type="text"
+                value={settings.STAR_PERFORMER_SUBHEADING}
+                onChange={(e) =>
+                  handleChange("STAR_PERFORMER_SUBHEADING", e.target.value)
+                }
+                placeholder="Celebrating excellence and dedication"
+                className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:outline-none text-sm transition"
+              />
+            </div>
           </div>
+        </div>
 
-          {/* Performer Name */}
+        {/* Performer Details */}
+        <div className="p-4 sm:p-5 space-y-4">
+          <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wide">Performer Details</h3>
+
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <label className="block text-xs font-semibold text-gray-600 mb-1.5">
               Performer Name *
             </label>
             <input
@@ -239,16 +243,15 @@ const StarPerformerSettings = () => {
                 handleChange("STAR_PERFORMER_NAME", e.target.value)
               }
               placeholder="Rahul Sharma"
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:outline-none text-sm transition"
             />
-            <p className="text-xs text-gray-500 mt-1">
+            <p className="text-xs text-gray-400 mt-1">
               Required to display the performer on home page
             </p>
           </div>
 
-          {/* Achievement */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <label className="block text-xs font-semibold text-gray-600 mb-1.5">
               Achievement / Description *
             </label>
             <textarea
@@ -256,78 +259,77 @@ const StarPerformerSettings = () => {
               onChange={(e) =>
                 handleChange("STAR_PERFORMER_ACHIEVEMENT", e.target.value)
               }
-              placeholder="Scored a brilliant century in the district championship finals. Showed exceptional technique and temperament under pressure. Selected for state-level trials."
+              placeholder="Scored a brilliant century in the district championship finals…"
               rows={5}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:outline-none text-sm transition resize-none"
             />
-          </div>
-
-          {/* Photo Upload */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Performer Photo
-            </label>
-            <div className="space-y-4">
-              {settings.STAR_PERFORMER_PHOTO_URL && (
-                <div className="flex justify-center">
-                  <div className="relative">
-                    <img
-                      src={getImageUrl(settings.STAR_PERFORMER_PHOTO_URL) || ""}
-                      alt="Star Performer"
-                      className="w-48 h-48 object-cover rounded-lg shadow-lg"
-                    />
-                    <div className="absolute -top-2 -right-2 bg-green-500 text-white rounded-full p-1">
-                      <CheckCircle size={16} />
-                    </div>
-                  </div>
-                </div>
-              )}
-              <label
-                className={`flex items-center justify-center gap-2 px-4 py-3 rounded-lg cursor-pointer transition border-2 border-dashed ${
-                  uploading
-                    ? "bg-gray-100 border-gray-300 cursor-not-allowed"
-                    : "bg-blue-50 text-blue-600 border-blue-300 hover:bg-blue-100"
-                }`}
-              >
-                <Upload className="w-5 h-5" />
-                <span className="font-medium">
-                  {uploading
-                    ? "Uploading..."
-                    : settings.STAR_PERFORMER_PHOTO_URL
-                      ? "Change Photo"
-                      : "Upload Photo"}
-                </span>
-                <input
-                  type="file"
-                  accept="image/*"
-                  onChange={handlePhotoUpload}
-                  disabled={uploading}
-                  className="hidden"
-                />
-              </label>
-              <p className="text-xs text-gray-500 text-center">
-                Recommended: Square image, at least 400x400px. Max 5MB.
-              </p>
-            </div>
           </div>
         </div>
 
-        {/* Save Button */}
-        <div className="mt-8 flex justify-end gap-3">
+        {/* Photo Upload */}
+        <div className="p-4 sm:p-5 space-y-4">
+          <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wide">Performer Photo</h3>
+
+          <div className="space-y-3">
+            {settings.STAR_PERFORMER_PHOTO_URL && (
+              <div className="flex justify-center">
+                <div className="relative">
+                  <img
+                    src={getImageUrl(settings.STAR_PERFORMER_PHOTO_URL) || ""}
+                    alt="Star Performer"
+                    className="w-40 h-40 sm:w-48 sm:h-48 object-cover rounded-xl shadow-md border border-gray-100"
+                  />
+                  <div className="absolute -top-2 -right-2 bg-green-500 text-white rounded-full p-1">
+                    <CheckCircle size={14} />
+                  </div>
+                </div>
+              </div>
+            )}
+            <label
+              className={`flex items-center justify-center gap-2 px-4 py-3 rounded-xl cursor-pointer transition border-2 border-dashed text-sm font-medium ${
+                uploading
+                  ? "bg-gray-50 border-gray-200 cursor-not-allowed text-gray-400"
+                  : "bg-blue-50 text-blue-600 border-blue-300 hover:bg-blue-100"
+              }`}
+            >
+              <Upload className="w-4 h-4" />
+              <span>
+                {uploading
+                  ? "Uploading…"
+                  : settings.STAR_PERFORMER_PHOTO_URL
+                    ? "Change Photo"
+                    : "Upload Photo"}
+              </span>
+              <input
+                type="file"
+                accept="image/*"
+                onChange={handlePhotoUpload}
+                disabled={uploading}
+                className="hidden"
+              />
+            </label>
+            <p className="text-xs text-gray-400 text-center">
+              Recommended: Square image, at least 400×400px. Max 5MB.
+            </p>
+          </div>
+        </div>
+
+        {/* Save Buttons */}
+        <div className="px-4 sm:px-5 py-4 flex justify-end gap-3 bg-gray-50 rounded-b-xl">
           <button
             onClick={loadSettings}
             disabled={saving}
-            className="px-6 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition"
+            className="px-5 py-2.5 border border-gray-300 text-gray-700 rounded-lg text-sm font-semibold hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition"
           >
-            Cancel
+            Reset
           </button>
           <button
             onClick={handleSave}
             disabled={saving || uploading}
-            className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center gap-2 transition-colors shadow-md hover:shadow-lg"
+            className="flex items-center gap-2 px-6 py-2.5 bg-blue-600 text-white rounded-lg text-sm font-semibold hover:bg-blue-700 active:bg-blue-800 disabled:bg-gray-400 disabled:cursor-not-allowed transition shadow-sm"
           >
-            <Save className="w-5 h-5" />
-            {saving ? "Saving..." : "Save Changes"}
+            <Save className="w-4 h-4" />
+            {saving ? "Saving…" : "Save Changes"}
           </button>
         </div>
       </div>

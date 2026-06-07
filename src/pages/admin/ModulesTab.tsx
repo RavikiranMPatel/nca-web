@@ -121,19 +121,19 @@ export default function ModulesTab() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       <div>
-        <h2 className="text-base font-semibold text-gray-900">
+        <h2 className="text-base sm:text-lg font-bold text-gray-900 tracking-tight">
           Module Visibility
         </h2>
-        <p className="text-xs text-gray-500 mt-0.5">
+        <p className="text-sm text-gray-500 mt-0.5">
           Control which features appear on the admin dashboard.
         </p>
       </div>
 
       {MODULE_GROUPS.map((group) => (
         <div key={group.label}>
-          <p className="text-[10px] font-semibold uppercase tracking-widest text-gray-400 mb-2 pb-1.5 border-b border-gray-200">
+          <p className="text-xs font-bold uppercase tracking-widest text-gray-400 mb-2 pb-1.5 border-b border-gray-200">
             {group.label}
           </p>
           <div className="space-y-2">
@@ -142,9 +142,9 @@ export default function ModulesTab() {
               return (
                 <label
                   key={key}
-                  className={`flex items-center justify-between p-3 rounded-lg border cursor-pointer transition ${
+                  className={`flex items-center justify-between p-3 sm:p-4 rounded-xl border cursor-pointer transition ${
                     enabled
-                      ? "bg-white border-gray-200"
+                      ? "bg-white border-gray-200 shadow-sm hover:border-blue-200"
                       : "bg-gray-50 border-gray-200 opacity-60"
                   }`}
                 >
@@ -155,17 +155,17 @@ export default function ModulesTab() {
                       }`}
                     />
                     <div>
-                      <span className="font-medium text-sm text-gray-900">
+                      <span className="font-semibold text-sm text-gray-900">
                         {label}
                       </span>
-                      <p className="text-xs text-gray-500">{description}</p>
+                      <p className="text-xs text-gray-500 mt-0.5">{description}</p>
                     </div>
                   </div>
                   <input
                     type="checkbox"
                     checked={enabled}
                     onChange={(e) => handleToggle(key, e.target.checked)}
-                    className="w-5 h-5 text-blue-600 rounded flex-shrink-0"
+                    className="w-5 h-5 text-blue-600 rounded flex-shrink-0 accent-blue-600"
                   />
                 </label>
               );

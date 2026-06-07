@@ -55,98 +55,111 @@ export default function InstagramSettings() {
   };
 
   return (
-    <div className="space-y-6">
-      <h2 className="text-lg font-semibold">Instagram Posts Section</h2>
-
-      <label className="flex items-center justify-between p-4 border rounded-lg bg-gray-50 cursor-pointer">
-        <div>
-          <span className="font-medium">Section Enabled</span>
-          <p className="text-sm text-gray-500">
-            Instagram section visible on home page
-          </p>
-          <PresenceBanner
-            entity="branches-tab"
-            id={academyId ?? undefined}
-          />{" "}
-        </div>
-        <input
-          type="checkbox"
-          checked={enabled}
-          onChange={(e) => setEnabled(e.target.checked)}
-          className="w-5 h-5 text-blue-600 rounded"
-        />
-      </label>
-
+    <div className="space-y-5">
+      {/* Header */}
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">
-          Section Heading
-        </label>
-        <input
-          type="text"
-          value={heading}
-          onChange={(e) => setHeading(e.target.value)}
-          className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
-        />
-      </div>
-
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">
-          Section Subheading
-        </label>
-        <input
-          type="text"
-          value={subheading}
-          onChange={(e) => setSubheading(e.target.value)}
-          className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
-        />
-      </div>
-
-      <div className="border-t pt-5 space-y-4">
-        <div className="flex items-center gap-2">
-          <Instagram size={18} className="text-pink-600" />
-          <h3 className="font-medium">Post / Reel URLs</h3>
-        </div>
-        <p className="text-sm text-gray-500">
-          Paste Instagram post or Reel URLs. Examples:
-          <br />
-          <code className="bg-gray-100 px-1 rounded text-xs">
-            https://www.instagram.com/p/XXXX/
-          </code>
-          <br />
-          <code className="bg-gray-100 px-1 rounded text-xs">
-            https://www.instagram.com/reel/XXXX/
-          </code>
+        <h2 className="text-base sm:text-lg font-bold text-gray-900 flex items-center gap-2 tracking-tight">
+          <Instagram className="w-5 h-5 text-pink-600 flex-shrink-0" />
+          Instagram Posts Section
+        </h2>
+        <PresenceBanner entity="branches-tab" id={academyId ?? undefined} />
+        <p className="text-sm text-gray-500 mt-0.5">
+          Configure the Instagram feed section on your homepage
         </p>
-
-        {posts.map((url, i) => (
-          <div key={i}>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Post {i + 1}
-            </label>
-            <input
-              type="url"
-              value={url}
-              onChange={(e) => {
-                const updated = [...posts];
-                updated[i] = e.target.value;
-                setPosts(updated);
-              }}
-              placeholder="https://www.instagram.com/reel/..."
-              className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
-            />
-          </div>
-        ))}
       </div>
 
-      <div className="flex justify-end pt-2">
-        <button
-          onClick={handleSave}
-          disabled={saving}
-          className="flex items-center gap-2 bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition disabled:opacity-50"
-        >
-          <Save size={16} />
-          {saving ? "Saving..." : "Save"}
-        </button>
+      <div className="bg-white rounded-xl border border-gray-200 shadow-sm divide-y divide-gray-100">
+        {/* Toggle */}
+        <label className="flex items-center justify-between p-4 sm:p-5 cursor-pointer hover:bg-gray-50 transition rounded-t-xl">
+          <div>
+            <span className="font-semibold text-sm text-gray-800 block">Section Enabled</span>
+            <p className="text-xs text-gray-500 mt-0.5">
+              Instagram section visible on home page
+            </p>
+          </div>
+          <input
+            type="checkbox"
+            checked={enabled}
+            onChange={(e) => setEnabled(e.target.checked)}
+            className="w-5 h-5 text-blue-600 rounded accent-blue-600 flex-shrink-0"
+          />
+        </label>
+
+        {/* Heading & Subheading */}
+        <div className="p-4 sm:p-5 space-y-4">
+          <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wide">Section Labels</h3>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-xs font-semibold text-gray-600 mb-1.5">
+                Section Heading
+              </label>
+              <input
+                type="text"
+                value={heading}
+                onChange={(e) => setHeading(e.target.value)}
+                className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:outline-none text-sm transition"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-gray-600 mb-1.5">
+                Section Subheading
+              </label>
+              <input
+                type="text"
+                value={subheading}
+                onChange={(e) => setSubheading(e.target.value)}
+                className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:outline-none text-sm transition"
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* Post URLs */}
+        <div className="p-4 sm:p-5 space-y-4">
+          <div className="flex items-center gap-2">
+            <Instagram size={15} className="text-pink-600 flex-shrink-0" />
+            <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wide">Post / Reel URLs</h3>
+          </div>
+          <p className="text-xs text-gray-400">
+            Paste Instagram post or Reel URLs:&nbsp;
+            <code className="bg-gray-100 px-1.5 py-0.5 rounded font-mono">instagram.com/p/XXXX/</code>
+            &nbsp;or&nbsp;
+            <code className="bg-gray-100 px-1.5 py-0.5 rounded font-mono">instagram.com/reel/XXXX/</code>
+          </p>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {posts.map((url, i) => (
+              <div key={i}>
+                <label className="block text-xs font-semibold text-gray-600 mb-1.5">
+                  Post {i + 1}
+                </label>
+                <input
+                  type="url"
+                  value={url}
+                  onChange={(e) => {
+                    const updated = [...posts];
+                    updated[i] = e.target.value;
+                    setPosts(updated);
+                  }}
+                  placeholder="https://www.instagram.com/reel/..."
+                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:outline-none text-sm transition"
+                />
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Save */}
+        <div className="px-4 sm:px-5 py-4 flex justify-end bg-gray-50 rounded-b-xl">
+          <button
+            onClick={handleSave}
+            disabled={saving}
+            className="flex items-center gap-2 px-6 py-2.5 bg-blue-600 text-white rounded-lg text-sm font-semibold hover:bg-blue-700 active:bg-blue-800 disabled:bg-gray-400 disabled:cursor-not-allowed transition shadow-sm"
+          >
+            <Save size={15} />
+            {saving ? "Saving…" : "Save Changes"}
+          </button>
+        </div>
       </div>
     </div>
   );

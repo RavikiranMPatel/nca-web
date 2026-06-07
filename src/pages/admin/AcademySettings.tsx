@@ -270,8 +270,11 @@ function AcademySettings() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-[60vh]">
-        <div className="w-8 h-8 border-4 border-slate-200 border-t-blue-600 rounded-full animate-spin" />
+      <div className="flex items-center justify-center min-h-[60vh] bg-gray-50">
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-9 h-9 border-4 border-slate-200 border-t-blue-600 rounded-full animate-spin" />
+          <p className="text-sm text-gray-400">Loading settings…</p>
+        </div>
       </div>
     );
   }
@@ -279,18 +282,18 @@ function AcademySettings() {
   const showSaveButton = activeTab === "general" || activeTab === "branding";
 
   return (
-    <div className="max-w-5xl mx-auto space-y-4 pb-24">
+    <div className="max-w-5xl mx-auto space-y-4 pb-28 px-3 sm:px-4 md:px-0">
       {/* ── HEADER ── */}
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-3 bg-white rounded-xl border border-gray-200 shadow-sm px-4 py-3">
         <button
           onClick={() => navigate("/admin")}
-          className="p-2 hover:bg-gray-100 rounded-lg transition flex-shrink-0"
+          className="p-2 hover:bg-gray-100 rounded-lg transition flex-shrink-0 text-gray-600"
         >
           <ArrowLeft size={20} />
         </button>
         <div className="flex-1 min-w-0">
-          <h1 className="text-lg md:text-2xl font-bold">Academy Settings</h1>
-          <p className="text-xs text-gray-500">
+          <h1 className="text-base sm:text-lg md:text-xl font-bold text-gray-900 leading-tight">Academy Settings</h1>
+          <p className="text-xs text-gray-500 hidden sm:block">
             Configure your academy information and content
           </p>
         </div>
@@ -298,36 +301,36 @@ function AcademySettings() {
           <button
             onClick={handleSave}
             disabled={saving}
-            className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition disabled:opacity-50 text-sm font-medium flex-shrink-0"
+            className="hidden md:flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 active:bg-blue-800 transition disabled:opacity-50 text-sm font-medium flex-shrink-0 shadow-sm"
           >
             <Save size={15} />
-            {saving ? "Saving..." : "Save"}
+            {saving ? "Saving…" : "Save"}
           </button>
         )}
       </div>
 
       {/* ── SIDEBAR + CONTENT ── */}
-      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-        <div className="flex min-h-[600px]">
+      <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+        <div className="flex flex-col md:flex-row min-h-[600px]">
           {/* ── LEFT SIDEBAR — desktop only ── */}
-          <aside className="hidden md:flex w-52 flex-shrink-0 flex-col border-r border-gray-200 bg-gray-50 overflow-y-auto">
+          <aside className="hidden md:flex w-56 flex-shrink-0 flex-col border-r border-gray-200 bg-gray-50/80 overflow-y-auto">
             {NAV_GROUPS.map((group) => (
-              <div key={group.label}>
-                <p className="px-4 pt-4 pb-1 text-[10px] font-semibold uppercase tracking-widest text-gray-400">
+              <div key={group.label} className="pb-2">
+                <p className="px-4 pt-5 pb-1.5 text-[10px] font-bold uppercase tracking-widest text-gray-400">
                   {group.label}
                 </p>
                 {group.tabs.map(({ key, label, icon }) => (
                   <button
                     key={key}
                     onClick={() => setActiveTab(key)}
-                    className={`w-full flex items-center gap-2.5 px-4 py-2 text-sm text-left transition border-l-2 ${
+                    className={`w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-left transition-all border-l-2 ${
                       activeTab === key
-                        ? "border-blue-600 text-blue-600 font-medium bg-white"
-                        : "border-transparent text-gray-500 hover:text-gray-800 hover:bg-white"
+                        ? "border-blue-600 text-blue-700 font-semibold bg-white shadow-sm"
+                        : "border-transparent text-gray-500 hover:text-gray-800 hover:bg-white/70"
                     }`}
                   >
-                    <i className={`ti ${icon} text-base`} aria-hidden="true" />
-                    {label}
+                    <i className={`ti ${icon} text-base flex-shrink-0`} aria-hidden="true" />
+                    <span className="truncate">{label}</span>
                   </button>
                 ))}
               </div>
@@ -335,16 +338,16 @@ function AcademySettings() {
           </aside>
 
           {/* ── MOBILE: horizontal scroll strip ── */}
-          <div className="md:hidden w-full border-b overflow-x-auto">
-            <nav className="flex min-w-max">
+          <div className="md:hidden w-full border-b border-gray-200 bg-gray-50 overflow-x-auto">
+            <nav className="flex min-w-max px-2">
               {NAV_GROUPS.flatMap((g) => g.tabs).map(({ key, label }) => (
                 <button
                   key={key}
                   onClick={() => setActiveTab(key)}
-                  className={`py-2.5 px-3 text-xs font-medium border-b-2 transition whitespace-nowrap ${
+                  className={`py-3 px-3.5 text-xs font-medium border-b-2 transition whitespace-nowrap ${
                     activeTab === key
-                      ? "border-blue-600 text-blue-600"
-                      : "border-transparent text-gray-500 hover:text-blue-600"
+                      ? "border-blue-600 text-blue-600 font-semibold"
+                      : "border-transparent text-gray-500 hover:text-gray-700"
                   }`}
                 >
                   {label}
@@ -354,22 +357,22 @@ function AcademySettings() {
           </div>
 
           {/* ── TAB CONTENT ── */}
-          <div className="flex-1 p-4 md:p-6 overflow-y-auto min-w-0">
+          <div className="flex-1 p-4 sm:p-5 md:p-7 overflow-y-auto min-w-0">
             {activeTab === "general" && (
               <div className="space-y-6">
-                <h2 className="text-base md:text-lg font-semibold">
+                <h2 className="text-base md:text-lg font-bold text-gray-900 tracking-tight">
                   General Settings
                 </h2>
                 <PresenceBanner
                   entity="academy-general"
                   id={academyId ?? undefined}
                 />
-                <label className="flex items-center justify-between p-4 border rounded-lg bg-gray-50 cursor-pointer">
+                <label className="flex items-center justify-between p-4 border border-gray-200 rounded-xl bg-gray-50 hover:bg-gray-100 transition cursor-pointer shadow-sm">
                   <div>
-                    <span className="font-medium text-sm">
+                    <span className="font-semibold text-sm text-gray-800">
                       🏏 Cricket Stats Leaderboard
                     </span>
-                    <p className="text-xs text-gray-500">
+                    <p className="text-xs text-gray-500 mt-0.5">
                       Show public cricket batting & bowling leaderboard on home
                       page
                     </p>
@@ -384,7 +387,7 @@ function AcademySettings() {
                         e.target.checked,
                       );
                     }}
-                    className="w-5 h-5 text-blue-600 rounded"
+                    className="w-5 h-5 text-blue-600 rounded accent-blue-600"
                   />
                 </label>
                 <div>
@@ -396,7 +399,7 @@ function AcademySettings() {
                     value={academyName}
                     onChange={(e) => setAcademyName(e.target.value)}
                     placeholder="NCA Cricket Academy"
-                    className="w-full px-4 py-2.5 border rounded-lg focus:ring-2 focus:ring-blue-500 text-sm"
+                    className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:outline-none text-sm bg-white transition"
                   />
                 </div>
                 <div>
@@ -411,7 +414,7 @@ function AcademySettings() {
                     }
                     placeholder="NCA"
                     maxLength={10}
-                    className="w-full px-4 py-2.5 border rounded-lg focus:ring-2 focus:ring-blue-500 text-sm"
+                    className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:outline-none text-sm bg-white transition"
                   />
                   <p className="text-xs text-gray-500 mt-1">
                     Short code for your academy (max 10 characters)
@@ -426,7 +429,7 @@ function AcademySettings() {
                     value={contactEmail}
                     onChange={(e) => setContactEmail(e.target.value)}
                     placeholder="academy@example.com"
-                    className="w-full px-4 py-2.5 border rounded-lg focus:ring-2 focus:ring-blue-500 text-sm"
+                    className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:outline-none text-sm bg-white transition"
                   />
                   <p className="text-xs text-gray-500 mt-1">
                     Used as the sender address for all outgoing emails
@@ -440,15 +443,15 @@ function AcademySettings() {
                     type="tel"
                     value={adminPhone}
                     onChange={(e) => setAdminPhone(e.target.value)}
-                    className="w-full px-4 py-2.5 border rounded-lg focus:ring-2 focus:ring-blue-500 text-sm"
+                    className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:outline-none text-sm bg-white transition"
                   />
                   <p className="text-xs text-gray-500 mt-1">
                     Used to receive WhatsApp notifications. Include country
                     code.
                   </p>
                 </div>
-                <div className="border-t pt-6">
-                  <h3 className="text-base font-semibold mb-4">
+                <div className="border-t border-gray-200 pt-6">
+                  <h3 className="text-sm font-bold text-gray-700 uppercase tracking-wide mb-4">
                     💳 Payment Settings
                   </h3>
                   <div className="space-y-4">
@@ -461,7 +464,7 @@ function AcademySettings() {
                         value={upiId}
                         onChange={(e) => setUpiId(e.target.value)}
                         placeholder="yourname@ybl"
-                        className="w-full px-4 py-2.5 border rounded-lg focus:ring-2 focus:ring-blue-500 text-sm"
+                        className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:outline-none text-sm bg-white transition"
                       />
                       <p className="text-xs text-gray-500 mt-1">
                         Shown to users on the payment page
@@ -475,7 +478,7 @@ function AcademySettings() {
                         type="text"
                         value={bookingPhone}
                         onChange={(e) => setBookingPhone(e.target.value)}
-                        className="w-full px-4 py-2.5 border rounded-lg focus:ring-2 focus:ring-blue-500 text-sm"
+                        className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:outline-none text-sm bg-white transition"
                       />
                       <p className="text-xs text-gray-500 mt-1">
                         Phone number users call after paying
@@ -494,11 +497,11 @@ function AcademySettings() {
                     />
                   </div>
                 </div>
-                <div className="border-t pt-6">
-                  <h3 className="text-base font-semibold mb-4">
+                <div className="border-t border-gray-200 pt-6">
+                  <h3 className="text-sm font-bold text-gray-700 uppercase tracking-wide mb-4">
                     📢 Announcement Bar
                   </h3>
-                  <label className="flex items-center justify-between p-4 border rounded-lg bg-gray-50 mb-4 cursor-pointer">
+                  <label className="flex items-center justify-between p-4 border border-gray-200 rounded-xl bg-gray-50 hover:bg-gray-100 transition mb-4 cursor-pointer shadow-sm">
                     <div>
                       <span className="font-medium text-sm">
                         Show Announcement Bar
@@ -511,7 +514,7 @@ function AcademySettings() {
                       type="checkbox"
                       checked={announcementEnabled}
                       onChange={(e) => setAnnouncementEnabled(e.target.checked)}
-                      className="w-5 h-5 text-blue-600 rounded"
+                      className="w-5 h-5 text-blue-600 rounded accent-blue-600"
                     />
                   </label>
                   <div className="mb-4">
@@ -528,7 +531,7 @@ function AcademySettings() {
                         setAnnouncementText(e.target.value.slice(0, 120))
                       }
                       placeholder="🏏 Summer Camp starts March 30! — Limited seats."
-                      className="w-full px-4 py-2.5 border rounded-lg focus:ring-2 focus:ring-blue-500 text-sm"
+                      className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:outline-none text-sm bg-white transition"
                     />
                     <p className="text-xs text-gray-400 mt-1">
                       Max 120 characters. Keep it short for mobile.
@@ -542,7 +545,7 @@ function AcademySettings() {
                       type="date"
                       value={announcementExpiry}
                       onChange={(e) => setAnnouncementExpiry(e.target.value)}
-                      className="w-full px-4 py-2.5 border rounded-lg focus:ring-2 focus:ring-blue-500 text-sm"
+                      className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:outline-none text-sm bg-white transition"
                     />
                     <p className="text-xs text-gray-400 mt-1">
                       Bar disappears automatically after this date. Leave empty
@@ -550,8 +553,8 @@ function AcademySettings() {
                     </p>
                   </div>
                 </div>
-                <div className="border-t pt-6">
-                  <h3 className="text-base font-semibold mb-4">
+                <div className="border-t border-gray-200 pt-6">
+                  <h3 className="text-sm font-bold text-gray-700 uppercase tracking-wide mb-4">
                     Player ID Format
                   </h3>
                   <div className="space-y-4">
@@ -566,7 +569,7 @@ function AcademySettings() {
                           setPlayerIdPrefix(e.target.value.toUpperCase())
                         }
                         placeholder="PLY-NCA"
-                        className="w-full px-4 py-2.5 border rounded-lg focus:ring-2 focus:ring-blue-500 text-sm"
+                        className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:outline-none text-sm bg-white transition"
                       />
                       <p className="text-xs text-gray-500 mt-1">
                         This will be used as the prefix for all player IDs
@@ -580,18 +583,18 @@ function AcademySettings() {
                         type="number"
                         value={playerIdCounter}
                         onChange={(e) => setPlayerIdCounter(e.target.value)}
-                        className="w-full px-4 py-2.5 border rounded-lg focus:ring-2 focus:ring-blue-500 text-sm"
+                        className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:outline-none text-sm bg-white transition"
                       />
                       <p className="text-xs text-gray-500 mt-1">
                         Next player will get ID number:{" "}
                         {parseInt(playerIdCounter) + 1}
                       </p>
                     </div>
-                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                      <p className="text-sm font-medium text-blue-900 mb-2">
-                        Preview Next Player ID:
+                    <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 shadow-sm">
+                      <p className="text-xs font-semibold text-blue-700 uppercase tracking-wide mb-2">
+                        Preview Next Player ID
                       </p>
-                      <div className="text-2xl font-bold text-blue-700">
+                      <div className="text-2xl font-bold text-blue-700 font-mono">
                         {previewId ||
                           `${playerIdPrefix}-${parseInt(playerIdCounter) + 1}`}
                       </div>
@@ -605,17 +608,17 @@ function AcademySettings() {
 
             {activeTab === "branding" && (
               <div className="space-y-8">
-                <h2 className="text-base md:text-lg font-semibold">
+                <h2 className="text-base md:text-lg font-bold text-gray-900 tracking-tight">
                   Branding & Theme Customization
                 </h2>
                 <PresenceBanner
                   entity="academy-branding"
                   id={academyId ?? undefined}
                 />
-                <label className="flex items-center justify-between p-4 border rounded-lg bg-gray-50 cursor-pointer">
+                <label className="flex items-center justify-between p-4 border border-gray-200 rounded-xl bg-gray-50 hover:bg-gray-100 transition cursor-pointer shadow-sm">
                   <div>
-                    <span className="font-medium text-sm">Section Enabled</span>
-                    <p className="text-xs text-gray-500">
+                    <span className="font-semibold text-sm text-gray-800">Section Enabled</span>
+                    <p className="text-xs text-gray-500 mt-0.5">
                       Image slider is visible on home page
                     </p>
                   </div>
@@ -629,7 +632,7 @@ function AcademySettings() {
                         e.target.checked,
                       );
                     }}
-                    className="w-5 h-5 text-blue-600 rounded"
+                    className="w-5 h-5 text-blue-600 rounded accent-blue-600"
                   />
                 </label>
                 <ImageUpload
@@ -642,8 +645,8 @@ function AcademySettings() {
                   label="Academy Logo"
                   helpText="Square image, will be resized to 200x200px. Max 5MB."
                 />
-                <div className="border-t pt-6">
-                  <h3 className="text-base font-semibold mb-4">🎨 Colors</h3>
+                <div className="border-t border-gray-200 pt-6">
+                  <h3 className="text-sm font-bold text-gray-700 uppercase tracking-wide mb-4">🎨 Colors</h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -693,8 +696,8 @@ function AcademySettings() {
                     </div>
                   </div>
                 </div>
-                <div className="border-t pt-6">
-                  <h3 className="text-base font-semibold mb-4">
+                <div className="border-t border-gray-200 pt-6">
+                  <h3 className="text-sm font-bold text-gray-700 uppercase tracking-wide mb-4">
                     🔘 Button Style
                   </h3>
                   <div className="space-y-3">
@@ -746,8 +749,8 @@ function AcademySettings() {
                     ))}
                   </div>
                 </div>
-                <div className="border-t pt-6">
-                  <h3 className="text-base font-semibold mb-4">
+                <div className="border-t border-gray-200 pt-6">
+                  <h3 className="text-sm font-bold text-gray-700 uppercase tracking-wide mb-4">
                     📐 Card Corners
                   </h3>
                   <div className="space-y-3">
@@ -788,8 +791,8 @@ function AcademySettings() {
                     ))}
                   </div>
                 </div>
-                <div className="border-t pt-6">
-                  <h3 className="text-base font-semibold mb-4">
+                <div className="border-t border-gray-200 pt-6">
+                  <h3 className="text-sm font-bold text-gray-700 uppercase tracking-wide mb-4">
                     🌑 Shadow Intensity
                   </h3>
                   <div className="space-y-3">
@@ -848,8 +851,8 @@ function AcademySettings() {
                     ))}
                   </div>
                 </div>
-                <div className="border-t pt-6">
-                  <h3 className="text-base font-semibold mb-4">
+                <div className="border-t border-gray-200 pt-6">
+                  <h3 className="text-sm font-bold text-gray-700 uppercase tracking-wide mb-4">
                     📏 Home Slider Settings
                   </h3>
                   <div className="mb-6">
@@ -905,7 +908,7 @@ function AcademySettings() {
                         type="checkbox"
                         checked={kenBurnsEnabled}
                         onChange={(e) => setKenBurnsEnabled(e.target.checked)}
-                        className="w-5 h-5 text-blue-600 rounded"
+                        className="w-5 h-5 text-blue-600 rounded accent-blue-600"
                       />
                       <div>
                         <span className="font-medium text-sm">
@@ -940,7 +943,7 @@ function AcademySettings() {
                       seconds)
                     </p>
                   </div>
-                  <div className="border-t pt-6">
+                  <div className="border-t border-gray-200 pt-6">
                     <label className="block text-sm font-medium text-gray-700 mb-3">
                       Image Fit Style
                     </label>
@@ -987,9 +990,9 @@ function AcademySettings() {
                     </div>
                   </div>
                 </div>
-                <div className="border-t pt-6">
-                  <h3 className="text-sm font-semibold mb-3">Live Preview</h3>
-                  <div className="space-y-3 bg-gray-50 p-4 md:p-6 rounded-lg">
+                <div className="border-t border-gray-200 pt-6">
+                  <h3 className="text-sm font-bold text-gray-700 uppercase tracking-wide mb-3">Live Preview</h3>
+                  <div className="space-y-4 bg-gray-50 border border-gray-200 p-4 sm:p-6 rounded-xl">
                     {logoUrl && (
                       <div>
                         <p className="text-xs text-gray-600 mb-2">Logo:</p>
@@ -1068,7 +1071,7 @@ function AcademySettings() {
 
             {activeTab === "facilities" && (
               <div>
-                <label className="flex items-center justify-between p-4 border rounded-lg bg-gray-50 mb-6 cursor-pointer">
+                <label className="flex items-center justify-between p-4 border border-gray-200 rounded-xl bg-gray-50 hover:bg-gray-100 transition mb-6 cursor-pointer shadow-sm">
                   <div>
                     <span className="font-medium text-sm">Section Enabled</span>
                     <p className="text-xs text-gray-500">
@@ -1085,7 +1088,7 @@ function AcademySettings() {
                         e.target.checked,
                       );
                     }}
-                    className="w-5 h-5 text-blue-600 rounded"
+                    className="w-5 h-5 text-blue-600 rounded accent-blue-600"
                   />
                 </label>
                 <FacilitiesManager />
@@ -1094,7 +1097,7 @@ function AcademySettings() {
 
             {activeTab === "testimonials" && (
               <div>
-                <label className="flex items-center justify-between p-4 border rounded-lg bg-gray-50 mb-6 cursor-pointer">
+                <label className="flex items-center justify-between p-4 border border-gray-200 rounded-xl bg-gray-50 hover:bg-gray-100 transition mb-6 cursor-pointer shadow-sm">
                   <div>
                     <span className="font-medium text-sm">Section Enabled</span>
                     <p className="text-xs text-gray-500">
@@ -1111,7 +1114,7 @@ function AcademySettings() {
                         e.target.checked,
                       );
                     }}
-                    className="w-5 h-5 text-blue-600 rounded"
+                    className="w-5 h-5 text-blue-600 rounded accent-blue-600"
                   />
                 </label>
                 <TestimonialsManager />
@@ -1120,7 +1123,7 @@ function AcademySettings() {
 
             {activeTab === "news" && (
               <div>
-                <label className="flex items-center justify-between p-4 border rounded-lg bg-gray-50 mb-6 cursor-pointer">
+                <label className="flex items-center justify-between p-4 border border-gray-200 rounded-xl bg-gray-50 hover:bg-gray-100 transition mb-6 cursor-pointer shadow-sm">
                   <div>
                     <span className="font-medium text-sm">Section Enabled</span>
                     <p className="text-xs text-gray-500">
@@ -1137,7 +1140,7 @@ function AcademySettings() {
                         e.target.checked,
                       );
                     }}
-                    className="w-5 h-5 text-blue-600 rounded"
+                    className="w-5 h-5 text-blue-600 rounded accent-blue-600"
                   />
                 </label>
                 <NewsManager />
@@ -1149,7 +1152,7 @@ function AcademySettings() {
 
             {activeTab === "gallery" && (
               <div>
-                <label className="flex items-center justify-between p-4 border rounded-lg bg-gray-50 mb-6 cursor-pointer">
+                <label className="flex items-center justify-between p-4 border border-gray-200 rounded-xl bg-gray-50 hover:bg-gray-100 transition mb-6 cursor-pointer shadow-sm">
                   <div>
                     <span className="font-medium text-sm">Section Enabled</span>
                     <p className="text-xs text-gray-500">
@@ -1166,7 +1169,7 @@ function AcademySettings() {
                         e.target.checked,
                       );
                     }}
-                    className="w-5 h-5 text-blue-600 rounded"
+                    className="w-5 h-5 text-blue-600 rounded accent-blue-600"
                   />
                 </label>
                 <GalleryManager />
@@ -1175,7 +1178,7 @@ function AcademySettings() {
 
             {activeTab === "team" && (
               <div>
-                <label className="flex items-center justify-between p-4 border rounded-lg bg-gray-50 mb-6 cursor-pointer">
+                <label className="flex items-center justify-between p-4 border border-gray-200 rounded-xl bg-gray-50 hover:bg-gray-100 transition mb-6 cursor-pointer shadow-sm">
                   <div>
                     <span className="font-medium text-sm">Section Enabled</span>
                     <p className="text-xs text-gray-500">
@@ -1192,7 +1195,7 @@ function AcademySettings() {
                         e.target.checked,
                       );
                     }}
-                    className="w-5 h-5 text-blue-600 rounded"
+                    className="w-5 h-5 text-blue-600 rounded accent-blue-600"
                   />
                 </label>
                 <TeamMembersAdmin />
@@ -1209,18 +1212,18 @@ function AcademySettings() {
       </div>
 
       {showSaveButton && (
-        <div className="md:hidden fixed bottom-16 left-0 right-0 z-20 px-4">
-          <div className="bg-white p-3 rounded-2xl shadow-lg border border-gray-200 flex gap-2">
+        <div className="md:hidden fixed bottom-16 left-0 right-0 z-20 px-3 sm:px-4">
+          <div className="bg-white/95 backdrop-blur-sm p-3 rounded-2xl shadow-xl border border-gray-200 flex gap-2">
             <Button variant="secondary" onClick={() => navigate("/admin")}>
               Cancel
             </Button>
             <button
               onClick={handleSave}
               disabled={saving}
-              className="flex-1 flex items-center justify-center gap-2 bg-blue-600 text-white px-6 py-2.5 rounded-lg hover:bg-blue-700 transition disabled:opacity-50 text-sm font-medium"
+              className="flex-1 flex items-center justify-center gap-2 bg-blue-600 text-white px-6 py-2.5 rounded-lg hover:bg-blue-700 active:bg-blue-800 transition disabled:opacity-50 text-sm font-semibold shadow-sm"
             >
               <Save size={16} />
-              {saving ? "Saving..." : "Save Settings"}
+              {saving ? "Saving…" : "Save Settings"}
             </button>
           </div>
         </div>

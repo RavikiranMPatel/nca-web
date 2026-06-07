@@ -130,38 +130,39 @@ const FacilitiesManager = () => {
   }
 
   return (
-    <div className="max-w-6xl mx-auto">
+    <div className="space-y-5">
       {/* Header */}
-      <div className="bg-white rounded-lg shadow-md p-6 mb-6">
-        <div className="flex justify-between items-center">
+      <div className="bg-white rounded-xl border border-slate-200 shadow-sm px-4 py-4">
+        <div className="flex items-start justify-between gap-3">
           <div>
-            <h2 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
-              <Award className="w-6 h-6 text-blue-600" />
+            <h2 className="text-base sm:text-lg font-bold text-gray-900 flex items-center gap-2 tracking-tight">
+              <Award className="w-5 h-5 text-blue-600 flex-shrink-0" />
               Facilities Management
             </h2>
-            <p className="text-gray-600 mt-1">
-              Manage the facilities showcased on your homepage
-            </p>
             <PresenceBanner
               entity="facilities-manager"
               id={academyId ?? undefined}
             />
+            <p className="text-sm text-gray-500 mt-0.5">
+              Manage the facilities showcased on your homepage
+            </p>
           </div>
           <button
             onClick={handleAdd}
             disabled={isAdding || !!editingId}
-            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center gap-2"
+            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-semibold hover:bg-blue-700 active:bg-blue-800 disabled:bg-gray-300 disabled:cursor-not-allowed transition shadow-sm flex-shrink-0"
           >
-            <Plus className="w-5 h-5" />
-            Add Facility
+            <Plus className="w-4 h-4" />
+            <span className="hidden sm:inline">Add Facility</span>
+            <span className="sm:hidden">Add</span>
           </button>
         </div>
       </div>
 
       {/* Add/Edit Form */}
       {(isAdding || editingId) && (
-        <div className="bg-white rounded-lg shadow-md p-6 mb-6 border-2 border-blue-200">
-          <h3 className="text-lg font-semibold mb-4">
+        <div className="bg-white rounded-xl border-2 border-blue-200 shadow-sm p-4 sm:p-5">
+          <h3 className="text-sm font-bold text-gray-700 uppercase tracking-wide mb-4">
             {isAdding ? "Add New Facility" : "Edit Facility"}
           </h3>
 
@@ -169,7 +170,7 @@ const FacilitiesManager = () => {
 
           <div className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label className="block text-xs font-semibold text-gray-600 mb-1.5">
                 Title *
               </label>
               <input
@@ -179,12 +180,12 @@ const FacilitiesManager = () => {
                   setFormData({ ...formData, title: e.target.value })
                 }
                 placeholder="Professional Turf Wickets"
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:outline-none text-sm transition"
               />
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label className="block text-xs font-semibold text-gray-600 mb-1.5">
                 Description
               </label>
               <textarea
@@ -194,13 +195,13 @@ const FacilitiesManager = () => {
                 }
                 placeholder="International-standard cricket pitches for match-like practice"
                 rows={3}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:outline-none text-sm transition resize-none"
               />
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label className="block text-xs font-semibold text-gray-600 mb-1.5">
                   Icon
                 </label>
                 <select
@@ -208,7 +209,7 @@ const FacilitiesManager = () => {
                   onChange={(e) =>
                     setFormData({ ...formData, iconName: e.target.value })
                   }
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:outline-none text-sm transition bg-white"
                 >
                   {iconOptions.map((icon) => (
                     <option key={icon} value={icon}>
@@ -219,7 +220,7 @@ const FacilitiesManager = () => {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label className="block text-xs font-semibold text-gray-600 mb-1.5">
                   Display Order
                 </label>
                 <input
@@ -231,12 +232,12 @@ const FacilitiesManager = () => {
                       displayOrder: parseInt(e.target.value),
                     })
                   }
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:outline-none text-sm transition"
                 />
               </div>
             </div>
 
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 p-3 bg-gray-50 rounded-lg border border-gray-200">
               <input
                 type="checkbox"
                 id="active"
@@ -254,18 +255,18 @@ const FacilitiesManager = () => {
               </label>
             </div>
 
-            <div className="flex gap-3 pt-2">
+            <div className="flex gap-3 pt-2 border-t border-gray-100">
               <button
                 onClick={handleSave}
                 disabled={!formData.title}
-                className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center gap-2"
+                className="flex items-center gap-2 px-6 py-2.5 bg-blue-600 text-white rounded-lg text-sm font-semibold hover:bg-blue-700 active:bg-blue-800 disabled:bg-gray-300 disabled:cursor-not-allowed transition shadow-sm"
               >
                 <Save className="w-4 h-4" />
                 Save
               </button>
               <button
                 onClick={handleCancel}
-                className="px-6 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 flex items-center gap-2"
+                className="flex items-center gap-2 px-6 py-2.5 bg-gray-100 text-gray-700 rounded-lg text-sm font-semibold hover:bg-gray-200 active:bg-gray-300 transition"
               >
                 <X className="w-4 h-4" />
                 Cancel
@@ -276,12 +277,12 @@ const FacilitiesManager = () => {
       )}
 
       {/* Facilities List */}
-      <div className="grid gap-4">
+      <div className="grid gap-3">
         {facilities.length === 0 ? (
-          <div className="bg-white rounded-lg shadow-md p-12 text-center">
-            <Award className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-            <p className="text-gray-500 text-lg">No facilities added yet</p>
-            <p className="text-gray-400 mt-2">
+          <div className="bg-white rounded-xl border-2 border-dashed border-gray-200 p-12 sm:p-16 text-center">
+            <Award className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+            <p className="text-gray-500 font-semibold">No facilities added yet</p>
+            <p className="text-sm text-gray-400 mt-1">
               Click "Add Facility" to get started
             </p>
           </div>
@@ -289,55 +290,59 @@ const FacilitiesManager = () => {
           facilities.map((facility) => (
             <div
               key={facility.id}
-              className="bg-white rounded-lg shadow-md p-6 hover:shadow-lg transition-shadow"
+              className="bg-white rounded-xl border border-slate-200 shadow-sm p-4 sm:p-5 hover:border-slate-300 transition"
             >
-              <div className="flex items-start justify-between">
-                <div className="flex-1">
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-3 mb-2">
-                    <div className="w-10 h-10 rounded-lg bg-blue-100 flex items-center justify-center">
-                      <Award className="w-6 h-6 text-blue-600" />
+                    <div className="w-9 h-9 rounded-lg bg-blue-100 flex items-center justify-center flex-shrink-0">
+                      <Award className="w-5 h-5 text-blue-600" />
                     </div>
-                    <div>
-                      <h3 className="text-lg font-semibold text-gray-800">
+                    <div className="min-w-0">
+                      <h3 className="font-semibold text-gray-800 text-sm truncate">
                         {facility.title}
                       </h3>
-                      <div className="flex items-center gap-2 mt-1">
+                      <div className="flex items-center gap-2 mt-0.5">
                         {facility.active ? (
-                          <span className="inline-flex items-center gap-1 px-2 py-1 bg-green-100 text-green-700 text-xs rounded-full">
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-green-100 text-green-700 text-xs rounded-full font-medium">
                             <Eye className="w-3 h-3" />
                             Active
                           </span>
                         ) : (
-                          <span className="inline-flex items-center gap-1 px-2 py-1 bg-gray-100 text-gray-600 text-xs rounded-full">
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-gray-100 text-gray-500 text-xs rounded-full font-medium">
                             <EyeOff className="w-3 h-3" />
                             Inactive
                           </span>
                         )}
-                        <span className="text-xs text-gray-500">
+                        <span className="text-xs text-gray-400">
                           Order: {facility.displayOrder}
                         </span>
                       </div>
                     </div>
                   </div>
-                  <p className="text-gray-600 mt-2">{facility.description}</p>
+                  {facility.description && (
+                    <p className="text-sm text-gray-500 mt-1 pl-12 leading-relaxed">
+                      {facility.description}
+                    </p>
+                  )}
                 </div>
 
-                <div className="flex gap-2 ml-4">
+                <div className="flex gap-1 flex-shrink-0">
                   <button
                     onClick={() => handleEdit(facility)}
                     disabled={
                       isAdding || (editingId && editingId !== facility.id)
                     }
-                    className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg disabled:text-gray-400 disabled:hover:bg-transparent"
+                    className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg disabled:text-gray-300 disabled:hover:bg-transparent transition"
                   >
-                    <Edit2 className="w-5 h-5" />
+                    <Edit2 className="w-4 h-4" />
                   </button>
                   <button
                     onClick={() => handleDelete(facility.id)}
                     disabled={isAdding || !!editingId}
-                    className="p-2 text-red-600 hover:bg-red-50 rounded-lg disabled:text-gray-400 disabled:hover:bg-transparent"
+                    className="p-2 text-red-500 hover:bg-red-50 rounded-lg disabled:text-gray-300 disabled:hover:bg-transparent transition"
                   >
-                    <Trash2 className="w-5 h-5" />
+                    <Trash2 className="w-4 h-4" />
                   </button>
                 </div>
               </div>

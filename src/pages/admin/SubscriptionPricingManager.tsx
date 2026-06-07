@@ -170,28 +170,33 @@ function SubscriptionPricingManager() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-lg font-semibold">Subscription Plans</h2>
-          <PresenceBanner
-            entity="facilities-manager"
-            id={academyId ?? undefined}
-          />
-          <p className="text-sm text-gray-500 mt-1">
-            Configure bowling machine membership pricing. Registration fee is
-            charged only once per user.
-          </p>
+      <div className="bg-white rounded-xl border border-slate-200 shadow-sm px-4 py-4">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <h2 className="text-base sm:text-lg font-bold text-gray-900 flex items-center gap-2 tracking-tight">
+              <IndianRupee className="w-5 h-5 text-blue-600 flex-shrink-0" />
+              Subscription Plans
+            </h2>
+            <PresenceBanner
+              entity="facilities-manager"
+              id={academyId ?? undefined}
+            />
+            <p className="text-sm text-gray-500 mt-0.5">
+              Configure bowling machine membership pricing. Registration fee is
+              charged only once per user.
+            </p>
+          </div>
+          <button
+            onClick={handleAdd}
+            className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 active:bg-blue-800 transition text-sm font-semibold shadow-sm flex-shrink-0"
+          >
+            <Plus size={16} />
+            <span className="hidden sm:inline">Add Plan</span>
+            <span className="sm:hidden">Add</span>
+          </button>
         </div>
-        <button
-          onClick={handleAdd}
-          className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2
-                     rounded-lg hover:bg-blue-700 transition text-sm font-medium"
-        >
-          <Plus size={16} />
-          Add Plan
-        </button>
       </div>
 
       {/* Registration Fee Info */}
@@ -211,9 +216,9 @@ function SubscriptionPricingManager() {
 
       {/* Plans Grid — grouped by sessions */}
       {Object.keys(grouped).length === 0 ? (
-        <div className="text-center py-16 bg-slate-50 rounded-xl border-2 border-dashed border-slate-200">
+        <div className="text-center py-12 sm:py-16 bg-white rounded-xl border-2 border-dashed border-slate-200">
           <IndianRupee size={40} className="mx-auto text-slate-300 mb-3" />
-          <p className="text-slate-500 font-medium">
+          <p className="text-slate-500 font-semibold">
             No subscription plans configured
           </p>
           <p className="text-sm text-slate-400 mt-1">
@@ -261,14 +266,14 @@ function SubscriptionPricingManager() {
           <div className="bg-white rounded-xl shadow-xl w-full max-w-md">
             {/* Modal Header */}
             <div className="flex items-center justify-between px-5 py-4 border-b bg-slate-50 rounded-t-xl">
-              <h3 className="font-bold text-lg">
+              <h3 className="font-bold text-base text-slate-900">
                 {editingPublicId ? "Edit Plan" : "New Subscription Plan"}
               </h3>
               <button
                 onClick={() => setShowForm(false)}
-                className="text-slate-400 hover:text-slate-600"
+                className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition"
               >
-                <X size={20} />
+                <X size={18} />
               </button>
             </div>
 
@@ -468,10 +473,10 @@ function PlanCard({
 
   return (
     <div
-      className={`relative bg-white rounded-xl border-2 p-4 transition ${
+      className={`relative bg-white rounded-xl shadow-sm p-4 transition ${
         plan.active
-          ? "border-slate-200 hover:border-blue-200 hover:shadow-md"
-          : "border-dashed border-slate-200 opacity-60"
+          ? "border border-slate-200 hover:border-blue-200 hover:shadow-md"
+          : "border border-dashed border-slate-200 opacity-60"
       }`}
     >
       {/* Top row */}

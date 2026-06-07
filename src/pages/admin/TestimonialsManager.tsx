@@ -156,37 +156,43 @@ const TestimonialsManager = () => {
     );
 
   return (
-    <div className="max-w-6xl mx-auto">
-      <div className="bg-white rounded-lg shadow-md p-6 mb-6">
-        <div className="flex justify-between items-center">
+    <div className="space-y-5">
+      {/* Header */}
+      <div className="bg-white rounded-xl border border-slate-200 shadow-sm px-4 py-4">
+        <div className="flex items-start justify-between gap-3">
           <div>
-            <h2 className="text-2xl font-bold">Testimonials Management</h2>
-            <p className="text-gray-600 mt-1">Manage customer testimonials</p>
+            <h2 className="text-base sm:text-lg font-bold text-gray-900 flex items-center gap-2 tracking-tight">
+              <Star className="w-5 h-5 text-yellow-500 flex-shrink-0" />
+              Testimonials Management
+            </h2>
             <PresenceBanner
               entity="testimonials-manager"
               id={academyId ?? undefined}
             />
+            <p className="text-sm text-gray-500 mt-0.5">Manage customer testimonials</p>
           </div>
           <button
             onClick={handleAdd}
             disabled={isAdding || !!editingId}
-            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400 flex items-center gap-2"
+            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-semibold hover:bg-blue-700 active:bg-blue-800 disabled:bg-gray-300 disabled:cursor-not-allowed transition shadow-sm flex-shrink-0"
           >
-            <Plus className="w-5 h-5" /> Add Testimonial
+            <Plus className="w-4 h-4" />
+            <span className="hidden sm:inline">Add Testimonial</span>
+            <span className="sm:hidden">Add</span>
           </button>
         </div>
       </div>
 
       {(isAdding || editingId) && (
-        <div className="bg-white rounded-lg shadow-md p-6 mb-6 border-2 border-blue-200">
-          <h3 className="text-lg font-semibold mb-4">
+        <div className="bg-white rounded-xl border-2 border-blue-200 shadow-sm p-4 sm:p-5">
+          <h3 className="text-sm font-bold text-gray-700 uppercase tracking-wide mb-4">
             {isAdding ? "Add New" : "Edit"} Testimonial
           </h3>
           {editingId && <PresenceBanner entity="testimonial" id={editingId} />}
           <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium mb-2">Name *</label>
+                <label className="block text-xs font-semibold text-gray-600 mb-1.5">Name *</label>
                 <input
                   type="text"
                   value={formData.name}
@@ -194,11 +200,11 @@ const TestimonialsManager = () => {
                     setFormData({ ...formData, name: e.target.value })
                   }
                   placeholder="John Doe"
-                  className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:outline-none text-sm transition"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium mb-2">Role *</label>
+                <label className="block text-xs font-semibold text-gray-600 mb-1.5">Role *</label>
                 <input
                   type="text"
                   value={formData.role}
@@ -206,13 +212,13 @@ const TestimonialsManager = () => {
                     setFormData({ ...formData, role: e.target.value })
                   }
                   placeholder="U-16 Player"
-                  className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:outline-none text-sm transition"
                 />
               </div>
             </div>
 
             <div>
-              <label className="block text-sm font-medium mb-2">
+              <label className="block text-xs font-semibold text-gray-600 mb-1.5">
                 Testimonial Text *
               </label>
               <textarea
@@ -220,15 +226,15 @@ const TestimonialsManager = () => {
                 onChange={(e) =>
                   setFormData({ ...formData, text: e.target.value })
                 }
-                placeholder="The coaching here is exceptional..."
+                placeholder="The coaching here is exceptional…"
                 rows={4}
-                className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
+                className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:outline-none text-sm transition resize-none"
               />
             </div>
 
-            <div className="grid grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium mb-2">Rating</label>
+                <label className="block text-xs font-semibold text-gray-600 mb-1.5">Rating</label>
                 <div className="flex gap-1">
                   {[1, 2, 3, 4, 5].map((n) => (
                     <button
@@ -245,7 +251,7 @@ const TestimonialsManager = () => {
                 </div>
               </div>
               <div>
-                <label className="block text-sm font-medium mb-2">
+                <label className="block text-xs font-semibold text-gray-600 mb-1.5">
                   Display Order
                 </label>
                 <input
@@ -257,24 +263,24 @@ const TestimonialsManager = () => {
                       displayOrder: parseInt(e.target.value),
                     })
                   }
-                  className="w-full px-4 py-2 border rounded-lg"
+                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:outline-none text-sm transition"
                 />
               </div>
             </div>
 
             <div>
-              <label className="block text-sm font-medium mb-2">Photo</label>
-              <div className="flex items-center gap-4">
+              <label className="block text-xs font-semibold text-gray-600 mb-1.5">Photo</label>
+              <div className="flex items-center gap-3 flex-wrap">
                 {formData.photoUrl && (
                   <img
                     src={getImageUrl(formData.photoUrl)}
                     alt="Preview"
-                    className="w-20 h-20 rounded-full object-cover"
+                    className="w-16 h-16 rounded-full object-cover border-2 border-gray-100"
                   />
                 )}
-                <label className="px-4 py-2 bg-gray-100 rounded-lg cursor-pointer hover:bg-gray-200 flex items-center gap-2">
+                <label className="flex items-center gap-2 px-4 py-2.5 bg-gray-100 rounded-lg text-sm font-medium text-gray-700 cursor-pointer hover:bg-gray-200 transition">
                   <Upload className="w-4 h-4" />
-                  {uploading ? "Uploading..." : "Upload Photo"}
+                  {uploading ? "Uploading…" : "Upload Photo"}
                   <input
                     type="file"
                     accept="image/*"
@@ -286,42 +292,42 @@ const TestimonialsManager = () => {
               </div>
             </div>
 
-            <div className="flex gap-4">
-              <label className="flex items-center gap-2">
+            <div className="flex gap-4 p-3 bg-gray-50 rounded-lg border border-gray-200">
+              <label className="flex items-center gap-2 cursor-pointer">
                 <input
                   type="checkbox"
                   checked={formData.featured}
                   onChange={(e) =>
                     setFormData({ ...formData, featured: e.target.checked })
                   }
-                  className="w-4 h-4"
+                  className="w-4 h-4 accent-blue-600"
                 />
-                <span className="text-sm">Featured</span>
+                <span className="text-sm font-medium text-gray-700">Featured</span>
               </label>
-              <label className="flex items-center gap-2">
+              <label className="flex items-center gap-2 cursor-pointer">
                 <input
                   type="checkbox"
                   checked={formData.active}
                   onChange={(e) =>
                     setFormData({ ...formData, active: e.target.checked })
                   }
-                  className="w-4 h-4"
+                  className="w-4 h-4 accent-blue-600"
                 />
-                <span className="text-sm">Active</span>
+                <span className="text-sm font-medium text-gray-700">Active</span>
               </label>
             </div>
 
-            <div className="flex gap-3">
+            <div className="flex gap-3 pt-2 border-t border-gray-100">
               <button
                 onClick={handleSave}
                 disabled={!formData.name || !formData.text}
-                className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400 flex items-center gap-2"
+                className="flex items-center gap-2 px-6 py-2.5 bg-blue-600 text-white rounded-lg text-sm font-semibold hover:bg-blue-700 active:bg-blue-800 disabled:bg-gray-300 disabled:cursor-not-allowed transition shadow-sm"
               >
                 <Save className="w-4 h-4" /> Save
               </button>
               <button
                 onClick={handleCancel}
-                className="px-6 py-2 bg-gray-200 rounded-lg hover:bg-gray-300 flex items-center gap-2"
+                className="flex items-center gap-2 px-6 py-2.5 bg-gray-100 text-gray-700 rounded-lg text-sm font-semibold hover:bg-gray-200 active:bg-gray-300 transition"
               >
                 <X className="w-4 h-4" /> Cancel
               </button>
@@ -330,68 +336,72 @@ const TestimonialsManager = () => {
         </div>
       )}
 
-      <div className="grid gap-4">
+      <div className="grid gap-3">
         {testimonials.map((testimonial) => (
           <div
             key={testimonial.id}
-            className="bg-white rounded-lg shadow-md p-6"
+            className="bg-white rounded-xl border border-slate-200 shadow-sm p-4 sm:p-5"
           >
-            <div className="flex gap-4">
-              {testimonial.photoUrl && (
+            <div className="flex gap-3 sm:gap-4">
+              {testimonial.photoUrl ? (
                 <img
                   src={getImageUrl(testimonial.photoUrl)}
                   alt={testimonial.name}
-                  className="w-16 h-16 rounded-full object-cover"
+                  className="w-12 h-12 sm:w-14 sm:h-14 rounded-full object-cover flex-shrink-0 border-2 border-gray-100"
                 />
+              ) : (
+                <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-bold flex-shrink-0 text-base">
+                  {testimonial.name.charAt(0).toUpperCase()}
+                </div>
               )}
-              <div className="flex-1">
-                <div className="flex items-start justify-between">
-                  <div>
-                    <h3 className="font-semibold text-lg">
+              <div className="flex-1 min-w-0">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <h3 className="font-semibold text-gray-800 text-sm">
                       {testimonial.name}
                     </h3>
-                    <p className="text-sm text-gray-600">{testimonial.role}</p>
-                    <div className="flex gap-1 mt-1">
+                    <p className="text-xs text-gray-500">{testimonial.role}</p>
+                    <div className="flex gap-0.5 mt-1">
                       {Array.from({ length: 5 }).map((_, i) => (
                         <Star
                           key={i}
-                          className={`w-4 h-4 ${i < (testimonial.rating || 5) ? "fill-yellow-400 text-yellow-400" : "text-gray-300"}`}
+                          className={`w-3.5 h-3.5 ${i < (testimonial.rating || 5) ? "fill-yellow-400 text-yellow-400" : "text-gray-200"}`}
                         />
                       ))}
                     </div>
                   </div>
-                  <div className="flex gap-2">
+                  <div className="flex gap-1 flex-shrink-0">
                     <button
                       onClick={() => handleEdit(testimonial)}
                       disabled={
                         isAdding || (editingId && editingId !== testimonial.id)
                       }
-                      className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg"
+                      className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg disabled:text-gray-300 disabled:hover:bg-transparent transition"
                     >
-                      <Edit2 className="w-5 h-5" />
+                      <Edit2 className="w-4 h-4" />
                     </button>
                     <button
                       onClick={() => handleDelete(testimonial.id)}
                       disabled={isAdding || !!editingId}
-                      className="p-2 text-red-600 hover:bg-red-50 rounded-lg"
+                      className="p-2 text-red-500 hover:bg-red-50 rounded-lg disabled:text-gray-300 disabled:hover:bg-transparent transition"
                     >
-                      <Trash2 className="w-5 h-5" />
+                      <Trash2 className="w-4 h-4" />
                     </button>
                   </div>
                 </div>
-                <p className="text-gray-700 mt-3">{testimonial.text}</p>
-                <div className="flex gap-2 mt-3">
+                <p className="text-sm text-gray-600 mt-2 leading-relaxed line-clamp-3">{testimonial.text}</p>
+                <div className="flex flex-wrap gap-1.5 mt-2">
                   {testimonial.featured && (
-                    <span className="px-2 py-1 bg-purple-100 text-purple-700 text-xs rounded-full">
+                    <span className="px-2 py-0.5 bg-purple-100 text-purple-700 text-xs rounded-full font-medium">
                       Featured
                     </span>
                   )}
                   {testimonial.active ? (
-                    <span className="px-2 py-1 bg-green-100 text-green-700 text-xs rounded-full flex items-center gap-1">
+                    <span className="px-2 py-0.5 bg-green-100 text-green-700 text-xs rounded-full font-medium flex items-center gap-1">
                       <Eye className="w-3 h-3" /> Active
                     </span>
                   ) : (
-                    <span className="px-2 py-1 bg-gray-100 text-gray-600 text-xs rounded-full flex items-center gap-1">
+                    <span className="px-2 py-0.5 bg-gray-100 text-gray-500 text-xs rounded-full font-medium flex items-center gap-1">
                       <EyeOff className="w-3 h-3" /> Inactive
                     </span>
                   )}

@@ -481,25 +481,25 @@ export default function AdminExcelImportPage() {
   return (
     <div className="max-w-5xl mx-auto space-y-4 pb-20 px-3 sm:px-4 lg:px-0">
       {/* Header */}
-      <div className="flex items-center gap-2 pt-2">
+      <div className="flex items-center gap-3 bg-white rounded-xl border border-slate-200 shadow-sm px-4 py-3 mt-1">
         <button
           onClick={() => navigate("/admin/revenue")}
-          className="p-2 hover:bg-slate-100 rounded-lg flex-shrink-0"
+          className="p-2 hover:bg-slate-100 rounded-lg flex-shrink-0 text-slate-600 transition"
         >
           <ArrowLeft size={20} />
         </button>
-        <div>
-          <h1 className="text-lg sm:text-2xl font-bold text-slate-900 leading-tight">
+        <div className="flex-1 min-w-0">
+          <h1 className="text-base sm:text-lg font-bold text-slate-900 leading-tight">
             Import Excel
           </h1>
-          <p className="text-xs text-slate-500">
+          <p className="text-xs text-slate-500 hidden sm:block">
             Bulk-import historical NCA Mysuru payment rows
           </p>
         </div>
       </div>
 
       {/* Step indicator */}
-      <div className="bg-white border border-slate-200 rounded-xl px-4 py-3">
+      <div className="bg-white border border-slate-200 rounded-xl shadow-sm px-4 py-3.5">
         <div className="flex items-center gap-3 sm:gap-4 overflow-x-auto">
           <StepDot n={1} label="Upload" active={step === 1} done={step > 1} />
           <ChevronRight size={14} className="text-slate-300 flex-shrink-0" />
@@ -629,8 +629,8 @@ export default function AdminExcelImportPage() {
           )}
 
           {/* Sheet reference */}
-          <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-2">
-            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">
+          <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-2 shadow-sm">
+            <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">
               Expected sheet names
             </p>
             <div className="space-y-1">
@@ -818,7 +818,7 @@ export default function AdminExcelImportPage() {
           <div className="flex items-center justify-between gap-3">
             <button
               onClick={() => setStep(1)}
-              className="flex items-center gap-2 px-4 py-2.5 bg-white border border-slate-200 text-slate-700 text-sm font-medium rounded-lg hover:bg-slate-50"
+              className="flex items-center gap-2 px-4 py-2.5 bg-white border border-slate-200 text-slate-700 text-sm font-medium rounded-lg hover:bg-slate-50 active:bg-slate-100 transition shadow-sm"
             >
               <ArrowLeft size={14} />
               Back
@@ -826,7 +826,7 @@ export default function AdminExcelImportPage() {
             <button
               onClick={doImport}
               disabled={importing || previewRows.length === 0}
-              className="flex items-center gap-2 px-5 py-2.5 bg-emerald-600 text-white text-sm font-semibold rounded-lg hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed min-w-[120px] justify-center"
+              className="flex items-center gap-2 px-5 py-2.5 bg-emerald-600 text-white text-sm font-semibold rounded-lg hover:bg-emerald-700 active:bg-emerald-800 disabled:opacity-50 disabled:cursor-not-allowed min-w-[120px] justify-center transition shadow-sm"
             >
               {importing ? (
                 <>
@@ -935,14 +935,14 @@ export default function AdminExcelImportPage() {
           <div className="flex items-center gap-3">
             <button
               onClick={() => navigate("/admin/revenue")}
-              className="flex items-center gap-2 px-4 py-2.5 bg-white border border-slate-200 text-slate-700 text-sm font-medium rounded-lg hover:bg-slate-50"
+              className="flex items-center gap-2 px-4 py-2.5 bg-white border border-slate-200 text-slate-700 text-sm font-medium rounded-lg hover:bg-slate-50 active:bg-slate-100 transition shadow-sm"
             >
               <ArrowLeft size={14} />
               Back to Revenue
             </button>
             <button
               onClick={reset}
-              className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700"
+              className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 active:bg-blue-800 transition shadow-sm"
             >
               <RotateCcw size={14} />
               Import More

@@ -343,14 +343,14 @@ function AdminMembersPage() {
   ];
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5 px-3 sm:px-4 md:px-0">
       {/* Header */}
-      <div>
-        <h2 className="text-lg font-semibold text-slate-900">
+      <div className="bg-white rounded-xl border border-slate-200 shadow-sm px-4 py-4">
+        <h2 className="text-base sm:text-lg font-bold text-slate-900 tracking-tight">
           Bowling Machine Members
         </h2>
         <PresenceBanner entity="branches-tab" id={academyId ?? undefined} />
-        <p className="text-sm text-slate-500 mt-1">
+        <p className="text-sm text-slate-500 mt-0.5">
           Manage subscribers, logged-in users, and guest bookers
         </p>
       </div>
@@ -405,7 +405,7 @@ function AdminMembersPage() {
       </div>
 
       {/* Tab Bar */}
-      <div className="flex gap-2 overflow-x-auto no-scrollbar">
+      <div className="flex gap-2 overflow-x-auto pb-0.5" style={{scrollbarWidth:'none'}}>
         {tabs.map((tab) => {
           const Icon = tab.icon;
           const isActive = activeTab === tab.key;
@@ -424,7 +424,7 @@ function AdminMembersPage() {
             <button
               key={tab.key}
               onClick={() => setActiveTab(tab.key)}
-              className={`flex-shrink-0 flex items-center gap-2 px-4 py-2.5 rounded-xl border text-sm font-medium transition ${colorMap[tab.color]}`}
+              className={`flex-shrink-0 flex items-center gap-2 px-4 py-2.5 rounded-xl border text-sm font-medium transition shadow-sm ${colorMap[tab.color]}`}
             >
               <Icon size={15} />
               {tab.label}
@@ -458,7 +458,7 @@ function AdminMembersPage() {
                 return (
                   <div
                     key={sub.publicId}
-                    className="bg-white rounded-xl border border-slate-200 overflow-hidden"
+                    className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden"
                   >
                     <div
                       className="flex items-center justify-between p-4 cursor-pointer hover:bg-slate-50 transition"
@@ -621,7 +621,7 @@ function AdminMembersPage() {
               {queuedSubscriptions.map((sub) => (
                 <div
                   key={sub.publicId}
-                  className="bg-white rounded-xl border border-amber-200 p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3"
+                  className="bg-white rounded-xl border border-amber-200 shadow-sm p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3"
                 >
                   <div className="flex items-center gap-3 min-w-0">
                     <div className="w-10 h-10 rounded-full bg-amber-100 flex items-center justify-center text-amber-700 font-bold text-sm shrink-0">
@@ -704,7 +704,7 @@ function AdminMembersPage() {
               {nonSubscribers.map((user) => (
                 <div
                   key={user.userId}
-                  className="bg-white rounded-xl border border-amber-200 p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3"
+                  className="bg-white rounded-xl border border-amber-200 shadow-sm p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3"
                 >
                   <div className="flex items-center gap-3 min-w-0">
                     <div className="w-10 h-10 rounded-full bg-amber-100 flex items-center justify-center text-amber-700 font-bold text-sm shrink-0">
@@ -788,7 +788,7 @@ function AdminMembersPage() {
               {guests.map((guest, index) => (
                 <div
                   key={`${guest.phone}-${index}`}
-                  className="bg-white rounded-xl border border-amber-200 p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3"
+                  className="bg-white rounded-xl border border-amber-200 shadow-sm p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3"
                 >
                   <div className="flex items-center gap-3 min-w-0">
                     <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center text-blue-700 font-bold text-sm shrink-0">
@@ -1170,10 +1170,10 @@ function InfoTile({
   value: string;
 }) {
   return (
-    <div className="bg-white rounded-lg p-3 border border-slate-100">
+    <div className="bg-white rounded-xl p-3 border border-slate-200 shadow-sm">
       <div className="flex items-center gap-1 text-slate-400 mb-1">
         {icon}
-        <span className="text-xs">{label}</span>
+        <span className="text-xs font-medium">{label}</span>
       </div>
       <p className="text-sm font-semibold text-slate-800 truncate">{value}</p>
     </div>

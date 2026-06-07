@@ -248,42 +248,45 @@ export default function TeamMembersAdmin() {
   }
 
   return (
-    <div className="p-6 max-w-5xl mx-auto">
+    <div className="space-y-5">
       {/* Header */}
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2">
-            <Users size={20} className="text-blue-600" />
-            Team Members
-          </h2>
-          <PresenceBanner
-            entity="branches-tab"
-            id={academyId ?? undefined}
-          />{" "}
-          <p className="text-sm text-gray-500 mt-0.5">
-            Manage coaches and staff shown on your website
-          </p>
+      <div className="bg-white rounded-xl border border-slate-200 shadow-sm px-4 py-4">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <h2 className="text-base sm:text-lg font-bold text-gray-900 flex items-center gap-2 tracking-tight">
+              <Users size={18} className="text-blue-600 flex-shrink-0" />
+              Team Members
+            </h2>
+            <PresenceBanner
+              entity="branches-tab"
+              id={academyId ?? undefined}
+            />
+            <p className="text-sm text-gray-500 mt-0.5">
+              Manage coaches and staff shown on your website
+            </p>
+          </div>
+          <button
+            onClick={openCreate}
+            className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-blue-700 active:bg-blue-800 transition shadow-sm flex-shrink-0"
+          >
+            <Plus size={16} />
+            <span className="hidden sm:inline">Add Member</span>
+            <span className="sm:hidden">Add</span>
+          </button>
         </div>
-        <button
-          onClick={openCreate}
-          className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 transition"
-        >
-          <Plus size={16} />
-          Add Member
-        </button>
       </div>
 
       {/* Empty state */}
       {members.length === 0 && !showForm && (
-        <div className="text-center py-16 border-2 border-dashed border-gray-200 rounded-xl">
+        <div className="text-center py-12 sm:py-16 border-2 border-dashed border-gray-200 rounded-xl bg-gray-50">
           <Users size={40} className="mx-auto text-gray-300 mb-3" />
-          <p className="text-gray-500 font-medium">No team members yet</p>
+          <p className="text-gray-500 font-semibold">No team members yet</p>
           <p className="text-sm text-gray-400 mt-1">
             Add your coaches and staff to showcase on the website
           </p>
           <button
             onClick={openCreate}
-            className="mt-4 inline-flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 transition"
+            className="mt-4 inline-flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-blue-700 active:bg-blue-800 transition shadow-sm"
           >
             <Plus size={16} />
             Add First Member
@@ -293,12 +296,12 @@ export default function TeamMembersAdmin() {
 
       {/* Member cards */}
       {members.length > 0 && (
-        <div className="space-y-3 mb-6">
+        <div className="space-y-2">
           {members.map((m) => (
             <div
               key={m.publicId}
-              className={`flex items-center gap-4 bg-white border rounded-xl p-4 transition ${
-                m.active ? "border-gray-200" : "border-gray-100 opacity-60"
+              className={`flex items-center gap-3 sm:gap-4 bg-white border rounded-xl p-3 sm:p-4 shadow-sm transition ${
+                m.active ? "border-gray-200 hover:border-gray-300" : "border-gray-100 opacity-60"
               }`}
             >
               <GripVertical
@@ -368,7 +371,6 @@ export default function TeamMembersAdmin() {
           ))}
         </div>
       )}
-
       {/* ── Add/Edit Form Modal ── */}
       {showForm && (
         <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center px-4">

@@ -67,38 +67,38 @@ function StarPerformer() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 py-12 px-4">
+    <div className="min-h-screen bg-gray-50 py-8 sm:py-12 px-4">
       <div className="max-w-4xl mx-auto">
         {/* Back Button */}
         <button
           onClick={() => navigate("/home")}
-          className="mb-6 flex items-center gap-2 text-gray-600 hover:text-gray-800 transition"
+          className="mb-6 flex items-center gap-2 text-gray-500 hover:text-gray-800 text-sm font-medium transition"
         >
-          <ArrowLeft size={20} />
+          <ArrowLeft size={18} />
           <span>Back to Home</span>
         </button>
 
         {/* Header */}
-        <div className="text-center mb-12">
+        <div className="text-center mb-8 sm:mb-12">
           <div className="flex justify-center mb-4">
             <div
-              className="w-16 h-16 rounded-full flex items-center justify-center"
+              className="w-14 h-14 sm:w-16 sm:h-16 rounded-full flex items-center justify-center"
               style={{ backgroundColor: `${data.primaryColor}15` }}
             >
               <Star
-                size={32}
+                size={28}
                 className="fill-current"
                 style={{ color: data.primaryColor }}
               />
             </div>
           </div>
           <h1
-            className="text-4xl md:text-5xl font-bold mb-4"
+            className="text-3xl sm:text-4xl md:text-5xl font-bold mb-3"
             style={{ color: data.primaryColor }}
           >
             {data.heading}
           </h1>
-          <p className="text-xl text-gray-600">{data.subheading}</p>
+          <p className="text-base sm:text-xl text-gray-600">{data.subheading}</p>
         </div>
 
         {/* Star Performer Card */}
@@ -108,7 +108,7 @@ function StarPerformer() {
             style={{ backgroundColor: data.primaryColor }}
           ></div>
 
-          <div className="p-8 md:p-12">
+          <div className="p-6 sm:p-8 md:p-12">
             <div className="grid md:grid-cols-2 gap-8 items-center">
               {/* Photo */}
               <div className="flex justify-center">
@@ -117,21 +117,21 @@ function StarPerformer() {
                     <img
                       src={getImageUrl(data.photoUrl)}
                       alt={data.name}
-                      className="w-64 h-64 md:w-80 md:h-80 object-cover rounded-2xl shadow-lg"
+                      className="w-56 h-56 sm:w-64 sm:h-64 md:w-80 md:h-80 object-cover rounded-2xl shadow-lg"
                     />
                     <div
-                      className="absolute -top-4 -right-4 w-16 h-16 rounded-full flex items-center justify-center shadow-lg"
+                      className="absolute -top-4 -right-4 w-14 h-14 rounded-full flex items-center justify-center shadow-lg"
                       style={{ backgroundColor: data.primaryColor }}
                     >
-                      <Trophy size={32} className="text-white" />
+                      <Trophy size={28} className="text-white" />
                     </div>
                   </div>
                 ) : (
                   <div
-                    className="w-64 h-64 md:w-80 md:h-80 rounded-2xl flex items-center justify-center"
+                    className="w-56 h-56 sm:w-64 sm:h-64 md:w-80 md:h-80 rounded-2xl flex items-center justify-center"
                     style={{ backgroundColor: `${data.primaryColor}15` }}
                   >
-                    <Star size={80} className="text-gray-300" />
+                    <Star size={72} className="text-gray-300" />
                   </div>
                 )}
               </div>
@@ -139,14 +139,14 @@ function StarPerformer() {
               {/* Details */}
               <div>
                 <div className="mb-6">
-                  <h2 className="text-3xl md:text-4xl font-bold text-gray-800 mb-2">
+                  <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold text-gray-800 mb-2">
                     {data.name || "Name not set"}
                   </h2>
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-1.5">
                     {[1, 2, 3, 4, 5].map((star) => (
                       <Star
                         key={star}
-                        size={20}
+                        size={18}
                         className="fill-current"
                         style={{ color: data.primaryColor }}
                       />
@@ -154,15 +154,15 @@ function StarPerformer() {
                   </div>
                 </div>
 
-                <div className="bg-gray-50 rounded-xl p-6">
+                <div className="bg-gray-50 rounded-xl p-5 sm:p-6">
                   <h3
-                    className="font-semibold mb-3 flex items-center gap-2"
+                    className="font-semibold mb-3 flex items-center gap-2 text-sm"
                     style={{ color: data.primaryColor }}
                   >
-                    <Trophy size={20} />
+                    <Trophy size={16} />
                     Achievement
                   </h3>
-                  <p className="text-gray-700 leading-relaxed whitespace-pre-line">
+                  <p className="text-gray-700 leading-relaxed whitespace-pre-line text-sm sm:text-base">
                     {data.achievement || "Achievement description not set"}
                   </p>
                 </div>
@@ -180,8 +180,8 @@ function StarPerformer() {
         </div>
 
         {/* Additional Message */}
-        <div className="mt-8 text-center">
-          <p className="text-gray-600 italic">
+        <div className="mt-6 sm:mt-8 text-center">
+          <p className="text-gray-500 italic text-sm">
             "Excellence is not a skill, it's an attitude"
           </p>
         </div>

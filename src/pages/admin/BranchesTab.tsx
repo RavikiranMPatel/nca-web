@@ -292,9 +292,9 @@ export default function BranchesTab() {
     <div className="space-y-5">
       <PresenceBanner entity="branches-tab" id={academyId ?? undefined} />{" "}
       {/* Tab Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-3">
         <div>
-          <h2 className="text-lg font-semibold text-slate-800">Branches</h2>
+          <h2 className="text-base sm:text-lg font-bold text-slate-900 tracking-tight">Branches</h2>
           <p className="text-sm text-slate-500 mt-0.5">
             {branches.length} branch{branches.length !== 1 ? "es" : ""}{" "}
             configured
@@ -302,10 +302,11 @@ export default function BranchesTab() {
         </div>
         <button
           onClick={() => setShowModal(true)}
-          className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition shadow-sm"
+          className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-semibold hover:bg-blue-700 active:bg-blue-800 transition shadow-sm flex-shrink-0"
         >
           <Plus size={15} />
-          Add Branch
+          <span className="hidden sm:inline">Add Branch</span>
+          <span className="sm:hidden">Add</span>
         </button>
       </div>
       {/* Branch cards */}
@@ -313,7 +314,7 @@ export default function BranchesTab() {
         {branches.map((branch) => (
           <div
             key={branch.id}
-            className={`bg-slate-50 rounded-xl border p-4 transition-all ${
+            className={`bg-white rounded-xl border shadow-sm p-4 transition-all ${
               branch.active ? "border-slate-200" : "border-slate-200 opacity-60"
             }`}
           >
@@ -408,7 +409,7 @@ export default function BranchesTab() {
       </div>
       {/* Empty state */}
       {branches.length === 0 && (
-        <div className="border border-dashed border-slate-300 rounded-xl p-10 text-center">
+        <div className="border-2 border-dashed border-slate-200 rounded-xl p-10 sm:p-16 text-center bg-slate-50">
           <Building2 size={36} className="mx-auto text-slate-300 mb-3" />
           <h3 className="text-sm font-semibold text-slate-600 mb-1">
             No branches yet
@@ -418,9 +419,9 @@ export default function BranchesTab() {
           </p>
           <button
             onClick={() => setShowModal(true)}
-            className="inline-flex items-center gap-2 px-3 py-2 bg-blue-600 text-white rounded-lg text-xs font-medium hover:bg-blue-700 transition"
+            className="inline-flex items-center gap-2 px-4 py-2.5 bg-blue-600 text-white rounded-lg text-sm font-semibold hover:bg-blue-700 active:bg-blue-800 transition shadow-sm"
           >
-            <Plus size={13} />
+            <Plus size={14} />
             Add Branch
           </button>
         </div>

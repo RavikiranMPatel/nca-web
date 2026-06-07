@@ -87,24 +87,23 @@ function CampTypeSettings() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       <div>
         <PresenceBanner
           entity="facilities-manager"
           id={academyId ?? undefined}
         />
-
-        <h3 className="text-lg font-semibold text-slate-900 mb-2">
+        <h3 className="text-base sm:text-lg font-bold text-slate-900 tracking-tight mb-1">
           Camp Type Settings
         </h3>
-        <p className="text-sm text-slate-600">
+        <p className="text-sm text-slate-500">
           Configure available camp types for your academy
         </p>
       </div>
 
       {/* Add new camp type */}
-      <div className="bg-white rounded-xl border border-slate-200 p-4">
-        <label className="block text-sm font-medium text-slate-700 mb-2">
+      <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4 sm:p-5">
+        <label className="block text-sm font-semibold text-slate-700 mb-2">
           Add New Camp Type
         </label>
         <div className="flex gap-2">
@@ -114,30 +113,30 @@ function CampTypeSettings() {
             onChange={(e) => setNewCampType(e.target.value)}
             onKeyPress={(e) => e.key === "Enter" && addCampType()}
             placeholder="e.g., Fitness, Advanced, Wicket Keeping"
-            className="flex-1 px-4 py-2 rounded-lg border border-slate-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all"
+            className="flex-1 px-4 py-2.5 rounded-lg border border-slate-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-100 focus:outline-none text-sm transition-all"
           />
           <button
             onClick={addCampType}
-            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-all"
+            className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 active:bg-blue-800 text-sm font-semibold transition-all shadow-sm flex-shrink-0"
           >
-            <Plus size={18} />
-            Add
+            <Plus size={16} />
+            <span className="hidden sm:inline">Add</span>
           </button>
         </div>
-        <p className="text-xs text-slate-500 mt-2">
+        <p className="text-xs text-slate-400 mt-2">
           Enter a descriptive name. It will be automatically formatted (e.g.,
-          "Fitness" becomes "FITNESS_CAMP")
+          "Fitness" → "FITNESS_CAMP")
         </p>
       </div>
 
       {/* List existing camp types */}
-      <div className="bg-white rounded-xl border border-slate-200 p-4">
-        <h4 className="font-medium text-slate-900 mb-3">
+      <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4 sm:p-5">
+        <h4 className="text-sm font-bold text-slate-700 uppercase tracking-wide mb-3">
           Current Camp Types ({campTypes.length})
         </h4>
 
         {campTypes.length === 0 ? (
-          <p className="text-sm text-slate-500 italic py-4 text-center">
+          <p className="text-sm text-slate-400 italic py-6 text-center">
             No camp types configured
           </p>
         ) : (
@@ -145,27 +144,27 @@ function CampTypeSettings() {
             {campTypes.map((type, index) => (
               <div
                 key={type}
-                className="flex items-center justify-between p-3 bg-slate-50 rounded-lg border border-slate-200 hover:border-slate-300 transition-all"
+                className="flex items-center justify-between p-3 bg-slate-50 rounded-xl border border-slate-200 hover:border-slate-300 hover:bg-slate-100 transition-all"
               >
-                <div className="flex items-center gap-3">
-                  <span className="text-sm font-medium text-slate-500">
+                <div className="flex items-center gap-3 min-w-0">
+                  <span className="text-xs font-bold text-slate-400 w-5 flex-shrink-0">
                     {index + 1}.
                   </span>
-                  <div>
-                    <span className="font-medium text-slate-900">
+                  <div className="min-w-0">
+                    <span className="font-semibold text-slate-800 text-sm">
                       {formatDisplayName(type)}
                     </span>
-                    <span className="ml-2 text-xs text-slate-500">
+                    <span className="ml-2 text-xs text-slate-400 font-mono">
                       ({type})
                     </span>
                   </div>
                 </div>
                 <button
                   onClick={() => removeCampType(type)}
-                  className="flex items-center gap-1 text-red-600 hover:bg-red-100 px-3 py-1.5 rounded-lg text-sm font-medium transition-all"
+                  className="flex items-center gap-1.5 text-red-600 hover:bg-red-50 border border-red-200 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex-shrink-0 ml-2"
                 >
-                  <Trash2 size={14} />
-                  Remove
+                  <Trash2 size={13} />
+                  <span className="hidden sm:inline">Remove</span>
                 </button>
               </div>
             ))}
@@ -177,19 +176,19 @@ function CampTypeSettings() {
       <div className="flex justify-end gap-3 pt-4 border-t border-slate-200">
         <button
           onClick={loadCampTypes}
-          className="px-6 py-2 rounded-lg font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 transition-all"
+          className="px-5 py-2.5 rounded-lg text-sm font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 active:bg-slate-300 transition-all"
         >
-          Cancel
+          Reset
         </button>
         <button
           onClick={saveCampTypes}
           disabled={saving}
-          className="flex items-center gap-2 px-6 py-2 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-lg font-semibold hover:from-blue-700 hover:to-blue-800 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-md hover:shadow-lg"
+          className="flex items-center gap-2 px-6 py-2.5 bg-blue-600 text-white rounded-lg text-sm font-semibold hover:bg-blue-700 active:bg-blue-800 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-sm"
         >
           {saving ? (
             <>
               <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-              Saving...
+              Saving…
             </>
           ) : (
             <>Save Settings</>

@@ -120,26 +120,26 @@ const GalleryManager = () => {
     );
 
   return (
-    <div className="max-w-6xl mx-auto">
-      <div className="bg-white rounded-lg shadow-md p-6 mb-6">
-        <div className="flex justify-between items-center">
+    <div className="space-y-5">
+      <div className="bg-white rounded-xl border border-slate-200 shadow-sm px-4 py-4">
+        <div className="flex items-start justify-between gap-3">
           <div>
-            <h2 className="text-2xl font-bold flex items-center gap-2">
-              <ImageIcon className="w-6 h-6 text-blue-600" />
+            <h2 className="text-base sm:text-lg font-bold text-gray-900 flex items-center gap-2 tracking-tight">
+              <ImageIcon className="w-5 h-5 text-blue-600 flex-shrink-0" />
               Gallery Management
             </h2>
             <PresenceBanner
               entity="facilities-manager"
               id={academyId ?? undefined}
             />
-
-            <p className="text-gray-600 mt-1">
+            <p className="text-sm text-gray-500 mt-0.5">
               Upload and manage gallery images
             </p>
           </div>
-          <label className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 cursor-pointer flex items-center gap-2">
-            <Upload className="w-5 h-5" />
-            {uploading ? "Uploading..." : "Upload Images"}
+          <label className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition shadow-sm flex-shrink-0 cursor-pointer ${uploading ? "bg-gray-300 text-gray-500 cursor-not-allowed" : "bg-blue-600 text-white hover:bg-blue-700 active:bg-blue-800"}`}>
+            <Upload className="w-4 h-4" />
+            <span className="hidden sm:inline">{uploading ? "Uploading…" : "Upload Images"}</span>
+            <span className="sm:hidden">{uploading ? "…" : "Upload"}</span>
             <input
               type="file"
               accept="image/*"
@@ -153,17 +153,17 @@ const GalleryManager = () => {
       </div>
 
       {images.length === 0 ? (
-        <div className="bg-white rounded-lg shadow-md p-12 text-center">
-          <ImageIcon className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-          <p className="text-gray-500 text-lg">No images in gallery</p>
-          <p className="text-gray-400 mt-2">Upload images to get started</p>
+        <div className="bg-white rounded-xl border-2 border-dashed border-gray-200 p-12 sm:p-16 text-center">
+          <ImageIcon className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+          <p className="text-gray-500 font-semibold">No images in gallery</p>
+          <p className="text-sm text-gray-400 mt-1">Upload images to get started</p>
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {images.map((image) => (
             <div
               key={image.id}
-              className="bg-white rounded-lg shadow-md overflow-hidden"
+              className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden"
             >
               <div className="relative group">
                 <img
@@ -171,22 +171,22 @@ const GalleryManager = () => {
                   alt={image.caption || "Gallery"}
                   className="w-full h-48 object-cover"
                 />
-                <div className="absolute inset-0 bg-black bg-opacity-50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+                <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
                   <button
                     onClick={() => handleToggle(image.id)}
-                    className="p-2 bg-white rounded-lg hover:bg-gray-100"
+                    className="p-2 bg-white rounded-lg hover:bg-gray-100 transition shadow-sm"
                   >
                     {image.active ? (
-                      <Eye className="w-5 h-5" />
+                      <Eye className="w-4 h-4" />
                     ) : (
-                      <EyeOff className="w-5 h-5" />
+                      <EyeOff className="w-4 h-4" />
                     )}
                   </button>
                   <button
                     onClick={() => handleDelete(image.id)}
-                    className="p-2 bg-white rounded-lg hover:bg-red-50 text-red-600"
+                    className="p-2 bg-white rounded-lg hover:bg-red-50 text-red-500 transition shadow-sm"
                   >
-                    <Trash2 className="w-5 h-5" />
+                    <Trash2 className="w-4 h-4" />
                   </button>
                 </div>
               </div>
@@ -204,16 +204,16 @@ const GalleryManager = () => {
                     )
                   }
                   onBlur={(e) => handleCaptionUpdate(image.id, e.target.value)}
-                  placeholder="Add caption..."
-                  className="w-full text-sm px-2 py-1 border rounded focus:ring-1 focus:ring-blue-500"
+                  placeholder="Add caption…"
+                  className="w-full text-sm px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:outline-none transition"
                 />
                 <div className="mt-2">
                   {image.active ? (
-                    <span className="inline-flex items-center gap-1 px-2 py-1 bg-green-100 text-green-700 text-xs rounded-full">
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-green-100 text-green-700 text-xs rounded-full font-medium">
                       <Eye className="w-3 h-3" /> Visible
                     </span>
                   ) : (
-                    <span className="inline-flex items-center gap-1 px-2 py-1 bg-gray-100 text-gray-600 text-xs rounded-full">
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-gray-100 text-gray-500 text-xs rounded-full font-medium">
                       <EyeOff className="w-3 h-3" /> Hidden
                     </span>
                   )}

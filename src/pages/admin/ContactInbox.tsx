@@ -149,30 +149,28 @@ export default function ContactInbox() {
   const total = counts.NEW + counts.READ + counts.REPLIED;
 
   return (
-    <div className="p-6 max-w-6xl mx-auto">
+    <div className="px-3 sm:px-6 py-4 sm:py-6 max-w-6xl mx-auto space-y-5">
       {/* Header */}
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2">
-            <Inbox size={20} className="text-blue-600" />
-            Contact Inbox
-            {counts.NEW > 0 && (
-              <span className="bg-blue-600 text-white text-xs font-bold px-2 py-0.5 rounded-full">
-                {counts.NEW} new
-              </span>
-            )}
-          </h2>
-          <p className="text-sm text-gray-500 mt-0.5">
-            Messages from your website contact form
-          </p>
-        </div>
+      <div className="bg-white rounded-xl border border-gray-200 shadow-sm px-4 py-4">
+        <h2 className="text-base sm:text-lg font-bold text-gray-900 flex items-center gap-2">
+          <Inbox size={18} className="text-blue-600 flex-shrink-0" />
+          Contact Inbox
+          {counts.NEW > 0 && (
+            <span className="bg-blue-600 text-white text-xs font-bold px-2 py-0.5 rounded-full">
+              {counts.NEW} new
+            </span>
+          )}
+        </h2>
+        <p className="text-sm text-gray-500 mt-0.5">
+          Messages from your website contact form
+        </p>
       </div>
 
       {/* Count pills */}
-      <div className="flex gap-3 mb-6 flex-wrap">
+      <div className="flex gap-2 overflow-x-auto pb-0.5" style={{scrollbarWidth:'none'}}>
         <button
           onClick={() => setFilter("")}
-          className={`flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium border transition ${
+          className={`flex-shrink-0 flex items-center gap-2 px-4 py-2 rounded-full text-sm font-semibold border transition shadow-sm ${
             filter === ""
               ? "bg-gray-800 text-white border-gray-800"
               : "bg-white text-gray-600 border-gray-200 hover:border-gray-400"
@@ -185,13 +183,13 @@ export default function ContactInbox() {
           <button
             key={s}
             onClick={() => setFilter(s)}
-            className={`flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium border transition ${
+            className={`flex-shrink-0 flex items-center gap-2 px-4 py-2 rounded-full text-sm font-semibold border transition shadow-sm ${
               filter === s
                 ? "bg-gray-800 text-white border-gray-800"
                 : "bg-white text-gray-600 border-gray-200 hover:border-gray-400"
             }`}
           >
-            <span className={`w-2 h-2 rounded-full ${STATUS_CONFIG[s].dot}`} />
+            <span className={`w-2 h-2 rounded-full flex-shrink-0 ${STATUS_CONFIG[s].dot}`} />
             {STATUS_CONFIG[s].label}
             <span className="text-xs opacity-70">{counts[s]}</span>
           </button>
@@ -200,12 +198,12 @@ export default function ContactInbox() {
 
       {/* Empty state */}
       {submissions.length === 0 && (
-        <div className="text-center py-20 border-2 border-dashed border-gray-100 rounded-2xl">
-          <Inbox size={40} className="mx-auto text-gray-200 mb-3" />
-          <p className="text-gray-400 font-medium">
+        <div className="text-center py-16 sm:py-20 border-2 border-dashed border-gray-200 rounded-2xl bg-gray-50">
+          <Inbox size={40} className="mx-auto text-gray-300 mb-3" />
+          <p className="text-gray-500 font-semibold">
             {filter ? `No ${filter.toLowerCase()} messages` : "No messages yet"}
           </p>
-          <p className="text-sm text-gray-300 mt-1">
+          <p className="text-sm text-gray-400 mt-1">
             Messages from your website contact form will appear here
           </p>
         </div>
@@ -213,10 +211,10 @@ export default function ContactInbox() {
 
       {/* Two-panel layout */}
       {submissions.length > 0 && (
-        <div className="flex gap-4 h-[600px]">
+        <div className="flex flex-col md:flex-row gap-4 md:h-[600px]">
           {/* ── List panel ── */}
           <div
-            className={`flex flex-col gap-1 overflow-y-auto ${selected ? "w-2/5" : "w-full"} transition-all`}
+            className={`flex flex-col gap-1 overflow-y-auto max-h-[360px] md:max-h-none ${selected ? "md:w-2/5" : "w-full"} transition-all`}
           >
             {submissions.map((s) => {
               const cfg = STATUS_CONFIG[s.status];
@@ -263,7 +261,7 @@ export default function ContactInbox() {
 
           {/* ── Detail panel ── */}
           {selected && (
-            <div className="flex-1 border border-gray-200 rounded-2xl overflow-hidden flex flex-col">
+            <div className="flex-1 border border-gray-200 shadow-sm rounded-2xl overflow-hidden flex flex-col min-h-[400px] md:min-h-0">
               {/* Detail header */}
               <div className="flex items-center justify-between p-4 border-b bg-white">
                 <div className="flex items-center gap-3">

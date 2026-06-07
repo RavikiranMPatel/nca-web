@@ -84,38 +84,40 @@ function MediaSettingsManager() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
+      {/* Header */}
       <div>
-        <h2 className="text-lg font-semibold text-slate-900">
-          📸 Media Gallery Settings
+        <h2 className="text-base sm:text-lg font-bold text-gray-900 flex items-center gap-2 tracking-tight">
+          <Camera className="w-5 h-5 text-blue-600 flex-shrink-0" />
+          Media Gallery Settings
         </h2>
         <PresenceBanner
           entity="facilities-manager"
           id={academyId ?? undefined}
         />
-        <p className="text-sm text-slate-600 mt-1">
+        <p className="text-sm text-slate-500 mt-0.5">
           Configure the player media gallery feature
         </p>
       </div>
 
       {/* ─── ENABLE / DISABLE ─────────────────────────── */}
-      <div className="bg-white rounded-xl border border-slate-200 divide-y divide-slate-100">
+      <div className="bg-white rounded-xl border border-slate-200 shadow-sm divide-y divide-slate-100">
         {/* Media Tab Toggle */}
-        <label className="flex items-center justify-between p-4 cursor-pointer hover:bg-slate-50 transition">
+        <label className="flex items-center justify-between p-4 sm:p-5 cursor-pointer hover:bg-slate-50 transition rounded-t-xl">
           <div className="flex items-center gap-3">
-            <div className="p-2 rounded-lg bg-blue-100">
-              <Camera size={18} className="text-blue-600" />
+            <div className="p-2 rounded-lg bg-blue-100 flex-shrink-0">
+              <Camera size={16} className="text-blue-600" />
             </div>
             <div>
-              <span className="font-medium text-slate-900">
+              <span className="font-semibold text-sm text-slate-900">
                 Enable Media Tab
               </span>
-              <p className="text-sm text-slate-500">
+              <p className="text-xs text-slate-500 mt-0.5">
                 Show the Media tab on player profiles
               </p>
             </div>
           </div>
-          <div className="relative">
+          <div className="relative flex-shrink-0">
             <input
               type="checkbox"
               checked={mediaEnabled}
@@ -128,25 +130,25 @@ function MediaSettingsManager() {
         </label>
 
         {/* Parent Visibility */}
-        <label className="flex items-center justify-between p-4 cursor-pointer hover:bg-slate-50 transition">
+        <label className="flex items-center justify-between p-4 sm:p-5 cursor-pointer hover:bg-slate-50 transition rounded-b-xl">
           <div className="flex items-center gap-3">
-            <div className="p-2 rounded-lg bg-green-100">
+            <div className="p-2 rounded-lg bg-green-100 flex-shrink-0">
               {parentVisible ? (
-                <Eye size={18} className="text-green-600" />
+                <Eye size={16} className="text-green-600" />
               ) : (
-                <EyeOff size={18} className="text-slate-400" />
+                <EyeOff size={16} className="text-slate-400" />
               )}
             </div>
             <div>
-              <span className="font-medium text-slate-900">
+              <span className="font-semibold text-sm text-slate-900">
                 Parents Can View Media
               </span>
-              <p className="text-sm text-slate-500">
+              <p className="text-xs text-slate-500 mt-0.5">
                 Allow parents to see their child's media gallery
               </p>
             </div>
           </div>
-          <div className="relative">
+          <div className="relative flex-shrink-0">
             <input
               type="checkbox"
               checked={parentVisible}
@@ -160,16 +162,16 @@ function MediaSettingsManager() {
       </div>
 
       {/* ─── PHOTO LIMIT ──────────────────────────────── */}
-      <div className="bg-white rounded-xl border border-slate-200 p-4">
-        <div className="flex items-center gap-3 mb-3">
-          <div className="p-2 rounded-lg bg-orange-100">
-            <Hash size={18} className="text-orange-600" />
+      <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4 sm:p-5">
+        <div className="flex items-center gap-3 mb-4">
+          <div className="p-2 rounded-lg bg-orange-100 flex-shrink-0">
+            <Hash size={16} className="text-orange-600" />
           </div>
           <div>
-            <span className="font-medium text-slate-900">
+            <span className="font-semibold text-sm text-slate-900">
               Max Photos Per Player
             </span>
-            <p className="text-sm text-slate-500">
+            <p className="text-xs text-slate-500 mt-0.5">
               Limit storage per player (0 = unlimited)
             </p>
           </div>
@@ -182,7 +184,7 @@ function MediaSettingsManager() {
             onChange={(e) => setMaxPhotos(e.target.value)}
             min="0"
             max="500"
-            className="w-32 px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-32 px-4 py-2.5 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"
           />
           <span className="text-sm text-slate-500">
             {maxPhotos === "0"
@@ -193,16 +195,16 @@ function MediaSettingsManager() {
       </div>
 
       {/* ─── VIDEO PLATFORMS ──────────────────────────── */}
-      <div className="bg-white rounded-xl border border-slate-200 p-4">
+      <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4 sm:p-5">
         <div className="flex items-center gap-3 mb-4">
-          <div className="p-2 rounded-lg bg-purple-100">
-            <Video size={18} className="text-purple-600" />
+          <div className="p-2 rounded-lg bg-purple-100 flex-shrink-0">
+            <Video size={16} className="text-purple-600" />
           </div>
           <div>
-            <span className="font-medium text-slate-900">
+            <span className="font-semibold text-sm text-slate-900">
               Enabled Video Platforms
             </span>
-            <p className="text-sm text-slate-500">
+            <p className="text-xs text-slate-500 mt-0.5">
               Select which video platforms coaches can link to
             </p>
           </div>
@@ -210,13 +212,13 @@ function MediaSettingsManager() {
 
         <div className="space-y-2">
           {/* YouTube */}
-          <label className="flex items-center justify-between p-3 border border-slate-200 rounded-lg cursor-pointer hover:bg-slate-50 transition">
+          <label className="flex items-center justify-between p-3 border border-slate-200 rounded-xl cursor-pointer hover:bg-slate-50 transition">
             <div className="flex items-center gap-3">
-              <div className="w-8 h-8 rounded-lg bg-red-100 flex items-center justify-center">
+              <div className="w-8 h-8 rounded-lg bg-red-100 flex items-center justify-center flex-shrink-0">
                 <span className="text-red-600 font-bold text-xs">▶</span>
               </div>
               <div>
-                <span className="font-medium text-slate-800">YouTube</span>
+                <span className="font-semibold text-sm text-slate-800">YouTube</span>
                 <p className="text-xs text-slate-500">
                   YouTube videos, shorts, and embeds
                 </p>
@@ -226,18 +228,18 @@ function MediaSettingsManager() {
               type="checkbox"
               checked={platforms.includes("YOUTUBE")}
               onChange={() => togglePlatform("YOUTUBE")}
-              className="w-5 h-5 text-blue-600 rounded focus:ring-2 focus:ring-blue-500"
+              className="w-5 h-5 text-blue-600 rounded focus:ring-2 focus:ring-blue-500 flex-shrink-0 accent-blue-600"
             />
           </label>
 
           {/* Instagram */}
-          <label className="flex items-center justify-between p-3 border border-slate-200 rounded-lg cursor-pointer hover:bg-slate-50 transition">
+          <label className="flex items-center justify-between p-3 border border-slate-200 rounded-xl cursor-pointer hover:bg-slate-50 transition">
             <div className="flex items-center gap-3">
-              <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-purple-500 via-pink-500 to-orange-400 flex items-center justify-center">
+              <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-purple-500 via-pink-500 to-orange-400 flex items-center justify-center flex-shrink-0">
                 <span className="text-white font-bold text-xs">📷</span>
               </div>
               <div>
-                <span className="font-medium text-slate-800">Instagram</span>
+                <span className="font-semibold text-sm text-slate-800">Instagram</span>
                 <p className="text-xs text-slate-500">
                   Instagram reels and posts (must be public)
                 </p>
@@ -247,23 +249,23 @@ function MediaSettingsManager() {
               type="checkbox"
               checked={platforms.includes("INSTAGRAM")}
               onChange={() => togglePlatform("INSTAGRAM")}
-              className="w-5 h-5 text-blue-600 rounded focus:ring-2 focus:ring-blue-500"
+              className="w-5 h-5 text-blue-600 rounded focus:ring-2 focus:ring-blue-500 flex-shrink-0 accent-blue-600"
             />
           </label>
         </div>
 
         {platforms.length === 0 && (
-          <div className="mt-3 bg-yellow-50 border border-yellow-200 rounded-lg px-3 py-2">
+          <div className="mt-3 bg-yellow-50 border border-yellow-200 rounded-xl px-4 py-3">
             <p className="text-xs text-yellow-800">
-              ⚠️ No platforms enabled. Coaches won't be able to add video links.
+              No platforms enabled — coaches won't be able to add video links.
             </p>
           </div>
         )}
 
         {platforms.includes("INSTAGRAM") && (
-          <div className="mt-3 bg-blue-50 border border-blue-200 rounded-lg px-3 py-2">
+          <div className="mt-3 bg-blue-50 border border-blue-200 rounded-xl px-4 py-3">
             <p className="text-xs text-blue-800">
-              ℹ️ Instagram embeds only work for <strong>public</strong>{" "}
+              Instagram embeds only work for <strong>public</strong>{" "}
               accounts. Private reels will show a fallback link.
             </p>
           </div>
@@ -275,10 +277,10 @@ function MediaSettingsManager() {
         <button
           onClick={handleSave}
           disabled={saving}
-          className="flex items-center gap-2 bg-blue-600 text-white px-6 py-2.5 rounded-lg font-semibold hover:bg-blue-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
+          className="flex items-center gap-2 bg-blue-600 text-white px-6 py-2.5 rounded-lg text-sm font-semibold hover:bg-blue-700 active:bg-blue-800 transition shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          <Save size={18} />
-          {saving ? "Saving..." : "Save Media Settings"}
+          <Save size={16} />
+          {saving ? "Saving…" : "Save Media Settings"}
         </button>
       </div>
     </div>
