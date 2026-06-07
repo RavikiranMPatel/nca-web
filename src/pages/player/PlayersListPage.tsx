@@ -17,6 +17,8 @@ import {
   Building2,
   UserPlus,
   Trash2,
+  UserCheck,
+  UserMinus,
 } from "lucide-react";
 import { getImageUrl } from "../../utils/imageUrl";
 import { toast } from "react-hot-toast";
@@ -272,6 +274,40 @@ function PlayersListPage() {
     player: Player | null;
   }>({ open: false, player: null });
   const [deleting, setDeleting] = useState(false);
+
+  const [toggleConfirm, setToggleConfirm] = useState<{
+    open: boolean;
+    player: Player | null;
+  }>({ open: false, player: null });
+  const [toggleReason, setToggleReason] = useState("");
+  const [toggling, setToggling] = useState(false);
+
+  const handleToggleStatus = async () => {
+    if (!toggleConfirm.player) return;
+    if (toggleConfirm.player.active && !toggleReason.trim()) {
+      toast.error("Please provide a reason for deactivating");
+      return;
+    }
+    setToggling(true);
+    try {
+      await api.put(
+        `/admin/players/${toggleConfirm.player.publicId}/toggle-status`,
+        {
+          reason: toggleReason.trim() || "Reactivated by admin",
+        },
+      );
+      toast.success(
+        `${toggleConfirm.player.displayName} marked as ${toggleConfirm.player.active ? "Inactive" : "Active"}`,
+      );
+      setToggleConfirm({ open: false, player: null });
+      setToggleReason("");
+      loadPlayers();
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || "Failed to update status");
+    } finally {
+      setToggling(false);
+    }
+  };
 
   const handleDeleteExt = async () => {
     if (!deleteConfirm.player) return;
@@ -705,7 +741,7 @@ function PlayersListPage() {
               <div
                 key={p.publicId}
                 onClick={() => navigate(`/admin/players/${p.publicId}`)}
-                className="bg-white rounded-xl border border-slate-200 p-3 active:bg-slate-50 transition cursor-pointer"
+                className={`bg-white rounded-xl border border-slate-200 p-3 active:bg-slate-50 transition cursor-pointer ${!p.active ? "opacity-60" : ""}`}
               >
                 <div className="flex gap-3 items-center">
                   {/* Avatar */}
@@ -785,6 +821,26 @@ function PlayersListPage() {
                         <Trash2 size={14} />
                       </button>
                     )}
+                    {isSuperAdmin && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setToggleConfirm({ open: true, player: p });
+                          setToggleReason("");
+                        }}
+                        className={`p-1.5 rounded-lg transition ${
+                          p.active
+                            ? "text-amber-400 hover:text-amber-600 hover:bg-amber-50"
+                            : "text-emerald-400 hover:text-emerald-600 hover:bg-emerald-50"
+                        }`}
+                      >
+                        {p.active ? (
+                          <UserMinus size={14} />
+                        ) : (
+                          <UserCheck size={14} />
+                        )}
+                      </button>
+                    )}
                     <ChevronRight size={16} className="text-slate-300" />
                   </div>
                 </div>
@@ -842,7 +898,7 @@ function PlayersListPage() {
                   return (
                     <tr
                       key={p.publicId}
-                      className="hover:bg-slate-50 transition-colors"
+                      className={`hover:bg-slate-50 transition-colors ${!p.active ? "opacity-60" : ""}`}
                     >
                       <td className="px-6 py-4">
                         {p.photoUrl ? (
@@ -968,6 +1024,27 @@ function PlayersListPage() {
                               title="Delete player"
                             >
                               <Trash2 size={15} />
+                            </button>
+                          )}
+                          {isSuperAdmin && (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setToggleConfirm({ open: true, player: p });
+                                setToggleReason("");
+                              }}
+                              className={`p-2 rounded-lg transition ${
+                                p.active
+                                  ? "text-amber-500 hover:text-amber-700 hover:bg-amber-50"
+                                  : "text-emerald-500 hover:text-emerald-700 hover:bg-emerald-50"
+                              }`}
+                              title={p.active ? "Mark Inactive" : "Mark Active"}
+                            >
+                              {p.active ? (
+                                <UserMinus size={15} />
+                              ) : (
+                                <UserCheck size={15} />
+                              )}
                             </button>
                           )}
                           <button
@@ -1111,6 +1188,117 @@ function PlayersListPage() {
                     <Trash2 size={14} />
                   )}
                   {deleting ? "Deleting..." : "Delete"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── TOGGLE STATUS MODAL ── */}
+      {toggleConfirm.open && toggleConfirm.player && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-sm">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
+              <div className="flex items-center gap-2">
+                <div
+                  className={`w-8 h-8 rounded-full flex items-center justify-center ${
+                    toggleConfirm.player.active
+                      ? "bg-amber-100"
+                      : "bg-emerald-100"
+                  }`}
+                >
+                  {toggleConfirm.player.active ? (
+                    <UserMinus size={15} className="text-amber-600" />
+                  ) : (
+                    <UserCheck size={15} className="text-emerald-600" />
+                  )}
+                </div>
+                <h3 className="font-semibold text-slate-900">
+                  {toggleConfirm.player.active
+                    ? "Mark as Inactive"
+                    : "Mark as Active"}
+                </h3>
+              </div>
+              <button
+                onClick={() => {
+                  setToggleConfirm({ open: false, player: null });
+                  setToggleReason("");
+                }}
+                className="text-slate-400 hover:text-slate-600 transition p-1"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="p-5 space-y-4">
+              <p className="text-sm text-slate-600">
+                {toggleConfirm.player.active ? (
+                  <>
+                    <span className="font-semibold text-slate-900">
+                      {toggleConfirm.player.displayName}
+                    </span>{" "}
+                    will be marked inactive but kept in the system. You can
+                    reactivate them anytime.
+                  </>
+                ) : (
+                  <>
+                    <span className="font-semibold text-slate-900">
+                      {toggleConfirm.player.displayName}
+                    </span>{" "}
+                    will be marked active again.
+                  </>
+                )}
+              </p>
+
+              {toggleConfirm.player.active && (
+                <div>
+                  <label className="text-xs font-semibold text-slate-600 block mb-1.5">
+                    Reason <span className="text-red-500">*</span>
+                  </label>
+                  <textarea
+                    value={toggleReason}
+                    onChange={(e) => setToggleReason(e.target.value)}
+                    placeholder="e.g. Student stopped coming to academy"
+                    rows={3}
+                    className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+                    autoFocus
+                  />
+                </div>
+              )}
+
+              <div className="flex gap-2 pt-1">
+                <button
+                  onClick={() => {
+                    setToggleConfirm({ open: false, player: null });
+                    setToggleReason("");
+                  }}
+                  disabled={toggling}
+                  className="flex-1 py-2.5 text-sm font-medium text-slate-600 bg-slate-100 rounded-lg hover:bg-slate-200 transition disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleToggleStatus}
+                  disabled={toggling}
+                  className={`flex-1 py-2.5 text-sm font-medium text-white rounded-lg transition flex items-center justify-center gap-2 disabled:opacity-50 ${
+                    toggleConfirm.player.active
+                      ? "bg-amber-500 hover:bg-amber-600"
+                      : "bg-emerald-600 hover:bg-emerald-700"
+                  }`}
+                >
+                  {toggling ? (
+                    <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                  ) : toggleConfirm.player.active ? (
+                    <UserMinus size={14} />
+                  ) : (
+                    <UserCheck size={14} />
+                  )}
+                  {toggling
+                    ? "Updating..."
+                    : toggleConfirm.player.active
+                      ? "Mark Inactive"
+                      : "Mark Active"}
                 </button>
               </div>
             </div>

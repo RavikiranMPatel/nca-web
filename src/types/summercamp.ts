@@ -91,6 +91,8 @@ export type SummerCampEnrollment = {
   batchNames: string[];
   createdAt: string;
   updatedAt: string;
+  playerGender?: string;
+  playerProfession?: string;
 };
 
 export type EnrollmentCreateRequest = {
@@ -103,6 +105,8 @@ export type EnrollmentCreateRequest = {
   guardianPhone?: string;
   batchIds: string[]; // Array of batch IDs
   notes?: string;
+  playerGender?: string;
+  playerProfession?: string;
 };
 
 export type EnrollmentUpdateRequest = {

@@ -27,6 +27,8 @@ function EnrollmentFormModal({
     playerName: "",
     playerPhone: "",
     playerEmail: "",
+    playerGender: "",
+    playerProfession: "",
     guardianName: "",
     guardianPhone: "",
     batchIds: [],
@@ -52,7 +54,9 @@ function EnrollmentFormModal({
   };
 
   const handleChange = (
-    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>,
+    e: React.ChangeEvent<
+      HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement
+    >,
   ) => {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
@@ -95,6 +99,14 @@ function EnrollmentFormModal({
       errors.push("Guardian phone number is required");
     } else if (!validateIndianPhone(formData.guardianPhone)) {
       errors.push("Enter a valid Indian mobile number (e.g. 9876543210)");
+    }
+
+    if (!formData.playerGender) {
+      errors.push("Gender is required");
+    }
+
+    if (!formData.playerProfession) {
+      errors.push("Profession is required");
     }
 
     if (errors.length > 0) {
@@ -192,6 +204,39 @@ function EnrollmentFormModal({
                   className="w-full px-4 py-2.5 rounded-lg border border-slate-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all"
                   placeholder="Student's email"
                 />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-2">
+                  Gender <span className="text-red-500">*</span>
+                </label>
+                <select
+                  name="playerGender"
+                  value={formData.playerGender}
+                  onChange={handleChange}
+                  className="w-full px-4 py-2.5 rounded-lg border border-slate-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all"
+                >
+                  <option value="">Select Gender</option>
+                  <option value="MALE">Male</option>
+                  <option value="FEMALE">Female</option>
+                  <option value="OTHER">Other</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-2">
+                  Profession <span className="text-red-500">*</span>
+                </label>
+                <select
+                  name="playerProfession"
+                  value={formData.playerProfession}
+                  onChange={handleChange}
+                  className="w-full px-4 py-2.5 rounded-lg border border-slate-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all"
+                >
+                  <option value="">Select Profession</option>
+                  <option value="STUDENT">Student</option>
+                  <option value="WORKING">Working Professional</option>
+                </select>
               </div>
             </div>
           </div>
