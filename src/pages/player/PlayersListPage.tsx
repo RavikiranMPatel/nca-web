@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { playerService } from "../../api/playerService/playerService";
 import {
   ArrowLeft,
@@ -249,16 +249,24 @@ function PlayersListPage() {
   const { userRole } = useAuth();
   const isSuperAdmin = userRole === "ROLE_SUPER_ADMIN";
   const [branches, setBranches] = useState<Branch[]>([]);
-  const [branchFilter, setBranchFilter] = useState<string>("all");
 
   const [players, setPlayers] = useState<Player[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
+  const [searchParams] = useSearchParams();
+
   const [statusFilter, setStatusFilter] = useState<
     "all" | "active" | "inactive"
-  >("all");
+  >((searchParams.get("status") as "active" | "inactive") ?? "all");
   const [professionFilter, setProfessionFilter] = useState<string>("all");
   const [ageGroupFilter, setAgeGroupFilter] = useState<string>("all");
+  const [branchFilter, setBranchFilter] = useState<string>("all");
+  const [genderFilter, setGenderFilter] = useState<string>(
+    searchParams.get("gender") ?? "all",
+  );
+  const [batchTimeFilter, setBatchTimeFilter] = useState<string>(
+    searchParams.get("batch") ?? "all",
+  );
   const [currentPage, setCurrentPage] = useState(1);
   const [showExportMenu, setShowExportMenu] = useState(false);
   const [exportingExcel, setExportingExcel] = useState(false);
@@ -364,12 +372,20 @@ function PlayersListPage() {
       ageGroupFilter === "all" || isEligibleForGroup(p.dob, ageGroupFilter);
     const matchesBranch =
       !isSuperAdmin || branchFilter === "all" || p.branchId === branchFilter;
+
+    const matchesGender = genderFilter === "all" || p.gender === genderFilter;
+    const matchesBatchTime =
+      batchTimeFilter === "all" ||
+      p.batch?.toLowerCase().includes(batchTimeFilter);
+
     return (
       matchesSearch &&
       matchesStatus &&
       matchesProfession &&
       matchesAgeGroup &&
-      matchesBranch
+      matchesBranch &&
+      matchesGender &&
+      matchesBatchTime
     );
   });
 
@@ -467,6 +483,8 @@ function PlayersListPage() {
     statusFilter !== "all" ||
     professionFilter !== "all" ||
     ageGroupFilter !== "all" ||
+    genderFilter !== "all" ||
+    batchTimeFilter !== "all" ||
     (isSuperAdmin && branchFilter !== "all");
 
   const resetFilters = () => {
@@ -475,6 +493,8 @@ function PlayersListPage() {
     setProfessionFilter("all");
     setAgeGroupFilter("all");
     setBranchFilter("all");
+    setGenderFilter("all");
+    setBatchTimeFilter("all");
   };
 
   if (loading) {

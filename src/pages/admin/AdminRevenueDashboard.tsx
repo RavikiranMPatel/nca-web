@@ -160,7 +160,8 @@ type Tab =
   | "regfees"
   | "subscriptions"
   | "expenses"
-  | "income";
+  | "income"
+  | "installments";
 type ExpenseSubTab = "summary" | "monthly" | "all";
 type DateRange = "all" | "today" | "this_week" | "this_month" | "custom";
 
@@ -431,6 +432,22 @@ export default function AdminRevenueDashboard() {
   const [editDueDateValue, setEditDueDateValue] = useState("");
   const [savingDueDate, setSavingDueDate] = useState(false);
 
+  type InstallmentPaymentRow = {
+    publicId: string;
+    amount: number;
+    paymentMode: string;
+    referenceNumber: string | null;
+    paidOn: string;
+    playerName: string;
+    playerPublicId: string;
+    planDescription: string | null;
+    installmentNumber: number;
+  };
+
+  const [installmentPayments, setInstallmentPayments] = useState<
+    InstallmentPaymentRow[]
+  >([]);
+
   const handleUpdateDueDate = async () => {
     if (!editDueDateRow || !editDueDateValue) return;
     setSavingDueDate(true);
@@ -498,6 +515,7 @@ export default function AdminRevenueDashboard() {
         feeSummaryRes,
         regFeesRes,
         subRevenueRes,
+        installmentPaymentsRes,
       ] = await Promise.all([
         api.get("/admin/fees/payments"),
         api.get("/admin/bookings"),
@@ -507,6 +525,9 @@ export default function AdminRevenueDashboard() {
         api.get("/admin/fees/collection-summary").catch(() => ({ data: [] })),
         api.get("/admin/fees/registration-fees").catch(() => ({ data: [] })),
         api.get("/admin/subscriptions/revenue").catch(() => ({ data: [] })),
+        api
+          .get("/admin/fee-installments/all-payments")
+          .catch(() => ({ data: [] })),
       ]);
       if (thisLoad !== loadRef.current) return;
 
@@ -542,6 +563,7 @@ export default function AdminRevenueDashboard() {
       setExpenses(newExpenses);
       setPartnerSpending(newPartnerSpending);
       setSuggestions(newSuggestions);
+      setInstallmentPayments(installmentPaymentsRes.data || []);
     } catch {
       if (thisLoad !== loadRef.current) return;
       setError("Failed to load revenue data");
@@ -795,6 +817,16 @@ export default function AdminRevenueDashboard() {
     [subRevenue, subRevenueSearch],
   );
 
+  const filteredInstallmentPayments = useMemo(
+    () => installmentPayments.filter((p) => inRange(p.paidOn)),
+    [installmentPayments, from, to],
+  );
+
+  const installmentPaymentsTotal = filteredInstallmentPayments.reduce(
+    (s, p) => s + Number(p.amount),
+    0,
+  );
+
   // ── grossRevenue now includes reg fees ──
   const grossRevenue =
     feesTotal +
@@ -802,7 +834,8 @@ export default function AdminRevenueDashboard() {
     campFeesTotal +
     otherIncomeTotal +
     regFeesTotal +
-    subRevenueTotal;
+    subRevenueTotal +
+    installmentPaymentsTotal;
   const netRevenue = grossRevenue - expensesTotal;
 
   const rangeLabels: Record<DateRange, string> = {
@@ -1137,6 +1170,7 @@ export default function AdminRevenueDashboard() {
     amount: number;
     mode: string;
   };
+
   const recentTx = useMemo<TxRow[]>(() => {
     const fees: TxRow[] = filteredFees.map((p) => ({
       key: "f-" + p.publicId,
@@ -1145,6 +1179,15 @@ export default function AdminRevenueDashboard() {
       name: p.player?.displayName || "Unknown",
       description: p.feePlan?.name || "Fee",
       amount: p.amount,
+      mode: fmtMode(p.paymentMode),
+    }));
+    const instTx: TxRow[] = filteredInstallmentPayments.map((p) => ({
+      key: "inst-" + p.publicId,
+      date: p.paidOn,
+      type: "fee" as const,
+      name: p.playerName,
+      description: `Installment #${p.installmentNumber}${p.planDescription ? " · " + p.planDescription : ""}`,
+      amount: Number(p.amount),
       mode: fmtMode(p.paymentMode),
     }));
     const camps: TxRow[] = filteredCampFees.map((p) => ({
@@ -1210,11 +1253,21 @@ export default function AdminRevenueDashboard() {
           mode: "—",
         }))
       : [];
-    return [...fees, ...camps, ...bks, ...regs, ...subs, ...exps, ...incs]
+    return [
+      ...fees,
+      ...instTx,
+      ...camps,
+      ...bks,
+      ...regs,
+      ...subs,
+      ...exps,
+      ...incs,
+    ]
       .sort((a, b) => (b.date > a.date ? 1 : -1))
       .slice(0, 20);
   }, [
     filteredFees,
+    filteredInstallmentPayments,
     filteredCampFees,
     filteredBookings,
     regFees,
@@ -1805,7 +1858,9 @@ export default function AdminRevenueDashboard() {
                   key={val}
                   onClick={() => {
                     setDateRange(val);
-                    if (val !== "custom") setShowFilterSheet(false);
+                    if (val !== "custom") {
+                      setShowFilterSheet(false);
+                    }
                   }}
                   className={`py-3 rounded-xl text-sm font-medium border-2 transition ${dateRange === val ? "bg-emerald-600 text-white border-emerald-600" : "border-slate-200 text-slate-700 bg-white"}`}
                 >
@@ -2025,6 +2080,7 @@ export default function AdminRevenueDashboard() {
         )}
         <SummaryCard
           label="Fees"
+          onClick={() => setActiveTab("fees")}
           value={fmt(feesTotal)}
           sub={`${filteredFees.length} payments`}
           icon={<IndianRupee size={15} className="text-blue-600" />}
@@ -2033,7 +2089,18 @@ export default function AdminRevenueDashboard() {
           valueClass="text-blue-700"
         />
         <SummaryCard
+          label="Installments Fees"
+          onClick={() => setActiveTab("installments")}
+          value={fmt(installmentPaymentsTotal)}
+          sub={`${filteredInstallmentPayments.length} payments`}
+          icon={<CreditCard size={15} className="text-blue-600" />}
+          bg="bg-gradient-to-br from-blue-50 to-indigo-50"
+          border="border-blue-200"
+          valueClass="text-blue-700"
+        />
+        <SummaryCard
           label="Camp Fees"
+          onClick={() => setActiveTab("campfees")}
           value={fmt(campFeesTotal)}
           sub={`${filteredCampFees.length} paid`}
           icon={<Users size={15} className="text-teal-600" />}
@@ -2044,6 +2111,7 @@ export default function AdminRevenueDashboard() {
         <SummaryCard
           label="Bookings"
           value={fmt(bookingsTotal + subRevenueTotal)}
+          onClick={() => setActiveTab("bookings")}
           sub={`${filteredBookings.length} bookings · ${subRevenueInRangeCount} subscription${subRevenueInRangeCount !== 1 ? "s" : ""}`}
           icon={<BookOpen size={15} className="text-orange-500" />}
           bg="bg-gradient-to-br from-orange-50 to-amber-50"
@@ -2054,6 +2122,10 @@ export default function AdminRevenueDashboard() {
         <SummaryCard
           label="Bowling Machine"
           value={fmt(bowlingMachineTotal)}
+          onClick={() => {
+            setActiveTab("bookings");
+            setBookingResourceFilter("BOWLING_MACHINE");
+          }}
           sub={`${bmCount} paid`}
           icon={<BookOpen size={15} className="text-orange-500" />}
           bg="bg-gradient-to-br from-orange-50 to-amber-50"
@@ -2063,6 +2135,10 @@ export default function AdminRevenueDashboard() {
         <SummaryCard
           label="Astro Turf"
           value={fmt(astroTurfTotal)}
+          onClick={() => {
+            setActiveTab("bookings");
+            setBookingResourceFilter("ASTRO");
+          }}
           sub={`${astroCount} paid`}
           icon={<BookOpen size={15} className="text-green-600" />}
           bg="bg-gradient-to-br from-green-50 to-emerald-50"
@@ -2073,6 +2149,10 @@ export default function AdminRevenueDashboard() {
           label="Tennis Ball"
           value={fmt(tennisBallTotal)}
           sub={`${tennisCount} paid`}
+          onClick={() => {
+            setActiveTab("bookings");
+            setBookingResourceFilter("TENNIS_BALL");
+          }}
           icon={<BookOpen size={15} className="text-yellow-600" />}
           bg="bg-gradient-to-br from-yellow-50 to-lime-50"
           border="border-yellow-200"
@@ -2083,6 +2163,7 @@ export default function AdminRevenueDashboard() {
           label="Reg Fees"
           value={fmt(regFeesTotal)}
           sub={`${regFeesPaidCount} of ${regFees.length} paid`}
+          onClick={() => setActiveTab("regfees")}
           icon={<CreditCard size={15} className="text-purple-600" />}
           bg="bg-gradient-to-br from-purple-50 to-fuchsia-50"
           border="border-purple-200"
@@ -2091,6 +2172,7 @@ export default function AdminRevenueDashboard() {
         <SummaryCard
           label="Bowling Machine Memberships"
           value={fmt(subRevenueTotal + membershipBookingsTotal)}
+          onClick={() => setActiveTab("subscriptions")}
           sub={`${subRevenueInRangeCount} activated · ${fmt(membershipBookingsTotal)} historical`}
           icon={<CreditCard size={15} className="text-cyan-600" />}
           bg="bg-gradient-to-br from-cyan-50 to-sky-50"
@@ -2102,6 +2184,7 @@ export default function AdminRevenueDashboard() {
             label="Other Income"
             value={fmt(otherIncomeTotal)}
             sub={`${filteredIncomes.length} entries`}
+            onClick={() => setActiveTab("income")}
             icon={<TrendingUp size={15} className="text-violet-600" />}
             bg="bg-gradient-to-br from-violet-50 to-purple-50"
             border="border-violet-200"
@@ -2115,6 +2198,7 @@ export default function AdminRevenueDashboard() {
             sub={`${filteredExpenses.length} entries`}
             icon={<TrendingDown size={15} className="text-red-500" />}
             bg="bg-gradient-to-br from-red-50 to-rose-50"
+            onClick={() => setActiveTab("expenses")}
             border="border-red-200"
             valueClass="text-red-600"
           />
@@ -2144,6 +2228,10 @@ export default function AdminRevenueDashboard() {
             ["feesummary", `Fee Summary (${feeSummary.length})`],
             ["regfees", `Reg Fees (${regFees.length})`],
             ["subscriptions", `Memberships (${subRevenue.length})`],
+            [
+              "installments",
+              `Installments (${filteredInstallmentPayments.length})`,
+            ],
             ...(isSuperAdmin
               ? [
                   ["expenses", `Expenses (${filteredExpenses.length})`],
@@ -2161,6 +2249,136 @@ export default function AdminRevenueDashboard() {
           </button>
         ))}
       </div>
+
+      {activeTab === "installments" && (
+        <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+          <div className="px-4 py-3 border-b border-slate-100 bg-slate-50 flex items-center justify-between">
+            <h2 className="font-bold text-slate-800 text-sm sm:text-base">
+              Installment Payments
+            </h2>
+            <span className="text-sm font-semibold text-blue-600">
+              {fmt(installmentPaymentsTotal)}
+            </span>
+          </div>
+          {filteredInstallmentPayments.length === 0 ? (
+            <EmptyState message="No installment payments in this period" />
+          ) : (
+            <>
+              {/* Mobile */}
+              <div className="sm:hidden divide-y divide-slate-100">
+                {filteredInstallmentPayments.map((p) => (
+                  <div key={p.publicId} className="px-4 py-3.5">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-semibold text-slate-800 truncate">
+                          {p.playerName}
+                        </p>
+                        <p className="text-xs text-slate-500 mt-0.5">
+                          Installment #{p.installmentNumber}
+                          {p.planDescription ? ` · ${p.planDescription}` : ""}
+                        </p>
+                      </div>
+                      <p className="text-sm font-bold text-slate-900 flex-shrink-0">
+                        {fmt(Number(p.amount))}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-3 mt-1.5 text-xs text-slate-400">
+                      <span>{fmtDate(p.paidOn)}</span>
+                      <span>{fmtMode(p.paymentMode)}</span>
+                      {p.referenceNumber && (
+                        <span className="font-mono">{p.referenceNumber}</span>
+                      )}
+                    </div>
+                  </div>
+                ))}
+                <div className="flex items-center justify-between px-4 py-3 bg-slate-50 border-t-2 border-slate-200">
+                  <span className="text-sm font-semibold text-slate-700">
+                    Total · {filteredInstallmentPayments.length} payments
+                  </span>
+                  <span className="text-sm font-bold text-blue-700">
+                    {fmt(installmentPaymentsTotal)}
+                  </span>
+                </div>
+              </div>
+
+              {/* Desktop */}
+              <div className="hidden sm:block overflow-x-auto">
+                <table className="w-full">
+                  <thead>
+                    <tr className="text-xs text-slate-500 uppercase tracking-wide border-b bg-slate-50/50">
+                      {[
+                        "Date",
+                        "Player",
+                        "Installment",
+                        "Plan",
+                        "Amount",
+                        "Mode",
+                        "Reference",
+                      ].map((h) => (
+                        <th
+                          key={h}
+                          className="text-left px-4 py-3 whitespace-nowrap"
+                        >
+                          {h}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {filteredInstallmentPayments
+                      .sort((a, b) => (b.paidOn > a.paidOn ? 1 : -1))
+                      .map((p) => (
+                        <tr key={p.publicId} className="hover:bg-slate-50">
+                          <td className="px-4 py-3 text-sm text-slate-600 whitespace-nowrap">
+                            {fmtDate(p.paidOn)}
+                          </td>
+                          <td className="px-4 py-3 text-sm font-medium text-slate-800">
+                            {p.playerName}
+                          </td>
+                          <td className="px-4 py-3 text-sm text-slate-600">
+                            #{p.installmentNumber}
+                          </td>
+                          <td className="px-4 py-3 text-sm text-slate-500">
+                            {p.planDescription || "—"}
+                          </td>
+                          <td className="px-4 py-3 text-sm font-bold text-slate-900">
+                            {fmt(Number(p.amount))}
+                          </td>
+                          <td className="px-4 py-3 text-sm text-slate-600">
+                            {fmtMode(p.paymentMode)}
+                          </td>
+                          <td className="px-4 py-3">
+                            {p.referenceNumber ? (
+                              <span className="text-xs font-mono text-slate-600 bg-slate-100 px-2 py-0.5 rounded">
+                                {p.referenceNumber}
+                              </span>
+                            ) : (
+                              <span className="text-xs text-slate-400">—</span>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                  </tbody>
+                  <tfoot>
+                    <tr className="border-t-2 border-slate-200 bg-slate-50">
+                      <td
+                        colSpan={4}
+                        className="px-4 py-3 text-sm font-semibold text-slate-700"
+                      >
+                        Total · {filteredInstallmentPayments.length} payments
+                      </td>
+                      <td className="px-4 py-3 text-sm font-bold text-blue-700">
+                        {fmt(installmentPaymentsTotal)}
+                      </td>
+                      <td colSpan={2} />
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+            </>
+          )}
+        </div>
+      )}
 
       {/* ── OVERVIEW ── */}
       {activeTab === "overview" && (
@@ -4364,6 +4582,7 @@ function SummaryCard({
   border,
   valueClass,
   spanFull,
+  onClick,
 }: {
   label: string;
   value: string;
@@ -4373,10 +4592,14 @@ function SummaryCard({
   border: string;
   valueClass: string;
   spanFull?: boolean;
+  onClick?: () => void;
 }) {
   return (
     <div
-      className={`rounded-xl border p-3 sm:p-4 ${bg} ${border} shadow-sm ${spanFull ? "col-span-2 sm:col-span-1" : ""}`}
+      onClick={onClick}
+      className={`rounded-xl border p-3 sm:p-4 ${bg} ${border} shadow-sm 
+    ${spanFull ? "col-span-2 sm:col-span-1" : ""}
+    ${onClick ? "cursor-pointer hover:shadow-md active:scale-95 transition-all" : "transition"}`}
     >
       <div className="flex items-center justify-between mb-1.5">
         <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide leading-tight truncate">

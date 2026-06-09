@@ -1,11 +1,11 @@
 import type { LucideIcon } from "lucide-react";
 
-
 type Props = {
   label: string;
   value: number | string;
   icon: LucideIcon;
   color?: "blue" | "green" | "orange" | "red";
+  onClick?: () => void;
 };
 
 const colorMap = {
@@ -20,9 +20,15 @@ function StatCard({
   value,
   icon: Icon,
   color = "blue",
+  onClick, // add this
 }: Props) {
   return (
-    <div className="bg-white p-5 rounded-lg shadow hover:shadow-lg transition">
+    <div
+      onClick={onClick}
+      className={`bg-white p-5 rounded-lg shadow hover:shadow-lg transition ${
+        onClick ? "cursor-pointer active:scale-95" : ""
+      }`}
+    >
       <div className="flex items-center justify-between">
         <div>
           <p className="text-sm text-gray-500">{label}</p>

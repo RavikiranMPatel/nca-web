@@ -247,60 +247,80 @@ function AdminDashboard() {
             label="Total Players"
             value={summary.totalPlayers}
             icon={Users}
+            onClick={() => navigate("/admin/players")}
           />
           <StatCard
             label="Active Players"
             value={summary.activePlayers}
             icon={UserCheck}
             color="green"
+            onClick={() => navigate("/admin/players?status=active")}
           />
           <StatCard
             label="Inactive"
             value={summary.inactivePlayers}
             icon={UserX}
             color="red"
+            onClick={() => navigate("/admin/players?status=inactive")}
           />
-          <StatCard label="Boys" value={summary.malePlayers} icon={Users} />
-          <StatCard label="Girls" value={summary.femalePlayers} icon={Users} />
+          <StatCard
+            label="Boys"
+            value={summary.malePlayers}
+            icon={Users}
+            onClick={() => navigate("/admin/players?gender=MALE")}
+          />
+          <StatCard
+            label="Girls"
+            value={summary.femalePlayers}
+            icon={Users}
+            onClick={() => navigate("/admin/players?gender=FEMALE")}
+          />
           <StatCard
             label="Morning Batch"
             value={summary.morningBatch}
             icon={Sun}
             color="orange"
+            onClick={() => navigate("/admin/players?batch=morning")}
           />
           <StatCard
             label="Evening Batch"
             value={summary.eveningBatch}
             icon={Moon}
+            onClick={() => navigate("/admin/players?batch=evening")}
           />
           <StatCard
             label="Both Batches"
             value={summary.bothBatch}
             icon={Users}
+            onClick={() => navigate("/admin/players?batch=both")}
           />
           <StatCard
             label="Present Today"
             value={summary.todayPresent}
             icon={CheckCircle}
             color="green"
+            onClick={() => navigate("/admin/attendance")}
           />
           <StatCard
             label="Absent Today"
             value={summary.todayAbsent}
             icon={XCircle}
             color="red"
+            onClick={() => navigate("/admin/attendance")}
           />
           <StatCard
             label="Fees Due"
             value={summary.feesDueToday}
             icon={Clock}
             color="orange"
+            onClick={() => navigate("/admin/fees?status=DUE")}
           />
           <StatCard
             label="Overdue Fees"
             value={summary.overdueFees}
             icon={AlertTriangle}
             color="red"
+            onClick={() => navigate("/admin/fees?status=OVERDUE")}
           />
         </div>
       </section>

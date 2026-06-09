@@ -13,6 +13,7 @@ import {
   Home,
   CalendarDays,
   BookOpen,
+  Gavel,
   ChevronRight,
 } from "lucide-react";
 import { useState, useEffect, useRef } from "react";
@@ -335,6 +336,10 @@ function Navbar() {
                 </div>
               )}
 
+              <NavLink to="/umpire-assist" className={linkClass}>
+                Umpire Assist
+              </NavLink>
+
               {!isAdmin && starPerformerEnabled && (
                 <NavLink to="/star-performer" className={linkClass}>
                   Star Performer
@@ -607,6 +612,17 @@ function Navbar() {
               iconColor="#db2777"
             />
           )}
+          <DrawerItem
+            icon={Gavel}
+            label="Umpire Assist"
+            active={location.pathname === "/umpire-assist"}
+            onClick={() => {
+              navigate("/umpire-assist");
+              setMobileOpen(false);
+            }}
+            iconBg="#ecfeff"
+            iconColor="#0891b2"
+          />
 
           {/* Sections scroll */}
           {enabledSections.length > 0 && (

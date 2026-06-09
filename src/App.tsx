@@ -75,6 +75,7 @@ import TournamentCreatePage from "./pages/scoring/TournamentCreatePage";
 import TournamentDetailPage from "./pages/scoring/TournamentDetailPage";
 import TournamentListPage from "./pages/scoring/TournamentListPage";
 import CricketStatsPage from "./pages/CricketStatsPage";
+import UmpireAssistPage from "./pages/umpire/UmpireAssistPage";
 
 // Add route after /my-bookings route:
 <Route
@@ -149,6 +150,15 @@ function App() {
         element={
           <AppLayout>
             <CricketStatsPage />
+          </AppLayout>
+        }
+      />
+
+      <Route
+        path="/umpire-assist"
+        element={
+          <AppLayout>
+            <UmpireAssistPage />
           </AppLayout>
         }
       />
