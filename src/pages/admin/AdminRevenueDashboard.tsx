@@ -734,20 +734,19 @@ export default function AdminRevenueDashboard() {
     (s, p) => s + (p.amount || 0),
     0,
   );
-  const expensesTotal = filteredExpenses.reduce(
-    (s, e) => s + (e.amount || 0),
-    0,
-  );
-  const otherIncomeTotal = filteredIncomes.reduce(
-    (s, e) => s + (e.amount || 0),
-    0,
-  );
   const monthlyPaidTotal = monthlyPayments
     .filter((p) => p.status === "PAID")
     .reduce((s, p) => s + (p.amount || 0), 0);
   const pendingBookings = bookings.filter(
     (b) => b.status === "PENDING_PAYMENT",
   ).length;
+  const expensesTotal =
+    filteredExpenses.reduce((s, e) => s + (e.amount || 0), 0) +
+    monthlyPaidTotal;
+  const otherIncomeTotal = filteredIncomes.reduce(
+    (s, e) => s + (e.amount || 0),
+    0,
+  );
 
   // ── NEW: Registration Fee totals ──
   const regFeesTotal = regFees
@@ -2195,7 +2194,7 @@ export default function AdminRevenueDashboard() {
           <SummaryCard
             label="Expenses"
             value={fmt(expensesTotal)}
-            sub={`${filteredExpenses.length} entries`}
+            sub={`${filteredExpenses.length} entries · ${monthlyPayments.filter((p) => p.status === "PAID").length} monthly paid`}
             icon={<TrendingDown size={15} className="text-red-500" />}
             bg="bg-gradient-to-br from-red-50 to-rose-50"
             onClick={() => setActiveTab("expenses")}
@@ -2234,7 +2233,10 @@ export default function AdminRevenueDashboard() {
             ],
             ...(isSuperAdmin
               ? [
-                  ["expenses", `Expenses (${filteredExpenses.length})`],
+                  [
+                    "expenses",
+                    `Expenses (${filteredExpenses.length + monthlyPayments.filter((p) => p.status === "PAID").length})`,
+                  ],
                   ["income", `Income (${filteredIncomes.length})`],
                 ]
               : []),

@@ -962,7 +962,12 @@ function Table1({ pcKey }: { pcKey: string }) {
 
             {/* FIX 5: Row E — exact PDF wording, no "(mins)" */}
             <FormRow rowId="E" description="Time made up from reduced interval">
-              <NumInput value={E} onChange={(v) => setE(v)} placeholder="0" />
+              <NumInput
+                value={E}
+                onChange={(v) => setE(v)}
+                placeholder="0"
+                min={-100}
+              />
             </FormRow>
 
             <FormRow
