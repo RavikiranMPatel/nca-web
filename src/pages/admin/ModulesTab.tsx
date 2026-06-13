@@ -102,6 +102,11 @@ const MODULE_GROUPS: ModuleGroup[] = [
         label: "Revenue",
         description: "Fees & booking payments",
       },
+      {
+        key: "MODULE_UMPIRE_ASSIST_ENABLED",
+        label: "Umpire Assist",
+        description: "Cricket laws AI assistant & rain/NRR calculators",
+      },
     ],
   },
 ];
@@ -158,7 +163,9 @@ export default function ModulesTab() {
                       <span className="font-semibold text-sm text-gray-900">
                         {label}
                       </span>
-                      <p className="text-xs text-gray-500 mt-0.5">{description}</p>
+                      <p className="text-xs text-gray-500 mt-0.5">
+                        {description}
+                      </p>
                     </div>
                   </div>
                   <input

@@ -137,6 +137,7 @@ function Navbar() {
 
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const [showLogoutToast, setShowLogoutToast] = useState(false);
+  const [umpireAssistEnabled, setUmpireAssistEnabled] = useState(true);
 
   const isAdmin = !!userRole && ADMIN_ROLES.includes(userRole);
 
@@ -164,6 +165,7 @@ function Navbar() {
         setLogoUrl(d.LOGO_URL || null);
         setAcademyName(d.ACADEMY_NAME || "NCA");
         setStarPerformerEnabled(d.SECTION_STAR_PERFORMER_ENABLED === "true");
+        setUmpireAssistEnabled(d.MODULE_UMPIRE_ASSIST_ENABLED !== "false");
 
         const sections: { id: string; label: string }[] = [];
         if (d.SECTION_FACILITIES_ENABLED !== "false")
@@ -335,10 +337,11 @@ function Navbar() {
                   )}
                 </div>
               )}
-
-              <NavLink to="/umpire-assist" className={linkClass}>
-                Umpire Assist
-              </NavLink>
+              {umpireAssistEnabled && (
+                <NavLink to="/umpire-assist" className={linkClass}>
+                  Umpire Assist
+                </NavLink>
+              )}
 
               {!isAdmin && starPerformerEnabled && (
                 <NavLink to="/star-performer" className={linkClass}>
@@ -612,17 +615,19 @@ function Navbar() {
               iconColor="#db2777"
             />
           )}
-          <DrawerItem
-            icon={Gavel}
-            label="Umpire Assist"
-            active={location.pathname === "/umpire-assist"}
-            onClick={() => {
-              navigate("/umpire-assist");
-              setMobileOpen(false);
-            }}
-            iconBg="#ecfeff"
-            iconColor="#0891b2"
-          />
+          {umpireAssistEnabled && (
+            <DrawerItem
+              icon={Gavel}
+              label="Umpire Assist"
+              active={location.pathname === "/umpire-assist"}
+              onClick={() => {
+                navigate("/umpire-assist");
+                setMobileOpen(false);
+              }}
+              iconBg="#ecfeff"
+              iconColor="#0891b2"
+            />
+          )}
 
           {/* Sections scroll */}
           {enabledSections.length > 0 && (
