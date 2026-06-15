@@ -99,6 +99,42 @@ function Section({
   );
 }
 
+async function compressImage(file: File): Promise<File> {
+  return new Promise((resolve) => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      const scale = Math.min(1, 1200 / Math.max(img.width, img.height));
+      const canvas = document.createElement("canvas");
+      canvas.width = img.width * scale;
+      canvas.height = img.height * scale;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) {
+        resolve(file);
+        return;
+      } // fallback to original
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      canvas.toBlob(
+        (blob) => {
+          if (!blob) {
+            resolve(file);
+            return;
+          } // fallback to original
+          resolve(
+            new File([blob], file.name.replace(/\.[^.]+$/, ".jpg"), {
+              type: "image/jpeg",
+            }),
+          );
+        },
+        "image/jpeg",
+        0.85,
+      );
+    };
+    img.src = url;
+  });
+}
+
 function PlayerForm({
   formData,
   onChange,
@@ -145,14 +181,18 @@ function PlayerForm({
     loadBatches();
   }, [selectedBranchId, onBranchChange]);
 
-  const handlePhotoSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const [compressing, setCompressing] = useState(false);
+
+  const handlePhotoSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (file.size > 5 * 1024 * 1024) {
-      alert("Photo size must be less than 5MB");
-      return;
-    }
-    onPhotoChange?.(file);
+
+    setCompressing(true);
+    const finalFile =
+      file.size > 5 * 1024 * 1024 ? await compressImage(file) : file;
+    setCompressing(false);
+
+    onPhotoChange?.(finalFile);
   };
 
   const removePhoto = () => onPhotoChange?.(null);
@@ -196,18 +236,32 @@ function PlayerForm({
             </div>
             {/* Upload button */}
             <div>
-              <label className="cursor-pointer inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 transition">
+              <button
+                type="button"
+                disabled={compressing}
+                onClick={() =>
+                  document.getElementById("player-photo-input")?.click()
+                }
+                className="cursor-pointer inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 transition disabled:opacity-60"
+              >
                 <Upload size={15} />
-                <span>{photoPreview ? "Change Photo" : "Upload Photo"}</span>
-                <input
-                  type="file"
-                  accept="image/*"
-                  onChange={handlePhotoSelect}
-                  className="hidden"
-                />
-              </label>
+                <span>
+                  {compressing
+                    ? "Processing…"
+                    : photoPreview
+                      ? "Change Photo"
+                      : "Upload Photo"}
+                </span>
+              </button>
+              <input
+                id="player-photo-input"
+                type="file"
+                accept="image/*"
+                onChange={handlePhotoSelect}
+                className="hidden"
+              />
               <p className="text-xs text-gray-400 mt-1.5">
-                JPG, PNG or JPEG · Max 5MB
+                JPG, PNG or JPEG · Large photos auto-compressed
               </p>
             </div>
           </div>
@@ -646,7 +700,7 @@ function PlayerForm({
         )}
         <button
           type="submit"
-          disabled={loading}
+          disabled={loading || compressing}
           className={`flex-1 sm:flex-none px-6 py-3 sm:py-2 bg-blue-600 text-white rounded-xl sm:rounded-lg text-sm font-semibold transition ${
             loading
               ? "opacity-50 cursor-not-allowed"

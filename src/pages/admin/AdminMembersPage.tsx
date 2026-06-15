@@ -39,6 +39,7 @@ type ActiveSubscriber = {
   notes: string;
   status: string;
   userPublicId: string;
+  isHistorical?: boolean;
 };
 
 type NonSubscriber = {
@@ -141,6 +142,8 @@ function AdminMembersPage() {
     action: "deduct" | "restore";
   } | null>(null);
   const [deducting, setDeducting] = useState(false);
+
+  const [showImportModal, setShowImportModal] = useState(false);
 
   useEffect(() => {
     fetchActive();
@@ -346,13 +349,24 @@ function AdminMembersPage() {
     <div className="space-y-5 px-3 sm:px-4 md:px-0">
       {/* Header */}
       <div className="bg-white rounded-xl border border-slate-200 shadow-sm px-4 py-4">
-        <h2 className="text-base sm:text-lg font-bold text-slate-900 tracking-tight">
-          Bowling Machine Members
-        </h2>
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-base sm:text-lg font-bold text-slate-900 tracking-tight">
+              Bowling Machine Members
+            </h2>
+            <p className="text-sm text-slate-500 mt-0.5">
+              Manage subscribers, logged-in users, and guest bookers
+            </p>
+          </div>
+          <button
+            onClick={() => setShowImportModal(true)}
+            className="flex items-center gap-1.5 text-xs bg-slate-700 text-white px-3 py-2 rounded-lg hover:bg-slate-800 transition font-medium shrink-0"
+          >
+            <Clock size={13} />
+            Import Past Member
+          </button>
+        </div>
         <PresenceBanner entity="branches-tab" id={academyId ?? undefined} />
-        <p className="text-sm text-slate-500 mt-0.5">
-          Manage subscribers, logged-in users, and guest bookers
-        </p>
       </div>
 
       {/* User Search */}
@@ -469,8 +483,13 @@ function AdminMembersPage() {
                           {sub.userName.charAt(0).toUpperCase() || "?"}
                         </div>
                         <div>
-                          <p className="font-semibold text-slate-900 text-sm">
+                          <p className="font-semibold text-slate-900 text-sm flex items-center gap-1">
                             {sub.userName || "—"}
+                            {sub.isHistorical && (
+                              <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-slate-100 text-slate-500 ml-1">
+                                Historical
+                              </span>
+                            )}
                           </p>
                           <p className="text-xs text-slate-500">
                             {sub.userEmail}
@@ -538,6 +557,11 @@ function AdminMembersPage() {
                             value={sub.startsOn}
                           />
                         </div>
+                        {sub.isHistorical && (
+                          <p className="text-xs text-slate-400 bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5 inline-block">
+                            Historical record — imported from past membership
+                          </p>
+                        )}
                         {sub.activatedBy && (
                           <p className="text-xs text-slate-400">
                             Activated by: {sub.activatedBy}
@@ -947,6 +971,604 @@ function AdminMembersPage() {
           }}
         />
       )}
+
+      {/* ── IMPORT HISTORICAL MODAL ───────────────────────────── */}
+      {showImportModal && (
+        <ImportHistoricalModal
+          plans={plans}
+          onClose={() => setShowImportModal(false)}
+          onSuccess={() => {
+            fetchActive();
+            fetchQueued();
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+// ── ImportHistoricalModal ─────────────────────────────────────────────────
+
+function ImportHistoricalModal({
+  plans,
+  onClose,
+  onSuccess,
+}: {
+  plans: SubscriptionPlan[];
+  onClose: () => void;
+  onSuccess: () => void;
+}) {
+  const [memberType, setMemberType] = useState<"registered" | "guest">(
+    "registered",
+  );
+
+  const [userSearch, setUserSearch] = useState("");
+  const [userSearchResults, setUserSearchResults] = useState<
+    UserSearchResult[]
+  >([]);
+  const [searchingUsers, setSearchingUsers] = useState(false);
+  const [selectedUser, setSelectedUser] = useState<UserSearchResult | null>(
+    null,
+  );
+
+  const [guestName, setGuestName] = useState("");
+  const [guestPhone, setGuestPhone] = useState("");
+
+  const [planType, setPlanType] = useState<"existing" | "manual">("existing");
+  const [selectedPlanId, setSelectedPlanId] = useState("");
+  const [manualSpm, setManualSpm] = useState<number | "">("");
+  const [manualMonths, setManualMonths] = useState<number | "">(1);
+  const [manualTotal, setManualTotal] = useState<string>("");
+
+  const [sessionsUsed, setSessionsUsed] = useState(0);
+  const [pricePaid, setPricePaid] = useState("");
+  const [paymentDate, setPaymentDate] = useState(
+    new Date().toISOString().split("T")[0],
+  );
+  const [paymentMode, setPaymentMode] = useState("CASH");
+  const [startsOn, setStartsOn] = useState("");
+  const [expiresOn, setExpiresOn] = useState("");
+  const [status, setStatus] = useState("EXPIRED");
+  const [notes, setNotes] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+
+  const selectedPlan = plans.find((p) => p.publicId === selectedPlanId);
+
+  const totalSessions =
+    planType === "existing" && selectedPlan
+      ? selectedPlan.totalSessions
+      : parseInt(manualTotal) || 0;
+
+  const sessionsRemaining = Math.max(0, totalSessions - sessionsUsed);
+
+  // Auto-fill total when manual spm/months change
+  useEffect(() => {
+    if (
+      typeof manualSpm === "number" &&
+      typeof manualMonths === "number" &&
+      planType === "manual"
+    ) {
+      setManualTotal(String(manualSpm * manualMonths));
+    }
+  }, [manualSpm, manualMonths, planType]);
+
+  // Auto-calculate end date
+  useEffect(() => {
+    if (!startsOn) return;
+    const months =
+      planType === "existing" && selectedPlan
+        ? selectedPlan.months
+        : typeof manualMonths === "number"
+          ? manualMonths
+          : 0;
+    if (months > 0) {
+      const start = new Date(startsOn);
+      start.setMonth(start.getMonth() + months);
+      setExpiresOn(start.toISOString().split("T")[0]);
+    }
+  }, [startsOn, selectedPlanId, manualMonths, planType]);
+
+  const handleUserSearch = async (q: string) => {
+    setUserSearch(q);
+    if (q.trim().length < 2) {
+      setUserSearchResults([]);
+      return;
+    }
+    setSearchingUsers(true);
+    try {
+      const res = await api.get(
+        `/admin/users/search?q=${encodeURIComponent(q)}`,
+      );
+      setUserSearchResults(res.data);
+    } catch {
+      /* silently fail */
+    } finally {
+      setSearchingUsers(false);
+    }
+  };
+
+  const handleSubmit = async () => {
+    if (memberType === "guest" && !guestName.trim()) {
+      toast.error("Guest name is required");
+      return;
+    }
+    if (!pricePaid) {
+      toast.error("Amount paid is required");
+      return;
+    }
+
+    const payload = {
+      userPublicId:
+        memberType === "registered" && selectedUser
+          ? selectedUser.publicId
+          : null,
+      guestName:
+        memberType === "guest" ? guestName.trim() || null : null,
+      guestPhone:
+        memberType === "guest" ? guestPhone.trim() || null : null,
+      planPublicId:
+        planType === "existing" ? selectedPlanId || null : null,
+      sessionsPerMonth:
+        planType === "manual" && typeof manualSpm === "number"
+          ? manualSpm
+          : null,
+      planMonths:
+        planType === "manual" && typeof manualMonths === "number"
+          ? manualMonths
+          : null,
+      totalSessions:
+        planType === "manual" && parseInt(manualTotal) > 0
+          ? parseInt(manualTotal)
+          : null,
+      sessionsUsed,
+      pricePaid: parseFloat(pricePaid),
+      paymentMode,
+      paymentDate,
+      startsOn: startsOn || null,
+      expiresOn: expiresOn || null,
+      status,
+      notes: notes.trim() || null,
+    };
+
+    setSubmitting(true);
+    try {
+      await api.post("/admin/subscriptions/import-historical", payload);
+      toast.success("Historical member imported successfully");
+      onSuccess();
+      onClose();
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message || "Failed to import member");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const canSubmit =
+    (memberType === "registered" ? !!selectedUser : !!guestName.trim()) &&
+    !!pricePaid &&
+    !submitting;
+
+  return (
+    <div className="fixed inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
+      <div className="bg-white w-full sm:max-w-lg sm:rounded-2xl rounded-t-2xl shadow-xl overflow-hidden flex flex-col max-h-[90vh]">
+        {/* Header */}
+        <div className="flex items-center justify-between px-5 py-4 border-b bg-slate-50">
+          <div>
+            <h3 className="font-bold text-slate-900">Import Past Member</h3>
+            <p className="text-xs text-slate-500 mt-0.5">
+              Record a historical subscription for revenue tracking
+            </p>
+          </div>
+          <button
+            onClick={onClose}
+            className="text-slate-400 hover:text-slate-600 p-1"
+          >
+            <X size={20} />
+          </button>
+        </div>
+
+        <div className="p-5 space-y-4 overflow-y-auto flex-1 min-h-0">
+          {/* Member Type Toggle */}
+          <div>
+            <label className="text-xs font-semibold text-slate-600 mb-2 block">
+              Member Type *
+            </label>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setMemberType("registered")}
+                className={`flex-1 py-2 rounded-xl border text-sm font-medium transition ${memberType === "registered" ? "bg-blue-600 text-white border-blue-600" : "border-slate-200 text-slate-600 hover:border-blue-300"}`}
+              >
+                Registered User
+              </button>
+              <button
+                onClick={() => setMemberType("guest")}
+                className={`flex-1 py-2 rounded-xl border text-sm font-medium transition ${memberType === "guest" ? "bg-slate-700 text-white border-slate-700" : "border-slate-200 text-slate-600 hover:border-slate-400"}`}
+              >
+                Guest (No Account)
+              </button>
+            </div>
+          </div>
+
+          {/* Registered user search */}
+          {memberType === "registered" && (
+            <div>
+              {selectedUser ? (
+                <div className="flex items-center gap-2 px-3 py-2 bg-green-50 border border-green-200 rounded-xl">
+                  <div className="flex-1">
+                    <p className="text-sm font-semibold text-green-800">
+                      {selectedUser.name}
+                    </p>
+                    <p className="text-xs text-green-600">
+                      {selectedUser.phone} · {selectedUser.email}
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => setSelectedUser(null)}
+                    className="text-green-600 hover:text-green-800"
+                  >
+                    <X size={16} />
+                  </button>
+                </div>
+              ) : (
+                <div className="relative">
+                  <input
+                    type="text"
+                    value={userSearch}
+                    onChange={(e) => handleUserSearch(e.target.value)}
+                    placeholder="Search user by name or phone..."
+                    className="w-full px-4 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                  {searchingUsers && (
+                    <div className="absolute right-3 top-3">
+                      <div className="w-4 h-4 border-2 border-slate-300 border-t-blue-500 rounded-full animate-spin" />
+                    </div>
+                  )}
+                  {userSearchResults.length > 0 && (
+                    <div className="absolute z-20 top-full mt-1 w-full bg-white border border-slate-200 rounded-xl shadow-lg overflow-hidden">
+                      {userSearchResults.map((u) => (
+                        <div
+                          key={u.publicId}
+                          onClick={() => {
+                            setSelectedUser(u);
+                            setUserSearch("");
+                            setUserSearchResults([]);
+                          }}
+                          className="flex items-center px-4 py-3 hover:bg-slate-50 border-b border-slate-100 last:border-0 cursor-pointer"
+                        >
+                          <div>
+                            <p className="text-sm font-semibold text-slate-800">
+                              {u.name}
+                            </p>
+                            <p className="text-xs text-slate-500">
+                              {u.phone} · {u.email}
+                            </p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Guest fields */}
+          {memberType === "guest" && (
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs font-semibold text-slate-600 mb-1.5 block">
+                  Name *
+                </label>
+                <input
+                  type="text"
+                  value={guestName}
+                  onChange={(e) => setGuestName(e.target.value)}
+                  placeholder="Guest name"
+                  className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-slate-600 mb-1.5 block">
+                  Phone
+                </label>
+                <input
+                  type="text"
+                  value={guestPhone}
+                  onChange={(e) => setGuestPhone(e.target.value)}
+                  placeholder="Phone number"
+                  className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+            </div>
+          )}
+
+          {/* Plan Section */}
+          <div>
+            <label className="text-xs font-semibold text-slate-600 mb-2 block">
+              Plan
+            </label>
+            <div className="flex gap-2 mb-3">
+              <button
+                onClick={() => setPlanType("existing")}
+                className={`flex-1 py-2 rounded-xl border text-sm font-medium transition ${planType === "existing" ? "bg-blue-600 text-white border-blue-600" : "border-slate-200 text-slate-600 hover:border-blue-300"}`}
+              >
+                Use Existing Plan
+              </button>
+              <button
+                onClick={() => setPlanType("manual")}
+                className={`flex-1 py-2 rounded-xl border text-sm font-medium transition ${planType === "manual" ? "bg-slate-700 text-white border-slate-700" : "border-slate-200 text-slate-600 hover:border-slate-400"}`}
+              >
+                Enter Manually
+              </button>
+            </div>
+
+            {planType === "existing" && (
+              <div className="space-y-2">
+                {plans.map((plan) => (
+                  <button
+                    key={plan.publicId}
+                    onClick={() => {
+                      setSelectedPlanId(plan.publicId);
+                      setPricePaid(String(plan.price));
+                    }}
+                    className={`w-full flex items-center justify-between px-4 py-3 rounded-xl border-2 transition text-left ${selectedPlanId === plan.publicId ? "border-blue-600 bg-blue-50" : "border-slate-200 hover:border-blue-300"}`}
+                  >
+                    <div>
+                      <p className="text-sm font-semibold text-slate-800">
+                        {plan.sessionsPerMonth} sessions ×{" "}
+                        {plan.months === 12
+                          ? "1 Year"
+                          : `${plan.months} Month${plan.months > 1 ? "s" : ""}`}
+                      </p>
+                      <p className="text-xs text-slate-500">
+                        {plan.totalSessions} total sessions
+                      </p>
+                      {plan.description && (
+                        <p className="text-xs text-blue-600 mt-0.5">
+                          {plan.description}
+                        </p>
+                      )}
+                    </div>
+                    <p className="text-base font-bold text-blue-700 shrink-0 ml-2">
+                      ₹{plan.price.toLocaleString("en-IN")}
+                    </p>
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {planType === "manual" && (
+              <div className="grid grid-cols-3 gap-2">
+                <div>
+                  <label className="text-xs text-slate-500 mb-1 block">
+                    Sessions/Month
+                  </label>
+                  <input
+                    type="number"
+                    min={0}
+                    value={manualSpm}
+                    onChange={(e) =>
+                      setManualSpm(
+                        e.target.value ? parseInt(e.target.value) : "",
+                      )
+                    }
+                    className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs text-slate-500 mb-1 block">
+                    Months
+                  </label>
+                  <input
+                    type="number"
+                    min={1}
+                    value={manualMonths}
+                    onChange={(e) =>
+                      setManualMonths(
+                        e.target.value ? parseInt(e.target.value) : "",
+                      )
+                    }
+                    className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs text-slate-500 mb-1 block">
+                    Total Sessions
+                  </label>
+                  <input
+                    type="number"
+                    min={0}
+                    value={manualTotal}
+                    onChange={(e) => setManualTotal(e.target.value)}
+                    className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Sessions Used */}
+          {totalSessions > 0 && (
+            <div>
+              <label className="text-xs font-semibold text-slate-600 mb-1.5 block">
+                Sessions Used ·{" "}
+                <span className="font-normal text-slate-400">
+                  {sessionsUsed} used · {sessionsRemaining} remaining
+                </span>
+              </label>
+              <input
+                type="range"
+                min={0}
+                max={totalSessions}
+                value={sessionsUsed}
+                onChange={(e) => setSessionsUsed(parseInt(e.target.value))}
+                className="w-full mb-2"
+              />
+              <input
+                type="number"
+                min={0}
+                max={totalSessions}
+                value={sessionsUsed}
+                onChange={(e) =>
+                  setSessionsUsed(
+                    Math.min(
+                      totalSessions,
+                      Math.max(0, parseInt(e.target.value) || 0),
+                    ),
+                  )
+                }
+                className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+          )}
+
+          {/* Amount Paid + Payment Date */}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs font-semibold text-slate-600 mb-1.5 block">
+                Amount Paid (₹) *
+              </label>
+              <input
+                type="number"
+                value={pricePaid}
+                onChange={(e) => setPricePaid(e.target.value)}
+                placeholder="0"
+                className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+            <div>
+              <label className="text-xs font-semibold text-slate-600 mb-1.5 block">
+                Payment Date *
+              </label>
+              <input
+                type="date"
+                value={paymentDate}
+                onChange={(e) => setPaymentDate(e.target.value)}
+                className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+          </div>
+
+          {/* Payment Mode */}
+          <div>
+            <label className="text-xs font-semibold text-slate-600 mb-2 block">
+              Payment Mode *
+            </label>
+            <div className="flex flex-wrap gap-2">
+              {PAYMENT_MODES.map((m) => (
+                <button
+                  key={m.value}
+                  onClick={() => setPaymentMode(m.value)}
+                  className={`px-3 py-1.5 rounded-lg border text-sm font-medium transition ${paymentMode === m.value ? "bg-slate-700 text-white border-slate-700" : "border-gray-300 text-gray-700 hover:bg-gray-50"}`}
+                >
+                  {m.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Start Date + End Date */}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs font-semibold text-slate-600 mb-1.5 block">
+                Start Date
+              </label>
+              <input
+                type="date"
+                value={startsOn}
+                onChange={(e) => setStartsOn(e.target.value)}
+                className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+            <div>
+              <label className="text-xs font-semibold text-slate-600 mb-1.5 block">
+                End Date
+              </label>
+              <input
+                type="date"
+                value={expiresOn}
+                onChange={(e) => setExpiresOn(e.target.value)}
+                className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+          </div>
+
+          {/* Status Pills */}
+          <div>
+            <label className="text-xs font-semibold text-slate-600 mb-2 block">
+              Status *
+            </label>
+            <div className="flex gap-2">
+              {[
+                {
+                  value: "ACTIVE",
+                  label: "Active",
+                  active: "bg-green-600 border-green-600 text-white",
+                  hover: "hover:border-green-300",
+                },
+                {
+                  value: "EXPIRED",
+                  label: "Expired",
+                  active: "bg-slate-600 border-slate-600 text-white",
+                  hover: "hover:border-slate-400",
+                },
+                {
+                  value: "CANCELLED",
+                  label: "Cancelled",
+                  active: "bg-red-600 border-red-600 text-white",
+                  hover: "hover:border-red-300",
+                },
+              ].map((s) => (
+                <button
+                  key={s.value}
+                  onClick={() => setStatus(s.value)}
+                  className={`flex-1 py-2 rounded-xl border text-sm font-medium transition ${status === s.value ? s.active : `border-slate-200 text-slate-600 ${s.hover}`}`}
+                >
+                  {s.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Notes */}
+          <div>
+            <label className="text-xs font-semibold text-slate-600 mb-1.5 block">
+              Notes{" "}
+              <span className="font-normal text-slate-400">(optional)</span>
+            </label>
+            <input
+              type="text"
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              placeholder="e.g. Member from 2023, paid cash..."
+              className="w-full px-4 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div className="flex gap-3 px-5 py-4 border-t bg-slate-50">
+          <button
+            onClick={onClose}
+            disabled={submitting}
+            className="flex-1 py-2.5 text-sm font-medium text-slate-600 bg-white border border-slate-200 rounded-xl hover:bg-slate-100 transition"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleSubmit}
+            disabled={!canSubmit}
+            className="flex-1 py-2.5 text-sm font-medium text-white bg-slate-700 rounded-xl hover:bg-slate-800 transition flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {submitting ? (
+              <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+            ) : (
+              <Clock size={14} />
+            )}
+            {submitting ? "Importing…" : "Import Member"}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

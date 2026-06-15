@@ -254,6 +254,7 @@ function PlayersListPage() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [searchParams] = useSearchParams();
+  const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
 
   const [statusFilter, setStatusFilter] = useState<
     "all" | "active" | "inactive"
@@ -765,12 +766,20 @@ function PlayersListPage() {
               >
                 <div className="flex gap-3 items-center">
                   {/* Avatar */}
-                  <div className="flex-shrink-0">
+                  <button
+                    type="button"
+                    className="flex-shrink-0"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (p.photoUrl)
+                        setLightboxUrl(getImageUrl(p.photoUrl) || null);
+                    }}
+                  >
                     {p.photoUrl ? (
                       <img
                         src={getImageUrl(p.photoUrl) || undefined}
                         alt={p.displayName}
-                        className="w-12 h-12 rounded-full object-cover object-top border-2 border-slate-200"
+                        className="w-12 h-12 rounded-full object-cover border-2 border-slate-200"
                         onError={(e) => {
                           e.currentTarget.style.display = "none";
                           (
@@ -786,7 +795,7 @@ function PlayersListPage() {
                         {p.displayName.charAt(0)}
                       </span>
                     </div>
-                  </div>
+                  </button>
 
                   {/* Info */}
                   <div className="flex-1 min-w-0">
@@ -925,23 +934,24 @@ function PlayersListPage() {
                           <img
                             src={getImageUrl(p.photoUrl) || undefined}
                             alt={p.displayName}
-                            className="w-10 h-10 rounded-full object-cover object-top border-2 border-slate-200"
+                            className="w-12 h-12 rounded-full object-cover border-2 border-slate-200"
                             onError={(e) => {
-                              e.currentTarget.style.display = "none";
-                              (
-                                e.currentTarget
-                                  .nextElementSibling as HTMLElement
-                              )?.classList.remove("hidden");
+                              e.currentTarget.replaceWith(
+                                Object.assign(document.createElement("div"), {
+                                  className:
+                                    "w-12 h-12 rounded-full bg-gradient-to-br from-blue-100 to-blue-200 flex items-center justify-center border-2 border-slate-200",
+                                  innerHTML: `<span class="text-base font-bold text-blue-600">${p.displayName.charAt(0)}</span>`,
+                                }),
+                              );
                             }}
                           />
-                        ) : null}
-                        <div
-                          className={`w-10 h-10 rounded-full bg-gradient-to-br from-blue-100 to-blue-200 flex items-center justify-center border-2 border-slate-200 ${p.photoUrl ? "hidden" : ""}`}
-                        >
-                          <span className="text-sm font-bold text-blue-600">
-                            {p.displayName.charAt(0)}
-                          </span>
-                        </div>
+                        ) : (
+                          <div className="w-12 h-12 rounded-full bg-gradient-to-br from-blue-100 to-blue-200 flex items-center justify-center border-2 border-slate-200">
+                            <span className="text-base font-bold text-blue-600">
+                              {p.displayName.charAt(0)}
+                            </span>
+                          </div>
+                        )}
                       </td>
                       <td className="px-6 py-4">
                         <span className="font-mono text-sm text-slate-700">
@@ -1335,6 +1345,26 @@ function PlayersListPage() {
         filterLabel={getFilterLabel()}
         playerPublicIds={getFilteredPublicIds()}
       />
+      {/* ── LIGHTBOX ── */}
+      {lightboxUrl && (
+        <div
+          className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4"
+          onClick={() => setLightboxUrl(null)}
+        >
+          <button
+            className="absolute top-4 right-4 p-2 bg-white/10 hover:bg-white/20 rounded-full transition"
+            onClick={() => setLightboxUrl(null)}
+          >
+            <X size={20} className="text-white" />
+          </button>
+          <img
+            src={lightboxUrl}
+            alt="Player photo"
+            className="max-w-full max-h-[90vh] rounded-xl object-contain"
+            onClick={(e) => e.stopPropagation()}
+          />
+        </div>
+      )}
     </div>
   );
 }
