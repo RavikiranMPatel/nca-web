@@ -1,4 +1,6 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
+import Cropper from "react-easy-crop";
+import type { Area } from "react-easy-crop";
 import { useNavigate, useParams } from "react-router-dom";
 import { ArrowLeft } from "lucide-react";
 import { toast } from "react-hot-toast";
@@ -97,15 +99,78 @@ function UpdatePlayer() {
     }));
   };
 
+  // Add these states alongside existing ones
+  const [showCropper, setShowCropper] = useState(false);
+  const [tempPhotoUrl, setTempPhotoUrl] = useState<string>("");
+  const [crop, setCrop] = useState({ x: 0, y: 0 });
+  const [zoom, setZoom] = useState(1);
+  const [croppedAreaPixels, setCroppedAreaPixels] = useState<Area | null>(null);
+
+  const onCropComplete = useCallback((_: Area, croppedAreaPixels: Area) => {
+    setCroppedAreaPixels(croppedAreaPixels);
+  }, []);
+
+  const getCroppedImg = async (
+    imageSrc: string,
+    pixelCrop: Area,
+  ): Promise<Blob> => {
+    const image = new Image();
+    image.src = imageSrc;
+    await new Promise((resolve, reject) => {
+      image.onload = resolve;
+      image.onerror = reject;
+    });
+    const canvas = document.createElement("canvas");
+    const ctx = canvas.getContext("2d")!;
+    canvas.width = pixelCrop.width;
+    canvas.height = pixelCrop.height;
+    ctx.drawImage(
+      image,
+      pixelCrop.x,
+      pixelCrop.y,
+      pixelCrop.width,
+      pixelCrop.height,
+      0,
+      0,
+      pixelCrop.width,
+      pixelCrop.height,
+    );
+    return new Promise((resolve) => {
+      canvas.toBlob((blob) => resolve(blob!), "image/jpeg", 0.95);
+    });
+  };
+
+  const applyCrop = async () => {
+    if (!croppedAreaPixels || !tempPhotoUrl) return;
+    try {
+      const croppedBlob = await getCroppedImg(tempPhotoUrl, croppedAreaPixels);
+      const croppedFile = new File([croppedBlob], "player-photo.jpg", {
+        type: "image/jpeg",
+      });
+      setPhotoFile(croppedFile);
+      setPhotoPreview(URL.createObjectURL(croppedBlob));
+      setShowCropper(false);
+      setTempPhotoUrl("");
+      toast.success("Photo cropped successfully!");
+    } catch {
+      toast.error("Failed to crop image");
+    }
+  };
+
   const handlePhotoChange = (file: File | null) => {
-    setPhotoFile(file);
     if (!file) {
+      setPhotoFile(null);
       setPhotoPreview("");
+      setTempPhotoUrl("");
       return;
     }
-
     const reader = new FileReader();
-    reader.onloadend = () => setPhotoPreview(reader.result as string);
+    reader.onloadend = () => {
+      setTempPhotoUrl(reader.result as string);
+      setShowCropper(true);
+      setCrop({ x: 0, y: 0 });
+      setZoom(1);
+    };
     reader.readAsDataURL(file);
   };
 
@@ -136,14 +201,6 @@ function UpdatePlayer() {
         }
       } catch {
         // non-blocking — proceed if check fails
-      }
-    }
-
-    // ── Phone format validation ────────────────────────────────────
-    if (formData.phone?.trim()) {
-      if (!/^[6-9]\d{9}$/.test(formData.phone.trim())) {
-        toast.error("Invalid phone number format");
-        return;
       }
     }
 
@@ -232,6 +289,73 @@ function UpdatePlayer() {
           onBatchChange={setBatchIds}
         />
       </form>
+
+      {showCropper && (
+        <div className="fixed inset-0 bg-black/90 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg w-full max-w-3xl max-h-[90vh] overflow-hidden shadow-xl flex flex-col">
+            <div className="p-4 border-b flex-shrink-0">
+              <h3 className="text-lg font-semibold">Adjust Photo</h3>
+              <p className="text-xs text-gray-500 mt-1">
+                Drag to reposition, use slider to zoom
+              </p>
+            </div>
+            <div className="relative h-64 sm:h-80 md:h-96 bg-gray-900 flex-shrink-0">
+              <Cropper
+                image={tempPhotoUrl}
+                crop={crop}
+                zoom={zoom}
+                aspect={1}
+                cropShape="round"
+                showGrid={false}
+                onCropChange={setCrop}
+                onZoomChange={setZoom}
+                onCropComplete={onCropComplete}
+                style={{ containerStyle: { width: "100%", height: "100%" } }}
+              />
+            </div>
+            <div className="p-4 space-y-4 flex-shrink-0">
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="text-sm font-medium text-gray-700">
+                    Zoom
+                  </label>
+                  <span className="text-sm text-gray-500">
+                    {Math.round(zoom * 100)}%
+                  </span>
+                </div>
+                <input
+                  type="range"
+                  min={1}
+                  max={3}
+                  step={0.1}
+                  value={zoom}
+                  onChange={(e) => setZoom(Number(e.target.value))}
+                  className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
+                />
+              </div>
+              <div className="flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowCropper(false);
+                    setTempPhotoUrl("");
+                  }}
+                  className="flex-1 py-2.5 text-sm font-medium text-slate-600 bg-slate-100 rounded-lg hover:bg-slate-200 transition"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={applyCrop}
+                  className="flex-1 py-2.5 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition"
+                >
+                  Apply Crop
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

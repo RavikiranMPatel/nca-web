@@ -288,7 +288,7 @@ function PlayerAttendanceHistoryPage() {
           <img
             src={getImageUrl(player.photoUrl) || undefined}
             alt={player.displayName}
-            className="w-10 h-10 rounded-full object-cover object-top border-2 border-slate-200 flex-shrink-0"
+            className="w-10 h-10 rounded-full object-cover object-center border-2 border-slate-200 flex-shrink-0"
           />
         ) : (
           <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-100 to-blue-200 flex items-center justify-center border-2 border-slate-200 flex-shrink-0">

@@ -46,6 +46,10 @@ export interface Player {
   bowlingStyle?: string;
   previousRepresentation?: string;
   notes?: string;
+  branchId?: string;
+  feeType?: "MONTHLY" | "ANNUAL" | "OTHER" | null;
+  feeStatus?: "PAID" | "DUE" | "OVERDUE" | null;
+  nextDueOn?: string | null;
 }
 
 export interface Batch {

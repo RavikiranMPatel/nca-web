@@ -7,6 +7,7 @@ type Props = {
     displayName: string;
     batch?: string;
     gender?: string;
+    photoUrl?: string;
   };
   value?: "PRESENT" | "ABSENT";
   disabled?: boolean;
@@ -57,10 +58,20 @@ function AttendanceRow({
     >
       <div className="flex items-center gap-4 p-4">
         {/* AVATAR */}
+
+        {player.photoUrl ? (
+          <img
+            src={player.photoUrl}
+            alt={player.displayName}
+            className="flex-shrink-0 w-12 h-12 rounded-full object-cover shadow-md border-2 border-slate-200"
+            onError={(e) => {
+              e.currentTarget.style.display = "none";
+              e.currentTarget.nextElementSibling?.classList.remove("hidden");
+            }}
+          />
+        ) : null}
         <div
-          className={`flex-shrink-0 w-12 h-12 rounded-full flex items-center justify-center text-white font-bold text-sm ${getAvatarColor(
-            player.gender,
-          )} shadow-md`}
+          className={`flex-shrink-0 w-12 h-12 rounded-full flex items-center justify-center text-white font-bold text-sm ${getAvatarColor(player.gender)} shadow-md ${player.photoUrl ? "hidden" : ""}`}
         >
           {getInitials(player.displayName)}
         </div>
