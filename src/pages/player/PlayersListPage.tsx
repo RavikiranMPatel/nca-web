@@ -9,6 +9,7 @@ import {
   Download,
   FileSpreadsheet,
   FileText,
+  FileArchive,
   Send,
   MessageCircle,
   Mail,
@@ -242,6 +243,124 @@ function ShareModal({
   );
 }
 
+// ─── BULK REPORT MODAL ──────────────────────────────────
+
+type BulkReportModalProps = {
+  isOpen: boolean;
+  onClose: () => void;
+  selectedCount: number;
+  allCount: number;
+  onDownload: (scope: "all" | "selected", mode: "COMBINED" | "ZIP") => void;
+  downloading: boolean;
+};
+
+function BulkReportModal({
+  isOpen,
+  onClose,
+  selectedCount,
+  allCount,
+  onDownload,
+  downloading,
+}: BulkReportModalProps) {
+  const [mode, setMode] = useState<"COMBINED" | "ZIP">("COMBINED");
+  const [scope, setScope] = useState<"all" | "selected">("all");
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+      <div className="bg-white rounded-xl shadow-xl w-full max-w-sm">
+        <div className="flex items-center justify-between px-5 py-4 bg-purple-600 rounded-t-xl text-white">
+          <div className="flex items-center gap-2">
+            <FileArchive size={18} />
+            <h3 className="font-bold">Attendance Reports</h3>
+          </div>
+          <button
+            onClick={onClose}
+            className="text-white/80 hover:text-white transition"
+          >
+            <X size={20} />
+          </button>
+        </div>
+        <div className="p-5 space-y-4">
+          <div>
+            <p className="text-xs font-semibold text-slate-600 mb-2">Include</p>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setScope("all")}
+                className={`flex-1 py-2 text-sm rounded-lg border transition ${
+                  scope === "all"
+                    ? "bg-purple-50 border-purple-300 text-purple-700 font-semibold"
+                    : "border-slate-200 text-slate-600 hover:bg-slate-50"
+                }`}
+              >
+                All ({allCount})
+              </button>
+              <button
+                onClick={() => setScope("selected")}
+                disabled={selectedCount === 0}
+                className={`flex-1 py-2 text-sm rounded-lg border transition disabled:opacity-40 disabled:cursor-not-allowed ${
+                  scope === "selected"
+                    ? "bg-purple-50 border-purple-300 text-purple-700 font-semibold"
+                    : "border-slate-200 text-slate-600 hover:bg-slate-50"
+                }`}
+              >
+                Selected ({selectedCount})
+              </button>
+            </div>
+          </div>
+
+          <div>
+            <p className="text-xs font-semibold text-slate-600 mb-2">Format</p>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setMode("COMBINED")}
+                className={`flex-1 py-2 text-sm rounded-lg border transition ${
+                  mode === "COMBINED"
+                    ? "bg-purple-50 border-purple-300 text-purple-700 font-semibold"
+                    : "border-slate-200 text-slate-600 hover:bg-slate-50"
+                }`}
+              >
+                Single PDF
+              </button>
+              <button
+                onClick={() => setMode("ZIP")}
+                className={`flex-1 py-2 text-sm rounded-lg border transition ${
+                  mode === "ZIP"
+                    ? "bg-purple-50 border-purple-300 text-purple-700 font-semibold"
+                    : "border-slate-200 text-slate-600 hover:bg-slate-50"
+                }`}
+              >
+                ZIP Archive
+              </button>
+            </div>
+          </div>
+
+          <div className="flex gap-2 pt-1">
+            <button
+              onClick={onClose}
+              className="flex-1 py-2.5 text-sm font-medium text-slate-600 bg-slate-100 rounded-lg hover:bg-slate-200 transition"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={() => onDownload(scope, mode)}
+              disabled={downloading || (scope === "selected" && selectedCount === 0)}
+              className="flex-1 py-2.5 text-sm font-medium text-white bg-purple-600 rounded-lg hover:bg-purple-700 transition flex items-center justify-center gap-2 disabled:opacity-50"
+            >
+              {downloading ? (
+                <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+              ) : (
+                <Download size={14} />
+              )}
+              {downloading ? "Generating…" : "Download"}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── MAIN COMPONENT ─────────────────────────────────────
 
 function PlayersListPage() {
@@ -277,6 +396,10 @@ function PlayersListPage() {
     channel: "WHATSAPP" | "EMAIL";
   }>({ open: false, channel: "WHATSAPP" });
   const [showAgeGroupTooltip, setShowAgeGroupTooltip] = useState(false);
+
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkReportModal, setBulkReportModal] = useState(false);
+  const [bulkReportDownloading, setBulkReportDownloading] = useState(false);
 
   const [deleteConfirm, setDeleteConfirm] = useState<{
     open: boolean;
@@ -478,6 +601,52 @@ function PlayersListPage() {
     }
   };
 
+  const handleBulkAttendanceDownload = async (
+    scope: "all" | "selected",
+    mode: "COMBINED" | "ZIP",
+  ) => {
+    setBulkReportDownloading(true);
+    try {
+      const ids =
+        scope === "selected" ? [...selectedIds] : getFilteredPublicIds();
+      const res = await api.post(
+        "/admin/players/attendance/report/bulk",
+        { playerPublicIds: ids, mode },
+        { responseType: "blob" },
+      );
+      const url = window.URL.createObjectURL(new Blob([res.data]));
+      const link = document.createElement("a");
+      link.href = url;
+      link.download =
+        mode === "ZIP" ? "attendance-reports.zip" : "attendance-reports.pdf";
+      link.click();
+      window.URL.revokeObjectURL(url);
+      toast.success("Downloaded!");
+      setBulkReportModal(false);
+    } catch {
+      toast.error("Failed to generate attendance reports");
+    } finally {
+      setBulkReportDownloading(false);
+    }
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedIds.size === filteredPlayers.length) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(filteredPlayers.map((p) => p.publicId)));
+    }
+  };
+
+  const toggleSelectPlayer = (publicId: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(publicId)) next.delete(publicId);
+      else next.add(publicId);
+      return next;
+    });
+  };
+
   const seasonYear = getSeasonYear();
   const hasActiveFilters =
     search ||
@@ -557,7 +726,7 @@ function PlayersListPage() {
                     className="fixed inset-0 z-10"
                     onClick={() => setShowExportMenu(false)}
                   />
-                  <div className="absolute right-0 mt-1 w-44 bg-white rounded-lg shadow-lg border border-slate-200 z-20 py-1">
+                  <div className="absolute right-0 mt-1 w-52 bg-white rounded-lg shadow-lg border border-slate-200 z-20 py-1">
                     <button
                       onClick={handleExportExcel}
                       disabled={exportingExcel}
@@ -573,6 +742,17 @@ function PlayersListPage() {
                     >
                       <FileText size={15} className="text-red-600" />
                       {exportingPdf ? "Exporting..." : "PDF"}
+                    </button>
+                    <div className="border-t border-slate-100 my-1" />
+                    <button
+                      onClick={() => {
+                        setShowExportMenu(false);
+                        setBulkReportModal(true);
+                      }}
+                      className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50 transition"
+                    >
+                      <FileArchive size={15} className="text-purple-600" />
+                      Attendance Reports
                     </button>
                   </div>
                 </>
@@ -765,6 +945,14 @@ function PlayersListPage() {
                 className={`bg-white rounded-xl border border-slate-200 p-3 active:bg-slate-50 transition cursor-pointer ${!p.active ? "opacity-60" : ""}`}
               >
                 <div className="flex gap-3 items-center">
+                  {/* Checkbox */}
+                  <input
+                    type="checkbox"
+                    checked={selectedIds.has(p.publicId)}
+                    onChange={() => toggleSelectPlayer(p.publicId)}
+                    onClick={(e) => e.stopPropagation()}
+                    className="w-4 h-4 rounded border-slate-300 text-purple-600 focus:ring-purple-500 cursor-pointer flex-shrink-0"
+                  />
                   {/* Avatar */}
                   <button
                     type="button"
@@ -882,6 +1070,18 @@ function PlayersListPage() {
             <table className="w-full">
               <thead>
                 <tr className="bg-slate-50 border-b border-slate-200">
+                  <th className="px-4 py-4 w-10">
+                    <input
+                      type="checkbox"
+                      checked={
+                        filteredPlayers.length > 0 &&
+                        selectedIds.size === filteredPlayers.length
+                      }
+                      onChange={toggleSelectAll}
+                      className="w-4 h-4 rounded border-slate-300 text-purple-600 focus:ring-purple-500 cursor-pointer"
+                      title="Select all filtered players"
+                    />
+                  </th>
                   <th className="px-6 py-4 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">
                     Photo
                   </th>
@@ -927,6 +1127,15 @@ function PlayersListPage() {
                       key={p.publicId}
                       className={`hover:bg-slate-50 transition-colors ${!p.active ? "opacity-60" : ""}`}
                     >
+                      <td className="px-4 py-4">
+                        <input
+                          type="checkbox"
+                          checked={selectedIds.has(p.publicId)}
+                          onChange={() => toggleSelectPlayer(p.publicId)}
+                          onClick={(e) => e.stopPropagation()}
+                          className="w-4 h-4 rounded border-slate-300 text-purple-600 focus:ring-purple-500 cursor-pointer"
+                        />
+                      </td>
                       <td className="px-6 py-4">
                         <button
                           type="button"
@@ -1355,6 +1564,16 @@ function PlayersListPage() {
         playerCount={filteredPlayers.length}
         filterLabel={getFilterLabel()}
         playerPublicIds={getFilteredPublicIds()}
+      />
+
+      {/* ── BULK ATTENDANCE REPORT MODAL ── */}
+      <BulkReportModal
+        isOpen={bulkReportModal}
+        onClose={() => setBulkReportModal(false)}
+        selectedCount={selectedIds.size}
+        allCount={filteredPlayers.length}
+        onDownload={handleBulkAttendanceDownload}
+        downloading={bulkReportDownloading}
       />
       {/* ── LIGHTBOX ── */}
       {lightboxUrl && (

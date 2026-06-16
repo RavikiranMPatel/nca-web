@@ -1,7 +1,8 @@
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, Fragment } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import {
   ArrowLeft,
+  Download,
   Flame,
   TrendingUp,
   TrendingDown,
@@ -22,7 +23,7 @@ import AttendanceSummaryCards from "../../components/attendance-component/Attend
 
 type AttendanceSession = {
   date: string;
-  batchName: string;
+  batch: string;
   status: "PRESENT" | "ABSENT" | "OVERRIDDEN";
   markedAt: string;
   markedBy: string;
@@ -54,11 +55,6 @@ type GroupedData = {
   days: AttendanceDay[];
   presentCount: number;
   totalCount: number;
-  calendar?: {
-    date: string;
-    status: "PRESENT" | "ABSENT" | "MIXED" | "NONE";
-    tooltip?: string;
-  }[];
 };
 
 /* ---------------- HELPERS ---------------- */
@@ -94,7 +90,6 @@ function groupHistoryByMonth(history: AttendanceDay[]): GroupedData[] {
       0,
     );
     const totalCount = days.reduce((sum, day) => sum + day.sessions.length, 0);
-    const calendar = generateMonthCalendar(monthKey, days);
 
     return {
       label: getMonthYear(days[0].date),
@@ -102,49 +97,8 @@ function groupHistoryByMonth(history: AttendanceDay[]): GroupedData[] {
       days,
       presentCount,
       totalCount,
-      calendar,
     };
   });
-}
-
-function generateMonthCalendar(
-  monthKey: string,
-  days: AttendanceDay[],
-): {
-  date: string;
-  status: "PRESENT" | "ABSENT" | "MIXED" | "NONE";
-  tooltip?: string;
-}[] {
-  const [year, month] = monthKey.split("-").map(Number);
-  const daysInMonth = new Date(year, month, 0).getDate();
-  const calendar = [];
-  const dayMap = new Map(days.map((d) => [d.date, d]));
-
-  for (let day = 1; day <= daysInMonth; day++) {
-    const dateStr = `${monthKey}-${String(day).padStart(2, "0")}`;
-    const dayData = dayMap.get(dateStr);
-
-    let status: "PRESENT" | "ABSENT" | "MIXED" | "NONE" = "NONE";
-    if (dayData) {
-      const statuses = dayData.sessions.map((s) => s.status);
-      const markedByUsers = [
-        ...new Set(dayData.sessions.map((s) => s.markedBy)),
-      ].join(", ");
-      if (statuses.every((s) => s === "PRESENT")) status = "PRESENT";
-      else if (statuses.every((s) => s === "ABSENT")) status = "ABSENT";
-      else status = "MIXED";
-      calendar.push({
-        date: dateStr,
-        status,
-        tooltip: `Marked by: ${markedByUsers}`,
-      });
-      continue;
-    }
-
-    calendar.push({ date: dateStr, status });
-  }
-
-  return calendar;
 }
 
 // ── Calculate current streak from history ─────────────────────────
@@ -226,10 +180,34 @@ function PlayerAttendanceHistoryPage() {
     navigate(`/admin/attendance/day/${date}`);
   };
 
+  const handleDownloadReport = async () => {
+    if (!playerId) return;
+    setDownloading(true);
+    try {
+      const res = await api.get(
+        `/admin/players/${playerId}/attendance/report.pdf`,
+        { responseType: "blob" },
+      );
+      const url = URL.createObjectURL(
+        new Blob([res.data], { type: "application/pdf" }),
+      );
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `attendance-${playerId}.pdf`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      toast.error("Failed to download attendance report");
+    } finally {
+      setDownloading(false);
+    }
+  };
+
   const [player, setPlayer] = useState<PlayerSummary | null>(null);
   const [summary, setSummary] = useState<PlayerAttendanceSummary | null>(null);
   const [history, setHistory] = useState<AttendanceDay[]>([]);
   const [loading, setLoading] = useState(true);
+  const [downloading, setDownloading] = useState(false);
 
   /* ---------------- LOAD DATA ---------------- */
   useEffect(() => {
@@ -305,6 +283,14 @@ function PlayerAttendanceHistoryPage() {
             Attendance History • {player.batchNames}
           </p>
         </div>
+        <button
+          onClick={handleDownloadReport}
+          disabled={downloading}
+          className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border border-blue-200 text-blue-700 bg-blue-50 hover:bg-blue-100 disabled:opacity-50 disabled:cursor-not-allowed transition flex-shrink-0"
+        >
+          <Download size={14} className={downloading ? "animate-bounce" : ""} />
+          {downloading ? "Generating…" : "Download Report"}
+        </button>
       </div>
 
       {/* ── SUMMARY CARDS ── */}
@@ -395,121 +381,111 @@ function PlayerAttendanceHistoryPage() {
         </div>
       )}
 
-      {/* ── HISTORY CALENDAR ── */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {history.length === 0 && (
-          <p className="text-sm text-gray-500">No attendance records found</p>
-        )}
-
-        {groupedData.map((group) => {
-          const monthPct =
-            group.totalCount > 0
-              ? Math.round((group.presentCount / group.totalCount) * 100)
-              : 0;
-
-          return (
-            <div
-              key={group.key}
-              className="bg-white rounded-2xl shadow-sm p-4 md:p-6"
-            >
-              {/* Month header with attendance % */}
-              <div className="flex items-center justify-between mb-3">
-                <h3 className="text-base font-bold text-gray-900 flex items-center gap-2">
-                  📅 {group.label}
-                </h3>
-                <div className="flex items-center gap-2">
-                  <span className="text-xs text-gray-500">
-                    {group.presentCount}/{group.totalCount}
-                  </span>
-                  <span
-                    className={`text-xs font-bold px-2 py-0.5 rounded-full ${
-                      monthPct >= 90
-                        ? "bg-emerald-100 text-emerald-700"
-                        : monthPct >= 75
-                          ? "bg-blue-100 text-blue-700"
-                          : monthPct >= 50
-                            ? "bg-amber-100 text-amber-700"
-                            : "bg-red-100 text-red-700"
-                    }`}
-                  >
-                    {monthPct}%
-                  </span>
-                </div>
-              </div>
-
-              {/* Legend — compact on mobile */}
-              <div className="flex flex-wrap gap-2 md:gap-4 text-[10px] md:text-xs font-medium text-gray-500 mb-4">
-                <div className="flex items-center gap-1">
-                  <span className="w-2.5 h-2.5 rounded-full bg-green-400" />{" "}
-                  Present
-                </div>
-                <div className="flex items-center gap-1">
-                  <span className="w-2.5 h-2.5 rounded-full bg-red-400" />{" "}
-                  Absent
-                </div>
-                <div className="flex items-center gap-1">
-                  <span className="w-2.5 h-2.5 rounded-full bg-yellow-400" />{" "}
-                  Mixed
-                </div>
-                <div className="flex items-center gap-1">
-                  <span className="w-2.5 h-2.5 rounded-full bg-gray-300" /> Not
-                  Marked
-                </div>
-              </div>
-
-              {group.calendar && (
-                <div className="w-full">
-                  <div className="grid grid-cols-7 gap-0.5 text-xs">
-                    {["M", "T", "W", "T", "F", "S", "S"].map((day, i) => (
-                      <div
-                        key={i}
-                        className="text-center font-medium text-gray-400 py-0.5 text-[10px]"
-                      >
-                        {day}
-                      </div>
-                    ))}
-
-                    {(() => {
-                      const firstDay = new Date(group.calendar![0].date);
-                      const dayOfWeek = (firstDay.getDay() + 6) % 7;
-                      return Array(dayOfWeek)
-                        .fill(null)
-                        .map((_, i) => <div key={`empty-${i}`} />);
-                    })()}
-
-                    {group.calendar.map((cal) => {
-                      const day = new Date(cal.date).getDate();
-                      let bgColor = "bg-gray-50 text-gray-500";
-                      if (cal.status === "PRESENT")
-                        bgColor = "bg-green-400 text-white";
-                      else if (cal.status === "ABSENT")
-                        bgColor = "bg-red-400 text-white";
-                      else if (cal.status === "MIXED")
-                        bgColor = "bg-yellow-400 text-white";
-
-                      return (
-                        <button
-                          key={cal.date}
-                          title={cal.tooltip || ""}
-                          onClick={() => openDayHistory(cal.date)}
-                          disabled={cal.status === "NONE"}
-                          className={`aspect-square w-full rounded text-[11px] font-semibold ${bgColor} ${
-                            cal.status !== "NONE"
-                              ? "hover:scale-105 cursor-pointer"
-                              : "opacity-30 cursor-default"
-                          } transition-all flex items-center justify-center`}
+      {/* ── BATCH DETAIL TABLE ── */}
+      {history.length === 0 ? (
+        <div className="bg-white rounded-2xl shadow-sm p-6 text-center text-sm text-gray-400">
+          No attendance records found
+        </div>
+      ) : (
+        <div className="bg-white rounded-2xl shadow-sm p-4 md:p-6">
+          <h3 className="text-base font-bold text-gray-900 mb-4">
+            Session Breakdown
+          </h3>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-gray-100">
+                  <th className="text-left py-2 pr-6 text-xs font-semibold text-gray-500 uppercase tracking-wide whitespace-nowrap">
+                    Date
+                  </th>
+                  <th className="text-left py-2 text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                    Batch / Status
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {[...groupedData]
+                  .sort((a, b) => b.key.localeCompare(a.key))
+                  .map((group, gi) => (
+                    <Fragment key={group.key}>
+                      {gi > 0 && (
+                        <tr>
+                          <td colSpan={2} className="pt-2" />
+                        </tr>
+                      )}
+                      <tr>
+                        <td
+                          colSpan={2}
+                          className="py-2 px-3 bg-slate-50 border-y border-slate-200 rounded"
                         >
-                          {day}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-            </div>
-          );
-        })}
-      </div>
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs font-semibold text-slate-700 uppercase tracking-wide">
+                              {group.label}
+                            </span>
+                            <span
+                              className={`text-xs font-medium ${
+                                group.totalCount > 0 &&
+                                group.presentCount / group.totalCount >= 0.75
+                                  ? "text-green-600"
+                                  : group.totalCount > 0 &&
+                                      group.presentCount / group.totalCount >= 0.5
+                                    ? "text-amber-600"
+                                    : "text-red-500"
+                              }`}
+                            >
+                              {group.presentCount}/{group.totalCount} sessions
+                              {group.totalCount > 0
+                                ? ` · ${Math.round((group.presentCount / group.totalCount) * 100)}%`
+                                : ""}
+                            </span>
+                          </div>
+                        </td>
+                      </tr>
+                      {[...group.days]
+                        .sort((a, b) => b.date.localeCompare(a.date))
+                        .map((day) => (
+                          <tr
+                            key={day.date}
+                            className="hover:bg-gray-50 transition-colors cursor-pointer border-b border-gray-50"
+                            onClick={() => openDayHistory(day.date)}
+                          >
+                            <td className="py-2.5 pr-6 text-xs text-gray-500 whitespace-nowrap">
+                              {formatDate(day.date)}
+                            </td>
+                            <td className="py-2.5">
+                              <div className="flex flex-wrap gap-1.5">
+                                {day.sessions.map((s, i) => (
+                                  <span
+                                    key={i}
+                                    className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${
+                                      s.status === "PRESENT"
+                                        ? "bg-green-100 text-green-700"
+                                        : s.status === "ABSENT"
+                                          ? "bg-red-100 text-red-700"
+                                          : "bg-yellow-100 text-yellow-700"
+                                    }`}
+                                  >
+                                    <span className="text-gray-500 font-normal">
+                                      {s.batch.replace(/^Regular\s+/i, "")}:
+                                    </span>
+                                    {s.status === "PRESENT"
+                                      ? "Present"
+                                      : s.status === "ABSENT"
+                                        ? "Absent"
+                                        : "Override"}
+                                  </span>
+                                ))}
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                    </Fragment>
+                  ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

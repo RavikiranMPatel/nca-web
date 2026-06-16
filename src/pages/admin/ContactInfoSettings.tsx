@@ -61,8 +61,23 @@ const ContactInfoSettings = () => {
     setSaving(true);
     setMessage({ type: "", text: "" });
 
+    // Validate each email in CONTACT_EMAIL
+    const contactEmails = settings.CONTACT_EMAIL
+      .split(",")
+      .map((e) => e.trim())
+      .filter((e) => e.length > 0);
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    const invalid = contactEmails.filter((e) => !emailRegex.test(e));
+    if (invalid.length > 0) {
+      setMessage({
+        type: "error",
+        text: `Invalid email address${invalid.length > 1 ? "es" : ""}: ${invalid.join(", ")}`,
+      });
+      setSaving(false);
+      return;
+    }
+
     try {
-      // Save each setting individually
       const updates = Object.entries(settings).map(([key, value]) =>
         api.put(`/admin/settings/${key}`, { value }),
       );
@@ -197,12 +212,16 @@ const ContactInfoSettings = () => {
               Email Address
             </label>
             <input
-              type="email"
+              type="text"
               value={settings.CONTACT_EMAIL}
               onChange={(e) => handleChange("CONTACT_EMAIL", e.target.value)}
               placeholder="info@nca-academy.com"
               className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:outline-none text-sm transition"
             />
+            <p className="text-xs text-gray-400 mt-1">
+              Multiple emails can be comma-separated (e.g. admin@nca.com,
+              info@nca.com). All addresses receive reminder emails.
+            </p>
           </div>
         </div>
 
