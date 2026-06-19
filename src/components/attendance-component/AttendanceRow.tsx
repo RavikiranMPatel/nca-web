@@ -1,5 +1,6 @@
 import { Check, X, MoreVertical, Edit2 } from "lucide-react";
 import { useState } from "react";
+import { createPortal } from "react-dom";
 
 type Props = {
   player: {
@@ -25,6 +26,7 @@ function AttendanceRow({
   onOverride,
 }: Props) {
   const [showMenu, setShowMenu] = useState(false);
+  const [showPhoto, setShowPhoto] = useState(false);
 
   // Get initials for avatar
   const getInitials = (name: string) => {
@@ -60,21 +62,61 @@ function AttendanceRow({
         {/* AVATAR */}
 
         {player.photoUrl ? (
-          <img
-            src={player.photoUrl}
-            alt={player.displayName}
-            className="flex-shrink-0 w-12 h-12 rounded-full object-cover shadow-md border-2 border-slate-200"
-            onError={(e) => {
-              e.currentTarget.style.display = "none";
-              e.currentTarget.nextElementSibling?.classList.remove("hidden");
-            }}
-          />
+          <button
+            type="button"
+            onClick={() => setShowPhoto(true)}
+            className="flex-shrink-0 rounded-full transition-transform hover:scale-110 active:scale-95 cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-offset-2"
+            aria-label={`View photo of ${player.displayName}`}
+          >
+            <img
+              src={player.photoUrl}
+              alt={player.displayName}
+              className="w-12 h-12 rounded-full object-cover shadow-md border-2 border-slate-200"
+              onError={(e) => {
+                e.currentTarget.style.display = "none";
+                // img is inside button; traverse up to button then to the sibling initials div
+                e.currentTarget.parentElement?.nextElementSibling?.classList.remove("hidden");
+              }}
+            />
+          </button>
         ) : null}
         <div
           className={`flex-shrink-0 w-12 h-12 rounded-full flex items-center justify-center text-white font-bold text-sm ${getAvatarColor(player.gender)} shadow-md ${player.photoUrl ? "hidden" : ""}`}
         >
           {getInitials(player.displayName)}
         </div>
+
+        {/* PHOTO LIGHTBOX */}
+        {showPhoto &&
+          createPortal(
+            <div
+              className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4"
+              onClick={() => setShowPhoto(false)}
+            >
+              <div
+                className="bg-white rounded-2xl shadow-2xl p-6 flex flex-col items-center gap-4 relative max-w-sm w-full"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <button
+                  type="button"
+                  onClick={() => setShowPhoto(false)}
+                  className="absolute top-3 right-3 w-8 h-8 flex items-center justify-center rounded-full hover:bg-slate-100 transition-colors text-slate-500 hover:text-slate-800"
+                  aria-label="Close"
+                >
+                  <X size={18} />
+                </button>
+                <img
+                  src={player.photoUrl}
+                  alt={player.displayName}
+                  className="w-64 h-64 rounded-xl object-cover shadow-md"
+                />
+                <p className="text-base font-semibold text-slate-900 text-center">
+                  {player.displayName}
+                </p>
+              </div>
+            </div>,
+            document.body
+          )}
 
         {/* PLAYER INFO */}
         <div className="flex-1 min-w-0">

@@ -20,6 +20,7 @@ import {
   Trash2,
   UserCheck,
   UserMinus,
+  CalendarOff,
 } from "lucide-react";
 import { getImageUrl } from "../../utils/imageUrl";
 import { toast } from "react-hot-toast";
@@ -40,9 +41,10 @@ type Player = {
   active: boolean;
   photoUrl?: string;
   branchId?: string;
-  feeType?: "MONTHLY" | "ANNUAL" | "OTHER" | null; // ← NEW
-  feeStatus?: "PAID" | "DUE" | "OVERDUE" | null; // ← NEW
+  feeType?: "MONTHLY" | "ANNUAL" | "OTHER" | null;
+  feeStatus?: "PAID" | "DUE" | "OVERDUE" | null;
   nextDueOn?: string | null;
+  excludeFromAttendance?: boolean;
 };
 
 const ITEMS_PER_PAGE = 10;
@@ -453,6 +455,39 @@ function PlayersListPage() {
       toast.error(err.response?.data?.message || "Failed to delete player");
     } finally {
       setDeleting(false);
+    }
+  };
+
+  const handleToggleAttendanceExclusion = async (player: Player) => {
+    const newValue = !player.excludeFromAttendance;
+    setPlayers((prev) =>
+      prev.map((p) =>
+        p.publicId === player.publicId
+          ? { ...p, excludeFromAttendance: newValue }
+          : p,
+      ),
+    );
+    try {
+      await api.patch(
+        `/admin/players/${player.publicId}/attendance-exclusion`,
+        { exclude: newValue },
+      );
+      toast.success(
+        newValue
+          ? `${player.displayName} excluded from attendance`
+          : `${player.displayName} included in attendance`,
+      );
+    } catch (err: any) {
+      setPlayers((prev) =>
+        prev.map((p) =>
+          p.publicId === player.publicId
+            ? { ...p, excludeFromAttendance: !newValue }
+            : p,
+        ),
+      );
+      toast.error(
+        err.response?.data?.message || "Failed to update attendance exclusion",
+      );
     }
   };
 
@@ -1009,6 +1044,12 @@ function PlayersListPage() {
                           {ageGroup}
                         </span>
                       )}
+                      {p.excludeFromAttendance && (
+                        <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-amber-50 text-amber-700 border border-amber-200">
+                          <CalendarOff size={9} />
+                          Attendance excluded
+                        </span>
+                      )}
                     </div>
 
                     <div className="flex items-center gap-3 mt-1 text-xs text-slate-500 flex-wrap">
@@ -1056,6 +1097,24 @@ function PlayersListPage() {
                         )}
                       </button>
                     )}
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleToggleAttendanceExclusion(p);
+                      }}
+                      className={`p-1.5 rounded-lg transition ${
+                        p.excludeFromAttendance
+                          ? "text-amber-500 hover:text-amber-700 hover:bg-amber-50"
+                          : "text-slate-300 hover:text-slate-500 hover:bg-slate-100"
+                      }`}
+                      title={
+                        p.excludeFromAttendance
+                          ? "Re-include in attendance"
+                          : "Exclude from attendance"
+                      }
+                    >
+                      <CalendarOff size={14} />
+                    </button>
                     <ChevronRight size={16} className="text-slate-300" />
                   </div>
                 </div>
@@ -1173,6 +1232,14 @@ function PlayersListPage() {
                         <span className="font-medium text-slate-900">
                           {p.displayName}
                         </span>
+                        {p.excludeFromAttendance && (
+                          <div className="mt-0.5">
+                            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-amber-50 text-amber-700 border border-amber-200">
+                              <CalendarOff size={9} />
+                              Attendance excluded
+                            </span>
+                          </div>
+                        )}
                       </td>
                       {isSuperAdmin && (
                         <td className="px-6 py-4">
@@ -1297,6 +1364,24 @@ function PlayersListPage() {
                               )}
                             </button>
                           )}
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleToggleAttendanceExclusion(p);
+                            }}
+                            className={`p-2 rounded-lg transition ${
+                              p.excludeFromAttendance
+                                ? "text-amber-500 hover:text-amber-700 hover:bg-amber-50"
+                                : "text-slate-300 hover:text-slate-500 hover:bg-slate-100"
+                            }`}
+                            title={
+                              p.excludeFromAttendance
+                                ? "Re-include in attendance"
+                                : "Exclude from attendance"
+                            }
+                          >
+                            <CalendarOff size={15} />
+                          </button>
                           <button
                             onClick={() =>
                               navigate(`/admin/players/${p.publicId}`)

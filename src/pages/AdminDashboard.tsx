@@ -313,14 +313,14 @@ function AdminDashboard() {
             value={summary.feesDueToday}
             icon={Clock}
             color="orange"
-            onClick={() => navigate("/admin/fees?status=DUE")}
+            onClick={() => navigate("/admin/fees-due?status=DUE")}
           />
           <StatCard
             label="Overdue Fees"
             value={summary.overdueFees}
             icon={AlertTriangle}
             color="red"
-            onClick={() => navigate("/admin/fees?status=OVERDUE")}
+            onClick={() => navigate("/admin/fees-due?status=OVERDUE")}
           />
         </div>
       </section>

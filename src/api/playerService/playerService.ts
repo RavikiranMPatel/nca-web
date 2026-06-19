@@ -50,6 +50,7 @@ export interface Player {
   feeType?: "MONTHLY" | "ANNUAL" | "OTHER" | null;
   feeStatus?: "PAID" | "DUE" | "OVERDUE" | null;
   nextDueOn?: string | null;
+  excludeFromAttendance?: boolean;
 }
 
 export interface Batch {
@@ -83,6 +84,7 @@ export interface PlayerFormData {
   notes?: string;
   active?: boolean;
   status?: string;
+  excludeFromAttendance?: boolean;
 }
 
 export interface PlayerStatusResponse {
@@ -238,6 +240,19 @@ export const playerService = {
    */
   deleteExtPlayer: async (publicId: string): Promise<void> => {
     await api.delete(`/admin/players/${publicId}`);
+  },
+
+  /**
+   * Toggle whether a player is excluded from attendance tracking.
+   * Calls PATCH /admin/players/{id}/attendance-exclusion
+   */
+  setAttendanceExclusion: async (
+    playerPublicId: string,
+    exclude: boolean,
+  ): Promise<void> => {
+    await api.patch(`/admin/players/${playerPublicId}/attendance-exclusion`, {
+      exclude,
+    });
   },
 };
 

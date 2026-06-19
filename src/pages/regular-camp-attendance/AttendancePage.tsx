@@ -201,7 +201,7 @@ function AttendancePage() {
         .includes(search.toLowerCase());
       const matchesBatch =
         p.batches?.some((b) => b.id === selectedBatchId) ?? false;
-      return matchesSearch && matchesBatch;
+      return matchesSearch && matchesBatch && !p.excludeFromAttendance;
     });
   }, [players, search, selectedBatchId]);
 

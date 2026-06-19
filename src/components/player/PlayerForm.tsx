@@ -40,6 +40,8 @@ type Props = {
   onBranchChange?: (branchId: string) => void;
   playerRole?: string;
   onPlayerRoleChange?: (role: string) => void;
+  excludeFromAttendance?: boolean;
+  onExcludeChange?: (val: boolean) => void;
 };
 
 // ── Reusable field wrapper ──────────────────────────────────────
@@ -154,6 +156,8 @@ function PlayerForm({
   onBranchChange,
   playerRole = "ALL_ROUNDER",
   onPlayerRoleChange,
+  excludeFromAttendance = false,
+  onExcludeChange,
 }: Props) {
   const [availableBatches, setAvailableBatches] = useState<Batch[]>([]);
   const [loadingBatches, setLoadingBatches] = useState(true);
@@ -576,6 +580,27 @@ function PlayerForm({
                 ⚠️ Please select at least one batch
               </p>
             )}
+          </div>
+
+          {/* Attendance exclusion */}
+          <div className="md:col-span-2">
+            <label className="flex items-start gap-3 cursor-pointer select-none group">
+              <input
+                type="checkbox"
+                checked={excludeFromAttendance}
+                onChange={(e) => onExcludeChange?.(e.target.checked)}
+                className="mt-0.5 w-4 h-4 rounded border-gray-300 text-amber-600 focus:ring-2 focus:ring-amber-300 cursor-pointer"
+              />
+              <div>
+                <span className="text-sm font-medium text-gray-700 group-hover:text-gray-900 transition">
+                  Exclude from attendance tracking
+                </span>
+                <p className="text-xs text-gray-400 mt-0.5 leading-relaxed">
+                  For players who attend irregularly (e.g. senior players) and
+                  shouldn't be part of daily roster marking.
+                </p>
+              </div>
+            </label>
           </div>
         </div>
       </Section>

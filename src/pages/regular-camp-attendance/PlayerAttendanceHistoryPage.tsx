@@ -428,7 +428,8 @@ function PlayerAttendanceHistoryPage() {
                                 group.presentCount / group.totalCount >= 0.75
                                   ? "text-green-600"
                                   : group.totalCount > 0 &&
-                                      group.presentCount / group.totalCount >= 0.5
+                                      group.presentCount / group.totalCount >=
+                                        0.5
                                     ? "text-amber-600"
                                     : "text-red-500"
                               }`}

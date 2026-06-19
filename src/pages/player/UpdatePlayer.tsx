@@ -39,6 +39,7 @@ function UpdatePlayer() {
     previousRepresentation: "",
     joiningDate: "",
     notes: "",
+    excludeFromAttendance: false,
   });
 
   // Load existing player data
@@ -71,6 +72,7 @@ function UpdatePlayer() {
             ? res.data.joiningDate.split("T")[0]
             : "",
           notes: res.data.notes || "",
+          excludeFromAttendance: res.data.excludeFromAttendance ?? false,
         });
 
         // Extract batch IDs from batches array
@@ -97,6 +99,22 @@ function UpdatePlayer() {
       ...prev,
       [e.target.name]: e.target.value,
     }));
+  };
+
+  // Attendance exclusion toggles immediately via PATCH rather than waiting for full form save.
+  const handleExcludeChange = async (val: boolean) => {
+    setFormData((prev) => ({ ...prev, excludeFromAttendance: val }));
+    try {
+      await api.patch(`/admin/players/${playerPublicId}/attendance-exclusion`, {
+        exclude: val,
+      });
+      toast.success(
+        val ? "Excluded from attendance tracking" : "Included in attendance tracking",
+      );
+    } catch {
+      setFormData((prev) => ({ ...prev, excludeFromAttendance: !val }));
+      toast.error("Failed to update attendance exclusion");
+    }
   };
 
   // Add these states alongside existing ones
@@ -287,6 +305,8 @@ function UpdatePlayer() {
           onCancel={() => navigate(-1)}
           batchIds={batchIds}
           onBatchChange={setBatchIds}
+          excludeFromAttendance={formData.excludeFromAttendance ?? false}
+          onExcludeChange={handleExcludeChange}
         />
       </form>
 

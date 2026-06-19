@@ -74,6 +74,7 @@ function RegisterPlayer() {
     previousRepresentation: "",
     joiningDate: new Date().toISOString().split("T")[0],
     notes: "",
+    excludeFromAttendance: false,
   });
 
   useEffect(() => {
@@ -359,6 +360,7 @@ function RegisterPlayer() {
       previousRepresentation: "",
       joiningDate: new Date().toISOString().split("T")[0],
       notes: "",
+      excludeFromAttendance: false,
     });
     setBatchIds([]);
     setSelectedFeePlan("");
@@ -406,6 +408,10 @@ function RegisterPlayer() {
           onFeePlanChange={setSelectedFeePlan}
           playerRole={playerRole}
           onPlayerRoleChange={setPlayerRole}
+          excludeFromAttendance={formData.excludeFromAttendance ?? false}
+          onExcludeChange={(val) =>
+            setFormData((prev) => ({ ...prev, excludeFromAttendance: val }))
+          }
           // Branch — only passed for super admin
           {...(isSuperAdmin && {
             branches,

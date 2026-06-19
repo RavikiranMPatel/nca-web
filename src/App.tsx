@@ -61,6 +61,7 @@ import MySubscription from "./pages/book-slot/MySubscription";
 import UserProfilePage from "./pages/UserProfilePage";
 import AdminRevenueDashboard from "./pages/admin/AdminRevenueDashboard";
 import AdminExcelImportPage from "./pages/admin/AdminExcelImportPage";
+import FeesDuePage from "./pages/admin/FeesDuePage";
 import PlayerCoachingPage from "./pages/player/PlayerCoachingPage";
 import CoachingDashboardPage from "./pages/coaching/CoachingDashboardPage";
 import PlayerCoachingViewPage from "./pages/player/PlayerCoachingViewPage";
@@ -484,6 +485,16 @@ function App() {
           <ProtectedRoute roles={["ROLE_SUPER_ADMIN"]}>
             <AppLayout>
               <AdminExcelImportPage />
+            </AppLayout>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/fees-due"
+        element={
+          <ProtectedRoute roles={["ROLE_ADMIN", "ROLE_SUPER_ADMIN"]}>
+            <AppLayout>
+              <FeesDuePage />
             </AppLayout>
           </ProtectedRoute>
         }
