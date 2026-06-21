@@ -144,9 +144,7 @@ function ManageResources() {
 
   const turfResources = resources.filter((r) => r.type === "TURF");
   const astroResources = resources.filter((r) => r.type === "ASTRO");
-  const bowlingResources = resources.filter(
-    (r) => r.type === "BOWLING_MACHINE",
-  );
+  const bowlingResources = resources.filter((r) => r.type === "BOWLING_MACHINE");
 
   // ── Shared input class ──
   const inputCls =

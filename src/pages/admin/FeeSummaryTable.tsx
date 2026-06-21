@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Calendar, X } from "lucide-react";
 import api from "../../api/axios";
 import { toast } from "react-hot-toast";
+import PlayerAvatar from "../../components/player/PlayerAvatar";
 
 export type FeeCollectionSummaryRow = {
   playerPublicId: string;
@@ -21,6 +22,8 @@ export type FeeCollectionSummaryRow = {
   installmentBalance: number | null;
   overdueInstallments: number;
   pendingInstallments: number;
+  photoUrl?: string | null;
+  gender?: string | null;
 };
 
 type StatusFilter = "ALL" | "DUE" | "OVERDUE" | "PAID";
@@ -43,8 +46,10 @@ type Props = {
 
 export function FeeSummaryTable({ rows, initialStatusFilter, onRefresh }: Props) {
   const [feeStatusFilter, setFeeStatusFilter] = useState<StatusFilter>(() => {
-    const s = initialStatusFilter;
-    return s === "DUE" || s === "OVERDUE" || s === "PAID" ? s : "ALL";
+    const s = (initialStatusFilter ?? "").toUpperCase();
+    // Both ?status=DUE and ?status=OVERDUE resolve to the combined Due/Overdue tab.
+    // ?status=PAID selects the Paid tab. Everything else defaults to Due/Overdue.
+    return s === "PAID" ? "PAID" : "DUE";
   });
   const [feeTypeFilter, setFeeTypeFilter] = useState<TypeFilter>("ALL");
   const [feeSummarySearch, setFeeSummarySearch] = useState("");
@@ -202,7 +207,7 @@ export function FeeSummaryTable({ rows, initialStatusFilter, onRefresh }: Props)
         <button
           onClick={() =>
             setFeeStatusFilter(
-              feeStatusFilter === "OVERDUE" ? "ALL" : "OVERDUE",
+              feeStatusFilter === "OVERDUE" ? "DUE" : "OVERDUE",
             )
           }
           className={`rounded-xl p-4 border-2 text-left transition ${
@@ -272,15 +277,6 @@ export function FeeSummaryTable({ rows, initialStatusFilter, onRefresh }: Props)
               {(
                 [
                   [
-                    "ALL",
-                    `All (${
-                      rows.filter(
-                        (r) =>
-                          feeTypeFilter === "ALL" || r.feeType === feeTypeFilter,
-                      ).length
-                    })`,
-                  ],
-                  [
                     "DUE",
                     `Due / Overdue (${
                       rows.filter(
@@ -309,11 +305,9 @@ export function FeeSummaryTable({ rows, initialStatusFilter, onRefresh }: Props)
                   onClick={() => setFeeStatusFilter(val)}
                   className={`px-3 py-1.5 rounded-md text-xs font-semibold whitespace-nowrap transition ${
                     feeStatusFilter === val
-                      ? val === "DUE"
-                        ? "bg-red-500 text-white shadow-sm"
-                        : val === "PAID"
-                          ? "bg-emerald-500 text-white shadow-sm"
-                          : "bg-white text-slate-900 shadow-sm"
+                      ? val === "PAID"
+                        ? "bg-emerald-500 text-white shadow-sm"
+                        : "bg-red-500 text-white shadow-sm"
                       : "text-slate-500 hover:text-slate-700"
                   }`}
                 >
@@ -341,22 +335,30 @@ export function FeeSummaryTable({ rows, initialStatusFilter, onRefresh }: Props)
                     row.feeStatus === "OVERDUE" ? "bg-red-50/40" : ""
                   }`}
                 >
-                  {/* Name + status badge */}
-                  <div className="flex items-start justify-between gap-2 mb-2">
-                    <p className="text-sm font-semibold text-slate-800 leading-snug">
-                      {row.playerName}
-                    </p>
-                    <span
-                      className={`flex-shrink-0 text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                        row.feeStatus === "PAID"
-                          ? "bg-emerald-100 text-emerald-700"
-                          : row.feeStatus === "OVERDUE"
-                            ? "bg-red-100 text-red-700"
-                            : "bg-amber-100 text-amber-700"
-                      }`}
-                    >
-                      {row.feeStatus === "OVERDUE" ? "⚠ OVERDUE" : row.feeStatus}
-                    </span>
+                  {/* Avatar + name + status badge */}
+                  <div className="flex items-start gap-3 mb-2">
+                    <PlayerAvatar
+                      displayName={row.playerName}
+                      photoUrl={row.photoUrl}
+                      gender={row.gender}
+                      size="md"
+                    />
+                    <div className="flex-1 min-w-0 flex items-start justify-between gap-2">
+                      <p className="text-sm font-semibold text-slate-800 leading-snug truncate">
+                        {row.playerName}
+                      </p>
+                      <span
+                        className={`flex-shrink-0 text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                          row.feeStatus === "PAID"
+                            ? "bg-emerald-100 text-emerald-700"
+                            : row.feeStatus === "OVERDUE"
+                              ? "bg-red-100 text-red-700"
+                              : "bg-amber-100 text-amber-700"
+                        }`}
+                      >
+                        {row.feeStatus === "OVERDUE" ? "⚠ OVERDUE" : row.feeStatus}
+                      </span>
+                    </div>
                   </div>
 
                   {/* Info rows */}
@@ -479,9 +481,17 @@ export function FeeSummaryTable({ rows, initialStatusFilter, onRefresh }: Props)
                       }`}
                     >
                       <td className="px-4 py-3">
-                        <p className="text-sm font-semibold text-slate-800">
-                          {row.playerName}
-                        </p>
+                        <div className="flex items-center gap-2.5">
+                          <PlayerAvatar
+                            displayName={row.playerName}
+                            photoUrl={row.photoUrl}
+                            gender={row.gender}
+                            size="sm"
+                          />
+                          <p className="text-sm font-semibold text-slate-800">
+                            {row.playerName}
+                          </p>
+                        </div>
                       </td>
                       <td className="px-4 py-3">
                         <span

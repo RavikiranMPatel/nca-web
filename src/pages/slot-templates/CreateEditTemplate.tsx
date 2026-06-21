@@ -87,16 +87,13 @@ function CreateEditTemplate() {
         const response = await api.get(`/admin/slot-templates/${id}`);
         const data = response.data;
         console.log("Template data:", data); // ADD THIS
-        // Detect bowling machine template from slots having price60Balls
-        const isBowlingTemplate = data.resourceType === "BOWLING_MACHINE";
+        const resourceCat: ResourceCategory =
+          data.resourceType === "BOWLING_MACHINE" ? "BOWLING_MACHINE" : "TURF_ASTRO";
         setFormData({
           name: data.name,
           description: data.description,
-          templateType: isBowlingTemplate ? "WEEKDAY" : data.templateType,
-
-          resourceCategory: (data.resourceType === "BOWLING_MACHINE"
-            ? "BOWLING_MACHINE"
-            : "TURF_ASTRO") as ResourceCategory,
+          templateType: resourceCat === "BOWLING_MACHINE" ? "WEEKDAY" : data.templateType,
+          resourceCategory: resourceCat,
           isDefaultWeekday: data.defaultWeekday || false,
           isDefaultWeekend: data.defaultWeekend || false,
           slots: data.slots || [],
@@ -441,7 +438,7 @@ function CreateEditTemplate() {
                 <p
                   className={`font-semibold text-sm ${isBowling ? "text-blue-700" : "text-gray-800"}`}
                 >
-                  {isBowling ? "🎯 Bowling Machine" : "🏏 Turf / Astro"}
+                  {formData.resourceCategory === "BOWLING_MACHINE" ? "🎯 Bowling Machine" : "🏏 Turf / Astro"}
                 </p>
                 <p className="text-xs text-gray-400 mt-0.5">
                   Resource type cannot be changed after creation
@@ -449,7 +446,7 @@ function CreateEditTemplate() {
               </div>
             ) : (
               // Selectable only on create
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 {[
                   {
                     id: "TURF_ASTRO",

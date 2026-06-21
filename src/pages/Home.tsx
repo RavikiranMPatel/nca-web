@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 import {
   Trophy,
   Award,
@@ -924,6 +924,21 @@ function Home() {
           </div>
         </section>
       )}
+
+      {/* ── PLAYER ACCOUNT ACTIVATION BANNER ── */}
+      <section className="py-3 px-4 bg-green-50 border-b border-green-200">
+        <div className="max-w-lg mx-auto flex items-center justify-between gap-3 flex-wrap">
+          <p className="text-sm text-green-800">
+            <span className="font-semibold">Already enrolled?</span> Set up your player account to track your stats and progress.
+          </p>
+          <Link
+            to="/player-signup"
+            className="shrink-0 text-sm font-semibold text-white bg-green-600 hover:bg-green-700 px-4 py-1.5 rounded-full transition"
+          >
+            🏏 Activate Account
+          </Link>
+        </div>
+      </section>
 
       {/* ── ACADEMY AT A GLANCE ── */}
       {settings.SECTION_STATS_ENABLED !== "false" && publicStats && (

@@ -1,6 +1,7 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import api from "../api/axios";
+import publicApi from "../api/publicApi";
 import { useAuth } from "../auth/useAuth";
 import {
   ArrowLeft,
@@ -15,6 +16,8 @@ import {
   CheckCircle2,
   AlertCircle,
   Loader2,
+  Search,
+  X,
 } from "lucide-react";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -25,6 +28,8 @@ type UserFormData = {
   phone: string;
   password: string;
   role: string;
+  playerPublicId: string;
+  playerDisplayName: string;
 };
 
 type RoleOption = {
@@ -35,6 +40,11 @@ type RoleOption = {
   bgColor: string;
   borderColor: string;
   dotColor: string;
+};
+
+type PlayerResult = {
+  playerPublicId: string;
+  displayName: string;
 };
 
 // ─── Role config ──────────────────────────────────────────────────────────────
@@ -85,9 +95,6 @@ function UserFormPage() {
   const { publicId } = useParams<{ publicId: string }>();
   const isEdit = Boolean(publicId);
 
-  // Guard: only SUPER_ADMIN should ever reach this page.
-  // ProtectedRoute in App.tsx already blocks it at the route level,
-  // but this is a second layer of safety.
   const { userRole, branchId } = useAuth();
   useEffect(() => {
     if (userRole && userRole !== "ROLE_SUPER_ADMIN") {
@@ -101,6 +108,8 @@ function UserFormPage() {
     phone: "",
     password: "",
     role: "ROLE_USER",
+    playerPublicId: "",
+    playerDisplayName: "",
   });
 
   const [showPassword, setShowPassword] = useState(false);
@@ -114,6 +123,14 @@ function UserFormPage() {
   const [touched, setTouched] = useState<
     Partial<Record<keyof UserFormData, boolean>>
   >({});
+
+  // ── Player search state (only used when role = ROLE_PLAYER in create mode) ─
+  const [playerQuery, setPlayerQuery] = useState("");
+  const [playerResults, setPlayerResults] = useState<PlayerResult[]>([]);
+  const [playerSearching, setPlayerSearching] = useState(false);
+  const [showPlayerDropdown, setShowPlayerDropdown] = useState(false);
+  const playerSearchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const playerSearchRef = useRef<HTMLDivElement>(null);
 
   // ── Validation ──────────────────────────────────────────────────────────────
   const errors: Partial<Record<keyof UserFormData, string>> = {};
@@ -134,7 +151,8 @@ function UserFormPage() {
     !!form.name.trim() &&
     /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email) &&
     (isEdit || form.password.length >= 6) &&
-    (!form.phone || /^\d{10}$/.test(form.phone));
+    (!form.phone || /^\d{10}$/.test(form.phone)) &&
+    (form.role !== "ROLE_PLAYER" || !!form.playerPublicId);
 
   // ── Load user for edit ──────────────────────────────────────────────────────
   useEffect(() => {
@@ -149,11 +167,58 @@ function UserFormPage() {
           phone: u.phone ?? "",
           password: "",
           role: u.role ?? "ROLE_USER",
+          playerPublicId: "",
+          playerDisplayName: "",
         });
       })
       .catch(() => showToast("Failed to load user", "error"))
       .finally(() => setLoading(false));
   }, [publicId]);
+
+  // ── Debounced player search ─────────────────────────────────────────────────
+  useEffect(() => {
+    if (form.role !== "ROLE_PLAYER" || isEdit) return;
+    if (playerSearchTimer.current) clearTimeout(playerSearchTimer.current);
+
+    if (playerQuery.trim().length < 2) {
+      setPlayerResults([]);
+      setShowPlayerDropdown(false);
+      return;
+    }
+
+    playerSearchTimer.current = setTimeout(async () => {
+      setPlayerSearching(true);
+      try {
+        const res = await publicApi.get<PlayerResult[]>("/players/search", {
+          params: { q: playerQuery.trim() },
+        });
+        setPlayerResults(res.data);
+        setShowPlayerDropdown(true);
+      } catch {
+        setPlayerResults([]);
+      } finally {
+        setPlayerSearching(false);
+      }
+    }, 350);
+
+    return () => {
+      if (playerSearchTimer.current) clearTimeout(playerSearchTimer.current);
+    };
+  }, [playerQuery, form.role, isEdit]);
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (
+        playerSearchRef.current &&
+        !playerSearchRef.current.contains(e.target as Node)
+      ) {
+        setShowPlayerDropdown(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
 
   // ── Helpers ─────────────────────────────────────────────────────────────────
   const showToast = (msg: string, type: "success" | "error") => {
@@ -166,6 +231,38 @@ function UserFormPage() {
 
   const change = (field: keyof UserFormData, value: string) =>
     setForm((f) => ({ ...f, [field]: value }));
+
+  function selectPlayer(player: PlayerResult) {
+    setForm((f) => ({
+      ...f,
+      playerPublicId: player.playerPublicId,
+      playerDisplayName: player.displayName,
+      // Auto-fill name if the admin hasn't entered one yet
+      name: f.name.trim() ? f.name : player.displayName,
+    }));
+    setPlayerQuery("");
+    setPlayerResults([]);
+    setShowPlayerDropdown(false);
+  }
+
+  function clearPlayer() {
+    setForm((f) => ({
+      ...f,
+      playerPublicId: "",
+      playerDisplayName: "",
+    }));
+    setPlayerQuery("");
+  }
+
+  function handleRoleChange(value: string) {
+    change("role", value);
+    // Clear player link when switching away from ROLE_PLAYER
+    if (value !== "ROLE_PLAYER") {
+      setForm((f) => ({ ...f, role: value, playerPublicId: "", playerDisplayName: "" }));
+      setPlayerQuery("");
+      setPlayerResults([]);
+    }
+  }
 
   // ── Submit ──────────────────────────────────────────────────────────────────
   const handleSubmit = async () => {
@@ -189,13 +286,15 @@ function UserFormPage() {
           password: form.password,
           role: form.role,
           branchId: branchId,
+          playerPublicId: form.playerPublicId || null,
         });
         showToast("User created successfully", "success");
       }
       setTimeout(() => navigate("/admin/users"), 1000);
-    } catch (e: any) {
+    } catch (e: unknown) {
       showToast(
-        e?.response?.data?.message ??
+        (e as { response?: { data?: { message?: string } } })?.response?.data
+          ?.message ??
           (isEdit ? "Update failed" : "Create failed"),
         "error",
       );
@@ -214,6 +313,7 @@ function UserFormPage() {
   }
 
   const selectedRole = ROLES.find((r) => r.value === form.role)!;
+  const needsPlayerLink = form.role === "ROLE_PLAYER" && !isEdit;
 
   // ─── Render ─────────────────────────────────────────────────────────────────
   return (
@@ -269,6 +369,102 @@ function UserFormPage() {
 
       {/* ── Body ───────────────────────────────────────────────────────────── */}
       <main className="flex-1 max-w-2xl w-full mx-auto px-4 py-6 pb-28 space-y-5">
+
+        {/* ── Player link card (only for ROLE_PLAYER in create mode) ───────── */}
+        {needsPlayerLink && (
+          <section className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+            <div className="px-4 pt-4 pb-2 flex items-center gap-2">
+              <span className="text-base leading-none">🏏</span>
+              <p className="text-xs font-semibold text-slate-400 uppercase tracking-widest">
+                Link to Player Record
+              </p>
+              <span className="ml-auto text-xs text-red-500 font-medium">Required</span>
+            </div>
+
+            <div className="px-4 pb-4">
+              {form.playerPublicId ? (
+                /* ── Selected player chip ── */
+                <div className="flex items-center justify-between bg-emerald-50 border border-emerald-300 rounded-xl px-4 py-3">
+                  <div>
+                    <p className="text-xs text-emerald-600 font-medium uppercase tracking-wide mb-0.5">
+                      Selected player
+                    </p>
+                    <p className="text-sm font-bold text-emerald-900">
+                      {form.playerDisplayName}
+                    </p>
+                    <p className="text-xs text-emerald-600 font-mono mt-0.5">
+                      {form.playerPublicId}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={clearPlayer}
+                    className="p-1.5 rounded-full hover:bg-emerald-200 transition text-emerald-700"
+                    title="Remove selection"
+                  >
+                    <X size={16} />
+                  </button>
+                </div>
+              ) : (
+                /* ── Search input + dropdown ── */
+                <div ref={playerSearchRef} className="relative">
+                  <div className="relative">
+                    <Search
+                      size={15}
+                      className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
+                    />
+                    <input
+                      type="text"
+                      value={playerQuery}
+                      onChange={(e) => setPlayerQuery(e.target.value)}
+                      placeholder="Search unclaimed players by name…"
+                      className="w-full pl-9 pr-4 py-2.5 border border-slate-200 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100 rounded-lg text-sm outline-none transition bg-white"
+                    />
+                    {playerSearching && (
+                      <Loader2
+                        size={14}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 animate-spin text-slate-400"
+                      />
+                    )}
+                  </div>
+
+                  {showPlayerDropdown && playerResults.length > 0 && (
+                    <ul className="absolute z-20 top-full mt-1 w-full bg-white border border-slate-200 rounded-xl shadow-lg overflow-hidden max-h-52 overflow-y-auto">
+                      {playerResults.map((p) => (
+                        <li key={p.playerPublicId}>
+                          <button
+                            type="button"
+                            onMouseDown={() => selectPlayer(p)}
+                            className="w-full flex items-center justify-between px-4 py-2.5 text-left text-sm hover:bg-emerald-50 transition"
+                          >
+                            <span className="font-medium text-slate-800">
+                              {p.displayName}
+                            </span>
+                            <ChevronRight size={14} className="text-slate-400" />
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+
+                  {showPlayerDropdown &&
+                    !playerSearching &&
+                    playerResults.length === 0 &&
+                    playerQuery.trim().length >= 2 && (
+                      <div className="absolute z-20 top-full mt-1 w-full bg-white border border-slate-200 rounded-xl shadow-lg px-4 py-3 text-sm text-slate-500">
+                        No unclaimed players found. They may already have an account.
+                      </div>
+                    )}
+                </div>
+              )}
+
+              <p className="text-xs text-slate-400 mt-2">
+                Only active players without an existing account are shown.
+              </p>
+            </div>
+          </section>
+        )}
+
         {/* Basic info card */}
         <section className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
           <div className="px-4 pt-4 pb-2">
@@ -378,7 +574,7 @@ function UserFormPage() {
                 <button
                   key={r.value}
                   type="button"
-                  onClick={() => change("role", r.value)}
+                  onClick={() => handleRoleChange(r.value)}
                   className={`w-full flex items-center gap-3 px-4 py-3.5 rounded-xl border-2 transition-all text-left ${
                     isSelected
                       ? `${r.bgColor} ${r.borderColor} shadow-sm`

@@ -132,10 +132,10 @@ type SubRevenueRow = {
   status: string;
   sessionsPerMonth: number;
   planMonths: number;
+  isHistorical: boolean;
 };
 
 type Tab =
-  | "overview"
   | "fees"
   | "bookings"
   | "campfees"
@@ -342,6 +342,8 @@ export default function AdminRevenueDashboard() {
   const [monthlyPayments, setMonthlyPayments] = useState<MonthlyPayment[]>([]);
   const [campPayments, setCampPayments] = useState<CampPayment[]>([]);
   const [feeSummary, setFeeSummary] = useState<FeeCollectionSummaryRow[]>([]);
+  const [feeSummaryLoaded, setFeeSummaryLoaded] = useState(false);
+  const [feeSummaryLoading, setFeeSummaryLoading] = useState(false);
   const [suggestions, setSuggestions] = useState<Suggestions>({
     area: [],
     discipline: [],
@@ -368,17 +370,22 @@ export default function AdminRevenueDashboard() {
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [activeTab, setActiveTab] = useState<Tab>("overview");
+  const [activeTab, setActiveTab] = useState<Tab>("fees");
   const [expenseSubTab, setExpenseSubTab] = useState<ExpenseSubTab>("summary");
   const [dateRange, setDateRange] = useState<DateRange>("all");
   const [customFrom, setCustomFrom] = useState("");
   const [customTo, setCustomTo] = useState("");
   const loadRef = useRef(0);
+  const tabBarRef = useRef<HTMLDivElement>(null);
+  const [tabFade, setTabFade] = useState({ left: false, right: false });
   const [showRangeMenu, setShowRangeMenu] = useState(false);
   const [showFilterSheet, setShowFilterSheet] = useState(false);
   const [expandedUser, setExpandedUser] = useState<string | null>(null);
   const [bookingResourceFilter, setBookingResourceFilter] =
     useState<string>("ALL");
+  const [bookingStatusFilter, setBookingStatusFilter] = useState<
+    "PAID" | "PENDING"
+  >("PAID");
   const [expenseSearch, setExpenseSearch] = useState("");
   const [expenseFilterBudgetHead, setExpenseFilterBudgetHead] = useState("");
   const [expenseFilterPaidBy, setExpenseFilterPaidBy] = useState("");
@@ -465,7 +472,6 @@ export default function AdminRevenueDashboard() {
         feesRes,
         bookingsRes,
         campPaymentsRes,
-        feeSummaryRes,
         regFeesRes,
         subRevenueRes,
         installmentPaymentsRes,
@@ -475,7 +481,6 @@ export default function AdminRevenueDashboard() {
         api
           .get("/admin/camp-revenue/payments", { skipAuthError: true } as any)
           .catch(() => ({ data: [] })),
-        api.get("/admin/fees/collection-summary").catch(() => ({ data: [] })),
         api.get("/admin/fees/registration-fees").catch(() => ({ data: [] })),
         api.get("/admin/subscriptions/revenue").catch(() => ({ data: [] })),
         api
@@ -510,13 +515,13 @@ export default function AdminRevenueDashboard() {
       setFeePayments(feesRes.data || []);
       setBookings(bookingsRes.data || []);
       setCampPayments(campPaymentsRes.data || []);
-      setFeeSummary(feeSummaryRes.data || []);
       setRegFees(regFeesRes.data || []);
       setSubRevenue(subRevenueRes.data || []);
       setExpenses(newExpenses);
       setPartnerSpending(newPartnerSpending);
       setSuggestions(newSuggestions);
       setInstallmentPayments(installmentPaymentsRes.data || []);
+      setFeeSummaryLoaded(false);
     } catch {
       if (thisLoad !== loadRef.current) return;
       setError("Failed to load revenue data");
@@ -571,6 +576,34 @@ export default function AdminRevenueDashboard() {
   useEffect(() => {
     loadMonthly(monthYear.year, monthYear.month);
   }, [monthYear, isSuperAdmin]);
+  useEffect(() => {
+    if (activeTab !== "feesummary" || feeSummaryLoaded) return;
+    setFeeSummaryLoading(true);
+    api
+      .get("/admin/fees/collection-summary")
+      .then((res) => {
+        setFeeSummary(res.data || []);
+        setFeeSummaryLoaded(true);
+      })
+      .catch(() => setFeeSummary([]))
+      .finally(() => setFeeSummaryLoading(false));
+  }, [activeTab, feeSummaryLoaded]);
+  useEffect(() => {
+    const el = tabBarRef.current;
+    if (!el) return;
+    const update = () =>
+      setTabFade({
+        left: el.scrollLeft > 2,
+        right: el.scrollLeft + el.clientWidth < el.scrollWidth - 2,
+      });
+    update();
+    el.addEventListener("scroll", update, { passive: true });
+    window.addEventListener("resize", update);
+    return () => {
+      el.removeEventListener("scroll", update);
+      window.removeEventListener("resize", update);
+    };
+  }, []);
 
   const { from, to } = getDateBounds(dateRange, customFrom, customTo);
   const inRange = (d: string) => {
@@ -693,6 +726,10 @@ export default function AdminRevenueDashboard() {
   const pendingBookings = bookings.filter(
     (b) => b.status === "PENDING_PAYMENT",
   ).length;
+  const pendingBookingsList = useMemo(
+    () => bookings.filter((b) => b.status === "PENDING_PAYMENT"),
+    [bookings],
+  );
   const expensesTotal =
     filteredExpenses.reduce((s, e) => s + (e.amount || 0), 0) +
     monthlyPaidTotal;
@@ -717,11 +754,11 @@ export default function AdminRevenueDashboard() {
   );
 
   const subRevenueTotal = subRevenue
-    .filter((r) => r.activatedAt && inRange(r.activatedAt))
+    .filter((r) => !r.isHistorical && r.activatedAt && inRange(r.activatedAt))
     .reduce((s, r) => s + (r.pricePaid || 0), 0);
 
   const subRevenueInRangeCount = subRevenue.filter(
-    (r) => r.activatedAt && inRange(r.activatedAt),
+    (r) => !r.isHistorical && r.activatedAt && inRange(r.activatedAt),
   ).length;
 
   const bmCount = filteredBookings.filter(
@@ -749,6 +786,8 @@ export default function AdminRevenueDashboard() {
   const bowlingMachineTotal = filteredBookings
     .filter((b) => b.resourceType === "BOWLING_MACHINE")
     .reduce((s, b) => s + (b.amount || 0), 0);
+
+  const regularBookingsTotal = bookingsTotal - membershipBookingsTotal;
 
   const filteredBookingsTotal = useMemo(() => {
     if (bookingResourceFilter === "ALL") {
@@ -2012,9 +2051,9 @@ export default function AdminRevenueDashboard() {
         />
         <SummaryCard
           label="Bookings"
-          value={fmt(bookingsTotal + subRevenueTotal)}
+          value={fmt(regularBookingsTotal)}
           onClick={() => setActiveTab("bookings")}
-          sub={`${filteredBookings.length} bookings · ${subRevenueInRangeCount} subscription${subRevenueInRangeCount !== 1 ? "s" : ""}`}
+          sub={`${bmCount + astroCount + tennisCount} paid sessions`}
           icon={<BookOpen size={15} className="text-orange-500" />}
           bg="bg-gradient-to-br from-orange-50 to-amber-50"
           border="border-orange-200"
@@ -2113,46 +2152,68 @@ export default function AdminRevenueDashboard() {
           bg="bg-gradient-to-br from-rose-50 to-pink-50"
           border="border-rose-200"
           valueClass="text-rose-600"
+          onClick={() => {
+            setActiveTab("bookings");
+            setBookingStatusFilter("PENDING");
+            setBookingResourceFilter("ALL");
+          }}
         />
       </div>
 
       {/* ── Main Tabs ── */}
-      <div
-        className="flex gap-1 bg-slate-100 rounded-xl p-1 overflow-x-auto"
-        style={{ scrollbarWidth: "none" }}
-      >
-        {(
-          [
-            ["overview", "Overview"],
-            ["fees", `Fees (${filteredFees.length})`],
-            ["bookings", `Bookings (${filteredBookings.length})`],
-            ["campfees", `Camp Fees (${filteredCampFees.length})`],
-            ["feesummary", `Fee Summary (${feeSummary.length})`],
-            ["regfees", `Reg Fees (${regFees.length})`],
-            ["subscriptions", `Memberships (${subRevenue.length})`],
+      <div className="relative">
+        <div
+          ref={tabBarRef}
+          className="flex gap-1 bg-slate-100 rounded-xl p-1 overflow-x-auto"
+          style={{ scrollbarWidth: "none" }}
+        >
+          {(
             [
-              "installments",
-              `Installments (${filteredInstallmentPayments.length})`,
-            ],
-            ...(isSuperAdmin
-              ? [
-                  [
-                    "expenses",
-                    `Expenses (${filteredExpenses.length + monthlyPayments.filter((p) => p.status === "PAID").length})`,
-                  ],
-                  ["income", `Income (${filteredIncomes.length})`],
-                ]
-              : []),
-          ] as [Tab, string][]
-        ).map(([tab, label]) => (
-          <button
-            key={tab}
-            onClick={() => setActiveTab(tab)}
-            className={`px-3 sm:px-4 py-2 rounded-lg text-xs sm:text-sm font-medium whitespace-nowrap transition ${activeTab === tab ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700"}`}
-          >
-            {label}
-          </button>
-        ))}
+              ["fees", "Fees", filteredFees.length],
+              ["bookings", "Bookings", filteredBookings.length],
+              ["campfees", "Camp Fees", filteredCampFees.length],
+              ["feesummary", "Fee Summary", feeSummary.length],
+              ["regfees", "Reg Fees", regFees.length],
+              ["subscriptions", "Memberships", subRevenue.length],
+              [
+                "installments",
+                "Installments",
+                filteredInstallmentPayments.length,
+              ],
+              ...(isSuperAdmin
+                ? [
+                    [
+                      "expenses",
+                      "Expenses",
+                      filteredExpenses.length +
+                        monthlyPayments.filter((p) => p.status === "PAID")
+                          .length,
+                    ],
+                    ["income", "Income", filteredIncomes.length],
+                  ]
+                : []),
+            ] as [Tab, string, number][]
+          ).map(([tab, label, count]) => (
+            <button
+              key={tab}
+              onClick={() => setActiveTab(tab)}
+              className={`flex items-center gap-1.5 px-3 sm:px-4 py-2 rounded-lg text-xs sm:text-sm font-medium whitespace-nowrap transition ${activeTab === tab ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700"}`}
+            >
+              {label}
+              <span
+                className={`text-[10px] font-semibold px-1.5 py-px rounded leading-none ${activeTab === tab ? "bg-slate-100 text-slate-500" : "bg-slate-200 text-slate-500"}`}
+              >
+                {count}
+              </span>
+            </button>
+          ))}
+        </div>
+        <div
+          className={`sm:hidden pointer-events-none absolute inset-y-0 right-0 w-10 rounded-r-xl bg-gradient-to-l from-slate-100 to-transparent transition-opacity duration-150 ${tabFade.right ? "opacity-100" : "opacity-0"}`}
+        />
+        <div
+          className={`sm:hidden pointer-events-none absolute inset-y-0 left-0 w-10 rounded-l-xl bg-gradient-to-r from-slate-100 to-transparent transition-opacity duration-150 ${tabFade.left ? "opacity-100" : "opacity-0"}`}
+        />
       </div>
 
       {activeTab === "installments" && (
@@ -2281,71 +2342,6 @@ export default function AdminRevenueDashboard() {
                 </table>
               </div>
             </>
-          )}
-        </div>
-      )}
-
-      {/* ── OVERVIEW ── */}
-      {activeTab === "overview" && (
-        <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-          <div className="px-4 py-3 border-b border-slate-100 bg-slate-50 flex items-center justify-between">
-            <h2 className="font-bold text-slate-800 text-sm sm:text-base">
-              Recent Transactions
-            </h2>
-            <span className="text-xs text-slate-400">Latest 20</span>
-          </div>
-          {recentTx.length === 0 ? (
-            <EmptyState message="No transactions in this period" />
-          ) : (
-            <div className="divide-y divide-slate-100">
-              {recentTx.map((tx) => (
-                <div
-                  key={tx.key}
-                  className="flex items-center justify-between px-3 sm:px-5 py-3 hover:bg-slate-50"
-                >
-                  <div className="flex items-center gap-2.5 min-w-0">
-                    <div
-                      className={`w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 ${tx.type === "fee" ? "bg-blue-100" : tx.type === "booking" ? "bg-orange-100" : tx.type === "income" ? "bg-violet-100" : tx.type === "regfee" ? "bg-purple-100" : "bg-red-100"}`}
-                    >
-                      {tx.type === "fee" ? (
-                        <CreditCard size={12} className="text-blue-600" />
-                      ) : tx.type === "booking" ? (
-                        <BookOpen size={12} className="text-orange-500" />
-                      ) : tx.type === "income" ? (
-                        <TrendingUp size={12} className="text-violet-500" />
-                      ) : tx.type === "regfee" ? (
-                        <IndianRupee size={12} className="text-purple-600" />
-                      ) : (
-                        <TrendingDown size={12} className="text-red-500" />
-                      )}
-                    </div>
-                    <div className="min-w-0">
-                      <p className="text-sm font-medium text-slate-800 truncate">
-                        {tx.name}
-                      </p>
-                      <p className="text-xs text-slate-500 truncate">
-                        {tx.description}
-                      </p>
-                    </div>
-                  </div>
-                  <div className="text-right flex-shrink-0 ml-2">
-                    <p
-                      className={`text-sm font-bold ${tx.type === "expense" ? "text-red-600" : tx.type === "income" ? "text-violet-600" : tx.type === "regfee" ? "text-purple-600" : "text-slate-900"}`}
-                    >
-                      {tx.type === "expense"
-                        ? "−"
-                        : tx.type === "income"
-                          ? "+"
-                          : ""}
-                      {fmt(tx.amount)}
-                    </p>
-                    <p className="text-xs text-slate-400">
-                      {fmtDateShort(tx.date)}
-                    </p>
-                  </div>
-                </div>
-              ))}
-            </div>
           )}
         </div>
       )}
@@ -2519,7 +2515,6 @@ export default function AdminRevenueDashboard() {
       )}
 
       {/* ── BOOKINGS ── */}
-      {/* ── BOOKINGS ── */}
       {activeTab === "bookings" && (
         <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
           <div className="px-4 py-3 border-b border-slate-100 bg-slate-50 flex items-center justify-between">
@@ -2527,222 +2522,342 @@ export default function AdminRevenueDashboard() {
               Booking Payments
             </h2>
             <span className="text-sm font-semibold text-orange-600">
-              {fmt(filteredBookingsTotal)}
+              {bookingStatusFilter === "PENDING"
+                ? `${pendingBookingsList.length} pending`
+                : fmt(filteredBookingsTotal)}
             </span>
           </div>
-          {/* Resource type sub-tabs */}
-          <div
-            className="px-4 py-2 border-b border-slate-100 flex gap-1 overflow-x-auto"
-            style={{ scrollbarWidth: "none" }}
-          >
-            {(
-              [
-                "ALL",
-                "BOWLING_MACHINE",
-                "BOWLING_MACHINE_MEMBERSHIP",
-                "TENNIS_BALL",
-                "ASTRO",
-              ] as const
-            ).map((rt) => {
-              const count =
-                rt === "ALL"
-                  ? filteredBookings.length
-                  : filteredBookings.filter((b) => b.resourceType === rt)
-                      .length;
-              const labels: Record<string, string> = {
-                ALL: "All",
-                BOWLING_MACHINE: "Bowling Machine",
-                BOWLING_MACHINE_MEMBERSHIP: "BM Memberships",
-                TENNIS_BALL: "Tennis Ball",
-                ASTRO: "Astro Turf",
-              };
-              return (
-                <button
-                  key={rt}
-                  onClick={() => {
-                    setBookingResourceFilter(rt);
-                    setExpandedUser(null);
-                  }}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap transition ${
-                    bookingResourceFilter === rt
-                      ? "bg-orange-100 text-orange-700 font-semibold"
-                      : "text-slate-500 hover:text-slate-700 hover:bg-slate-100"
-                  }`}
-                >
-                  {labels[rt]} ({count})
-                </button>
-              );
-            })}
+          {/* Status filter: Paid | Pending */}
+          <div className="px-4 py-2 border-b border-slate-100 flex gap-1">
+            <button
+              onClick={() => setBookingStatusFilter("PAID")}
+              className={`px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap transition ${
+                bookingStatusFilter === "PAID"
+                  ? "bg-orange-100 text-orange-700 font-semibold"
+                  : "text-slate-500 hover:text-slate-700 hover:bg-slate-100"
+              }`}
+            >
+              Paid ({filteredBookings.length})
+            </button>
+            <button
+              onClick={() => setBookingStatusFilter("PENDING")}
+              className={`px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap transition ${
+                bookingStatusFilter === "PENDING"
+                  ? "bg-rose-100 text-rose-700 font-semibold"
+                  : "text-slate-500 hover:text-slate-700 hover:bg-slate-100"
+              }`}
+            >
+              Pending ({pendingBookings})
+            </button>
           </div>
-          {groupedBookings.length === 0 ? (
-            <EmptyState message="No booking payments in this period" />
-          ) : (
-            <div className="divide-y divide-slate-100">
-              {groupedBookings
-                .filter(
-                  (group) =>
-                    bookingResourceFilter === "ALL" ||
-                    group.bookings.some(
-                      (b) => b.resourceType === bookingResourceFilter,
-                    ),
-                )
-                .map((group) => ({
-                  ...group,
-                  bookings:
-                    bookingResourceFilter === "ALL"
-                      ? group.bookings
-                      : group.bookings.filter(
-                          (b) => b.resourceType === bookingResourceFilter,
-                        ),
-                  total:
-                    bookingResourceFilter === "ALL"
-                      ? group.total
-                      : group.bookings
-                          .filter(
-                            (b) => b.resourceType === bookingResourceFilter,
-                          )
-                          .reduce((s, b) => s + (b.amount || 0), 0),
-                }))
-                .filter((group) => group.bookings.length > 0)
-                .map((group) => (
-                  <div key={group.key}>
-                    <div
-                      onClick={() =>
-                        setExpandedUser(
-                          expandedUser === group.key ? null : group.key,
-                        )
-                      }
-                      className="flex items-center justify-between px-3 sm:px-5 py-3.5 hover:bg-slate-50 cursor-pointer active:bg-slate-100"
-                    >
-                      <div className="flex items-center gap-2.5 min-w-0">
-                        <div className="w-8 h-8 rounded-full bg-orange-100 flex items-center justify-center flex-shrink-0">
-                          <span className="text-sm font-bold text-orange-600">
-                            {group.name.charAt(0).toUpperCase()}
-                          </span>
-                        </div>
-                        <div className="min-w-0">
+          {bookingStatusFilter === "PENDING" ? (
+            pendingBookingsList.length === 0 ? (
+              <EmptyState message="No pending bookings" />
+            ) : (
+              <>
+                <div className="sm:hidden divide-y divide-slate-100">
+                  {pendingBookingsList.map((b) => (
+                    <div key={b.bookingPublicId} className="px-4 py-3.5">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0 flex-1">
                           <p className="text-sm font-semibold text-slate-800 truncate">
-                            {group.name}
+                            {b.playerName || b.bookedByEmail || "—"}
                           </p>
-                          <p className="text-xs text-slate-400">
-                            {group.bookings.length} booking
-                            {group.bookings.length !== 1 ? "s" : ""}
+                          <p className="text-xs text-slate-500 mt-0.5">
+                            {b.resourceType}
+                            {b.startTime && b.endTime
+                              ? ` · ${b.startTime}–${b.endTime}`
+                              : ""}
                           </p>
                         </div>
-                      </div>
-                      <div className="flex items-center gap-2 flex-shrink-0 ml-2">
-                        <p className="text-sm font-bold text-slate-900">
-                          {fmt(group.total)}
+                        <p className="text-sm font-bold text-slate-900 flex-shrink-0">
+                          {fmt(b.amount)}
                         </p>
-                        <ChevronDown
-                          size={15}
-                          className={`text-slate-400 transition-transform ${expandedUser === group.key ? "rotate-180" : ""}`}
-                        />
+                      </div>
+                      <div className="flex items-center gap-3 mt-1.5">
+                        <span className="text-xs text-slate-400">
+                          {fmtDate(b.slotDate)}
+                        </span>
+                        <span className="inline-flex items-center gap-0.5 text-xs font-semibold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">
+                          <Clock size={10} />
+                          Pending
+                        </span>
                       </div>
                     </div>
-                    {expandedUser === group.key && (
-                      <div className="bg-slate-50 border-t border-slate-100">
-                        <div className="sm:hidden divide-y divide-slate-100">
-                          {group.bookings
-                            .sort((a, b) => (b.slotDate > a.slotDate ? 1 : -1))
-                            .map((b) => (
-                              <div
-                                key={b.bookingPublicId}
-                                className="flex items-center justify-between px-4 py-3"
-                              >
-                                <div>
-                                  <p className="text-sm font-medium text-slate-800">
-                                    {fmtDateShort(b.slotDate)} · {b.startTime}–
-                                    {b.endTime}
-                                  </p>
-                                  <p className="text-xs text-slate-500">
-                                    {b.resourceType} · {fmtMode(b.paymentMode)}
-                                  </p>
-                                </div>
-                                <p className="text-sm font-bold text-slate-900">
-                                  {fmt(b.amount)}
-                                </p>
-                              </div>
-                            ))}
+                  ))}
+                </div>
+                <div className="hidden sm:block overflow-x-auto">
+                  <table className="w-full">
+                    <thead>
+                      <tr className="text-xs text-slate-500 uppercase tracking-wide border-b bg-slate-50/50">
+                        {["Date", "Player", "Resource", "Slot", "Amount", "Status"].map(
+                          (h) => (
+                            <th
+                              key={h}
+                              className="text-left px-4 py-3 whitespace-nowrap"
+                            >
+                              {h}
+                            </th>
+                          ),
+                        )}
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {pendingBookingsList.map((b) => (
+                        <tr key={b.bookingPublicId} className="hover:bg-slate-50">
+                          <td className="px-4 py-3 text-sm text-slate-600 whitespace-nowrap">
+                            {fmtDate(b.slotDate)}
+                          </td>
+                          <td className="px-4 py-3 text-sm font-medium text-slate-800">
+                            {b.playerName || b.bookedByEmail || "—"}
+                          </td>
+                          <td className="px-4 py-3 text-sm text-slate-600">
+                            {b.resourceType}
+                          </td>
+                          <td className="px-4 py-3 text-sm text-slate-600">
+                            {b.startTime && b.endTime
+                              ? `${b.startTime}–${b.endTime}`
+                              : "—"}
+                          </td>
+                          <td className="px-4 py-3 text-sm font-bold text-slate-900">
+                            {fmt(b.amount)}
+                          </td>
+                          <td className="px-4 py-3">
+                            <span className="inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-full bg-amber-100 text-amber-700">
+                              <Clock size={11} />
+                              Pending
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </>
+            )
+          ) : (
+            <>
+              {/* Resource type sub-tabs */}
+              <div
+                className="px-4 py-2 border-b border-slate-100 flex gap-1 overflow-x-auto"
+                style={{ scrollbarWidth: "none" }}
+              >
+                {(
+                  [
+                    "ALL",
+                    "BOWLING_MACHINE",
+                    "BOWLING_MACHINE_MEMBERSHIP",
+                    "TENNIS_BALL",
+                    "ASTRO",
+                  ] as const
+                ).map((rt) => {
+                  const count =
+                    rt === "ALL"
+                      ? filteredBookings.length
+                      : filteredBookings.filter((b) => b.resourceType === rt)
+                          .length;
+                  const labels: Record<string, string> = {
+                    ALL: "All",
+                    BOWLING_MACHINE: "Bowling Machine",
+                    BOWLING_MACHINE_MEMBERSHIP: "BM Memberships",
+                    TENNIS_BALL: "Tennis Ball",
+                    ASTRO: "Astro Turf",
+                  };
+                  return (
+                    <button
+                      key={rt}
+                      onClick={() => {
+                        setBookingResourceFilter(rt);
+                        setExpandedUser(null);
+                      }}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap transition ${
+                        bookingResourceFilter === rt
+                          ? "bg-orange-100 text-orange-700 font-semibold"
+                          : "text-slate-500 hover:text-slate-700 hover:bg-slate-100"
+                      }`}
+                    >
+                      {labels[rt]} ({count})
+                    </button>
+                  );
+                })}
+              </div>
+              {groupedBookings.length === 0 ? (
+                <EmptyState message="No booking payments in this period" />
+              ) : (
+                <div className="divide-y divide-slate-100">
+                  {groupedBookings
+                    .filter(
+                      (group) =>
+                        bookingResourceFilter === "ALL" ||
+                        group.bookings.some(
+                          (b) => b.resourceType === bookingResourceFilter,
+                        ),
+                    )
+                    .map((group) => ({
+                      ...group,
+                      bookings:
+                        bookingResourceFilter === "ALL"
+                          ? group.bookings
+                          : group.bookings.filter(
+                              (b) => b.resourceType === bookingResourceFilter,
+                            ),
+                      total:
+                        bookingResourceFilter === "ALL"
+                          ? group.total
+                          : group.bookings
+                              .filter(
+                                (b) => b.resourceType === bookingResourceFilter,
+                              )
+                              .reduce((s, b) => s + (b.amount || 0), 0),
+                    }))
+                    .filter((group) => group.bookings.length > 0)
+                    .map((group) => (
+                      <div key={group.key}>
+                        <div
+                          onClick={() =>
+                            setExpandedUser(
+                              expandedUser === group.key ? null : group.key,
+                            )
+                          }
+                          className="flex items-center justify-between px-3 sm:px-5 py-3.5 hover:bg-slate-50 cursor-pointer active:bg-slate-100"
+                        >
+                          <div className="flex items-center gap-2.5 min-w-0">
+                            <div className="w-8 h-8 rounded-full bg-orange-100 flex items-center justify-center flex-shrink-0">
+                              <span className="text-sm font-bold text-orange-600">
+                                {group.name.charAt(0).toUpperCase()}
+                              </span>
+                            </div>
+                            <div className="min-w-0">
+                              <p className="text-sm font-semibold text-slate-800 truncate">
+                                {group.name}
+                              </p>
+                              <p className="text-xs text-slate-400">
+                                {group.bookings.length} booking
+                                {group.bookings.length !== 1 ? "s" : ""}
+                              </p>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2 flex-shrink-0 ml-2">
+                            <p className="text-sm font-bold text-slate-900">
+                              {fmt(group.total)}
+                            </p>
+                            <ChevronDown
+                              size={15}
+                              className={`text-slate-400 transition-transform ${expandedUser === group.key ? "rotate-180" : ""}`}
+                            />
+                          </div>
                         </div>
-                        <div className="hidden sm:block overflow-x-auto">
-                          <table className="w-full">
-                            <thead>
-                              <tr className="text-xs text-slate-400 uppercase tracking-wide border-b border-slate-200">
-                                {[
-                                  "Date",
-                                  "Slot",
-                                  "Resource",
-                                  "Amount",
-                                  "Mode",
-                                  "Status",
-                                ].map((h) => (
-                                  <th key={h} className="text-left px-5 py-2">
-                                    {h}
-                                  </th>
-                                ))}
-                              </tr>
-                            </thead>
-                            <tbody className="divide-y divide-slate-100">
+                        {expandedUser === group.key && (
+                          <div className="bg-slate-50 border-t border-slate-100">
+                            <div className="sm:hidden divide-y divide-slate-100">
                               {group.bookings
                                 .sort((a, b) =>
                                   b.slotDate > a.slotDate ? 1 : -1,
                                 )
                                 .map((b) => (
-                                  <tr
+                                  <div
                                     key={b.bookingPublicId}
-                                    className="hover:bg-white"
+                                    className="flex items-center justify-between px-4 py-3"
                                   >
-                                    <td className="px-5 py-2.5 text-sm text-slate-600">
-                                      {fmtDate(b.slotDate)}
-                                    </td>
-                                    <td className="px-5 py-2.5 text-sm text-slate-600">
-                                      {b.startTime && b.endTime
-                                        ? `${b.startTime}–${b.endTime}`
-                                        : "—"}
-                                    </td>
-                                    <td className="px-5 py-2.5 text-sm text-slate-600">
-                                      {b.resourceType}
-                                    </td>
-                                    <td className="px-5 py-2.5 text-sm font-bold text-slate-900">
+                                    <div>
+                                      <p className="text-sm font-medium text-slate-800">
+                                        {fmtDateShort(b.slotDate)} ·{" "}
+                                        {b.startTime}–{b.endTime}
+                                      </p>
+                                      <p className="text-xs text-slate-500">
+                                        {b.resourceType} ·{" "}
+                                        {fmtMode(b.paymentMode)}
+                                      </p>
+                                    </div>
+                                    <p className="text-sm font-bold text-slate-900">
                                       {fmt(b.amount)}
-                                    </td>
-                                    <td className="px-5 py-2.5 text-sm text-slate-600">
-                                      {fmtMode(b.paymentMode)}
-                                    </td>
-                                    <td className="px-5 py-2.5">
-                                      <span className="inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-700">
-                                        <CheckCircle2 size={11} />
-                                        Paid
-                                      </span>
-                                    </td>
-                                  </tr>
+                                    </p>
+                                  </div>
                                 ))}
-                            </tbody>
-                          </table>
-                        </div>
+                            </div>
+                            <div className="hidden sm:block overflow-x-auto">
+                              <table className="w-full">
+                                <thead>
+                                  <tr className="text-xs text-slate-400 uppercase tracking-wide border-b border-slate-200">
+                                    {[
+                                      "Date",
+                                      "Slot",
+                                      "Resource",
+                                      "Amount",
+                                      "Mode",
+                                      "Status",
+                                    ].map((h) => (
+                                      <th
+                                        key={h}
+                                        className="text-left px-5 py-2"
+                                      >
+                                        {h}
+                                      </th>
+                                    ))}
+                                  </tr>
+                                </thead>
+                                <tbody className="divide-y divide-slate-100">
+                                  {group.bookings
+                                    .sort((a, b) =>
+                                      b.slotDate > a.slotDate ? 1 : -1,
+                                    )
+                                    .map((b) => (
+                                      <tr
+                                        key={b.bookingPublicId}
+                                        className="hover:bg-white"
+                                      >
+                                        <td className="px-5 py-2.5 text-sm text-slate-600">
+                                          {fmtDate(b.slotDate)}
+                                        </td>
+                                        <td className="px-5 py-2.5 text-sm text-slate-600">
+                                          {b.startTime && b.endTime
+                                            ? `${b.startTime}–${b.endTime}`
+                                            : "—"}
+                                        </td>
+                                        <td className="px-5 py-2.5 text-sm text-slate-600">
+                                          {b.resourceType}
+                                        </td>
+                                        <td className="px-5 py-2.5 text-sm font-bold text-slate-900">
+                                          {fmt(b.amount)}
+                                        </td>
+                                        <td className="px-5 py-2.5 text-sm text-slate-600">
+                                          {fmtMode(b.paymentMode)}
+                                        </td>
+                                        <td className="px-5 py-2.5">
+                                          <span className="inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-700">
+                                            <CheckCircle2 size={11} />
+                                            Paid
+                                          </span>
+                                        </td>
+                                      </tr>
+                                    ))}
+                                </tbody>
+                              </table>
+                            </div>
+                          </div>
+                        )}
                       </div>
-                    )}
-                  </div>
-                ))}
+                    ))}
 
-              <div className="flex items-center justify-between px-4 sm:px-5 py-3.5 bg-slate-50 border-t-2 border-slate-200">
-                <span className="text-sm font-semibold text-slate-700">
-                  Total ·{" "}
-                  {bookingResourceFilter === "ALL"
-                    ? groupedBookings.length
-                    : groupedBookings.filter((g) =>
-                        g.bookings.some(
-                          (b) => b.resourceType === bookingResourceFilter,
-                        ),
-                      ).length}{" "}
-                  users
-                </span>
-                <span className="text-sm font-bold text-orange-600">
-                  {fmt(filteredBookingsTotal)}
-                </span>
-              </div>
-            </div>
+                  <div className="flex items-center justify-between px-4 sm:px-5 py-3.5 bg-slate-50 border-t-2 border-slate-200">
+                    <span className="text-sm font-semibold text-slate-700">
+                      Total ·{" "}
+                      {bookingResourceFilter === "ALL"
+                        ? groupedBookings.length
+                        : groupedBookings.filter((g) =>
+                            g.bookings.some(
+                              (b) => b.resourceType === bookingResourceFilter,
+                            ),
+                          ).length}{" "}
+                      users
+                    </span>
+                    <span className="text-sm font-bold text-orange-600">
+                      {fmt(filteredBookingsTotal)}
+                    </span>
+                  </div>
+                </div>
+              )}
+            </>
           )}
         </div>
       )}
@@ -2880,7 +2995,13 @@ export default function AdminRevenueDashboard() {
 
       {/* ── FEE COLLECTION SUMMARY ── */}
       {activeTab === "feesummary" && (
-        <FeeSummaryTable rows={feeSummary} onRefresh={load} />
+        feeSummaryLoading ? (
+          <div className="flex items-center justify-center py-16 bg-white rounded-xl border border-slate-200 shadow-sm">
+            <div className="w-8 h-8 border-4 border-slate-200 border-t-emerald-500 rounded-full animate-spin" />
+          </div>
+        ) : (
+          <FeeSummaryTable rows={feeSummary} onRefresh={load} />
+        )
       )}
 
       {/* ── NEW: REGISTRATION FEES TAB ── */}

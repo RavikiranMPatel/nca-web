@@ -43,6 +43,8 @@ type PlayerStat = {
   widesConceded?: number;
   noBallsConceded?: number;
   catchesTaken?: number;
+  source?: string;
+  status?: string;
 };
 
 type PlayerInfo = {
@@ -998,6 +1000,11 @@ function MatchStatCard({ stat }: { stat: PlayerStat }) {
             </div>
           </div>
           <div className="flex items-center gap-1.5 flex-shrink-0 flex-wrap justify-end">
+            {stat.source === "PLAYER" && (
+              <span className="px-2 py-0.5 bg-yellow-400/90 text-yellow-900 text-xs font-semibold rounded">
+                Self-reported
+              </span>
+            )}
             {stat.format && (
               <span
                 className={`px-2 py-0.5 text-white text-xs font-bold rounded ${

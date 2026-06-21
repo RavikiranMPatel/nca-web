@@ -1,5 +1,5 @@
 import { useNavigate, useParams, useLocation, Outlet } from "react-router-dom";
-import { ArrowLeft, ChevronRight, Lock } from "lucide-react";
+import { ArrowLeft, ChevronRight } from "lucide-react";
 import { useEffect, useState } from "react";
 import Button from "../../components/Button";
 import api from "../../api/axios";
@@ -10,11 +10,10 @@ function PlayerOverviewPage() {
   const { playerPublicId } = useParams();
 
   const role = localStorage.getItem("userRole");
-  const isSuperAdmin = role === "ROLE_SUPER_ADMIN";
   const isAdmin = role === "ROLE_ADMIN" || role === "ROLE_SUPER_ADMIN";
+  const isSuperAdmin = role === "ROLE_SUPER_ADMIN";
 
   const [playerName, setPlayerName] = useState<string>("");
-  const [showTooltip, setShowTooltip] = useState(false);
 
   const isExternalPlayer = playerPublicId?.startsWith("EXT-") ?? false;
 
@@ -46,9 +45,7 @@ function PlayerOverviewPage() {
             : "Info";
 
   const handleUpdateClick = () => {
-    if (isSuperAdmin) {
-      navigate(`/admin/players/${playerPublicId}/edit`);
-    }
+    navigate(`/admin/players/${playerPublicId}/edit`);
   };
 
   return (
@@ -68,38 +65,12 @@ function PlayerOverviewPage() {
           </h1>
         </div>
 
-        {/* UPDATE BUTTON - VISIBLE FOR ALL ADMINS */}
+        {/* UPDATE BUTTON */}
         {isAdmin && (
-          <div className="relative self-start md:self-auto">
-            <div
-              onMouseEnter={() => !isSuperAdmin && setShowTooltip(true)}
-              onMouseLeave={() => setShowTooltip(false)}
-              onClick={() => !isSuperAdmin && setShowTooltip(true)}
-            >
-              <Button
-                variant="primary"
-                onClick={handleUpdateClick}
-                disabled={!isSuperAdmin}
-              >
-                <div className="flex items-center gap-2">
-                  {!isSuperAdmin && <Lock size={16} />}
-                  Update Player
-                </div>
-              </Button>
-            </div>
-
-            {/* TOOLTIP */}
-            {showTooltip && !isSuperAdmin && (
-              <div className="absolute top-full mt-2 right-0 md:left-1/2 md:-translate-x-1/2 z-50 w-64 md:w-auto">
-                <div className="bg-gray-900 text-white text-xs rounded-lg px-3 py-2 shadow-lg">
-                  <div className="flex items-center gap-2">
-                    <Lock size={14} />
-                    <span>Update option only for Super Admin</span>
-                  </div>
-                  <div className="absolute -top-1 right-4 md:left-1/2 md:-translate-x-1/2 w-2 h-2 bg-gray-900 transform rotate-45"></div>
-                </div>
-              </div>
-            )}
+          <div className="self-start md:self-auto">
+            <Button variant="primary" onClick={handleUpdateClick}>
+              Update Player
+            </Button>
           </div>
         )}
       </div>
@@ -151,12 +122,14 @@ function PlayerOverviewPage() {
               Analysis
             </TabButton>
 
-            <TabButton
-              active={activeTab === "Fees"}
-              onClick={() => navigate(`/admin/players/${playerPublicId}/fees`)}
-            >
-              Fees
-            </TabButton>
+            {isSuperAdmin && (
+              <TabButton
+                active={activeTab === "Fees"}
+                onClick={() => navigate(`/admin/players/${playerPublicId}/fees`)}
+              >
+                Fees
+              </TabButton>
+            )}
 
             <TabButton
               active={activeTab === "Media"}

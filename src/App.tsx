@@ -25,6 +25,9 @@ import PlayerInfoPage from "./pages/player/PlayerInfoPage";
 import PlayerStatsPage from "./pages/player/PlayerStatsPage";
 import UpdatePlayer from "./pages/player/UpdatePlayer";
 import AddCricketStats from "./pages/player/AddCricketStats";
+import PendingStatReviewPage from "./pages/admin/PendingStatReviewPage";
+import MyStatsSubmitPage from "./pages/player/MyStatsSubmitPage";
+import MySubmissionsPage from "./pages/player/MySubmissionsPage";
 import BatchManagementPage from "./pages/BatchManagementPage";
 import SlotTemplateManagement from "./pages/slot-templates/SlotTemplateManagement";
 import CreateEditTemplate from "./pages/slot-templates/CreateEditTemplate";
@@ -77,6 +80,7 @@ import TournamentDetailPage from "./pages/scoring/TournamentDetailPage";
 import TournamentListPage from "./pages/scoring/TournamentListPage";
 import CricketStatsPage from "./pages/CricketStatsPage";
 import UmpireAssistPage from "./pages/umpire/UmpireAssistPage";
+import PlayerSignupPage from "./pages/PlayerSignupPage";
 
 // Add route after /my-bookings route:
 <Route
@@ -129,6 +133,7 @@ function App() {
       {/* PUBLIC */}
       <Route path="/login" element={<Login />} />
       <Route path="/signup" element={<Signup />} />
+      <Route path="/player-signup" element={<PlayerSignupPage />} />
       <Route
         path="/home"
         element={
@@ -525,7 +530,14 @@ function App() {
         <Route path="info" element={<PlayerInfoPage />} />
         <Route path="stats" element={<PlayerStatsPage />} />
         <Route path="analysis" element={<PlayerAnalysisPage />} />
-        <Route path="fees" element={<PlayerFeesTab />} />
+        <Route
+          path="fees"
+          element={
+            <ProtectedRoute roles={["ROLE_SUPER_ADMIN"]}>
+              <PlayerFeesTab />
+            </ProtectedRoute>
+          }
+        />
         <Route path="media" element={<PlayerMediaPage />} />
         <Route path="coaching" element={<PlayerCoachingPage />} />
       </Route>
@@ -564,6 +576,16 @@ function App() {
         }
       />
       <Route
+        path="/admin/cricket-stats/pending"
+        element={
+          <ProtectedRoute roles={["ROLE_ADMIN", "ROLE_SUPER_ADMIN"]}>
+            <AppLayout>
+              <PendingStatReviewPage />
+            </AppLayout>
+          </ProtectedRoute>
+        }
+      />
+      <Route
         path="/admin/player-assessment"
         element={<PlayerAssessmentDashboardPage />}
       />
@@ -585,6 +607,26 @@ function App() {
           >
             <AppLayout>
               <PlayerCoachingViewPage />
+            </AppLayout>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/my-stats"
+        element={
+          <ProtectedRoute roles={["ROLE_PLAYER"]}>
+            <AppLayout>
+              <MySubmissionsPage />
+            </AppLayout>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/my-stats/submit"
+        element={
+          <ProtectedRoute roles={["ROLE_PLAYER"]}>
+            <AppLayout>
+              <MyStatsSubmitPage />
             </AppLayout>
           </ProtectedRoute>
         }

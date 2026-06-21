@@ -5,7 +5,8 @@ import api from "../../api/axios";
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 type Slot = {
-  time: string;
+  time: string;        // "HH:mm - HH:mm" — payload extraction and comparison only
+  displayTime: string; // "H:mm AM – H:mm PM" — all rendered text
   slotId: string;
   availableCount: number;
   price: number;
@@ -22,10 +23,23 @@ type UserSuggestion = {
   email: string;
 };
 
+type GuestSuggestion = {
+  name: string;
+  phone: string;
+  email: string;
+};
+
 type BookerType = "REGISTERED" | "GUEST";
 type PaymentStatus = "CONFIRMED" | "PENDING_PAYMENT";
 
-const RESOURCES = ["TURF", "ASTRO", "BOWLING_MACHINE"];
+const RESOURCES = ["TURF", "ASTRO", "BOWLING_MACHINE"] as const;
+type ResourceKey = (typeof RESOURCES)[number];
+
+const RESOURCE_LABELS: Record<ResourceKey, string> = {
+  TURF:            "Turf",
+  ASTRO:           "Astro Turf",
+  BOWLING_MACHINE: "Bowling Machine",
+};
 
 const PAYMENT_MODES = [
   { value: "PHONE_PE", label: "PhonePe" },
@@ -44,6 +58,11 @@ const SLOT_GROUPS = [
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 const fmt = (t: string) => t.substring(0, 5);
+const fmt12 = (t: string): string => {
+  const [h, m] = t.split(":").map(Number);
+  const period = h >= 12 ? "PM" : "AM";
+  return `${h % 12 || 12}:${m.toString().padStart(2, "0")} ${period}`;
+};
 const today = () => new Date().toLocaleDateString("en-CA");
 
 // ─── Main Component ───────────────────────────────────────────────────────────
@@ -55,7 +74,7 @@ export default function AdminManualBooking() {
   const [mode, setMode] = useState<"FUTURE" | "PAST">("FUTURE");
 
   // ── Mode B — past session fields ──────────────────────────────────────────
-  const [pastDate, setPastDate] = useState("");
+  const [pastDate, setPastDate] = useState(today());
   const [pastTime, setPastTime] = useState("");
   const [pastResource, setPastResource] = useState("");
   const [pastSlots, setPastSlots] = useState<
@@ -91,6 +110,9 @@ export default function AdminManualBooking() {
   const [guestName, setGuestName] = useState("");
   const [guestPhone, setGuestPhone] = useState("");
   const [guestEmail, setGuestEmail] = useState("");
+  const [guestSuggestions, setGuestSuggestions] = useState<GuestSuggestion[]>([]);
+  const [guestSearchLoading, setGuestSearchLoading] = useState(false);
+  const [guestBookerPicked, setGuestBookerPicked] = useState(false);
 
   // ── Step 3 – confirm ─────────────────────────────────────────────────────
   const [paymentStatus, setPaymentStatus] =
@@ -217,6 +239,7 @@ export default function AdminManualBooking() {
         setSlots(
           res.data.slots.map((s: any) => ({
             time: `${fmt(s.startTime)} - ${fmt(s.endTime)}`,
+            displayTime: `${fmt12(s.startTime)} – ${fmt12(s.endTime)}`,
             slotId: s.slotId,
             availableCount: s.availableCount,
             price:
@@ -262,6 +285,29 @@ export default function AdminManualBooking() {
     const t = setTimeout(() => searchUsers(userSearch), 300);
     return () => clearTimeout(t);
   }, [userSearch, searchUsers]);
+
+  // ── Guest booker search (past walk-ins) ───────────────────────────────────
+  const searchGuestBookers = useCallback(async (q: string) => {
+    if (q.length < 2) {
+      setGuestSuggestions([]);
+      return;
+    }
+    setGuestSearchLoading(true);
+    try {
+      const res = await api.get("/bookings/admin/guest-bookers/search", { params: { q } });
+      setGuestSuggestions(res.data || []);
+    } catch {
+      setGuestSuggestions([]);
+    } finally {
+      setGuestSearchLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (guestBookerPicked) return;
+    const t = setTimeout(() => searchGuestBookers(guestName), 300);
+    return () => clearTimeout(t);
+  }, [guestName, guestBookerPicked, searchGuestBookers]);
 
   // ── Submit ────────────────────────────────────────────────────────────────
   const handleSubmit = async () => {
@@ -351,7 +397,7 @@ export default function AdminManualBooking() {
               <strong>
                 {bookerType === "GUEST" ? guestName : selectedUser?.name}
               </strong>{" "}
-              on <strong>{date}</strong> ({resource} · {selectedSlot?.time}) has
+              on <strong>{date}</strong> ({resource} · {selectedSlot?.displayTime}) has
               been saved.
             </>
           )}
@@ -367,6 +413,8 @@ export default function AdminManualBooking() {
               setGuestName("");
               setGuestPhone("");
               setGuestEmail("");
+              setGuestSuggestions([]);
+              setGuestBookerPicked(false);
               setUserSearch("");
               setNotes("");
               setPastDate("");
@@ -488,14 +536,14 @@ export default function AdminManualBooking() {
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Resource *
                 </label>
-                <div className="flex flex-wrap gap-2">
+                <div className="grid grid-cols-2 gap-2">
                   {RESOURCES.map((r) => (
                     <button
                       key={r}
                       onClick={() => setPastResource(r)}
-                      className={`px-4 py-2 rounded-xl border font-semibold text-sm transition-all ${pastResource === r ? "bg-blue-600 text-white border-blue-600" : "border-gray-300 hover:bg-gray-50"}`}
+                      className={`px-3 py-2.5 rounded-xl border font-semibold text-sm transition-all text-center leading-tight ${pastResource === r ? "bg-blue-600 text-white border-blue-600" : "border-gray-300 hover:bg-gray-50"}`}
                     >
-                      {r}
+                      {RESOURCE_LABELS[r]}
                     </button>
                   ))}
                 </div>
@@ -507,7 +555,7 @@ export default function AdminManualBooking() {
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     Session *
                   </label>
-                  <div className="grid grid-cols-2 gap-3 max-w-xs">
+                  <div className="grid grid-cols-2 gap-3 sm:max-w-sm">
                     {([60, 120] as const).map((b) => (
                       <button
                         key={b}
@@ -550,7 +598,7 @@ export default function AdminManualBooking() {
                     <option value="">Select time</option>
                     {pastSlots.map((s) => (
                       <option key={s.startTime} value={s.startTime + ":00"}>
-                        {s.startTime} - {s.endTime}
+                        {fmt12(s.startTime)} – {fmt12(s.endTime)}
                       </option>
                     ))}
                   </select>
@@ -599,7 +647,7 @@ export default function AdminManualBooking() {
           <div className="bg-white rounded-2xl border border-gray-200 p-6 shadow-sm space-y-4">
             <p className="font-semibold text-gray-900">Booker Details</p>
             <div className="grid md:grid-cols-2 gap-4">
-              <div>
+              <div className="relative">
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Full Name *
                 </label>
@@ -607,9 +655,36 @@ export default function AdminManualBooking() {
                   type="text"
                   placeholder="e.g. Rohit Sharma"
                   value={guestName}
-                  onChange={(e) => setGuestName(e.target.value)}
+                  onChange={(e) => {
+                    setGuestName(e.target.value);
+                    setGuestBookerPicked(false);
+                  }}
                   className="w-full border border-gray-300 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
+                {guestName.length >= 2 && !guestBookerPicked && (
+                  <div className="absolute z-20 w-full mt-1 bg-white border border-gray-200 rounded-xl shadow-lg max-h-52 overflow-auto">
+                    {guestSearchLoading ? (
+                      <p className="px-4 py-3 text-sm text-gray-400">Searching…</p>
+                    ) : guestSuggestions.length === 0 ? null : (
+                      guestSuggestions.map((g, i) => (
+                        <button
+                          key={i}
+                          type="button"
+                          onClick={() => {
+                            setGuestName(g.name);
+                            setGuestPhone(g.phone);
+                            setGuestSuggestions([]);
+                            setGuestBookerPicked(true);
+                          }}
+                          className="w-full text-left px-4 py-3 hover:bg-blue-50 transition border-b border-gray-100 last:border-0"
+                        >
+                          <p className="text-sm font-semibold text-gray-900">{g.name}</p>
+                          <p className="text-xs text-gray-500">{g.phone}{g.email ? ` · ${g.email}` : ""}</p>
+                        </button>
+                      ))
+                    )}
+                  </div>
+                )}
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -650,8 +725,8 @@ export default function AdminManualBooking() {
               <p className="font-semibold text-slate-800">Session Summary</p>
               <div className="flex flex-wrap gap-x-6 gap-y-1 text-xs text-slate-600">
                 {pastDate && <span>📅 {pastDate}</span>}
-                {pastResource && <span>🏏 {pastResource}</span>}
-                {pastTime && <span>🕐 {pastTime.substring(0, 5)}</span>}
+                {pastResource && <span>🏏 {RESOURCE_LABELS[pastResource as ResourceKey] ?? pastResource}</span>}
+                {pastTime && <span>🕐 {fmt12(pastTime)}</span>}
                 {pastResource === "BOWLING_MACHINE" && pastBallCount && (
                   <span>🎯 {pastBallCount} balls</span>
                 )}
@@ -731,14 +806,14 @@ export default function AdminManualBooking() {
               <label className="block text-sm font-medium text-gray-700 mb-3">
                 Select Resource
               </label>
-              <div className="flex flex-col sm:flex-row gap-3">
+              <div className="grid grid-cols-2 gap-2">
                 {RESOURCES.map((r) => (
                   <button
                     key={r}
                     onClick={() => setResource(r)}
-                    className={`px-6 py-2.5 rounded-xl border font-semibold transition-all ${resource === r ? "bg-blue-600 text-white border-blue-600 shadow" : "border-gray-300 hover:bg-gray-50"}`}
+                    className={`px-3 py-2.5 rounded-xl border font-semibold text-sm transition-all text-center leading-tight ${resource === r ? "bg-blue-600 text-white border-blue-600 shadow" : "border-gray-300 hover:bg-gray-50"}`}
                   >
-                    {r}
+                    {RESOURCE_LABELS[r]}
                   </button>
                 ))}
               </div>
@@ -847,7 +922,7 @@ export default function AdminManualBooking() {
                             <p
                               className={`text-sm font-bold ${disabled ? "line-through text-gray-400" : selected ? "text-white" : "text-gray-900"}`}
                             >
-                              {slot.time}
+                              {slot.displayTime}
                             </p>
                             <p
                               className={`text-xs mt-0.5 ${selected ? "text-blue-100" : "text-gray-500"}`}
@@ -932,13 +1007,42 @@ export default function AdminManualBooking() {
             {bookerType === "GUEST" ? (
               <div className="grid md:grid-cols-2 gap-4">
                 <FormField label="Full Name *">
-                  <input
-                    type="text"
-                    placeholder="e.g. Rohit Sharma"
-                    value={guestName}
-                    onChange={(e) => setGuestName(e.target.value)}
-                    className="w-full border border-gray-300 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
+                  <div className="relative">
+                    <input
+                      type="text"
+                      placeholder="e.g. Rohit Sharma"
+                      value={guestName}
+                      onChange={(e) => {
+                        setGuestName(e.target.value);
+                        setGuestBookerPicked(false);
+                      }}
+                      className="w-full border border-gray-300 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                    {guestName.length >= 2 && !guestBookerPicked && (
+                      <div className="absolute z-20 w-full mt-1 bg-white border border-gray-200 rounded-xl shadow-lg max-h-52 overflow-auto">
+                        {guestSearchLoading ? (
+                          <p className="px-4 py-3 text-sm text-gray-400">Searching…</p>
+                        ) : guestSuggestions.length === 0 ? null : (
+                          guestSuggestions.map((g, i) => (
+                            <button
+                              key={i}
+                              type="button"
+                              onClick={() => {
+                                setGuestName(g.name);
+                                setGuestPhone(g.phone);
+                                setGuestSuggestions([]);
+                                setGuestBookerPicked(true);
+                              }}
+                              className="w-full text-left px-4 py-3 hover:bg-blue-50 transition border-b border-gray-100 last:border-0"
+                            >
+                              <p className="text-sm font-semibold text-gray-900">{g.name}</p>
+                              <p className="text-xs text-gray-500">{g.phone}{g.email ? ` · ${g.email}` : ""}</p>
+                            </button>
+                          ))
+                        )}
+                      </div>
+                    )}
+                  </div>
                 </FormField>
                 <FormField label="Phone Number *">
                   <input
@@ -980,7 +1084,7 @@ export default function AdminManualBooking() {
                   />
                 </FormField>
                 {userSearch.length >= 2 && !selectedUser && (
-                  <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-xl shadow-lg max-h-52 overflow-auto">
+                  <div className="absolute z-20 w-full mt-1 bg-white border border-gray-200 rounded-xl shadow-lg max-h-52 overflow-auto">
                     {searchLoading ? (
                       <p className="px-4 py-3 text-sm text-gray-400">
                         Searching…
@@ -1070,8 +1174,8 @@ export default function AdminManualBooking() {
               </p>
               <div className="rounded-xl border border-gray-100 divide-y divide-gray-100">
                 <SummaryRow label="Date" value={date} />
-                <SummaryRow label="Resource" value={resource} />
-                <SummaryRow label="Slot" value={selectedSlot?.time ?? ""} />
+                <SummaryRow label="Resource" value={RESOURCE_LABELS[resource as ResourceKey] ?? resource} />
+                <SummaryRow label="Slot" value={selectedSlot?.displayTime ?? ""} />
                 {resource === "BOWLING_MACHINE" && ballCount && (
                   <SummaryRow
                     label="Session"
@@ -1215,7 +1319,7 @@ function SlotSummaryBadge({
       <span className="text-blue-500 text-xl">📅</span>
       <div>
         <p className="text-sm font-semibold text-blue-900">
-          {date} · {resource} · {slot.time}
+          {date} · {resource} · {slot.displayTime}
         </p>
         <p className="text-xs text-blue-500">
           ₹{slot.price}

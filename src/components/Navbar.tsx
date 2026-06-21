@@ -454,6 +454,18 @@ function Navbar() {
                             Coaching
                           </button>
                         )}
+                        {userRole === "ROLE_PLAYER" && isAuthenticated && (
+                          <button
+                            onClick={() => {
+                              navigate("/my-stats");
+                              setUserMenuOpen(false);
+                            }}
+                            className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition"
+                          >
+                            <span className="text-base leading-none">🏏</span>My
+                            Stats
+                          </button>
+                        )}
                         <div className="h-px bg-gray-100 my-1" />
                         <button
                           onClick={requestLogout}
@@ -715,6 +727,19 @@ function Navbar() {
                   }}
                   iconBg="#f3f4f6"
                   iconColor="#374151"
+                />
+              )}
+              {userRole === "ROLE_PLAYER" && (
+                <DrawerItem
+                  icon={User}
+                  label="My Stats"
+                  active={location.pathname.startsWith("/my-stats")}
+                  onClick={() => {
+                    navigate("/my-stats");
+                    setMobileOpen(false);
+                  }}
+                  iconBg="#eff6ff"
+                  iconColor="#2563eb"
                 />
               )}
             </>

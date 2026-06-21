@@ -43,6 +43,7 @@ type DashboardSummary = {
   todayAbsent: number;
   feesDueToday: number;
   overdueFees: number;
+  pendingStatReviews: number;
 };
 
 // ─── Action card — full-color on mobile, same on desktop ───────
@@ -309,19 +310,21 @@ function AdminDashboard() {
             onClick={() => navigate("/admin/attendance")}
           />
           <StatCard
-            label="Fees Due"
-            value={summary.feesDueToday}
-            icon={Clock}
-            color="orange"
-            onClick={() => navigate("/admin/fees-due?status=DUE")}
-          />
-          <StatCard
-            label="Overdue Fees"
-            value={summary.overdueFees}
+            label="Fees Pending"
+            value={summary.feesDueToday + summary.overdueFees}
             icon={AlertTriangle}
             color="red"
-            onClick={() => navigate("/admin/fees-due?status=OVERDUE")}
+            onClick={() => navigate("/admin/fees-due")}
           />
+          {showCricketStats && summary.pendingStatReviews > 0 && (
+            <StatCard
+              label="Stat Reviews"
+              value={summary.pendingStatReviews}
+              icon={BarChart}
+              color="orange"
+              onClick={() => navigate("/admin/cricket-stats/pending")}
+            />
+          )}
         </div>
       </section>
 

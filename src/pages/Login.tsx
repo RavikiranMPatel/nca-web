@@ -139,6 +139,16 @@ function Login() {
             Sign up
           </Link>
         </p>
+
+        <div className="mt-3 border-t border-gray-100 pt-3 text-center">
+          <p className="text-xs text-gray-500 mb-1">Already enrolled at the academy?</p>
+          <Link
+            to="/player-signup"
+            className="text-sm text-green-700 font-semibold hover:underline"
+          >
+            🏏 Activate Your Player Account
+          </Link>
+        </div>
       </div>
     </div>
   );
