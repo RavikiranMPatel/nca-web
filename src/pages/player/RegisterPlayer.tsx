@@ -102,6 +102,7 @@ function RegisterPlayer() {
   const getCroppedImg = async (
     imageSrc: string,
     pixelCrop: Area,
+    quality: number = 0.85,
   ): Promise<Blob> => {
     const image = new Image();
     image.src = imageSrc;
@@ -129,8 +130,14 @@ function RegisterPlayer() {
       pixelCrop.height,
     );
 
-    return new Promise((resolve) => {
-      canvas.toBlob((blob) => resolve(blob!), "image/jpeg", 0.95);
+    return new Promise((resolve, reject) => {
+      canvas.toBlob((blob) => {
+        if (!blob) {
+          reject(new Error("Failed to process image — try a different photo"));
+          return;
+        }
+        resolve(blob);
+      }, "image/jpeg", quality);
     });
   };
 
@@ -186,7 +193,22 @@ function RegisterPlayer() {
     if (!croppedAreaPixels || !tempPhotoUrl) return;
 
     try {
-      const croppedBlob = await getCroppedImg(tempPhotoUrl, croppedAreaPixels);
+      const MAX_UPLOAD_SIZE = 4 * 1024 * 1024;
+      let croppedBlob = await getCroppedImg(tempPhotoUrl, croppedAreaPixels, 0.85);
+
+      if (croppedBlob.size > MAX_UPLOAD_SIZE) {
+        croppedBlob = await getCroppedImg(tempPhotoUrl, croppedAreaPixels, 0.7);
+      }
+      if (croppedBlob.size > MAX_UPLOAD_SIZE) {
+        croppedBlob = await getCroppedImg(tempPhotoUrl, croppedAreaPixels, 0.6);
+      }
+      if (croppedBlob.size > MAX_UPLOAD_SIZE) {
+        toast.error(
+          "Photo is too large after cropping — try a tighter crop or a different photo",
+        );
+        return;
+      }
+
       const croppedFile = new File([croppedBlob], "player-photo.jpg", {
         type: "image/jpeg",
       });
@@ -198,7 +220,7 @@ function RegisterPlayer() {
       setTempPhotoUrl("");
       toast.success("Photo cropped successfully!");
     } catch (error) {
-      toast.error("Failed to crop image");
+      toast.error("Failed to process image — try a different photo");
     }
   };
 
@@ -329,8 +351,16 @@ function RegisterPlayer() {
       setInvalidFields({});
       setShowSuccessDialog(true);
     } catch (err: any) {
-      const message =
-        err?.response?.data?.message || "Failed to register player";
+      const status = err?.response?.status;
+      const serverMsg: string = err?.response?.data?.message ?? "";
+      const isSizeError =
+        status === 413 ||
+        serverMsg.toLowerCase().includes("maximum upload") ||
+        serverMsg.toLowerCase().includes("file size") ||
+        (photoFile !== null && !err?.response);
+      const message = isSizeError
+        ? "Photo file is too large — please try a smaller image or a tighter crop"
+        : serverMsg || "Failed to register player";
       setErrorMessage(message);
       setShowErrorDialog(true);
     } finally {

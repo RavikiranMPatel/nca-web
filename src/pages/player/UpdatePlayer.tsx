@@ -131,6 +131,7 @@ function UpdatePlayer() {
   const getCroppedImg = async (
     imageSrc: string,
     pixelCrop: Area,
+    quality: number = 0.85,
   ): Promise<Blob> => {
     const image = new Image();
     image.src = imageSrc;
@@ -153,15 +154,36 @@ function UpdatePlayer() {
       pixelCrop.width,
       pixelCrop.height,
     );
-    return new Promise((resolve) => {
-      canvas.toBlob((blob) => resolve(blob!), "image/jpeg", 0.95);
+    return new Promise((resolve, reject) => {
+      canvas.toBlob((blob) => {
+        if (!blob) {
+          reject(new Error("Failed to process image — try a different photo"));
+          return;
+        }
+        resolve(blob);
+      }, "image/jpeg", quality);
     });
   };
 
   const applyCrop = async () => {
     if (!croppedAreaPixels || !tempPhotoUrl) return;
     try {
-      const croppedBlob = await getCroppedImg(tempPhotoUrl, croppedAreaPixels);
+      const MAX_UPLOAD_SIZE = 4 * 1024 * 1024;
+      let croppedBlob = await getCroppedImg(tempPhotoUrl, croppedAreaPixels, 0.85);
+
+      if (croppedBlob.size > MAX_UPLOAD_SIZE) {
+        croppedBlob = await getCroppedImg(tempPhotoUrl, croppedAreaPixels, 0.7);
+      }
+      if (croppedBlob.size > MAX_UPLOAD_SIZE) {
+        croppedBlob = await getCroppedImg(tempPhotoUrl, croppedAreaPixels, 0.6);
+      }
+      if (croppedBlob.size > MAX_UPLOAD_SIZE) {
+        toast.error(
+          "Photo is too large after cropping — try a tighter crop or a different photo",
+        );
+        return;
+      }
+
       const croppedFile = new File([croppedBlob], "player-photo.jpg", {
         type: "image/jpeg",
       });
@@ -171,7 +193,7 @@ function UpdatePlayer() {
       setTempPhotoUrl("");
       toast.success("Photo cropped successfully!");
     } catch {
-      toast.error("Failed to crop image");
+      toast.error("Failed to process image — try a different photo");
     }
   };
 
@@ -273,7 +295,18 @@ function UpdatePlayer() {
       toast.success("Player updated successfully");
       navigate(`/admin/players/${playerPublicId}/info`);
     } catch (error: any) {
-      toast.error(error?.response?.data?.message || "Update failed");
+      const status = error?.response?.status;
+      const serverMsg: string = error?.response?.data?.message ?? "";
+      const isSizeError =
+        status === 413 ||
+        serverMsg.toLowerCase().includes("maximum upload") ||
+        serverMsg.toLowerCase().includes("file size") ||
+        (photoFile !== null && !error?.response);
+      toast.error(
+        isSizeError
+          ? "Photo file is too large — please try a smaller image or a tighter crop"
+          : serverMsg || "Update failed",
+      );
     } finally {
       setLoading(false);
     }

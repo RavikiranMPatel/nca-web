@@ -193,7 +193,7 @@ function PlayerForm({
 
     setCompressing(true);
     const finalFile =
-      file.size > 5 * 1024 * 1024 ? await compressImage(file) : file;
+      file.size > 1.5 * 1024 * 1024 ? await compressImage(file) : file;
     setCompressing(false);
 
     onPhotoChange?.(finalFile);
