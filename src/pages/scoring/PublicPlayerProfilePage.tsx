@@ -1,6 +1,8 @@
 import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
+import { ArrowLeft } from "lucide-react";
 import { getPublicPlayerProfile } from "../../api/scoring/publicApi";
+import { useAuth } from "../../auth/useAuth";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 interface BattingStats {
@@ -106,6 +108,8 @@ const SectionHeader = ({ title, icon }: { title: string; icon: string }) => (
 export default function PublicPlayerProfilePage() {
   const { playerPublicId } = useParams<{ playerPublicId: string }>();
   const navigate = useNavigate();
+  const { userRole } = useAuth();
+  const isPlayer = userRole === "ROLE_PLAYER";
   const [profile, setProfile] = useState<PlayerProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -149,14 +153,25 @@ export default function PublicPlayerProfilePage() {
     <div className="min-h-screen bg-gray-50 dark:bg-gray-950">
       {/* ── NCA header ───────────────────────────────────────────────────── */}
       <div className="bg-blue-700 dark:bg-blue-900 px-4 py-3">
-        <div className="max-w-2xl mx-auto flex items-center justify-between">
-          <div>
-            <div className="text-white font-bold text-sm">NCA Mysuru</div>
-            <div className="text-blue-200 text-xs">NextGen Cricket Academy</div>
+        <div className="max-w-2xl mx-auto flex items-center justify-between gap-3">
+          <div className="flex items-center gap-3 min-w-0">
+            {isPlayer && (
+              <button
+                onClick={() => navigate("/my-stats")}
+                className="p-1.5 rounded-lg bg-white/20 text-white hover:bg-white/30 transition flex-shrink-0"
+                aria-label="Back to My Stats"
+              >
+                <ArrowLeft size={16} />
+              </button>
+            )}
+            <div className="min-w-0">
+              <div className="text-white font-bold text-sm">NCA Mysuru</div>
+              <div className="text-blue-200 text-xs">NextGen Cricket Academy</div>
+            </div>
           </div>
           <button
             onClick={() => navigator.clipboard.writeText(window.location.href)}
-            className="text-xs px-3 py-1.5 bg-white/20 text-white rounded-lg active:scale-95 transition-all"
+            className="text-xs px-3 py-1.5 bg-white/20 text-white rounded-lg active:scale-95 transition-all flex-shrink-0"
           >
             🔗 Share
           </button>
