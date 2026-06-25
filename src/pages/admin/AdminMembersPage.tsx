@@ -572,7 +572,7 @@ function AdminMembersPage() {
                             Note: {sub.notes}
                           </p>
                         )}
-                        <div className="flex gap-2 pt-1 flex-wrap">
+                        <div className="grid grid-cols-2 gap-2 pt-1">
                           <button
                             onClick={() =>
                               setAssignModal({
@@ -581,7 +581,7 @@ function AdminMembersPage() {
                                 hasActiveSub: true,
                               })
                             }
-                            className="text-xs px-3 py-1.5 border border-blue-300 text-blue-700 rounded-lg hover:bg-blue-50 transition"
+                            className="text-xs px-3 py-1.5 border border-blue-300 text-blue-700 rounded-lg hover:bg-blue-50 transition text-center"
                           >
                             + Assign Next Plan
                           </button>
@@ -594,7 +594,7 @@ function AdminMembersPage() {
                                 action: "deduct",
                               })
                             }
-                            className="text-xs px-3 py-1.5 border border-amber-300 text-amber-700 rounded-lg hover:bg-amber-50 transition"
+                            className="text-xs px-3 py-1.5 border border-amber-300 text-amber-700 rounded-lg hover:bg-amber-50 transition text-center"
                           >
                             − Deduct Session
                           </button>
@@ -607,7 +607,7 @@ function AdminMembersPage() {
                                 action: "restore",
                               })
                             }
-                            className="text-xs px-3 py-1.5 border border-green-300 text-green-700 rounded-lg hover:bg-green-50 transition"
+                            className="text-xs px-3 py-1.5 border border-green-300 text-green-700 rounded-lg hover:bg-green-50 transition text-center"
                           >
                             + Restore Session
                           </button>
@@ -615,7 +615,7 @@ function AdminMembersPage() {
                             onClick={() =>
                               handleCancelSubscription(sub.publicId)
                             }
-                            className="text-xs px-3 py-1.5 border border-red-300 text-red-600 rounded-lg hover:bg-red-50 transition"
+                            className="text-xs px-3 py-1.5 border border-red-300 text-red-600 rounded-lg hover:bg-red-50 transition text-center"
                           >
                             Cancel Subscription
                           </button>
@@ -860,81 +860,113 @@ function AdminMembersPage() {
 
       {/* ── DEDUCT / RESTORE SESSION MODAL ──────────────────────────── */}
       {deductModal && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6">
-            <h3 className="font-bold text-lg mb-1">
-              {deductModal.action === "deduct"
-                ? "− Deduct Session"
-                : "+ Restore Session"}
-            </h3>
-            <p className="text-sm text-slate-500 mb-1">
-              Player: <strong>{deductModal.userName}</strong>
-            </p>
-            <p className="text-sm text-slate-500 mb-5">
-              Sessions remaining:{" "}
-              <strong>{deductModal.sessionsRemaining}</strong>
-            </p>
-            <p className="text-sm font-semibold text-slate-700 mb-3">
-              How many balls?
-            </p>
-            <div className="grid grid-cols-2 gap-3 mb-5">
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
+          <div className="bg-white w-full sm:max-w-sm sm:rounded-2xl rounded-t-2xl shadow-xl flex flex-col max-h-[85vh]">
+            {/* Header */}
+            <div className="shrink-0 flex items-center justify-between px-5 py-4 border-b bg-slate-50">
+              <h3 className="font-bold text-lg">
+                {deductModal.action === "deduct"
+                  ? "− Deduct Session"
+                  : "+ Restore Session"}
+              </h3>
               <button
-                onClick={() => handleManualSession(60)}
-                disabled={deducting}
-                className="py-4 rounded-xl border-2 border-blue-200 bg-blue-50 hover:border-blue-400 transition text-center disabled:opacity-50"
+                onClick={() => setDeductModal(null)}
+                className="text-slate-400 hover:text-slate-600 p-1"
               >
-                <p className="text-xl font-bold text-blue-700">60</p>
-                <p className="text-xs text-blue-500">balls · 1 session</p>
-              </button>
-              <button
-                onClick={() => handleManualSession(120)}
-                disabled={deducting}
-                className="py-4 rounded-xl border-2 border-purple-200 bg-purple-50 hover:border-purple-400 transition text-center disabled:opacity-50"
-              >
-                <p className="text-xl font-bold text-purple-700">120</p>
-                <p className="text-xs text-purple-500">balls · 2 sessions</p>
+                <X size={20} />
               </button>
             </div>
-            <button
-              onClick={() => setDeductModal(null)}
-              disabled={deducting}
-              className="w-full py-2.5 text-sm font-medium text-slate-600 bg-slate-100 rounded-xl hover:bg-slate-200 transition"
-            >
-              Cancel
-            </button>
+            {/* Body */}
+            <div className="flex-1 overflow-y-auto min-h-0 px-5 py-4 space-y-4">
+              <div>
+                <p className="text-sm text-slate-500">
+                  Player: <strong>{deductModal.userName}</strong>
+                </p>
+                <p className="text-sm text-slate-500 mt-1">
+                  Sessions remaining:{" "}
+                  <strong>{deductModal.sessionsRemaining}</strong>
+                </p>
+              </div>
+              <div>
+                <p className="text-sm font-semibold text-slate-700 mb-3">
+                  How many balls?
+                </p>
+                <div className="grid grid-cols-2 gap-3">
+                  <button
+                    onClick={() => handleManualSession(60)}
+                    disabled={deducting}
+                    className="py-4 rounded-xl border-2 border-blue-200 bg-blue-50 hover:border-blue-400 transition text-center disabled:opacity-50"
+                  >
+                    <p className="text-xl font-bold text-blue-700">60</p>
+                    <p className="text-xs text-blue-500">balls · 1 session</p>
+                  </button>
+                  <button
+                    onClick={() => handleManualSession(120)}
+                    disabled={deducting}
+                    className="py-4 rounded-xl border-2 border-purple-200 bg-purple-50 hover:border-purple-400 transition text-center disabled:opacity-50"
+                  >
+                    <p className="text-xl font-bold text-purple-700">120</p>
+                    <p className="text-xs text-purple-500">balls · 2 sessions</p>
+                  </button>
+                </div>
+              </div>
+            </div>
+            {/* Footer */}
+            <div className="shrink-0 px-5 py-4 border-t bg-slate-50">
+              <button
+                onClick={() => setDeductModal(null)}
+                disabled={deducting}
+                className="w-full py-2.5 text-sm font-medium text-slate-600 bg-slate-100 rounded-xl hover:bg-slate-200 transition"
+              >
+                Cancel
+              </button>
+            </div>
           </div>
         </div>
       )}
 
       {/* ── ACTIVATE MODAL — in AdminMembersPage scope ────────────────── */}
       {activateModal && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6 space-y-4">
-            <h3 className="font-bold text-lg">Activate Subscription</h3>
-            <p className="text-sm text-slate-500">
-              Player: <strong>{activateModal.userName}</strong>
-            </p>
-            <div>
-              <p className="text-sm font-semibold text-slate-700 mb-2">
-                Payment Mode *
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
+          <div className="bg-white w-full sm:max-w-sm sm:rounded-2xl rounded-t-2xl shadow-xl flex flex-col max-h-[85vh]">
+            {/* Header */}
+            <div className="shrink-0 flex items-center justify-between px-5 py-4 border-b bg-slate-50">
+              <h3 className="font-bold text-lg">Activate Subscription</h3>
+              <button
+                onClick={() => setActivateModal(null)}
+                className="text-slate-400 hover:text-slate-600 p-1"
+              >
+                <X size={20} />
+              </button>
+            </div>
+            {/* Body */}
+            <div className="flex-1 overflow-y-auto min-h-0 px-5 py-4 space-y-4">
+              <p className="text-sm text-slate-500">
+                Player: <strong>{activateModal.userName}</strong>
               </p>
-              <div className="flex flex-wrap gap-2">
-                {PAYMENT_MODES.map((m) => (
-                  <button
-                    key={m.value}
-                    onClick={() => setActivatePaymentMode(m.value)}
-                    className={`px-3 py-1.5 rounded-lg border text-sm font-medium transition ${
-                      activatePaymentMode === m.value
-                        ? "bg-green-600 text-white border-green-600"
-                        : "border-gray-300 text-gray-700 hover:bg-gray-50"
-                    }`}
-                  >
-                    {m.label}
-                  </button>
-                ))}
+              <div>
+                <p className="text-sm font-semibold text-slate-700 mb-2">
+                  Payment Mode *
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  {PAYMENT_MODES.map((m) => (
+                    <button
+                      key={m.value}
+                      onClick={() => setActivatePaymentMode(m.value)}
+                      className={`px-3 py-1.5 rounded-lg border text-sm font-medium transition ${
+                        activatePaymentMode === m.value
+                          ? "bg-green-600 text-white border-green-600"
+                          : "border-gray-300 text-gray-700 hover:bg-gray-50"
+                      }`}
+                    >
+                      {m.label}
+                    </button>
+                  ))}
+                </div>
               </div>
             </div>
-            <div className="flex gap-3 pt-1">
+            {/* Footer — always visible below scroll area */}
+            <div className="shrink-0 flex gap-3 px-5 py-4 border-t bg-slate-50">
               <button
                 onClick={() => setActivateModal(null)}
                 disabled={activating}
@@ -1150,9 +1182,9 @@ function ImportHistoricalModal({
 
   return (
     <div className="fixed inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
-      <div className="bg-white w-full sm:max-w-lg sm:rounded-2xl rounded-t-2xl shadow-xl overflow-hidden flex flex-col max-h-[90vh]">
+      <div className="bg-white w-full sm:max-w-lg sm:rounded-2xl rounded-t-2xl shadow-xl overflow-hidden flex flex-col max-h-[85vh]">
         {/* Header */}
-        <div className="flex items-center justify-between px-5 py-4 border-b bg-slate-50">
+        <div className="shrink-0 flex items-center justify-between px-5 py-4 border-b bg-slate-50">
           <div>
             <h3 className="font-bold text-slate-900">Import Past Member</h3>
             <p className="text-xs text-slate-500 mt-0.5">
@@ -1547,7 +1579,7 @@ function ImportHistoricalModal({
         </div>
 
         {/* Footer */}
-        <div className="flex gap-3 px-5 py-4 border-t bg-slate-50">
+        <div className="shrink-0 flex gap-3 px-5 py-4 border-t bg-slate-50">
           <button
             onClick={onClose}
             disabled={submitting}
@@ -1630,9 +1662,9 @@ function AssignPlanModal({
 
   return (
     <div className="fixed inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
-      <div className="bg-white w-full sm:max-w-md sm:rounded-2xl rounded-t-2xl shadow-xl overflow-hidden flex flex-col max-h-[90vh]">
+      <div className="bg-white w-full sm:max-w-md sm:rounded-2xl rounded-t-2xl shadow-xl overflow-hidden flex flex-col max-h-[85vh]">
         {/* Header */}
-        <div className="flex items-center justify-between px-5 py-4 border-b bg-slate-50">
+        <div className="shrink-0 flex items-center justify-between px-5 py-4 border-b bg-slate-50">
           <div>
             <h3 className="font-bold text-slate-900">Assign Plan</h3>
             <p className="text-xs text-slate-500 mt-0.5">{modal.userName}</p>
@@ -1752,8 +1784,8 @@ function AssignPlanModal({
           </div>
         </div>
 
-        {/* Footer */}
-        <div className="flex gap-3 px-5 py-4 border-t bg-slate-50">
+        {/* Footer — shrink-0 keeps this pinned below the scroll area */}
+        <div className="shrink-0 flex gap-3 px-5 py-4 border-t bg-slate-50">
           <button
             onClick={onClose}
             disabled={assigning}
