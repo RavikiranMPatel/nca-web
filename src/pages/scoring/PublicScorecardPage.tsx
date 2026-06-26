@@ -81,6 +81,7 @@ interface PlayingXIPlayer {
   isCaptain: boolean;
   isWicketkeeper: boolean;
   isForeign: boolean;
+  role?: string | null;
 }
 
 interface PlayingXITeam {
@@ -109,6 +110,7 @@ interface Scorecard {
   officials: { role: string; name: string; kscaId?: string }[];
   innings: InningsScorecard[];
   playingXI: PlayingXITeam[];
+  playingXIIsDerived?: boolean;
 }
 
 interface Shot {
@@ -147,28 +149,54 @@ const roleLabel: Record<string, string> = {
 };
 
 // ── Playing XI Tab ────────────────────────────────────────────────────────────
-const PlayingXITab = ({ playingXI }: { playingXI: PlayingXITeam[] }) => {
-  if (!playingXI || playingXI.length === 0) {
+const roleBadge = (role?: string | null) => {
+  if (!role) return null;
+  const styles: Record<string, string> = {
+    BAT: "bg-blue-50 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400",
+    BOWL: "bg-orange-50 text-orange-600 dark:bg-orange-900/30 dark:text-orange-400",
+    AR: "bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-400",
+    WK: "bg-purple-50 text-purple-600 dark:bg-purple-900/30 dark:text-purple-400",
+  };
+  return (
+    <span
+      className={`ml-1.5 px-1.5 py-0.5 rounded text-[10px] font-semibold leading-none ${styles[role] ?? "bg-gray-100 text-gray-500"}`}
+    >
+      {role}
+    </span>
+  );
+};
+
+const PlayingXITab = ({
+  playingXI,
+  isDerived,
+  matchStatus,
+}: {
+  playingXI: PlayingXITeam[];
+  isDerived?: boolean;
+  matchStatus: string;
+}) => {
+  const isEmpty = !playingXI || playingXI.length === 0;
+  if (isEmpty) {
+    const isActive =
+      matchStatus === "COMPLETED" || matchStatus === "IN_PROGRESS";
     return (
       <div className="px-4 py-12 text-center text-gray-400 text-sm">
-        Playing XI not yet announced
+        {isActive ? "Playing XI data not available" : "Playing XI not yet announced"}
       </div>
     );
   }
 
   const renderPlayerName = (p: PlayingXIPlayer) => (
-    <span className="font-medium text-gray-900 dark:text-gray-100 text-sm">
+    <span className="font-medium text-gray-900 dark:text-gray-100 text-sm flex items-center flex-wrap gap-x-0.5">
       {p.playerName}
       {p.isCaptain && (
-        <span className="text-gray-500 dark:text-gray-400 font-normal">
-          {" "}
-          (c)
-        </span>
+        <span className="text-gray-500 dark:text-gray-400 font-normal"> (c)</span>
       )}
       {p.isWicketkeeper && (
         <span className="text-gray-500 dark:text-gray-400 font-normal"> †</span>
       )}
       {p.isForeign && <span className="text-orange-500 ml-1 text-xs">✈</span>}
+      {roleBadge(p.role)}
     </span>
   );
 
@@ -180,6 +208,11 @@ const PlayingXITab = ({ playingXI }: { playingXI: PlayingXITeam[] }) => {
 
     return (
       <div className="px-4 py-4">
+        {isDerived && (
+          <p className="text-xs text-gray-400 dark:text-gray-500 mb-3 italic">
+            Based on match participation
+          </p>
+        )}
         {/* Header row */}
         <div className="grid grid-cols-2 gap-2 mb-3">
           <div className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
@@ -248,6 +281,11 @@ const PlayingXITab = ({ playingXI }: { playingXI: PlayingXITeam[] }) => {
   // Single team fallback
   return (
     <div className="px-4 py-4">
+      {isDerived && (
+        <p className="text-xs text-gray-400 dark:text-gray-500 mb-3 italic">
+          Based on match participation
+        </p>
+      )}
       {playingXI.map((team) => (
         <div key={team.teamId} className="mb-6">
           <div className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-2">
@@ -1101,7 +1139,11 @@ export default function PublicScorecardPage() {
 
         {/* ── Playing XI tab ─────────────────────────────────────────────────── */}
         {activeTab === "xi" && (
-          <PlayingXITab playingXI={scorecard.playingXI ?? []} />
+          <PlayingXITab
+            playingXI={scorecard.playingXI ?? []}
+            isDerived={scorecard.playingXIIsDerived}
+            matchStatus={scorecard.status}
+          />
         )}
 
         {/* ── Match Flow tab ──────────────────────────────────────────────────── */}

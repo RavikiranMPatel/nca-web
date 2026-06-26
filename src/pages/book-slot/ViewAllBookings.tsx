@@ -22,6 +22,16 @@ type Booking = {
   sessionsRemaining: number | null;
 };
 
+const formatSlotDate = (dateStr: string): string => {
+  if (!dateStr) return "N/A";
+  const [y, m, d] = dateStr.split("-").map(Number);
+  return new Date(y, m - 1, d).toLocaleDateString("en-GB", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  });
+};
+
 function ViewAllBookings() {
   const navigate = useNavigate();
   const [bookings, setBookings] = useState<Booking[]>([]);
@@ -488,7 +498,7 @@ function ViewAllBookings() {
                           <Calendar size={14} className="text-gray-400" />
                           <div>
                             <p className="font-medium text-gray-900 text-sm">
-                              {booking.slotDate || "N/A"}
+                              {formatSlotDate(booking.slotDate)}
                             </p>
                             <p className="text-xs text-gray-500 flex items-center gap-1">
                               <Clock size={11} /> {booking.startTime || "?"} -{" "}
@@ -575,7 +585,7 @@ function ViewAllBookings() {
                     {getStatusBadge(booking.status)}
                   </div>
                   <div className="flex items-center gap-3 text-xs text-gray-500">
-                    <span>📅 {booking.slotDate}</span>
+                    <span>📅 {formatSlotDate(booking.slotDate)}</span>
                     <span>
                       🕐 {booking.startTime} – {booking.endTime}
                     </span>

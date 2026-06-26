@@ -8,6 +8,7 @@ import {
   Power,
   Settings,
   TrendingUp,
+  Send,
 } from "lucide-react";
 import {
   Users,
@@ -27,6 +28,7 @@ import {
   MessageCircle,
 } from "lucide-react";
 import StatCard from "../components/StatCard";
+import BroadcastModal from "../components/BroadcastModal";
 import api from "../api/axios";
 
 type DashboardSummary = {
@@ -142,6 +144,7 @@ function AdminDashboard() {
   const [summary, setSummary] = useState<DashboardSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [showBroadcast, setShowBroadcast] = useState(false);
   const role = localStorage.getItem("userRole");
   const isSuperAdmin = role === "ROLE_SUPER_ADMIN";
 
@@ -527,6 +530,14 @@ function AdminDashboard() {
               textLight="text-orange-100"
             />
           )}
+          <ActionCard
+            icon={Send}
+            title="WA Broadcast"
+            description="Send WhatsApp message to all players"
+            onClick={() => setShowBroadcast(true)}
+            gradient="bg-gradient-to-br from-green-500 to-emerald-600"
+            textLight="text-green-100"
+          />
           {isSuperAdmin && (
             <PlainCard
               icon={Settings}
@@ -548,6 +559,10 @@ function AdminDashboard() {
           )}
         </div>
       </section>
+
+      {showBroadcast && (
+        <BroadcastModal onClose={() => setShowBroadcast(false)} />
+      )}
     </div>
   );
 }
