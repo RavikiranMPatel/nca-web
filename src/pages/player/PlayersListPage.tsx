@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { playerService } from "../../api/playerService/playerService";
+import SendSquadModal from "../../components/SendSquadModal";
 import {
   ArrowLeft,
   Search,
@@ -393,6 +394,7 @@ function PlayersListPage() {
   const [showExportMenu, setShowExportMenu] = useState(false);
   const [exportingExcel, setExportingExcel] = useState(false);
   const [exportingPdf, setExportingPdf] = useState(false);
+  const [showSquadModal, setShowSquadModal] = useState(false);
   const [shareModal, setShareModal] = useState<{
     open: boolean;
     channel: "WHATSAPP" | "EMAIL";
@@ -794,13 +796,25 @@ function PlayersListPage() {
               )}
             </div>
 
-            {/* WhatsApp */}
+            {/* WhatsApp → Send Squad to Coach */}
             <button
-              onClick={() => setShareModal({ open: true, channel: "WHATSAPP" })}
+              onClick={() => setShowSquadModal(true)}
+              title={
+                selectedIds.size > 0
+                  ? `Send ${selectedIds.size} selected player${selectedIds.size !== 1 ? "s" : ""} to coach`
+                  : "Send squad to coach"
+              }
               className="flex items-center gap-1.5 px-2.5 py-2 text-xs font-medium text-white bg-green-600 rounded-lg hover:bg-green-700 transition shadow-sm"
             >
               <MessageCircle size={15} />
-              <span className="hidden sm:inline">WhatsApp</span>
+              {selectedIds.size > 0 ? (
+                <>
+                  <span className="hidden sm:inline">WA ({selectedIds.size})</span>
+                  <span className="sm:hidden font-bold">{selectedIds.size}</span>
+                </>
+              ) : (
+                <span className="hidden sm:inline">WhatsApp</span>
+              )}
             </button>
 
             {/* Email */}
@@ -1641,7 +1655,21 @@ function PlayersListPage() {
         </div>
       )}
 
-      {/* ── SHARE MODAL ── */}
+      {/* ── SEND SQUAD MODAL ── */}
+      {showSquadModal && (
+        <SendSquadModal
+          players={
+            selectedIds.size > 0
+              ? filteredPlayers.filter((p) => selectedIds.has(p.publicId))
+              : filteredPlayers
+          }
+          selectionMode={selectedIds.size > 0 ? "checkbox" : "filter"}
+          filterLabel={selectedIds.size === 0 ? getFilterLabel() : ""}
+          onClose={() => setShowSquadModal(false)}
+        />
+      )}
+
+      {/* ── SHARE MODAL (Email only) ── */}
       <ShareModal
         isOpen={shareModal.open}
         onClose={() => setShareModal({ ...shareModal, open: false })}

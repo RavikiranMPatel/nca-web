@@ -237,6 +237,24 @@ const emptyStats = (): BatterStats => ({
   sixes: 0,
 });
 
+const getSpellStats = (
+  deliveries: Record<string, unknown>[],
+  bowlerInternalId: string,
+) => {
+  const bd = deliveries.filter(
+    (d) => (d.bowler as Record<string, unknown>)?.id === bowlerInternalId,
+  );
+  return {
+    balls: bd.filter((d) => d.isLegalBall as boolean).length,
+    runs: bd.reduce(
+      (s, d) =>
+        s + ((d.runsBatsman as number) ?? 0) + ((d.runsExtras as number) ?? 0),
+      0,
+    ),
+    wickets: bd.filter((d) => d.isWicket as boolean).length,
+  };
+};
+
 export default function LiveScorerPage() {
   const { matchId } = useParams<{ matchId: string }>();
   const navigate = useNavigate();
@@ -392,8 +410,8 @@ export default function LiveScorerPage() {
               displayName: mtp.displayName as string,
               battingStyle: mtp.battingStyle as string | undefined,
               bowlingStyle: mtp.bowlingStyle as string | undefined,
-              isWicketkeeper: !!mtp.isWicketkeeper,
-              isCaptain: !!mtp.isCaptain,
+              isWicketkeeper: !!(mtp.isWicketkeeper ?? mtp.wicketkeeper),
+              isCaptain: !!(mtp.isCaptain ?? mtp.captain),
               playerRole: mtp.playerRole as string | undefined,
             };
           });
@@ -473,34 +491,12 @@ export default function LiveScorerPage() {
           : null;
         setLastBowlerPublicId(prevOverBowlerPlayer?.publicId ?? null);
 
-        // ── Restore current bowler's in-progress over stats ──────────────────────
         const currentBowlerInternalId = overBowlers[currentOverIndex];
         if (currentBowlerInternalId) {
-          const currentOverDeliveries = deliveries.filter((d) => {
-            const overNum = d.overNumber as number;
-            const bowlerInternalId = (d.bowler as Record<string, unknown>)
-              ?.id as string;
-            return (
-              overNum === currentOverIndex &&
-              bowlerInternalId === currentBowlerInternalId
-            );
-          });
-          setBowlerBalls(
-            currentOverDeliveries.filter((d) => d.isLegalBall as boolean)
-              .length,
-          );
-          setBowlerRuns(
-            currentOverDeliveries.reduce(
-              (s, d) =>
-                s +
-                ((d.runsBatsman as number) ?? 0) +
-                ((d.runsExtras as number) ?? 0),
-              0,
-            ),
-          );
-          setBowlerWickets(
-            currentOverDeliveries.filter((d) => d.isWicket as boolean).length,
-          );
+          const spell = getSpellStats(deliveries, currentBowlerInternalId);
+          setBowlerBalls(spell.balls);
+          setBowlerRuns(spell.runs);
+          setBowlerWickets(spell.wickets);
         }
 
         const statsMap: Record<string, BatterStats> = {};
@@ -517,9 +513,9 @@ export default function LiveScorerPage() {
           const runs = (d.runsBatsman as number) ?? 0;
           const isLegal = d.isLegalBall as boolean;
           const isWicket = d.isWicket as boolean;
+          if (isLegal) statsMap[batsmanPid].balls += 1;
           if (!isWicket) {
             statsMap[batsmanPid].runs += runs;
-            if (isLegal) statsMap[batsmanPid].balls += 1;
             if (runs === 4) statsMap[batsmanPid].fours += 1;
             if (runs === 6) statsMap[batsmanPid].sixes += 1;
           }
@@ -630,13 +626,6 @@ export default function LiveScorerPage() {
   }, [matchId]);
 
   const score = async (runs: number, extra?: string, extraRuns = 1) => {
-    console.log(
-      "[score] called — bowler:",
-      bowler?.displayName ?? "null",
-      "overJustEnded:",
-      overJustEnded,
-    );
-
     if (!matchId || !striker || !nonStriker || !bowler) {
       setError(
         overJustEnded
@@ -753,7 +742,6 @@ export default function LiveScorerPage() {
       }
 
       if (state.overComplete) {
-        console.log("[score] overComplete=true, clearing bowler");
         const rotateEndOfOver = shouldRotateEndOfOver(totalRunsScored);
         if (rotateEndOfOver) {
           setStriker(currentNonStriker);
@@ -1023,14 +1011,11 @@ export default function LiveScorerPage() {
         const runs = (d.runsBatsman as number) ?? 0;
         const isLegal = d.isLegalBall as boolean;
         const isWicket = d.isWicket as boolean;
+        if (isLegal) statsMap[batsmanPid].balls += 1;
         if (!isWicket) {
           statsMap[batsmanPid].runs += runs;
-          if (isLegal) statsMap[batsmanPid].balls += 1;
           if (runs === 4) statsMap[batsmanPid].fours += 1;
           if (runs === 6) statsMap[batsmanPid].sixes += 1;
-        } else {
-          if (isLegal) statsMap[batsmanPid].balls += 1;
-          statsMap[batsmanPid].runs += runs;
         }
       });
       setBatterStatsMap(statsMap);
@@ -1060,41 +1045,55 @@ export default function LiveScorerPage() {
       } else {
         setIsFreeHit(false);
       }
-      // Restore bowler current over stats after undo
       if (deliveries.length > 0) {
         const last = deliveries[deliveries.length - 1];
-
         const lastBowlerInternalId = (last.bowler as Record<string, unknown>)
           ?.id as string;
-        const lastOverNum = last.overNumber as number;
-
-        if (lastBowlerInternalId && lastOverNum !== undefined) {
-          const currentOverDeliveries = deliveries.filter((d) => {
-            const overNum = d.overNumber as number;
-            const bowlerInternalId = (d.bowler as Record<string, unknown>)
-              ?.id as string;
-            return (
-              overNum === lastOverNum &&
-              bowlerInternalId === lastBowlerInternalId
-            );
-          });
-          setBowlerBalls(
-            currentOverDeliveries.filter((d) => d.isLegalBall as boolean)
-              .length,
-          );
-          setBowlerRuns(
-            currentOverDeliveries.reduce(
-              (s, d) =>
-                s +
-                ((d.runsBatsman as number) ?? 0) +
-                ((d.runsExtras as number) ?? 0),
-              0,
-            ),
-          );
-          setBowlerWickets(
-            currentOverDeliveries.filter((d) => d.isWicket as boolean).length,
-          );
+        if (lastBowlerInternalId) {
+          const spell = getSpellStats(deliveries, lastBowlerInternalId);
+          setBowlerBalls(spell.balls);
+          setBowlerRuns(spell.runs);
+          setBowlerWickets(spell.wickets);
         }
+      }
+      // Recompute bowlerOversMap and lastBowlerPublicId after undo
+      {
+        const ballsPerOver = match?.ballsPerOver ?? 6;
+        const currentOverIndexAfterUndo = Math.floor(
+          state.inningsState.totalBalls / ballsPerOver,
+        );
+        const overBowlersAfterUndo: Record<number, string> = {};
+        deliveries.forEach((d) => {
+          const overNum = d.overNumber as number;
+          const bowlerInternalId = (d.bowler as Record<string, unknown>)
+            ?.id as string;
+          if (bowlerInternalId)
+            overBowlersAfterUndo[overNum] = bowlerInternalId;
+        });
+        const oversMapAfterUndo: Record<string, number> = {};
+        Object.entries(overBowlersAfterUndo).forEach(
+          ([overIdx, bowlerInternalId]) => {
+            if (Number(overIdx) < currentOverIndexAfterUndo) {
+              const bowlerPlayer = bowlingPlayersRef.current.find(
+                (p) => p.id === bowlerInternalId,
+              );
+              if (bowlerPlayer) {
+                oversMapAfterUndo[bowlerPlayer.publicId] =
+                  (oversMapAfterUndo[bowlerPlayer.publicId] ?? 0) + 1;
+              }
+            }
+          },
+        );
+        setBowlerOversMap(oversMapAfterUndo);
+
+        const prevOverBowlerInternalId =
+          overBowlersAfterUndo[currentOverIndexAfterUndo - 1];
+        const prevOverBowlerPlayer = prevOverBowlerInternalId
+          ? bowlingPlayersRef.current.find(
+              (p) => p.id === prevOverBowlerInternalId,
+            )
+          : null;
+        setLastBowlerPublicId(prevOverBowlerPlayer?.publicId ?? null);
       }
       // Restore striker/nonStriker/bowler from deliveries after undo
       if (deliveries.length > 0) {
@@ -1647,9 +1646,40 @@ export default function LiveScorerPage() {
                           onClick={() => {
                             if (hardDisabled) return;
                             setBowler(p);
-                            setBowlerBalls(0);
-                            setBowlerRuns(0);
-                            setBowlerWickets(0);
+                            const fetchAndRestoreSpell = async () => {
+                              try {
+                                const deliveries = await api
+                                  .get(
+                                    `/admin/cricket/matches/${matchId}/scoring/deliveries`,
+                                  )
+                                  .then(
+                                    (r) => r.data as Record<string, unknown>[],
+                                  );
+                                const bowlerPlayer =
+                                  bowlingPlayersRef.current.find(
+                                    (bp) => bp.publicId === p.publicId,
+                                  );
+
+                                if (bowlerPlayer?.id) {
+                                  const spell = getSpellStats(
+                                    deliveries,
+                                    bowlerPlayer.id,
+                                  );
+                                  setBowlerBalls(spell.balls);
+                                  setBowlerRuns(spell.runs);
+                                  setBowlerWickets(spell.wickets);
+                                } else {
+                                  setBowlerBalls(0);
+                                  setBowlerRuns(0);
+                                  setBowlerWickets(0);
+                                }
+                              } catch {
+                                setBowlerBalls(0);
+                                setBowlerRuns(0);
+                                setBowlerWickets(0);
+                              }
+                            };
+                            fetchAndRestoreSpell();
                             setOverJustEnded(false);
                             setShowBowlerSelect(false);
                             setShowPlayerSearch("");
