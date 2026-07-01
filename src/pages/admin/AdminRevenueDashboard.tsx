@@ -24,6 +24,7 @@ import {
   Check,
   RotateCcw,
   SlidersHorizontal,
+  Award,
 } from "lucide-react";
 import api from "../../api/axios";
 import { toast } from "react-hot-toast";
@@ -41,6 +42,7 @@ type FeePayment = {
   player: { displayName: string } | null;
   nextDueOn: string | null;
   feeStatus: string | null;
+  reversedPaymentPublicId?: string;
 };
 type Booking = {
   bookingPublicId: string;
@@ -144,7 +146,23 @@ type Tab =
   | "subscriptions"
   | "expenses"
   | "income"
-  | "installments";
+  | "installments"
+  | "commission";
+
+type CommissionRow = {
+  memberName: string;
+  memberPhone: string;
+  subscriptionPublicId?: string;
+  sessionsUsed: number;
+  pricePaid: number;
+  totalSessions: number;
+  sessionValue: number;
+  source: "Subscription" | "Direct Booking";
+  ballCount?: number | null;
+  bookingPublicId?: string;
+};
+type CommissionRateMode = "10" | "15" | "custom";
+type UsageEntry = { id: string; usedAt: string; sessionsUsed: number };
 type ExpenseSubTab = "summary" | "monthly" | "all";
 type DateRange = "all" | "today" | "this_week" | "this_month" | "custom";
 
@@ -425,6 +443,27 @@ export default function AdminRevenueDashboard() {
     InstallmentPaymentRow[]
   >([]);
 
+  // ── Commission state ──
+  const nowIso = new Date().toISOString();
+  const [commissionMonth, setCommissionMonth] = useState(nowIso.substring(0, 7));
+  const [commissionData, setCommissionData] = useState<CommissionRow[]>([]);
+  const [commissionLoading, setCommissionLoading] = useState(false);
+  const [commissionRateMode, setCommissionRateMode] = useState<CommissionRateMode>("10");
+  const [commissionRateCustom, setCommissionRateCustom] = useState("");
+  const [defaultRate, setDefaultRate] = useState<number>(10);
+  const [savingRate, setSavingRate] = useState(false);
+  // Part A — direct booking edit
+  const [editDirectModal, setEditDirectModal] = useState<CommissionRow | null>(null);
+  const [editBallCount, setEditBallCount] = useState<60 | 120 | 180 | 240>(60);
+  const [editAmount, setEditAmount] = useState("");
+  const [editDirectSaving, setEditDirectSaving] = useState(false);
+  // Part B — subscription usage log expand/edit
+  const [expandedSubKeys, setExpandedSubKeys] = useState<Set<string>>(new Set());
+  const [usageEntries, setUsageEntries] = useState<Record<string, UsageEntry[]>>({});
+  const [usageEntriesLoading, setUsageEntriesLoading] = useState<Set<string>>(new Set());
+  const [editingEntry, setEditingEntry] = useState<{ id: string; usedAt: string; sessionsUsed: number; subKey: string } | null>(null);
+  const [deletingEntry, setDeletingEntry] = useState<{ id: string; subKey: string } | null>(null);
+
   // ── NEW: Registration Fee handlers ──
   const handleMarkRegFeePaid = async () => {
     if (!showRegFeeModal) return;
@@ -572,10 +611,27 @@ export default function AdminRevenueDashboard() {
 
   useEffect(() => {
     load();
+    // Load commission rate and eagerly populate badge count
+    api.get("/admin/bowling/commission-rate")
+      .then(res => {
+        const rate = parseFloat(res.data?.rate ?? 10);
+        setDefaultRate(rate);
+        if (rate === 10) setCommissionRateMode("10");
+        else if (rate === 15) setCommissionRateMode("15");
+        else { setCommissionRateMode("custom"); setCommissionRateCustom(String(rate)); }
+      })
+      .catch(() => {/* keep default 10 */});
+    // Eagerly fetch commission data so the tab badge shows a real count on first render
+    loadCommissionData(new Date().toISOString().substring(0, 7));
   }, []);
   useEffect(() => {
     loadMonthly(monthYear.year, monthYear.month);
   }, [monthYear, isSuperAdmin]);
+  useEffect(() => {
+    if (activeTab === "commission") {
+      loadCommissionData(commissionMonth);
+    }
+  }, [activeTab]);
   useEffect(() => {
     if (activeTab !== "feesummary" || feeSummaryLoaded) return;
     setFeeSummaryLoading(true);
@@ -605,6 +661,14 @@ export default function AdminRevenueDashboard() {
     };
   }, []);
 
+  // Scroll the active tab pill into view whenever it changes (desktop pill row)
+  useEffect(() => {
+    const el = tabBarRef.current;
+    if (!el) return;
+    const btn = el.querySelector(`[data-tab="${activeTab}"]`) as HTMLElement | null;
+    if (btn) btn.scrollIntoView({ inline: "nearest", behavior: "smooth", block: "nearest" });
+  }, [activeTab]);
+
   const { from, to } = getDateBounds(dateRange, customFrom, customTo);
   const inRange = (d: string) => {
     if (!from && !to) return true;
@@ -617,6 +681,17 @@ export default function AdminRevenueDashboard() {
   const filteredFees = useMemo(
     () => feePayments.filter((p) => p.type !== "REVERSAL" && inRange(p.paidOn)),
     [feePayments, from, to],
+  );
+  // Set of NORMAL row publicIds that have a matching REVERSAL row. Used to show
+  // "Reversed" status badge in the Fees table without hiding the original row.
+  const reversedNormalIds = useMemo(
+    () =>
+      new Set(
+        feePayments
+          .filter((p) => p.type === "REVERSAL" && p.reversedPaymentPublicId)
+          .map((p) => p.reversedPaymentPublicId!),
+      ),
+    [feePayments],
   );
   const filteredBookings = useMemo(
     () =>
@@ -711,7 +786,15 @@ export default function AdminRevenueDashboard() {
     [filteredIncomes, incomeSearch, incomeFilterBudgetHead, incomeFilterPaidBy],
   );
 
-  const feesTotal = filteredFees.reduce((s, p) => s + (p.amount || 0), 0);
+  // Subtract in-range REVERSAL rows — they are excluded from filteredFees (the display list)
+  // but their positive amounts must still offset the original NORMAL rows in the sum.
+  // Without this, a reversed ₹15k NORMAL row remains counted while the ₹15k REVERSAL row
+  // is simply discarded, leaving revenue overstated by the full reversal amount.
+  const feesReversalAdjustment = feePayments
+    .filter((p) => p.type === "REVERSAL" && inRange(p.paidOn))
+    .reduce((s, p) => s + (p.amount || 0), 0);
+  const feesTotal =
+    filteredFees.reduce((s, p) => s + (p.amount || 0), 0) - feesReversalAdjustment;
   const bookingsTotal = filteredBookings.reduce(
     (s, b) => s + (b.amount || 0),
     0,
@@ -818,6 +901,15 @@ export default function AdminRevenueDashboard() {
     0,
   );
 
+  // ── Commission computed values (client-side, updates instantly with rate change) ──
+  const effectiveRate =
+    commissionRateMode === "10" ? 10
+    : commissionRateMode === "15" ? 15
+    : parseFloat(commissionRateCustom) || 0;
+  const commTotalSessions = commissionData.reduce((s, r) => s + r.sessionsUsed, 0);
+  const commTotalValue = commissionData.reduce((s, r) => s + Number(r.sessionValue), 0);
+  const commTotalDue = commTotalValue * effectiveRate / 100;
+
   // ── grossRevenue now includes reg fees ──
   const grossRevenue =
     feesTotal +
@@ -889,6 +981,148 @@ export default function AdminRevenueDashboard() {
       setExpenseSaving(false);
     }
   };
+  const loadCommissionData = async (month: string) => {
+    setCommissionLoading(true);
+    let subRows: CommissionRow[] = [];
+    let directRows: CommissionRow[] = [];
+
+    // Fetch both independently so one failure doesn't wipe the other
+    try {
+      const res = await api.get(`/admin/bowling/usage-report?month=${month}`);
+      subRows = (res.data || []).map((r: CommissionRow) => ({
+        ...r,
+        source: "Subscription" as const,
+      }));
+      console.log(`[Commission] /usage-report ${month}: ${subRows.length} row(s)`, subRows);
+    } catch (e) {
+      console.error("[Commission] /usage-report failed:", e);
+      toast.error("Failed to load subscription session data");
+    }
+
+    try {
+      const res = await api.get(`/admin/bowling/direct-bookings?month=${month}`);
+      console.log(`[Commission] /direct-bookings ${month}: raw response`, res.data);
+      directRows = (res.data || []).map(
+        (r: { memberName: string; memberPhone: string; sessionValue: number; bookingPublicId: string; ballCount: number | null }) => {
+          const sessions = r.ballCount ? Math.round(r.ballCount / 60) : 1;
+          return {
+            memberName: r.memberName,
+            memberPhone: r.memberPhone,
+            subscriptionPublicId: undefined,
+            sessionsUsed: sessions,
+            pricePaid: Number(r.sessionValue),
+            totalSessions: 1,
+            sessionValue: Number(r.sessionValue),
+            source: "Direct Booking" as const,
+            ballCount: r.ballCount,
+            bookingPublicId: r.bookingPublicId,
+          };
+        },
+      );
+      console.log(`[Commission] /direct-bookings ${month}: ${directRows.length} mapped row(s)`, directRows);
+    } catch (e) {
+      console.error("[Commission] /direct-bookings failed:", e);
+      toast.error("Failed to load direct booking data");
+    }
+
+    console.log(`[Commission] merged total for ${month}:`, [...subRows, ...directRows]);
+    setCommissionData([...subRows, ...directRows]);
+    setCommissionLoading(false);
+  };
+
+  const saveCommissionRate = async () => {
+    const rate =
+      commissionRateMode === "10" ? "10.00"
+      : commissionRateMode === "15" ? "15.00"
+      : commissionRateCustom;
+    if (!rate || isNaN(parseFloat(rate))) return;
+    setSavingRate(true);
+    try {
+      await api.put("/admin/bowling/commission-rate", { rate });
+      setDefaultRate(parseFloat(rate));
+      toast.success("Commission rate saved");
+    } catch {
+      toast.error("Failed to save rate");
+    } finally {
+      setSavingRate(false);
+    }
+  };
+
+  // ── Part A: direct booking edit ──────────────────────────────────────────
+  const openDirectEdit = (row: CommissionRow) => {
+    setEditDirectModal(row);
+    setEditBallCount(([60, 120, 180, 240].includes(row.ballCount ?? 0)
+      ? row.ballCount
+      : 60) as 60 | 120 | 180 | 240);
+    setEditAmount(String(row.pricePaid));
+  };
+
+  const saveDirectBookingEdit = async () => {
+    if (!editDirectModal?.bookingPublicId) return;
+    setEditDirectSaving(true);
+    try {
+      await api.patch(`/admin/bookings/${editDirectModal.bookingPublicId}/edit`, {
+        ballCount: editBallCount,
+        amount: parseFloat(editAmount) || undefined,
+      });
+      toast.success("Booking updated");
+      setEditDirectModal(null);
+      loadCommissionData(commissionMonth);
+    } catch (e: any) {
+      toast.error(e?.response?.data?.message || "Failed to update booking");
+    } finally {
+      setEditDirectSaving(false);
+    }
+  };
+
+  // ── Part B: subscription usage log expand/edit ────────────────────────────
+  const loadUsageEntries = async (subPublicId: string) => {
+    setUsageEntriesLoading((prev) => new Set(prev).add(subPublicId));
+    try {
+      const res = await api.get(
+        `/admin/bowling/usage-entries?subscriptionPublicId=${subPublicId}&month=${commissionMonth}`,
+      );
+      setUsageEntries((prev) => ({ ...prev, [subPublicId]: res.data || [] }));
+    } catch {
+      toast.error("Failed to load usage log");
+    } finally {
+      setUsageEntriesLoading((prev) => {
+        const next = new Set(prev);
+        next.delete(subPublicId);
+        return next;
+      });
+    }
+  };
+
+  const toggleSubExpand = (subKey: string) => {
+    setExpandedSubKeys((prev) => {
+      const next = new Set(prev);
+      if (next.has(subKey)) {
+        next.delete(subKey);
+      } else {
+        next.add(subKey);
+        if (!usageEntries[subKey]) loadUsageEntries(subKey);
+      }
+      return next;
+    });
+  };
+
+  // Stub — full endpoint built after UI approval
+  const saveUsageEntryEdit = async () => {
+    if (!editingEntry) return;
+    console.log("[TODO] PATCH /admin/bowling/usage-entries/" + editingEntry.id, editingEntry);
+    toast("(stub) Save wired after UI approval");
+    setEditingEntry(null);
+  };
+
+  // Stub — full endpoint built after UI approval
+  const confirmDeleteUsageEntry = async () => {
+    if (!deletingEntry) return;
+    console.log("[TODO] DELETE /admin/bowling/usage-entries/" + deletingEntry.id);
+    toast("(stub) Delete wired after UI approval");
+    setDeletingEntry(null);
+  };
+
   const deleteExpense = async (publicId: string) => {
     try {
       await api.delete(`/admin/expenses/${publicId}`);
@@ -2005,7 +2239,7 @@ export default function AdminRevenueDashboard() {
 
       {/* ── Summary Cards ── */}
       <div
-        className={`grid gap-2 sm:gap-3 ${isSuperAdmin ? "grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6" : "grid-cols-2 sm:grid-cols-3 lg:grid-cols-4"}`}
+        className={`grid gap-2 sm:gap-3 ${isSuperAdmin ? "grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6" : "grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5"}`}
       >
         {isSuperAdmin && (
           <SummaryCard
@@ -2120,6 +2354,16 @@ export default function AdminRevenueDashboard() {
           border="border-cyan-200"
           valueClass="text-cyan-700"
         />
+        <SummaryCard
+          label="Coach Commission"
+          value={fmt(commTotalDue)}
+          onClick={() => setActiveTab("commission")}
+          sub={`${commTotalSessions} session${commTotalSessions !== 1 ? "s" : ""} · ${effectiveRate}% rate · ${commissionMonth}`}
+          icon={<Award size={15} className="text-amber-600" />}
+          bg="bg-gradient-to-br from-amber-50 to-orange-50"
+          border="border-amber-200"
+          valueClass="text-amber-700"
+        />
         {isSuperAdmin && (
           <SummaryCard
             label="Other Income"
@@ -2161,60 +2405,67 @@ export default function AdminRevenueDashboard() {
       </div>
 
       {/* ── Main Tabs ── */}
-      <div className="relative">
-        <div
-          ref={tabBarRef}
-          className="flex gap-1 bg-slate-100 rounded-xl p-1 overflow-x-auto"
-          style={{ scrollbarWidth: "none" }}
-        >
-          {(
-            [
-              ["fees", "Fees", filteredFees.length],
-              ["bookings", "Bookings", filteredBookings.length],
-              ["campfees", "Camp Fees", filteredCampFees.length],
-              ["feesummary", "Fee Summary", feeSummary.length],
-              ["regfees", "Reg Fees", regFees.length],
-              ["subscriptions", "Memberships", subRevenue.length],
-              [
-                "installments",
-                "Installments",
-                filteredInstallmentPayments.length,
-              ],
-              ...(isSuperAdmin
-                ? [
-                    [
-                      "expenses",
-                      "Expenses",
-                      filteredExpenses.length +
-                        monthlyPayments.filter((p) => p.status === "PAID")
-                          .length,
-                    ],
-                    ["income", "Income", filteredIncomes.length],
-                  ]
-                : []),
-            ] as [Tab, string, number][]
-          ).map(([tab, label, count]) => (
-            <button
-              key={tab}
-              onClick={() => setActiveTab(tab)}
-              className={`flex items-center gap-1.5 px-3 sm:px-4 py-2 rounded-lg text-xs sm:text-sm font-medium whitespace-nowrap transition ${activeTab === tab ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700"}`}
-            >
-              {label}
-              <span
-                className={`text-[10px] font-semibold px-1.5 py-px rounded leading-none ${activeTab === tab ? "bg-slate-100 text-slate-500" : "bg-slate-200 text-slate-500"}`}
+      {(() => {
+        const allTabs: [Tab, string, number][] = [
+          ["fees", "Fees", filteredFees.length],
+          ["bookings", "Bookings", filteredBookings.length],
+          ["campfees", "Camp Fees", filteredCampFees.length],
+          ["feesummary", "Fee Summary", feeSummary.length],
+          ["regfees", "Reg Fees", regFees.length],
+          ["subscriptions", "Memberships", subRevenue.length],
+          ["installments", "Installments", filteredInstallmentPayments.length],
+          ...(isSuperAdmin
+            ? [
+                ["expenses", "Expenses", filteredExpenses.length + monthlyPayments.filter((p) => p.status === "PAID").length],
+                ["income", "Income", filteredIncomes.length],
+                ["commission", "Coach Commission", commTotalSessions],
+              ]
+            : [["commission", "Coach Commission", commTotalSessions]]),
+        ] as [Tab, string, number][];
+
+        return (
+          <>
+            {/* Mobile: native dropdown — cleaner than scrolling 10 pills at 375 px */}
+            <div className="sm:hidden">
+              <select
+                value={activeTab}
+                onChange={(e) => setActiveTab(e.target.value as Tab)}
+                className="w-full bg-slate-100 rounded-xl px-3 py-2.5 text-sm font-medium text-slate-800 border-0 focus:ring-2 focus:ring-blue-500 focus:outline-none appearance-none"
+                style={{ backgroundImage: "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E\")", backgroundRepeat: "no-repeat", backgroundPosition: "right 12px center", paddingRight: "32px" }}
               >
-                {count}
-              </span>
-            </button>
-          ))}
-        </div>
-        <div
-          className={`sm:hidden pointer-events-none absolute inset-y-0 right-0 w-10 rounded-r-xl bg-gradient-to-l from-slate-100 to-transparent transition-opacity duration-150 ${tabFade.right ? "opacity-100" : "opacity-0"}`}
-        />
-        <div
-          className={`sm:hidden pointer-events-none absolute inset-y-0 left-0 w-10 rounded-l-xl bg-gradient-to-r from-slate-100 to-transparent transition-opacity duration-150 ${tabFade.left ? "opacity-100" : "opacity-0"}`}
-        />
-      </div>
+                {allTabs.map(([tab, label, count]) => (
+                  <option key={tab} value={tab}>{label} ({count})</option>
+                ))}
+              </select>
+            </div>
+
+            {/* Desktop: scrollable pill row */}
+            <div className="relative hidden sm:block">
+              <div
+                ref={tabBarRef}
+                className="flex gap-1 bg-slate-100 rounded-xl p-1 overflow-x-auto"
+                style={{ scrollbarWidth: "none" }}
+              >
+                {allTabs.map(([tab, label, count]) => (
+                  <button
+                    key={tab}
+                    data-tab={tab}
+                    onClick={() => setActiveTab(tab)}
+                    className={`flex items-center gap-1.5 px-3 sm:px-4 py-2 rounded-lg text-xs sm:text-sm font-medium whitespace-nowrap transition ${activeTab === tab ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700"}`}
+                  >
+                    {label}
+                    <span className={`text-[10px] font-semibold px-1.5 py-px rounded leading-none ${activeTab === tab ? "bg-slate-100 text-slate-500" : "bg-slate-200 text-slate-500"}`}>
+                      {count}
+                    </span>
+                  </button>
+                ))}
+              </div>
+              <div className={`pointer-events-none absolute inset-y-0 right-0 w-10 rounded-r-xl bg-gradient-to-l from-slate-100 to-transparent transition-opacity duration-150 ${tabFade.right ? "opacity-100" : "opacity-0"}`} />
+              <div className={`pointer-events-none absolute inset-y-0 left-0 w-10 rounded-l-xl bg-gradient-to-r from-slate-100 to-transparent transition-opacity duration-150 ${tabFade.left ? "opacity-100" : "opacity-0"}`} />
+            </div>
+          </>
+        );
+      })()}
 
       {activeTab === "installments" && (
         <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
@@ -2384,11 +2635,18 @@ export default function AdminRevenueDashboard() {
                       <span className="text-xs bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded">
                         {fmtMode(p.paymentMode)}
                       </span>
-                      <span className="inline-flex items-center gap-0.5 text-xs font-semibold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700">
-                        <CheckCircle2 size={10} />
-                        Paid
-                      </span>
-                      {p.nextDueOn && (
+                      {reversedNormalIds.has(p.publicId) ? (
+                        <span className="inline-flex items-center gap-0.5 text-xs font-semibold px-2 py-0.5 rounded-full bg-slate-100 text-slate-500">
+                          <X size={10} />
+                          Reversed
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-0.5 text-xs font-semibold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700">
+                          <CheckCircle2 size={10} />
+                          Paid
+                        </span>
+                      )}
+                      {p.nextDueOn && !reversedNormalIds.has(p.publicId) && (
                         <span
                           className={`text-xs font-medium ${p.feeStatus === "OVERDUE" ? "text-red-600" : p.feeStatus === "DUE" ? "text-amber-600" : "text-slate-500"}`}
                         >
@@ -2464,13 +2722,22 @@ export default function AdminRevenueDashboard() {
                           )}
                         </td>
                         <td className="px-4 py-3">
-                          <span className="inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-700">
-                            <CheckCircle2 size={11} />
-                            Paid
-                          </span>
+                          {reversedNormalIds.has(p.publicId) ? (
+                            <span className="inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-full bg-slate-100 text-slate-500">
+                              <X size={11} />
+                              Reversed
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-700">
+                              <CheckCircle2 size={11} />
+                              Paid
+                            </span>
+                          )}
                         </td>
                         <td className="px-4 py-3 text-sm">
-                          {p.nextDueOn ? (
+                          {reversedNormalIds.has(p.publicId) ? (
+                            <span className="text-xs text-slate-400">—</span>
+                          ) : p.nextDueOn ? (
                             <span
                               className={`font-medium ${p.feeStatus === "OVERDUE" ? "text-red-600" : p.feeStatus === "DUE" ? "text-amber-600" : "text-slate-600"}`}
                             >
@@ -4186,6 +4453,537 @@ export default function AdminRevenueDashboard() {
                   </tfoot>
                 </table>
               </div>
+            </>
+          )}
+        </div>
+      )}
+      {/* ── COACH COMMISSION TAB ───────────────────────────────────────── */}
+      {activeTab === "commission" && (
+        <div className="space-y-4">
+          {/* Header card: month + rate controls */}
+          <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4 space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+              <div className="flex-1">
+                <h2 className="font-bold text-slate-800 text-sm sm:text-base">Coach Commission</h2>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  BM sessions × per-session price × commission rate
+                </p>
+              </div>
+              <input
+                type="month"
+                value={commissionMonth}
+                onChange={(e) => {
+                  setCommissionMonth(e.target.value);
+                  loadCommissionData(e.target.value);
+                }}
+                className="border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+
+            {/* Rate control row */}
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-xs font-semibold text-slate-500 uppercase tracking-wide">
+                Rate:
+              </span>
+              {(["10", "15"] as CommissionRateMode[]).map((r) => (
+                <button
+                  key={r}
+                  onClick={() => setCommissionRateMode(r)}
+                  className={`px-3 py-1.5 rounded-lg text-sm font-semibold border transition ${
+                    commissionRateMode === r
+                      ? "bg-blue-600 text-white border-blue-600"
+                      : "border-slate-300 text-slate-600 hover:bg-slate-50"
+                  }`}
+                >
+                  {r}%
+                </button>
+              ))}
+              <button
+                onClick={() => setCommissionRateMode("custom")}
+                className={`px-3 py-1.5 rounded-lg text-sm font-semibold border transition ${
+                  commissionRateMode === "custom"
+                    ? "bg-blue-600 text-white border-blue-600"
+                    : "border-slate-300 text-slate-600 hover:bg-slate-50"
+                }`}
+              >
+                Custom
+              </button>
+              {commissionRateMode === "custom" && (
+                <div className="flex items-center gap-1">
+                  <input
+                    type="number"
+                    value={commissionRateCustom}
+                    onChange={(e) => setCommissionRateCustom(e.target.value)}
+                    min="0"
+                    max="100"
+                    step="0.5"
+                    placeholder="e.g. 12.5"
+                    className="w-24 border border-slate-300 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                  <span className="text-sm text-slate-500">%</span>
+                </div>
+              )}
+              <button
+                onClick={saveCommissionRate}
+                disabled={savingRate}
+                className="ml-auto flex items-center gap-1.5 px-3 py-1.5 bg-slate-700 text-white text-xs font-semibold rounded-lg hover:bg-slate-800 disabled:opacity-50 transition"
+              >
+                <Check size={12} />
+                {savingRate ? "Saving…" : "Save as default"}
+              </button>
+            </div>
+            {defaultRate !== effectiveRate && (
+              <p className="text-xs text-amber-600">
+                Showing preview at {effectiveRate}% — default is {defaultRate}%. Click "Save as default" to persist.
+              </p>
+            )}
+          </div>
+
+          {/* Summary cards */}
+          {(() => {
+            const subRows = commissionData.filter(r => r.source === "Subscription");
+            const directRows = commissionData.filter(r => r.source === "Direct Booking");
+            const subSessions = subRows.reduce((s, r) => s + r.sessionsUsed, 0);
+            const directCount = directRows.length;
+            return (
+              <div className="grid grid-cols-3 gap-3">
+                <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
+                  <p className="text-xs font-semibold text-blue-500 uppercase tracking-wide">Sessions / Bookings</p>
+                  <p className="text-2xl font-bold text-blue-700 mt-1">{commTotalSessions}</p>
+                  <p className="text-xs text-blue-400 mt-0.5 leading-snug">
+                    {subSessions > 0 && `${subSessions} sub`}
+                    {subSessions > 0 && directCount > 0 && " · "}
+                    {directCount > 0 && `${directCount} direct`}
+                    {subSessions === 0 && directCount === 0 && "—"}
+                  </p>
+                </div>
+                <div className="bg-green-50 border border-green-200 rounded-xl p-4">
+                  <p className="text-xs font-semibold text-green-500 uppercase tracking-wide">Session Value</p>
+                  <p className="text-2xl font-bold text-green-700 mt-1">{fmt(commTotalValue)}</p>
+                  <p className="text-xs text-green-400 mt-0.5">subscription + direct bookings</p>
+                </div>
+                <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
+                  <p className="text-xs font-semibold text-amber-600 uppercase tracking-wide">Commission @ {effectiveRate}%</p>
+                  <p className="text-2xl font-bold text-amber-700 mt-1">{fmt(commTotalDue)}</p>
+                  <p className="text-xs text-amber-500 mt-0.5">payable to coach</p>
+                </div>
+              </div>
+            );
+          })()}
+
+          {/* Drill-down */}
+          {commissionLoading ? (
+            <div className="flex justify-center py-10">
+              <div className="w-7 h-7 border-4 border-slate-200 border-t-blue-600 rounded-full animate-spin" />
+            </div>
+          ) : commissionData.length === 0 ? (
+            <EmptyState message="No BM sessions logged for this month yet" />
+          ) : (
+            <>
+              {/* ── Mobile cards ── */}
+              <div className="sm:hidden space-y-3">
+                {commissionData.map((row, i) => {
+                  const isDirect = row.source === "Direct Booking";
+                  const subKey = row.subscriptionPublicId || `sub-${i}`;
+                  const isExpanded = !isDirect && expandedSubKeys.has(subKey);
+                  return (
+                    <div key={i} className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+                      <div className="p-4 space-y-2">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <p className="font-semibold text-slate-900 text-sm">{row.memberName}</p>
+                              <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${isDirect ? "bg-violet-100 text-violet-700" : "bg-blue-100 text-blue-700"}`}>
+                                {isDirect ? "Direct" : "Sub"}
+                              </span>
+                            </div>
+                            <p className="text-xs text-slate-400">{row.memberPhone}</p>
+                            {isDirect && row.ballCount && (
+                              <p className="text-xs text-slate-400">{row.ballCount} balls · {row.sessionsUsed} session{row.sessionsUsed !== 1 ? "s" : ""}</p>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-1 shrink-0">
+                            <span className="inline-flex items-center justify-center w-9 h-9 rounded-full bg-blue-100 text-blue-700 font-bold text-sm">
+                              {row.sessionsUsed}
+                            </span>
+                            {isDirect ? (
+                              <button onClick={() => openDirectEdit(row)}
+                                className="p-1.5 rounded-lg hover:bg-violet-50 text-violet-600">
+                                <Pencil size={13} />
+                              </button>
+                            ) : (
+                              <button onClick={() => toggleSubExpand(subKey)}
+                                className="p-1.5 rounded-lg hover:bg-blue-50 text-blue-600">
+                                <ChevronDown size={14} className={`transition-transform ${isExpanded ? "rotate-180" : ""}`} />
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                        {!isDirect && (
+                          <div className="text-xs text-slate-500" title={row.subscriptionPublicId}>
+                            Plan: {row.totalSessions} sessions · {fmt(row.pricePaid)}
+                          </div>
+                        )}
+                        <div className="flex justify-between text-sm pt-1 border-t border-slate-100">
+                          <span className="text-slate-500">Session value</span>
+                          <span className="font-medium">{fmt(Number(row.sessionValue))}</span>
+                        </div>
+                        <div className="flex justify-between text-sm">
+                          <span className="text-slate-500">Commission</span>
+                          <span className="font-bold text-amber-700">
+                            {fmt(Number(row.sessionValue) * effectiveRate / 100)}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Mobile: expanded usage entries for subscription rows */}
+                      {!isDirect && isExpanded && (
+                        <div className="border-t border-blue-100 bg-blue-50 p-3">
+                          <p className="text-[11px] font-semibold text-blue-600 uppercase tracking-wide mb-2">
+                            Usage Log · {commissionMonth}
+                          </p>
+                          {usageEntriesLoading.has(subKey) ? (
+                            <div className="flex justify-center py-4">
+                              <div className="w-5 h-5 border-2 border-blue-200 border-t-blue-600 rounded-full animate-spin" />
+                            </div>
+                          ) : (usageEntries[subKey] || []).length === 0 ? (
+                            <p className="text-xs text-slate-400 text-center py-2">No entries found</p>
+                          ) : (
+                            <div className="space-y-2">
+                              {(usageEntries[subKey] || []).map((entry) =>
+                                editingEntry?.id === entry.id ? (
+                                  <div key={entry.id} className="bg-white rounded-lg p-2 space-y-2 border border-blue-200">
+                                    <div className="grid grid-cols-2 gap-2">
+                                      <div>
+                                        <label className="text-[10px] font-semibold text-slate-500">Date</label>
+                                        <input type="date" value={editingEntry.usedAt}
+                                          onChange={(e) => setEditingEntry({ ...editingEntry, usedAt: e.target.value })}
+                                          className="w-full border border-slate-300 rounded px-2 py-1 text-xs" />
+                                      </div>
+                                      <div>
+                                        <label className="text-[10px] font-semibold text-slate-500">Sessions</label>
+                                        <select value={editingEntry.sessionsUsed}
+                                          onChange={(e) => setEditingEntry({ ...editingEntry, sessionsUsed: +e.target.value })}
+                                          className="w-full border border-slate-300 rounded px-2 py-1 text-xs">
+                                          {[1, 2, 3, 4].map((n) => <option key={n} value={n}>{n}</option>)}
+                                        </select>
+                                      </div>
+                                    </div>
+                                    {editingEntry.usedAt.substring(0, 7) !== commissionMonth && (
+                                      <p className="text-[10px] text-amber-600">Moving this to {editingEntry.usedAt.substring(0, 7)} will reduce this month's total.</p>
+                                    )}
+                                    <div className="flex gap-2">
+                                      <button onClick={saveUsageEntryEdit} className="flex-1 text-xs bg-blue-600 text-white rounded py-1 font-semibold">Save</button>
+                                      <button onClick={() => setEditingEntry(null)} className="flex-1 text-xs border border-slate-300 text-slate-600 rounded py-1">Cancel</button>
+                                    </div>
+                                  </div>
+                                ) : deletingEntry?.id === entry.id ? (
+                                  <div key={entry.id} className="bg-red-50 rounded-lg p-2 border border-red-200 space-y-1">
+                                    <p className="text-xs text-red-700 font-medium">Delete {entry.usedAt} · {entry.sessionsUsed} session(s)?</p>
+                                    <p className="text-[10px] text-slate-500">This removes the log entry only — subscription counter is NOT automatically restored.</p>
+                                    <div className="flex gap-2">
+                                      <button onClick={confirmDeleteUsageEntry} className="flex-1 text-xs bg-red-600 text-white rounded py-1 font-semibold">Delete</button>
+                                      <button onClick={() => setDeletingEntry(null)} className="flex-1 text-xs border border-slate-300 rounded py-1 text-slate-600">Cancel</button>
+                                    </div>
+                                  </div>
+                                ) : (
+                                  <div key={entry.id} className="flex items-center justify-between bg-white rounded-lg px-3 py-2 border border-blue-100">
+                                    <div>
+                                      <span className="text-xs font-medium text-slate-800">{entry.usedAt}</span>
+                                      <span className="text-xs text-slate-500 ml-2">{entry.sessionsUsed} session{entry.sessionsUsed !== 1 ? "s" : ""}</span>
+                                    </div>
+                                    <div className="flex gap-1">
+                                      <button onClick={() => setEditingEntry({ id: entry.id, usedAt: entry.usedAt, sessionsUsed: entry.sessionsUsed, subKey })}
+                                        className="p-1 hover:bg-blue-50 text-blue-600 rounded">
+                                        <Pencil size={11} />
+                                      </button>
+                                      <button onClick={() => setDeletingEntry({ id: entry.id, subKey })}
+                                        className="p-1 hover:bg-red-50 text-red-500 rounded">
+                                        <Trash2 size={11} />
+                                      </button>
+                                    </div>
+                                  </div>
+                                )
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+                {/* Mobile totals */}
+                <div className="bg-slate-50 rounded-xl border border-slate-200 p-4 space-y-2">
+                  <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Total · {commTotalSessions} sessions</p>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-slate-600">Session value</span>
+                    <span className="font-semibold text-green-700">{fmt(commTotalValue)}</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-slate-600">Commission @ {effectiveRate}%</span>
+                    <span className="font-bold text-amber-700">{fmt(commTotalDue)}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* ── Desktop table ── */}
+              <div className="hidden sm:block bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+                <table className="w-full text-sm">
+                  <thead className="bg-slate-50 text-slate-500 text-xs uppercase tracking-wide">
+                    <tr>
+                      <th className="px-4 py-3 text-left font-medium">Member</th>
+                      <th className="px-4 py-3 text-left font-medium">Source</th>
+                      <th className="px-4 py-3 text-left font-medium">Plan / Amount</th>
+                      <th className="px-4 py-3 text-center font-medium">Sessions</th>
+                      <th className="px-4 py-3 text-right font-medium">Session Value</th>
+                      <th className="px-4 py-3 text-right font-medium">Commission ({effectiveRate}%)</th>
+                      <th className="px-4 py-3 text-right font-medium w-16"></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {commissionData.map((row, i) => {
+                      const isDirect = row.source === "Direct Booking";
+                      const subKey = row.subscriptionPublicId || `sub-${i}`;
+                      const isExpanded = !isDirect && expandedSubKeys.has(subKey);
+                      const rowCommission = Number(row.sessionValue) * effectiveRate / 100;
+                      return (
+                        <tr key={`row-${i}`} className={`${isExpanded ? "" : "border-b border-slate-100"} ${!isDirect ? "cursor-pointer select-none" : ""} hover:bg-slate-50`}
+                            onClick={!isDirect ? () => toggleSubExpand(subKey) : undefined}>
+                          <td className="px-4 py-3">
+                            <p className="font-medium text-slate-900">{row.memberName}</p>
+                            <p className="text-xs text-slate-400">{row.memberPhone}</p>
+                          </td>
+                          <td className="px-4 py-3">
+                            <div className="flex items-center gap-1.5">
+                              <span className={`inline-block text-xs font-semibold px-2 py-0.5 rounded-full ${isDirect ? "bg-violet-100 text-violet-700" : "bg-blue-100 text-blue-700"}`}>
+                                {row.source}
+                              </span>
+                              {!isDirect && (
+                                <ChevronDown size={12} className={`text-slate-400 transition-transform ${isExpanded ? "rotate-180" : ""}`} />
+                              )}
+                            </div>
+                          </td>
+                          <td className="px-4 py-3">
+                            {isDirect ? (
+                              row.ballCount ? (
+                                <p className="text-slate-700 text-xs">{row.ballCount} balls · {row.sessionsUsed} session{row.sessionsUsed !== 1 ? "s" : ""}</p>
+                              ) : (
+                                <p className="text-slate-400 text-xs italic">one-off booking</p>
+                              )
+                            ) : (
+                              <>
+                                <p className="text-slate-700" title={row.subscriptionPublicId}>
+                                  {row.totalSessions} sessions · {fmt(row.pricePaid)}
+                                </p>
+                                <p className="text-xs text-slate-400">
+                                  {fmt(row.pricePaid / row.totalSessions)}/session
+                                </p>
+                              </>
+                            )}
+                          </td>
+                          <td className="px-4 py-3 text-center">
+                            <span className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-blue-100 text-blue-700 font-bold">
+                              {row.sessionsUsed}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 text-right font-medium text-green-700">
+                            {fmt(Number(row.sessionValue))}
+                          </td>
+                          <td className="px-4 py-3 text-right font-bold text-amber-700">
+                            {fmt(rowCommission)}
+                          </td>
+                          <td className="px-4 py-3 text-right">
+                            {isDirect && (
+                              <button onClick={(e) => { e.stopPropagation(); openDirectEdit(row); }}
+                                className="p-1.5 hover:bg-violet-50 text-violet-600 rounded-lg transition">
+                                <Pencil size={13} />
+                              </button>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                    {/* Expandable usage-entries rows — rendered outside tbody row loop */}
+                    {commissionData.map((row, i) => {
+                      const isDirect = row.source === "Direct Booking";
+                      if (isDirect) return null;
+                      const subKey = row.subscriptionPublicId || `sub-${i}`;
+                      const isExpanded = expandedSubKeys.has(subKey);
+                      if (!isExpanded) return null;
+                      return (
+                        <tr key={`expand-${i}`} className="border-b border-slate-100">
+                          <td colSpan={7} className="p-0">
+                            <div className="bg-blue-50 px-6 py-3 space-y-2">
+                              <p className="text-[11px] font-semibold text-blue-600 uppercase tracking-wide">
+                                Usage Log · {commissionMonth}
+                              </p>
+                              {usageEntriesLoading.has(subKey) ? (
+                                <div className="flex items-center gap-2 py-2 text-xs text-slate-400">
+                                  <div className="w-4 h-4 border-2 border-blue-200 border-t-blue-500 rounded-full animate-spin" />
+                                  Loading…
+                                </div>
+                              ) : (usageEntries[subKey] || []).length === 0 ? (
+                                <p className="text-xs text-slate-400 py-1">No individual entries found for this month.</p>
+                              ) : (
+                                <table className="w-full text-xs">
+                                  <thead>
+                                    <tr className="text-slate-500 uppercase tracking-wide">
+                                      <th className="text-left pr-6 pb-1 font-medium">Date</th>
+                                      <th className="text-center pr-6 pb-1 font-medium">Sessions</th>
+                                      <th className="pb-1"></th>
+                                    </tr>
+                                  </thead>
+                                  <tbody className="divide-y divide-blue-100">
+                                    {(usageEntries[subKey] || []).map((entry) =>
+                                      editingEntry?.id === entry.id ? (
+                                        <tr key={entry.id}>
+                                          <td className="py-1.5 pr-4">
+                                            <input type="date" value={editingEntry.usedAt}
+                                              onChange={(e) => setEditingEntry({ ...editingEntry, usedAt: e.target.value })}
+                                              className="border border-slate-300 rounded px-2 py-1 text-xs" />
+                                            {editingEntry.usedAt.substring(0, 7) !== commissionMonth && (
+                                              <p className="text-[10px] text-amber-600 mt-0.5">
+                                                ⚠ Moving to {editingEntry.usedAt.substring(0, 7)} will reduce this month&apos;s total.
+                                              </p>
+                                            )}
+                                          </td>
+                                          <td className="py-1.5 pr-4 text-center">
+                                            <select value={editingEntry.sessionsUsed}
+                                              onChange={(e) => setEditingEntry({ ...editingEntry, sessionsUsed: +e.target.value })}
+                                              className="border border-slate-300 rounded px-2 py-1 text-xs">
+                                              {[1, 2, 3, 4].map((n) => <option key={n} value={n}>{n}</option>)}
+                                            </select>
+                                          </td>
+                                          <td className="py-1.5">
+                                            <div className="flex gap-1 justify-end">
+                                              <button onClick={saveUsageEntryEdit}
+                                                className="px-2 py-1 bg-blue-600 text-white rounded text-[11px] font-semibold">
+                                                Save
+                                              </button>
+                                              <button onClick={() => setEditingEntry(null)}
+                                                className="px-2 py-1 border border-slate-300 text-slate-600 rounded text-[11px]">
+                                                Cancel
+                                              </button>
+                                            </div>
+                                          </td>
+                                        </tr>
+                                      ) : deletingEntry?.id === entry.id ? (
+                                        <tr key={entry.id} className="bg-red-50">
+                                          <td colSpan={3} className="py-2 px-1">
+                                            <div className="flex items-start gap-3">
+                                              <div className="flex-1">
+                                                <p className="text-red-700 font-medium">Delete entry: {entry.usedAt} · {entry.sessionsUsed} session(s)?</p>
+                                                <p className="text-[10px] text-slate-500 mt-0.5">
+                                                  This removes the log entry only — the subscription&apos;s session counter is NOT automatically restored.
+                                                </p>
+                                              </div>
+                                              <div className="flex gap-1 shrink-0">
+                                                <button onClick={confirmDeleteUsageEntry}
+                                                  className="px-2 py-1 bg-red-600 text-white rounded text-[11px] font-semibold">
+                                                  Delete
+                                                </button>
+                                                <button onClick={() => setDeletingEntry(null)}
+                                                  className="px-2 py-1 border border-slate-300 text-slate-600 rounded text-[11px]">
+                                                  Cancel
+                                                </button>
+                                              </div>
+                                            </div>
+                                          </td>
+                                        </tr>
+                                      ) : (
+                                        <tr key={entry.id} className="hover:bg-blue-100/40">
+                                          <td className="py-1.5 pr-6 font-medium text-slate-800">{entry.usedAt}</td>
+                                          <td className="py-1.5 pr-6 text-center text-slate-600">{entry.sessionsUsed}</td>
+                                          <td className="py-1.5">
+                                            <div className="flex gap-1 justify-end">
+                                              <button onClick={() => setEditingEntry({ id: entry.id, usedAt: entry.usedAt, sessionsUsed: entry.sessionsUsed, subKey })}
+                                                className="p-1 hover:bg-blue-200 text-blue-700 rounded">
+                                                <Pencil size={11} />
+                                              </button>
+                                              <button onClick={() => setDeletingEntry({ id: entry.id, subKey })}
+                                                className="p-1 hover:bg-red-100 text-red-500 rounded">
+                                                <Trash2 size={11} />
+                                              </button>
+                                            </div>
+                                          </td>
+                                        </tr>
+                                      )
+                                    )}
+                                  </tbody>
+                                </table>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                  <tfoot className="bg-slate-50 border-t-2 border-slate-200 text-sm font-semibold">
+                    <tr>
+                      <td colSpan={3} className="px-4 py-3 text-slate-600">
+                        Total · {commTotalSessions} session(s) across {commissionData.length} row(s)
+                      </td>
+                      <td className="px-4 py-3 text-center text-slate-800">{commTotalSessions}</td>
+                      <td className="px-4 py-3 text-right text-green-700">{fmt(commTotalValue)}</td>
+                      <td className="px-4 py-3 text-right text-amber-700">{fmt(commTotalDue)}</td>
+                      <td />
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+
+              {/* ── Part A: Direct booking edit modal ── */}
+              {editDirectModal && (
+                <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+                  <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6 space-y-4">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <h3 className="font-bold text-slate-900">Edit Booking</h3>
+                        <p className="text-xs text-slate-500">{editDirectModal.memberName} · Direct BM booking</p>
+                      </div>
+                      <button onClick={() => setEditDirectModal(null)} className="text-slate-400 hover:text-slate-600">
+                        <X size={18} />
+                      </button>
+                    </div>
+
+                    <div className="space-y-1">
+                      <label className="text-xs font-semibold text-slate-600 uppercase tracking-wide">Ball Count</label>
+                      <div className="grid grid-cols-4 gap-2">
+                        {([60, 120, 180, 240] as const).map((bc) => (
+                          <button key={bc} onClick={() => setEditBallCount(bc)}
+                            className={`py-2.5 rounded-lg text-sm font-bold border transition ${
+                              editBallCount === bc
+                                ? "bg-blue-600 text-white border-blue-600"
+                                : "border-slate-300 text-slate-600 hover:bg-slate-50"
+                            }`}>
+                            {bc}
+                            <span className="block text-[10px] font-normal opacity-75">{bc / 60} sess.</span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="space-y-1">
+                      <label className="text-xs font-semibold text-slate-600 uppercase tracking-wide">Amount (₹)</label>
+                      <input type="number" min="0" step="any" value={editAmount}
+                        onChange={(e) => setEditAmount(e.target.value)}
+                        className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                      <p className="text-[10px] text-slate-400">Saving also updates the linked payment record and the All Bookings page.</p>
+                    </div>
+
+                    <div className="flex gap-3 pt-1">
+                      <button onClick={() => setEditDirectModal(null)}
+                        className="flex-1 py-2 border border-slate-300 rounded-lg text-sm text-slate-600 hover:bg-slate-50 transition">
+                        Cancel
+                      </button>
+                      <button onClick={saveDirectBookingEdit} disabled={editDirectSaving}
+                        className="flex-1 py-2 bg-blue-600 text-white rounded-lg text-sm font-semibold hover:bg-blue-700 disabled:opacity-50 transition">
+                        {editDirectSaving ? "Saving…" : "Save Changes"}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
             </>
           )}
         </div>

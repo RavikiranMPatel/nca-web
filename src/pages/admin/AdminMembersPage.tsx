@@ -15,6 +15,7 @@ import {
   ChevronUp,
   Clock,
   X,
+  Archive,
 } from "lucide-react";
 import PresenceBanner from "../../components/PresenceBanner";
 import { useAuth } from "../../auth/useAuth";
@@ -85,7 +86,37 @@ type SubscriptionPlan = {
   description: string;
 };
 
-type Tab = "ACTIVE" | "QUEUED" | "NON_SUBSCRIBERS" | "GUESTS";
+type Tab = "ACTIVE" | "QUEUED" | "NON_SUBSCRIBERS" | "GUESTS" | "HISTORY" | "USAGE_REPORT";
+
+type UsageReportRow = {
+  memberName: string;
+  memberPhone: string;
+  subscriptionPublicId: string;
+  sessionsUsed: number;
+  pricePaid: number;
+  totalSessions: number;
+  sessionValue: number;
+};
+
+type HistoricalSubscription = {
+  publicId: string;
+  userName: string;
+  userEmail: string;
+  userPhone: string;
+  sessionsPerMonth: number;
+  planMonths: number;
+  totalSessions: number;
+  sessionsUsed: number;
+  sessionsRemaining: number;
+  startsOn: string;
+  expiresOn: string;
+  pricePaid: number;
+  status: string;
+  endReason: string;
+  cancelledAt: string;
+  cancelledBy: string;
+  notes: string;
+};
 
 const PAYMENT_MODES = [
   { value: "CASH", label: "Cash" },
@@ -120,6 +151,9 @@ function AdminMembersPage() {
   >([]);
   const [searchingUsers, setSearchingUsers] = useState(false);
 
+  const [historicalSubscriptions, setHistoricalSubscriptions] = useState<HistoricalSubscription[]>([]);
+  const [loadingHistory, setLoadingHistory] = useState(false);
+
   const [loadingActive, setLoadingActive] = useState(true);
   const [loadingNonSub, setLoadingNonSub] = useState(false);
   const [loadingGuests, setLoadingGuests] = useState(false);
@@ -142,16 +176,27 @@ function AdminMembersPage() {
     action: "deduct" | "restore";
   } | null>(null);
   const [deducting, setDeducting] = useState(false);
+  const [deductDate, setDeductDate] = useState<string>(
+    new Date().toISOString().substring(0, 10),
+  );
+
+  const [usageReport, setUsageReport] = useState<UsageReportRow[]>([]);
+  const [usageMonth, setUsageMonth] = useState<string>(
+    new Date().toISOString().substring(0, 7),
+  );
+  const [loadingUsage, setLoadingUsage] = useState(false);
 
   const [showImportModal, setShowImportModal] = useState(false);
 
   useEffect(() => {
     fetchActive();
     fetchQueued();
+    fetchHistory();
     fetchPlans();
   }, []);
 
   useEffect(() => {
+    if (activeTab === "USAGE_REPORT") fetchUsageReport(usageMonth);
     if (activeTab === "NON_SUBSCRIBERS" && nonSubscribers.length === 0)
       fetchNonSubscribers();
     if (activeTab === "GUESTS" && guests.length === 0) fetchGuests();
@@ -233,6 +278,18 @@ function AdminMembersPage() {
     }
   };
 
+  const fetchHistory = async () => {
+    setLoadingHistory(true);
+    try {
+      const res = await api.get("/admin/subscriptions/history");
+      setHistoricalSubscriptions(res.data);
+    } catch {
+      toast.error("Failed to load history");
+    } finally {
+      setLoadingHistory(false);
+    }
+  };
+
   const handleInvite = async (userId: string, name: string) => {
     setInvitingId(userId);
     try {
@@ -289,7 +346,7 @@ function AdminMembersPage() {
         deductModal.action === "deduct"
           ? `/admin/subscriptions/${deductModal.publicId}/deduct-session`
           : `/admin/subscriptions/${deductModal.publicId}/restore-session`;
-      await api.post(endpoint, { ballCount });
+      await api.post(endpoint, { ballCount, sessionDate: deductDate });
       toast.success(
         deductModal.action === "deduct"
           ? `${ballCount === 120 ? "2 sessions" : "1 session"} deducted from ${deductModal.userName}`
@@ -307,6 +364,18 @@ function AdminMembersPage() {
 
   const toggleExpand = (id: string) =>
     setExpandedId((prev) => (prev === id ? null : id));
+
+  const fetchUsageReport = async (month: string) => {
+    setLoadingUsage(true);
+    try {
+      const res = await api.get(`/admin/bowling/usage-report?month=${month}`);
+      setUsageReport(res.data || []);
+    } catch {
+      toast.error("Failed to load usage report");
+    } finally {
+      setLoadingUsage(false);
+    }
+  };
 
   const tabs: {
     key: Tab;
@@ -341,6 +410,20 @@ function AdminMembersPage() {
       label: "Guests",
       count: guests.length,
       icon: UserX,
+      color: "blue",
+    },
+    {
+      key: "HISTORY",
+      label: "History",
+      count: historicalSubscriptions.length,
+      icon: Archive,
+      color: "slate",
+    },
+    {
+      key: "USAGE_REPORT",
+      label: "Session Usage",
+      count: usageReport.length,
+      icon: Activity,
       color: "blue",
     },
   ];
@@ -433,6 +516,9 @@ function AdminMembersPage() {
             blue: isActive
               ? "bg-blue-600 text-white border-blue-600"
               : "border-slate-200 text-slate-600 hover:border-blue-300",
+            slate: isActive
+              ? "bg-slate-700 text-white border-slate-700"
+              : "border-slate-200 text-slate-600 hover:border-slate-400",
           };
           return (
             <button
@@ -858,6 +944,245 @@ function AdminMembersPage() {
         </>
       )}
 
+      {/* ── TAB 5: HISTORY ───────────────────────────────────────────── */}
+      {activeTab === "HISTORY" && (
+        <>
+          {loadingHistory ? (
+            <Spinner />
+          ) : historicalSubscriptions.length === 0 ? (
+            <EmptyState
+              icon={<Archive size={40} className="text-slate-300" />}
+              message="No past subscriptions found"
+            />
+          ) : (
+            <div className="space-y-3">
+              {historicalSubscriptions.map((sub) => {
+                const endReasonColor =
+                  sub.status === "CANCELLED"
+                    ? "bg-red-50 text-red-600 border-red-200"
+                    : sub.endReason === "Sessions exhausted"
+                      ? "bg-amber-50 text-amber-600 border-amber-200"
+                      : "bg-slate-50 text-slate-500 border-slate-200";
+                return (
+                  <div
+                    key={sub.publicId}
+                    className="bg-white rounded-xl border border-slate-200 shadow-sm p-4"
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center text-slate-500 font-bold text-sm shrink-0">
+                          {sub.userName?.charAt(0)?.toUpperCase() || "?"}
+                        </div>
+                        <div className="min-w-0">
+                          <p className="font-semibold text-slate-900 text-sm truncate">
+                            {sub.userName || "—"}
+                          </p>
+                          {sub.userEmail && (
+                            <p className="text-xs text-slate-500 flex items-center gap-1">
+                              <Mail size={11} /> {sub.userEmail}
+                            </p>
+                          )}
+                          {sub.userPhone && (
+                            <p className="text-xs text-slate-500 flex items-center gap-1 mt-0.5">
+                              <Phone size={11} /> {sub.userPhone}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                      <span
+                        className={`shrink-0 text-xs font-semibold px-2.5 py-1 rounded-full border ${endReasonColor}`}
+                      >
+                        {sub.endReason}
+                      </span>
+                    </div>
+
+                    <div className="mt-3 grid grid-cols-2 sm:grid-cols-4 gap-3">
+                      <InfoTile
+                        icon={<Activity size={13} />}
+                        label="Plan"
+                        value={`${sub.sessionsPerMonth} × ${sub.planMonths}mo`}
+                      />
+                      <InfoTile
+                        icon={<Users size={13} />}
+                        label="Sessions"
+                        value={`${sub.sessionsUsed}/${sub.totalSessions} used`}
+                      />
+                      <InfoTile
+                        icon={<Calendar size={13} />}
+                        label="Started"
+                        value={sub.startsOn || "—"}
+                      />
+                      <InfoTile
+                        icon={<Calendar size={13} />}
+                        label={sub.status === "CANCELLED" ? "Cancelled" : "Expired"}
+                        value={
+                          sub.status === "CANCELLED"
+                            ? sub.cancelledAt || sub.expiresOn || "—"
+                            : sub.expiresOn || "—"
+                        }
+                      />
+                    </div>
+
+                    <div className="mt-3 flex items-center justify-between">
+                      <div className="flex items-center gap-1.5 text-xs text-slate-500">
+                        <IndianRupee size={12} />
+                        <span className="font-semibold text-slate-700">
+                          ₹{sub.pricePaid?.toLocaleString("en-IN")}
+                        </span>
+                        <span className="text-slate-400">paid</span>
+                      </div>
+                      {sub.notes && (
+                        <p className="text-xs text-slate-400 italic truncate max-w-xs">
+                          {sub.notes}
+                        </p>
+                      )}
+                    </div>
+
+                    {sub.status === "CANCELLED" && sub.cancelledBy && (
+                      <p className="mt-2 text-xs text-slate-400">
+                        Cancelled by: {sub.cancelledBy}
+                      </p>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </>
+      )}
+
+      {/* ── SESSION USAGE REPORT TAB ──────────────────────────────── */}
+      {activeTab === "USAGE_REPORT" && (
+        <div className="space-y-4">
+          {/* Month picker + refresh */}
+          <div className="flex items-center gap-3 flex-wrap">
+            <input
+              type="month"
+              value={usageMonth}
+              onChange={(e) => {
+                setUsageMonth(e.target.value);
+                fetchUsageReport(e.target.value);
+              }}
+              className="border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+            <span className="text-sm text-slate-500">
+              {usageReport.length === 0 && !loadingUsage
+                ? "No sessions logged for this month"
+                : `${usageReport.length} member(s) · ${usageReport.reduce((s, r) => s + r.sessionsUsed, 0)} sessions total`}
+            </span>
+          </div>
+
+          {loadingUsage ? (
+            <Spinner />
+          ) : usageReport.length === 0 ? (
+            <EmptyState
+              icon={<Activity size={32} className="text-slate-300" />}
+              message="No session usage recorded for this month yet"
+            />
+          ) : (
+            <>
+              {/* Desktop table */}
+              <div className="hidden md:block bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+                <table className="w-full text-sm">
+                  <thead className="bg-slate-50 text-slate-500 text-xs uppercase tracking-wide">
+                    <tr>
+                      <th className="px-4 py-3 text-left font-medium">Member</th>
+                      <th className="px-4 py-3 text-left font-medium">Subscription</th>
+                      <th className="px-4 py-3 text-center font-medium">Sessions Used</th>
+                      <th className="px-4 py-3 text-right font-medium">Plan Price</th>
+                      <th className="px-4 py-3 text-right font-medium">Session Value</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {usageReport.map((row, i) => (
+                      <tr key={i} className="hover:bg-slate-50">
+                        <td className="px-4 py-3">
+                          <p className="font-medium text-slate-900">{row.memberName}</p>
+                          <p className="text-xs text-slate-400">{row.memberPhone}</p>
+                        </td>
+                        <td className="px-4 py-3">
+                          <p
+                            className="font-medium text-slate-700"
+                            title={row.subscriptionPublicId}
+                          >
+                            {row.totalSessions} sessions · ₹{row.pricePaid?.toLocaleString("en-IN")}
+                          </p>
+                          <p className="text-xs text-slate-400 mt-0.5">
+                            ₹{(row.pricePaid / row.totalSessions).toFixed(0)}/session
+                          </p>
+                        </td>
+                        <td className="px-4 py-3 text-center">
+                          <span className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-blue-100 text-blue-700 font-bold text-sm">
+                            {row.sessionsUsed}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-right text-slate-600">
+                          ₹{row.pricePaid?.toLocaleString("en-IN")}
+                        </td>
+                        <td className="px-4 py-3 text-right font-semibold text-slate-800">
+                          ₹{row.sessionValue?.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                  <tfoot className="bg-slate-50 border-t border-slate-200 text-sm font-semibold">
+                    <tr>
+                      <td colSpan={2} className="px-4 py-3 text-slate-600">Total</td>
+                      <td className="px-4 py-3 text-center text-slate-800">
+                        {usageReport.reduce((s, r) => s + r.sessionsUsed, 0)}
+                      </td>
+                      <td className="px-4 py-3" />
+                      <td className="px-4 py-3 text-right text-slate-800">
+                        ₹{usageReport
+                          .reduce((s, r) => s + r.sessionValue, 0)
+                          .toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                      </td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+
+              {/* Mobile cards */}
+              <div className="md:hidden space-y-3">
+                {usageReport.map((row, i) => (
+                  <div key={i} className="bg-white rounded-xl border border-slate-200 shadow-sm p-4 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="font-semibold text-slate-900">{row.memberName}</p>
+                        <p className="text-xs text-slate-400">{row.memberPhone}</p>
+                      </div>
+                      <span className="inline-flex items-center justify-center w-10 h-10 rounded-full bg-blue-100 text-blue-700 font-bold">
+                        {row.sessionsUsed}
+                      </span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-slate-500">Plan</span>
+                      <span
+                        className="font-medium text-slate-700"
+                        title={row.subscriptionPublicId}
+                      >
+                        {row.totalSessions} sessions · ₹{row.pricePaid?.toLocaleString("en-IN")}
+                      </span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-slate-500">Session value</span>
+                      <span className="font-semibold text-slate-800">
+                        ₹{row.sessionValue?.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+                <div className="bg-slate-50 rounded-xl p-4 flex justify-between text-sm font-semibold">
+                  <span>Total ({usageReport.reduce((s, r) => s + r.sessionsUsed, 0)} sessions)</span>
+                  <span>₹{usageReport.reduce((s, r) => s + r.sessionValue, 0)
+                    .toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span>
+                </div>
+              </div>
+            </>
+          )}
+        </div>
+      )}
+
       {/* ── DEDUCT / RESTORE SESSION MODAL ──────────────────────────── */}
       {deductModal && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
@@ -887,6 +1212,23 @@ function AdminMembersPage() {
                   <strong>{deductModal.sessionsRemaining}</strong>
                 </p>
               </div>
+              {deductModal.action === "deduct" && (
+                <div>
+                  <label className="block text-sm font-semibold text-slate-700 mb-1">
+                    Session date
+                  </label>
+                  <input
+                    type="date"
+                    value={deductDate}
+                    max={new Date().toISOString().substring(0, 10)}
+                    onChange={(e) => setDeductDate(e.target.value)}
+                    className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                  <p className="text-xs text-slate-400 mt-1">
+                    Used for monthly reports — backdate for past sessions
+                  </p>
+                </div>
+              )}
               <div>
                 <p className="text-sm font-semibold text-slate-700 mb-3">
                   How many balls?

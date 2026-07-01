@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Calendar, Clock, ArrowLeft, Search, Download } from "lucide-react";
+import { Calendar, Clock, ArrowLeft, Search, Download, Pencil, Trash2 } from "lucide-react";
 import api from "../../api/axios";
 
 type Booking = {
@@ -40,6 +40,79 @@ function ViewAllBookings() {
   const [statusFilter, setStatusFilter] = useState<string>("ALL");
   const [dateFilter, setDateFilter] = useState<string>("");
   const [marking, setMarking] = useState<string | null>(null);
+  const [cancelling, setCancelling] = useState<string | null>(null);
+
+  type EditState = {
+    booking: Booking;
+    slotDate: string;
+    startTime: string;
+    amount: string;
+    status: string;
+    ballCount: string;
+  };
+  const [editModal, setEditModal] = useState<EditState | null>(null);
+  const [editSaving, setEditSaving] = useState(false);
+  const [editError, setEditError] = useState("");
+
+  const cancelBooking = async (publicId: string, playerName: string) => {
+    if (
+      !window.confirm(
+        `Delete booking for "${playerName}"?\n\nThe row will be permanently removed from this list. Any subscription sessions used will be reversed.`,
+      )
+    )
+      return;
+    setCancelling(publicId);
+    try {
+      await api.delete(`/admin/bookings/${publicId}`);
+      setBookings((prev) => prev.filter((b) => b.bookingPublicId !== publicId));
+    } catch (e: any) {
+      alert(e?.response?.data?.message || "Failed to delete booking");
+    } finally {
+      setCancelling(null);
+    }
+  };
+
+  const openEditModal = (booking: Booking) => {
+    setEditError("");
+    setEditModal({
+      booking,
+      slotDate: booking.slotDate || "",
+      startTime: booking.startTime ? booking.startTime.substring(0, 5) : "",
+      amount: booking.amount != null ? String(booking.amount) : "",
+      status: booking.status,
+      ballCount: booking.ballCount != null ? String(booking.ballCount) : "",
+    });
+  };
+
+  const saveEdit = async () => {
+    if (!editModal) return;
+    setEditSaving(true);
+    setEditError("");
+    try {
+      const res = await api.patch(
+        `/admin/bookings/${editModal.booking.bookingPublicId}/edit`,
+        {
+          slotDate: editModal.slotDate || null,
+          startTime: editModal.startTime ? editModal.startTime + ":00" : null,
+          amount: editModal.amount ? parseFloat(editModal.amount) : null,
+          status: editModal.status || null,
+          ballCount: editModal.ballCount ? parseInt(editModal.ballCount) : null,
+        },
+      );
+      setBookings((prev) =>
+        prev.map((b) =>
+          b.bookingPublicId === editModal.booking.bookingPublicId
+            ? { ...b, ...res.data }
+            : b,
+        ),
+      );
+      setEditModal(null);
+    } catch (e: any) {
+      setEditError(e?.response?.data?.message || "Failed to save changes");
+    } finally {
+      setEditSaving(false);
+    }
+  };
 
   const markAsPaid = async (publicId: string) => {
     if (!window.confirm("Mark this booking as paid and confirm the slot?"))
@@ -566,6 +639,33 @@ function ViewAllBookings() {
                               <Download size={12} /> Receipt
                             </button>
                           )}
+                          {booking.status !== "CANCELLED" &&
+                            booking.status !== "COMPLETED" && (
+                              <button
+                                onClick={() => openEditModal(booking)}
+                                className="flex items-center gap-1 border border-gray-300 text-gray-600 px-3 py-1.5 rounded-lg text-xs font-semibold hover:bg-gray-50 transition"
+                              >
+                                <Pencil size={11} /> Edit
+                              </button>
+                            )}
+                          {booking.status !== "CANCELLED" &&
+                            booking.status !== "COMPLETED" && (
+                              <button
+                                onClick={() =>
+                                  cancelBooking(
+                                    booking.bookingPublicId,
+                                    booking.playerName,
+                                  )
+                                }
+                                disabled={cancelling === booking.bookingPublicId}
+                                className="flex items-center gap-1 border border-red-200 text-red-600 px-3 py-1.5 rounded-lg text-xs font-semibold hover:bg-red-50 transition disabled:opacity-50"
+                              >
+                                <Trash2 size={11} />
+                                {cancelling === booking.bookingPublicId
+                                  ? "..."
+                                  : "Delete"}
+                              </button>
+                            )}
                         </div>
                       </td>
                     </tr>
@@ -600,9 +700,9 @@ function ViewAllBookings() {
                       </span>
                     )}
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 flex-wrap">
                     {getPaymentBadge(booking.paymentStatus)}
-                    <div className="ml-auto flex gap-2">
+                    <div className="ml-auto flex gap-2 flex-wrap justify-end">
                       {booking.status === "PENDING_PAYMENT" && (
                         <button
                           onClick={() => markAsPaid(booking.bookingPublicId)}
@@ -635,6 +735,33 @@ function ViewAllBookings() {
                           <Download size={11} /> Receipt
                         </button>
                       )}
+                      {booking.status !== "CANCELLED" &&
+                        booking.status !== "COMPLETED" && (
+                          <button
+                            onClick={() => openEditModal(booking)}
+                            className="border border-gray-300 text-gray-600 px-3 py-1.5 rounded-lg text-xs font-semibold hover:bg-gray-50 transition flex items-center gap-1"
+                          >
+                            <Pencil size={11} /> Edit
+                          </button>
+                        )}
+                      {booking.status !== "CANCELLED" &&
+                        booking.status !== "COMPLETED" && (
+                          <button
+                            onClick={() =>
+                              cancelBooking(
+                                booking.bookingPublicId,
+                                booking.playerName,
+                              )
+                            }
+                            disabled={cancelling === booking.bookingPublicId}
+                            className="border border-red-200 text-red-600 px-3 py-1.5 rounded-lg text-xs font-semibold hover:bg-red-50 transition flex items-center gap-1 disabled:opacity-50"
+                          >
+                            <Trash2 size={11} />
+                            {cancelling === booking.bookingPublicId
+                              ? "..."
+                              : "Delete"}
+                          </button>
+                        )}
                     </div>
                   </div>
                 </div>
@@ -643,6 +770,163 @@ function ViewAllBookings() {
           </>
         )}
       </div>
+
+      {/* ── EDIT MODAL ── */}
+      {editModal && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center px-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6 space-y-5">
+            <div className="flex items-center justify-between">
+              <h3 className="font-bold text-gray-900 text-lg">Edit Booking</h3>
+              <button
+                onClick={() => setEditModal(null)}
+                className="text-gray-400 hover:text-gray-600 text-lg leading-none"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="bg-gray-50 rounded-xl p-3 text-sm space-y-1">
+              <p>
+                <span className="text-gray-500">Booker:</span>{" "}
+                <strong>{editModal.booking.playerName}</strong>
+              </p>
+              <p>
+                <span className="text-gray-500">Resource:</span>{" "}
+                <strong>{editModal.booking.resourceType}</strong>
+                {editModal.booking.ballCount && (
+                  <span className="text-gray-500">
+                    {" "}
+                    · {editModal.booking.ballCount} balls
+                  </span>
+                )}
+              </p>
+            </div>
+
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Date
+                  </label>
+                  <input
+                    type="date"
+                    value={editModal.slotDate}
+                    onChange={(e) =>
+                      setEditModal({ ...editModal, slotDate: e.target.value })
+                    }
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Start Time
+                  </label>
+                  <input
+                    type="time"
+                    value={editModal.startTime}
+                    onChange={(e) =>
+                      setEditModal({ ...editModal, startTime: e.target.value })
+                    }
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Amount (₹)
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="any"
+                    value={editModal.amount}
+                    onChange={(e) =>
+                      setEditModal({ ...editModal, amount: e.target.value })
+                    }
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="e.g. 500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Status
+                  </label>
+                  <select
+                    value={editModal.status}
+                    onChange={(e) =>
+                      setEditModal({ ...editModal, status: e.target.value })
+                    }
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="CONFIRMED">Confirmed</option>
+                    <option value="PENDING_PAYMENT">Pending Payment</option>
+                    <option value="PENDING_CONFIRMATION">Pending Play</option>
+                  </select>
+                </div>
+              </div>
+
+              {editModal.booking.resourceType === "BOWLING_MACHINE" && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Ball Count
+                  </label>
+                  <div className="grid grid-cols-4 gap-2">
+                    {([60, 120, 180, 240] as const).map((bc) => (
+                      <button
+                        key={bc}
+                        type="button"
+                        onClick={() => setEditModal({ ...editModal, ballCount: String(bc) })}
+                        className={`py-2 rounded-lg text-sm font-bold border transition ${
+                          editModal.ballCount === String(bc)
+                            ? "bg-blue-600 text-white border-blue-600"
+                            : "border-gray-300 text-gray-600 hover:bg-gray-50"
+                        }`}
+                      >
+                        {bc}
+                        <span className="block text-[10px] font-normal opacity-75">{bc / 60} sess.</span>
+                      </button>
+                    ))}
+                  </div>
+                  {editModal.ballCount && (
+                    <p className="text-xs text-gray-400 mt-1">
+                      {editModal.ballCount} balls = {Math.round(parseInt(editModal.ballCount) / 60)} session(s)
+                    </p>
+                  )}
+                </div>
+              )}
+
+              <p className="text-xs text-gray-400">
+                Changing date/time re-points the booking to the slot at that
+                time. Amount update also syncs the linked payment record.
+              </p>
+            </div>
+
+            {editError && (
+              <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3 text-sm text-red-700">
+                {editError}
+              </div>
+            )}
+
+            <div className="flex gap-3 pt-1">
+              <button
+                onClick={() => setEditModal(null)}
+                className="flex-1 border border-gray-200 text-gray-600 py-2.5 rounded-xl text-sm font-semibold hover:bg-gray-50 transition"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={saveEdit}
+                disabled={editSaving}
+                className="flex-1 bg-blue-600 text-white py-2.5 rounded-xl text-sm font-semibold hover:bg-blue-700 transition disabled:opacity-50"
+              >
+                {editSaving ? "Saving…" : "Save Changes"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {playedModal && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center px-4">

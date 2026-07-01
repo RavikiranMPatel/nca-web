@@ -109,7 +109,9 @@ function UpdatePlayer() {
         exclude: val,
       });
       toast.success(
-        val ? "Excluded from attendance tracking" : "Included in attendance tracking",
+        val
+          ? "Excluded from attendance tracking"
+          : "Included in attendance tracking",
       );
     } catch {
       setFormData((prev) => ({ ...prev, excludeFromAttendance: !val }));
@@ -155,13 +157,19 @@ function UpdatePlayer() {
       pixelCrop.height,
     );
     return new Promise((resolve, reject) => {
-      canvas.toBlob((blob) => {
-        if (!blob) {
-          reject(new Error("Failed to process image — try a different photo"));
-          return;
-        }
-        resolve(blob);
-      }, "image/jpeg", quality);
+      canvas.toBlob(
+        (blob) => {
+          if (!blob) {
+            reject(
+              new Error("Failed to process image — try a different photo"),
+            );
+            return;
+          }
+          resolve(blob);
+        },
+        "image/jpeg",
+        quality,
+      );
     });
   };
 
@@ -169,7 +177,11 @@ function UpdatePlayer() {
     if (!croppedAreaPixels || !tempPhotoUrl) return;
     try {
       const MAX_UPLOAD_SIZE = 4 * 1024 * 1024;
-      let croppedBlob = await getCroppedImg(tempPhotoUrl, croppedAreaPixels, 0.85);
+      let croppedBlob = await getCroppedImg(
+        tempPhotoUrl,
+        croppedAreaPixels,
+        0.85,
+      );
 
       if (croppedBlob.size > MAX_UPLOAD_SIZE) {
         croppedBlob = await getCroppedImg(tempPhotoUrl, croppedAreaPixels, 0.7);
@@ -198,20 +210,30 @@ function UpdatePlayer() {
   };
 
   const handlePhotoChange = (file: File | null) => {
+    if (tempPhotoUrl) URL.revokeObjectURL(tempPhotoUrl); // clean up previous
+
     if (!file) {
       setPhotoFile(null);
       setPhotoPreview("");
       setTempPhotoUrl("");
       return;
     }
-    const reader = new FileReader();
-    reader.onloadend = () => {
-      setTempPhotoUrl(reader.result as string);
-      setShowCropper(true);
-      setCrop({ x: 0, y: 0 });
-      setZoom(1);
-    };
-    reader.readAsDataURL(file);
+
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error("Image size must be less than 5MB");
+      return;
+    }
+
+    if (!file.type.match(/^image\/(jpeg|jpg|png|webp)$/)) {
+      toast.error("Only JPG, PNG, and WebP images are supported");
+      return;
+    }
+
+    const objectUrl = URL.createObjectURL(file);
+    setTempPhotoUrl(objectUrl);
+    setShowCropper(true);
+    setCrop({ x: 0, y: 0 });
+    setZoom(1);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -391,6 +413,7 @@ function UpdatePlayer() {
                   type="button"
                   onClick={() => {
                     setShowCropper(false);
+                    if (tempPhotoUrl) URL.revokeObjectURL(tempPhotoUrl);
                     setTempPhotoUrl("");
                   }}
                   className="flex-1 py-2.5 text-sm font-medium text-slate-600 bg-slate-100 rounded-lg hover:bg-slate-200 transition"

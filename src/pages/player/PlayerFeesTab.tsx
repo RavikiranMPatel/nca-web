@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useParams } from "react-router-dom";
 import {
   IndianRupee,
@@ -56,6 +56,14 @@ type FeePayment = {
   reversedPaymentPublicId?: string;
 };
 
+type InstPlanSummary = {
+  publicId: string;
+  totalAmount: number;
+  paidAmount: number;
+  status: string;
+  installments: unknown[];
+};
+
 // ── NEW: Registration Fee type ──
 type RegFeeStatus = {
   playerPublicId: string;
@@ -92,10 +100,19 @@ function PlayerFeesTab() {
   const [receiptPhone, setReceiptPhone] = useState("");
   const [sendingReceipt, setSendingReceipt] = useState(false);
 
+  // ── Installment plan summary (for disabling Mark as Paid) ──
+  const [instPlans, setInstPlans] = useState<InstPlanSummary[]>([]);
+  const [syncingAccount, setSyncingAccount] = useState(false);
+
   // ── Edit Due Date state ──
   const [showEditDueDate, setShowEditDueDate] = useState(false);
   const [editDueDateValue, setEditDueDateValue] = useState("");
   const [savingDueDate, setSavingDueDate] = useState(false);
+
+  // ── Edit Last Paid state ──
+  const [showEditLastPaid, setShowEditLastPaid] = useState(false);
+  const [editLastPaidValue, setEditLastPaidValue] = useState("");
+  const [savingLastPaid, setSavingLastPaid] = useState(false);
 
   // ── NEW: Registration Fee state ──
   const [regFee, setRegFee] = useState<RegFeeStatus | null>(null);
@@ -140,6 +157,24 @@ function PlayerFeesTab() {
       toast.error(err.response?.data?.message || "Failed to update date");
     } finally {
       setSavingDate(false);
+    }
+  };
+
+  // ── Edit Last Paid handler ──
+  const handleUpdateLastPaid = async () => {
+    if (!account || !editLastPaidValue) return;
+    setSavingLastPaid(true);
+    try {
+      await api.patch(
+        `/admin/fees/accounts/${account.publicId}/last-paid?lastPaidOn=${editLastPaidValue}`,
+      );
+      toast.success("Last paid date updated!");
+      setShowEditLastPaid(false);
+      loadAll();
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || "Failed to update last paid date");
+    } finally {
+      setSavingLastPaid(false);
     }
   };
 
@@ -226,14 +261,20 @@ function PlayerFeesTab() {
   const loadAll = async () => {
     setLoading(true);
     try {
-      const [accountRes, paymentsRes, plansRes, regFeeRes] = await Promise.all([
-        api.get(`/admin/fees/accounts/${playerPublicId}`).catch(() => null),
-        api
-          .get(`/admin/fees/payments?playerPublicId=${playerPublicId}`)
-          .catch(() => ({ data: [] })),
-        api.get("/admin/fees/plans/active"),
-        api.get("/admin/fees/registration-fees").catch(() => ({ data: [] })),
-      ]);
+      const [accountRes, paymentsRes, plansRes, regFeeRes, instPlansRes] =
+        await Promise.all([
+          api.get(`/admin/fees/accounts/${playerPublicId}`).catch(() => null),
+          api
+            .get(`/admin/fees/payments?playerPublicId=${playerPublicId}`)
+            .catch(() => ({ data: [] })),
+          api.get("/admin/fees/plans/active"),
+          api
+            .get("/admin/fees/registration-fees")
+            .catch(() => ({ data: [] })),
+          api
+            .get(`/admin/fee-installments/player/${playerPublicId}`)
+            .catch(() => ({ data: [] })),
+        ]);
       if (accountRes && accountRes.status === 200 && accountRes.data) {
         setAccount(accountRes.data);
       } else {
@@ -241,6 +282,7 @@ function PlayerFeesTab() {
       }
       setPayments(paymentsRes.data || []);
       setPlans(plansRes.data || []);
+      setInstPlans(instPlansRes.data || []);
       // ── NEW: find this player's reg fee ──
       const allRegFees: RegFeeStatus[] = regFeeRes.data || [];
       setRegFee(
@@ -431,6 +473,40 @@ function PlayerFeesTab() {
     return Math.ceil((due.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
   };
 
+  // ── Installment-completion guard — must be declared before ANY early return ──
+  // Checks independently of account.status so stale accounts are caught even when
+  // the server hasn't resynced yet. Null-safe: returns null when account is null.
+  const blockingInstPlan = useMemo(
+    () =>
+      account
+        ? (instPlans.find(
+            (p) =>
+              p.status === "COMPLETED" &&
+              p.paidAmount >= (account.feePlan?.finalAmount ?? Infinity),
+          ) ?? null)
+        : null,
+    [instPlans, account],
+  );
+
+  // Auto-resync: when a blocking plan is detected and account isn't PAID yet,
+  // call the backend to anchor lastPaidOn to the actual first installment date.
+  // Shows a toast on failure so the admin knows to use "Edit Last Paid" manually.
+  useEffect(() => {
+    if (!blockingInstPlan || !account || account.status === "PAID" || syncingAccount)
+      return;
+    setSyncingAccount(true);
+    api
+      .post(`/admin/fees/accounts/${account.publicId}/sync-from-installments`)
+      .then(() => loadAll())
+      .catch(() =>
+        toast.error(
+          "Auto-resync failed — use 'Edit Last Paid' to correct dates manually",
+        ),
+      )
+      .finally(() => setSyncingAccount(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [blockingInstPlan?.publicId, account?.publicId, account?.status]);
+
   if (loading) {
     return (
       <div className="flex justify-center py-16">
@@ -597,7 +673,22 @@ function PlayerFeesTab() {
         </div>
 
         <div className="flex flex-col sm:flex-row gap-2">
-          {account.status !== "PAID" ? (
+          {blockingInstPlan ? (
+            <div className="flex-1 space-y-1.5">
+              <button
+                disabled
+                className="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-slate-100 text-slate-400 border border-slate-200 rounded-lg font-medium text-sm cursor-not-allowed"
+              >
+                <CheckCircle2 size={16} /> Mark as Paid
+              </button>
+              <p className="text-xs text-emerald-700 bg-emerald-50 border border-emerald-100 rounded-lg px-3 py-2 text-center leading-relaxed">
+                Fully paid via installment plan — ₹
+                {blockingInstPlan.paidAmount.toLocaleString("en-IN")} collected
+                across {blockingInstPlan.installments.length} installment
+                {blockingInstPlan.installments.length !== 1 ? "s" : ""}
+              </p>
+            </div>
+          ) : account.status !== "PAID" ? (
             <button
               onClick={() => {
                 resetPayForm();
@@ -634,6 +725,17 @@ function PlayerFeesTab() {
             className="flex-1 sm:flex-none inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-white text-slate-700 border border-slate-200 rounded-lg font-medium hover:bg-slate-50 transition text-sm"
           >
             <Calendar size={15} /> Edit Due Date
+          </button>
+          <button
+            onClick={() => {
+              setEditLastPaidValue(
+                account.lastPaidOn ? account.lastPaidOn.split("T")[0] : ""
+              );
+              setShowEditLastPaid(true);
+            }}
+            className="flex-1 sm:flex-none inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-white text-slate-700 border border-slate-200 rounded-lg font-medium hover:bg-slate-50 transition text-sm"
+          >
+            <Clock size={15} /> Edit Last Paid
           </button>
         </div>
       </div>
@@ -1449,6 +1551,54 @@ function PlayerFeesTab() {
                   className="flex-1 py-2.5 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-50"
                 >
                   {savingDueDate ? "Saving…" : "Save Due Date"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── EDIT LAST PAID MODAL ── */}
+      {showEditLastPaid && account && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center">
+          <div className="bg-white rounded-t-2xl sm:rounded-xl shadow-xl w-full sm:max-w-sm">
+            <div className="flex items-center justify-between px-5 py-4 border-b bg-slate-50 rounded-t-2xl sm:rounded-t-xl">
+              <div>
+                <h3 className="font-bold text-slate-800">Edit Last Paid Date</h3>
+                <p className="text-xs text-slate-500">{account.feePlan.name}</p>
+              </div>
+              <button onClick={() => setShowEditLastPaid(false)}>
+                <X size={18} className="text-slate-400" />
+              </button>
+            </div>
+            <div className="p-5 space-y-4">
+              <div>
+                <label className="text-xs font-semibold text-slate-600 block mb-1.5">
+                  Last Paid Date *
+                </label>
+                <input
+                  type="date"
+                  value={editLastPaidValue}
+                  onChange={(e) => setEditLastPaidValue(e.target.value)}
+                  className="w-full px-4 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+              <p className="text-xs text-amber-600 bg-amber-50 rounded-lg px-3 py-2">
+                This corrects the recorded payment date only. Account status is re-derived from the next due date — if the account still shows as DUE or OVERDUE after saving, also update the due date using "Edit Due Date".
+              </p>
+              <div className="flex gap-2 pt-1">
+                <button
+                  onClick={() => setShowEditLastPaid(false)}
+                  className="flex-1 py-2.5 text-sm font-medium text-slate-600 bg-slate-100 rounded-lg hover:bg-slate-200"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleUpdateLastPaid}
+                  disabled={savingLastPaid || !editLastPaidValue}
+                  className="flex-1 py-2.5 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-50"
+                >
+                  {savingLastPaid ? "Saving…" : "Save Last Paid"}
                 </button>
               </div>
             </div>

@@ -101,28 +101,32 @@ function Section({
   );
 }
 
-async function compressImage(file: File): Promise<File> {
-  return new Promise((resolve) => {
-    const img = new Image();
-    const url = URL.createObjectURL(file);
-    img.onload = () => {
-      URL.revokeObjectURL(url);
-      const scale = Math.min(1, 1200 / Math.max(img.width, img.height));
-      const canvas = document.createElement("canvas");
-      canvas.width = img.width * scale;
-      canvas.height = img.height * scale;
-      const ctx = canvas.getContext("2d");
-      if (!ctx) {
-        resolve(file);
-        return;
-      } // fallback to original
-      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+async function compressImage(
+  file: File,
+  maxDim = 1200,
+  quality = 0.85,
+): Promise<File> {
+  try {
+    const bitmap = await createImageBitmap(file);
+    const scale = Math.min(1, maxDim / Math.max(bitmap.width, bitmap.height));
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.round(bitmap.width * scale);
+    canvas.height = Math.round(bitmap.height * scale);
+    const ctx = canvas.getContext("2d");
+    if (!ctx) {
+      bitmap.close();
+      return file;
+    }
+    ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+    bitmap.close();
+
+    return await new Promise((resolve) => {
       canvas.toBlob(
         (blob) => {
           if (!blob) {
             resolve(file);
             return;
-          } // fallback to original
+          }
           resolve(
             new File([blob], file.name.replace(/\.[^.]+$/, ".jpg"), {
               type: "image/jpeg",
@@ -130,11 +134,12 @@ async function compressImage(file: File): Promise<File> {
           );
         },
         "image/jpeg",
-        0.85,
+        quality,
       );
-    };
-    img.src = url;
-  });
+    });
+  } catch {
+    return file; // fallback if createImageBitmap unsupported/fails
+  }
 }
 
 function PlayerForm({

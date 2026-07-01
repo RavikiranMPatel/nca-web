@@ -12,6 +12,8 @@ type Slot = {
   price: number;
   price60Balls: number | null;
   price120Balls: number | null;
+  price180Balls: number | null;
+  price240Balls: number | null;
   slotType: "MORNING" | "AFTERNOON" | "EVENING";
   lightsRequired: boolean;
 };
@@ -84,11 +86,13 @@ export default function AdminManualBooking() {
       price: number;
       price60Balls: number | null;
       price120Balls: number | null;
+      price180Balls: number | null;
+      price240Balls: number | null;
     }[]
   >([]);
   const [pastSlotsLoading, setPastSlotsLoading] = useState(false);
   // ── NEW: past session extra fields ──
-  const [pastBallCount, setPastBallCount] = useState<60 | 120 | null>(null);
+  const [pastBallCount, setPastBallCount] = useState<60 | 120 | 180 | 240 | null>(null);
   const [pastAmount, setPastAmount] = useState("");
   const [pastPaymentMode, setPastPaymentMode] = useState("CASH");
 
@@ -117,7 +121,7 @@ export default function AdminManualBooking() {
   // ── Step 3 – confirm ─────────────────────────────────────────────────────
   const [paymentStatus, setPaymentStatus] =
     useState<PaymentStatus>("CONFIRMED");
-  const [ballCount, setBallCount] = useState<60 | 120 | null>(null);
+  const [ballCount, setBallCount] = useState<60 | 120 | 180 | 240 | null>(null);
   const [notes, setNotes] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState("");
@@ -142,11 +146,14 @@ export default function AdminManualBooking() {
     if (!pastBallCount || pastSlots.length === 0 || !pastTime) return;
     const slot = pastSlots.find((s) => s.startTime + ":00" === pastTime);
     if (!slot) return;
-    if (pastBallCount === 60 && slot.price60Balls) {
-      setPastAmount(String(slot.price60Balls));
-    } else if (pastBallCount === 120 && slot.price120Balls) {
-      setPastAmount(String(slot.price120Balls));
-    }
+    const priceMap: Record<60 | 120 | 180 | 240, number | null> = {
+      60:  slot.price60Balls,
+      120: slot.price120Balls,
+      180: slot.price180Balls,
+      240: slot.price240Balls,
+    };
+    const price = priceMap[pastBallCount];
+    if (price) setPastAmount(String(price));
   }, [pastBallCount, pastTime, pastSlots]);
 
   // ── Fetch past slots ──────────────────────────────────────────────────────
@@ -172,6 +179,8 @@ export default function AdminManualBooking() {
               price: s.price,
               price60Balls: s.price60Balls ?? null,
               price120Balls: s.price120Balls ?? null,
+              price180Balls: s.price180Balls ?? null,
+              price240Balls: s.price240Balls ?? null,
             })),
           );
         } else {
@@ -244,12 +253,15 @@ export default function AdminManualBooking() {
             availableCount: s.availableCount,
             price:
               resource === "BOWLING_MACHINE"
-                ? ballCount === 60
-                  ? s.price60Balls
-                  : s.price120Balls
+                ? ballCount === 60  ? s.price60Balls
+                : ballCount === 120 ? s.price120Balls
+                : ballCount === 180 ? s.price180Balls
+                : s.price240Balls
                 : s.price,
             price60Balls: s.price60Balls ?? null,
             price120Balls: s.price120Balls ?? null,
+            price180Balls: s.price180Balls ?? null,
+            price240Balls: s.price240Balls ?? null,
             slotType: s.slotType,
             lightsRequired: s.lightsRequired,
           })),
@@ -262,7 +274,7 @@ export default function AdminManualBooking() {
       }
     };
     run();
-  }, [date, resource]);
+  }, [date, resource, ballCount]);
 
   // ── User search ───────────────────────────────────────────────────────────
   const searchUsers = useCallback(async (q: string) => {
@@ -555,8 +567,15 @@ export default function AdminManualBooking() {
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     Session *
                   </label>
-                  <div className="grid grid-cols-2 gap-3 sm:max-w-sm">
-                    {([60, 120] as const).map((b) => (
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                    {(
+                      [
+                        { b: 60,  label: "15 mins · 1 session" },
+                        { b: 120, label: "30 mins · 2 sessions" },
+                        { b: 180, label: "45 mins · 3 sessions" },
+                        { b: 240, label: "60 mins · 4 sessions" },
+                      ] as const
+                    ).map(({ b, label }) => (
                       <button
                         key={b}
                         onClick={() => setPastBallCount(b)}
@@ -567,11 +586,7 @@ export default function AdminManualBooking() {
                         >
                           {b} balls
                         </p>
-                        <p className="text-xs text-gray-500 mt-0.5">
-                          {b === 60
-                            ? "15 mins · 1 session"
-                            : "30 mins · 2 sessions"}
-                        </p>
+                        <p className="text-xs text-gray-500 mt-0.5">{label}</p>
                       </button>
                     ))}
                   </div>
@@ -825,17 +840,22 @@ export default function AdminManualBooking() {
               <label className="block text-sm font-medium text-gray-700 mb-3">
                 Select Session *
               </label>
-              <div className="grid grid-cols-2 gap-3">
-                {([60, 120] as const).map((b) => (
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                {(
+                  [
+                    { b: 60,  sub: "balls · 15 mins · 1 session" },
+                    { b: 120, sub: "balls · 30 mins · 2 sessions" },
+                    { b: 180, sub: "balls · 45 mins · 3 sessions" },
+                    { b: 240, sub: "balls · 60 mins · 4 sessions" },
+                  ] as const
+                ).map(({ b, sub }) => (
                   <button
                     key={b}
                     onClick={() => setBallCount(b)}
                     className={`py-4 rounded-xl border-2 text-center transition ${ballCount === b ? "border-blue-600 bg-blue-50" : "border-gray-200 hover:border-blue-300"}`}
                   >
                     <p className="text-xl font-bold text-blue-700">{b}</p>
-                    <p className="text-xs text-gray-500 mt-0.5">
-                      {b === 60 ? "balls · 15 mins" : "balls · 30 mins"}
-                    </p>
+                    <p className="text-xs text-gray-500 mt-0.5">{sub}</p>
                   </button>
                 ))}
               </div>
@@ -1179,12 +1199,24 @@ export default function AdminManualBooking() {
                 {resource === "BOWLING_MACHINE" && ballCount && (
                   <SummaryRow
                     label="Session"
-                    value={`${ballCount} balls (${ballCount === 60 ? "15 mins" : "30 mins"})`}
+                    value={`${ballCount} balls (${
+                      ballCount === 60  ? "15 mins · 1 session" :
+                      ballCount === 120 ? "30 mins · 2 sessions" :
+                      ballCount === 180 ? "45 mins · 3 sessions" :
+                                         "60 mins · 4 sessions"
+                    })`}
                   />
                 )}
                 <SummaryRow
                   label="Amount"
-                  value={`₹${resource === "BOWLING_MACHINE" ? (ballCount === 60 ? (selectedSlot?.price60Balls ?? selectedSlot?.price ?? 0) : (selectedSlot?.price120Balls ?? selectedSlot?.price ?? 0)) : (selectedSlot?.price ?? 0)}`}
+                  value={`₹${
+                    resource === "BOWLING_MACHINE"
+                      ? ballCount === 60  ? (selectedSlot?.price60Balls  ?? selectedSlot?.price ?? 0)
+                      : ballCount === 120 ? (selectedSlot?.price120Balls ?? selectedSlot?.price ?? 0)
+                      : ballCount === 180 ? (selectedSlot?.price180Balls ?? selectedSlot?.price ?? 0)
+                      :                     (selectedSlot?.price240Balls ?? selectedSlot?.price ?? 0)
+                      : (selectedSlot?.price ?? 0)
+                  }`}
                 />
                 <SummaryRow
                   label="Booker"

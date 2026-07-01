@@ -18,6 +18,8 @@ type TemplateSlot = {
   price: number;
   price60Balls?: number;
   price120Balls?: number;
+  price180Balls?: number;
+  price240Balls?: number;
   lightsRequired: boolean;
   slotType: "MORNING" | "AFTERNOON" | "EVENING";
   displayOrder: number;
@@ -57,6 +59,8 @@ function CreateEditTemplate() {
 
   const [bulkPrice60, setBulkPrice60] = useState("");
   const [bulkPrice120, setBulkPrice120] = useState("");
+  const [bulkPrice180, setBulkPrice180] = useState("");
+  const [bulkPrice240, setBulkPrice240] = useState("");
   const [bulkPrice, setBulkPrice] = useState("");
 
   const applyBulkPrices = () => {
@@ -70,6 +74,12 @@ function CreateEditTemplate() {
             price120Balls: bulkPrice120
               ? parseFloat(bulkPrice120)
               : slot.price120Balls,
+            price180Balls: bulkPrice180
+              ? parseFloat(bulkPrice180)
+              : slot.price180Balls,
+            price240Balls: bulkPrice240
+              ? parseFloat(bulkPrice240)
+              : slot.price240Balls,
           }
         : {
             price: bulkPrice ? parseFloat(bulkPrice) : slot.price,
@@ -78,6 +88,8 @@ function CreateEditTemplate() {
     setFormData({ ...formData, slots: newSlots });
     setBulkPrice60("");
     setBulkPrice120("");
+    setBulkPrice180("");
+    setBulkPrice240("");
     setBulkPrice("");
   };
 
@@ -239,6 +251,8 @@ function CreateEditTemplate() {
     end: number,
     p60: number,
     p120: number,
+    p180?: number,
+    p240?: number,
   ): TemplateSlot[] => {
     const slots: TemplateSlot[] = [];
     for (let totalMin = start * 60; totalMin < end * 60; totalMin += 15) {
@@ -257,6 +271,8 @@ function CreateEditTemplate() {
         price: 0,
         price60Balls: p60,
         price120Balls: p120,
+        ...(p180 !== undefined ? { price180Balls: p180 } : {}),
+        ...(p240 !== undefined ? { price240Balls: p240 } : {}),
         lightsRequired: hour >= 17,
         slotType,
         displayOrder: slots.length + 1,
@@ -626,6 +642,34 @@ function CreateEditTemplate() {
                       step="any"
                     />
                   </div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-xs text-gray-600 whitespace-nowrap">
+                      ₹ 180 balls
+                    </span>
+                    <input
+                      type="number"
+                      value={bulkPrice180}
+                      onChange={(e) => setBulkPrice180(e.target.value)}
+                      className="border rounded px-2 py-1 text-sm w-20"
+                      placeholder="optional"
+                      min="0"
+                      step="any"
+                    />
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-xs text-gray-600 whitespace-nowrap">
+                      ₹ 240 balls
+                    </span>
+                    <input
+                      type="number"
+                      value={bulkPrice240}
+                      onChange={(e) => setBulkPrice240(e.target.value)}
+                      className="border rounded px-2 py-1 text-sm w-20"
+                      placeholder="optional"
+                      min="0"
+                      step="any"
+                    />
+                  </div>
                 </>
               ) : (
                 <div className="flex items-center gap-1.5">
@@ -851,6 +895,38 @@ function SlotRow({ slot, index, isBowling, onUpdate, onRemove }: SlotRowProps) {
               min="0"
               step="any"
               placeholder="500"
+            />
+          </div>
+          <div className="flex items-center gap-1.5">
+            <span className="text-xs text-gray-500 whitespace-nowrap">
+              ₹ 180 balls
+            </span>
+            <input
+              type="number"
+              value={slot.price180Balls ?? ""}
+              onChange={(e) =>
+                onUpdate(index, "price180Balls", e.target.value ? parseFloat(e.target.value) : undefined)
+              }
+              className="border rounded px-2 py-1 text-sm w-20"
+              min="0"
+              step="any"
+              placeholder="optional"
+            />
+          </div>
+          <div className="flex items-center gap-1.5">
+            <span className="text-xs text-gray-500 whitespace-nowrap">
+              ₹ 240 balls
+            </span>
+            <input
+              type="number"
+              value={slot.price240Balls ?? ""}
+              onChange={(e) =>
+                onUpdate(index, "price240Balls", e.target.value ? parseFloat(e.target.value) : undefined)
+              }
+              className="border rounded px-2 py-1 text-sm w-20"
+              min="0"
+              step="any"
+              placeholder="optional"
             />
           </div>
         </div>

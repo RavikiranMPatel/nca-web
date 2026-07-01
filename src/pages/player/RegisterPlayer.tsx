@@ -131,13 +131,19 @@ function RegisterPlayer() {
     );
 
     return new Promise((resolve, reject) => {
-      canvas.toBlob((blob) => {
-        if (!blob) {
-          reject(new Error("Failed to process image — try a different photo"));
-          return;
-        }
-        resolve(blob);
-      }, "image/jpeg", quality);
+      canvas.toBlob(
+        (blob) => {
+          if (!blob) {
+            reject(
+              new Error("Failed to process image — try a different photo"),
+            );
+            return;
+          }
+          resolve(blob);
+        },
+        "image/jpeg",
+        quality,
+      );
     });
   };
 
@@ -162,6 +168,8 @@ function RegisterPlayer() {
   };
 
   const handlePhotoChange = (file: File | null) => {
+    if (tempPhotoUrl) URL.revokeObjectURL(tempPhotoUrl); // clean up previous
+
     if (!file) {
       setPhotoFile(null);
       setPhotoPreview("");
@@ -179,14 +187,11 @@ function RegisterPlayer() {
       return;
     }
 
-    const reader = new FileReader();
-    reader.onloadend = () => {
-      setTempPhotoUrl(reader.result as string);
-      setShowCropper(true);
-      setCrop({ x: 0, y: 0 });
-      setZoom(1);
-    };
-    reader.readAsDataURL(file);
+    const objectUrl = URL.createObjectURL(file);
+    setTempPhotoUrl(objectUrl);
+    setShowCropper(true);
+    setCrop({ x: 0, y: 0 });
+    setZoom(1);
   };
 
   const applyCrop = async () => {
@@ -194,7 +199,11 @@ function RegisterPlayer() {
 
     try {
       const MAX_UPLOAD_SIZE = 4 * 1024 * 1024;
-      let croppedBlob = await getCroppedImg(tempPhotoUrl, croppedAreaPixels, 0.85);
+      let croppedBlob = await getCroppedImg(
+        tempPhotoUrl,
+        croppedAreaPixels,
+        0.85,
+      );
 
       if (croppedBlob.size > MAX_UPLOAD_SIZE) {
         croppedBlob = await getCroppedImg(tempPhotoUrl, croppedAreaPixels, 0.7);
@@ -568,6 +577,7 @@ function RegisterPlayer() {
                     variant="secondary"
                     onClick={() => {
                       setShowCropper(false);
+                      if (tempPhotoUrl) URL.revokeObjectURL(tempPhotoUrl);
                       setTempPhotoUrl("");
                     }}
                   >

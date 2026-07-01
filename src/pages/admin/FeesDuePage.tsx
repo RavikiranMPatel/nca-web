@@ -12,11 +12,22 @@ export default function FeesDuePage() {
   const [rows, setRows] = useState<FeeCollectionSummaryRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [resynced, setResynced] = useState<number | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
     setError("");
+    setResynced(null);
     try {
+      // Resync stale accounts first (idempotent — skips already-PAID accounts).
+      // This ensures any FeeAccount whose status hasn't caught up with a completed
+      // installment plan is corrected at the data level before we read the list.
+      const syncRes = await api
+        .post("/admin/fees/resync-installment-accounts")
+        .catch(() => null);
+      const syncCount: number = syncRes?.data?.resynced ?? 0;
+      if (syncCount > 0) setResynced(syncCount);
+
       const res = await api.get("/admin/fees/collection-summary");
       setRows(res.data || []);
     } catch {
@@ -52,6 +63,11 @@ export default function FeesDuePage() {
               {!loading && (
                 <p className="text-xs text-slate-400">
                   {overdueCnt} overdue · {dueCnt} due soon · {rows.length} total
+                  {resynced !== null && resynced > 0 && (
+                    <span className="ml-2 text-emerald-600 font-medium">
+                      · {resynced} account{resynced !== 1 ? "s" : ""} auto-corrected
+                    </span>
+                  )}
                 </p>
               )}
             </div>
