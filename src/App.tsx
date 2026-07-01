@@ -1,5 +1,5 @@
 import { Routes, Route, Navigate, useNavigate } from "react-router-dom";
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import Login from "./pages/Login";
 import Signup from "./pages/Signup";
 import Home from "./pages/Home";
@@ -81,18 +81,19 @@ import TournamentListPage from "./pages/scoring/TournamentListPage";
 import CricketStatsPage from "./pages/CricketStatsPage";
 import UmpireAssistPage from "./pages/umpire/UmpireAssistPage";
 import PlayerSignupPage from "./pages/PlayerSignupPage";
+import PlatformAdminLogin from "./platform-admin/pages/PlatformAdminLogin";
+import PlatformAdminDashboard from "./platform-admin/pages/PlatformAdminDashboard";
+import PlatformAdminAcademies from "./platform-admin/pages/PlatformAdminAcademies";
+import PlatformAdminServers from "./platform-admin/pages/PlatformAdminServers";
+import PlatformAdminBackups from "./platform-admin/pages/PlatformAdminBackups";
+import PlatformAdminEvents from "./platform-admin/pages/PlatformAdminEvents";
 
-// Add route after /my-bookings route:
-<Route
-  path="/my-subscription"
-  element={
-    <ProtectedRoute>
-      <AppLayout>
-        <MySubscription />
-      </AppLayout>
-    </ProtectedRoute>
-  }
-/>;
+// Guard for platform-admin routes: redirects to login if no key stored
+function PlatformAdminGuard({ children }: { children: ReactNode }) {
+  const key = localStorage.getItem('platformAdminKey');
+  if (!key) return <Navigate to="/platform-admin" replace />;
+  return <>{children}</>;
+}
 
 function App() {
   const [onboarded, setOnboarded] = useState<boolean | null>(null);
@@ -830,6 +831,29 @@ function App() {
       <Route
         path="/players/:playerPublicId/profile"
         element={<PublicPlayerProfilePage />}
+      />
+
+      {/* ================= PLATFORM ADMIN ================= */}
+      <Route path="/platform-admin" element={<PlatformAdminLogin />} />
+      <Route
+        path="/platform-admin/dashboard"
+        element={<PlatformAdminGuard><PlatformAdminDashboard /></PlatformAdminGuard>}
+      />
+      <Route
+        path="/platform-admin/academies"
+        element={<PlatformAdminGuard><PlatformAdminAcademies /></PlatformAdminGuard>}
+      />
+      <Route
+        path="/platform-admin/servers"
+        element={<PlatformAdminGuard><PlatformAdminServers /></PlatformAdminGuard>}
+      />
+      <Route
+        path="/platform-admin/backups"
+        element={<PlatformAdminGuard><PlatformAdminBackups /></PlatformAdminGuard>}
+      />
+      <Route
+        path="/platform-admin/events"
+        element={<PlatformAdminGuard><PlatformAdminEvents /></PlatformAdminGuard>}
       />
 
       {/* CATCH-ALL */}

@@ -4,6 +4,23 @@ const api = axios.create({
   baseURL: "/api",
 });
 
+// 🛠️ [DEV ONLY] Attach X-Tenant-ID from localStorage when running under Vite dev server.
+// Set it in the browser console: localStorage.setItem('devTenantOverride', 'academy2')
+// Clear it:                       localStorage.removeItem('devTenantOverride')
+// Never runs in production builds (import.meta.env.DEV is false after `vite build`).
+if (import.meta.env.DEV) {
+  api.interceptors.request.use(
+    (config) => {
+      const slug = localStorage.getItem("devTenantOverride");
+      if (slug) {
+        config.headers["X-Tenant-ID"] = slug;
+      }
+      return config;
+    },
+    (error) => Promise.reject(error),
+  );
+}
+
 // 🔐 Attach JWT to every request
 // NEW
 api.interceptors.request.use(
