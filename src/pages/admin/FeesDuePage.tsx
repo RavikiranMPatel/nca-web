@@ -13,6 +13,9 @@ export default function FeesDuePage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [resynced, setResynced] = useState<number | null>(null);
+  const [upiId, setUpiId] = useState("");
+  const [academyName, setAcademyName] = useState("");
+  const [bookingPhone, setBookingPhone] = useState("");
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -22,14 +25,18 @@ export default function FeesDuePage() {
       // Resync stale accounts first (idempotent — skips already-PAID accounts).
       // This ensures any FeeAccount whose status hasn't caught up with a completed
       // installment plan is corrected at the data level before we read the list.
-      const syncRes = await api
-        .post("/admin/fees/resync-installment-accounts")
-        .catch(() => null);
+      const [syncRes, settingsRes, summaryRes] = await Promise.all([
+        api.post("/admin/fees/resync-installment-accounts").catch(() => null),
+        api.get("/admin/settings").catch(() => null),
+        api.get("/admin/fees/collection-summary"),
+      ]);
       const syncCount: number = syncRes?.data?.resynced ?? 0;
       if (syncCount > 0) setResynced(syncCount);
-
-      const res = await api.get("/admin/fees/collection-summary");
-      setRows(res.data || []);
+      const s = settingsRes?.data ?? {};
+      setUpiId(s.UPI_ID?.trim() ?? "");
+      setAcademyName(s.ACADEMY_NAME?.trim() ?? "");
+      setBookingPhone(s.BOOKING_PHONE?.trim() ?? "");
+      setRows(summaryRes.data || []);
     } catch {
       setError("Failed to load fee data");
     } finally {
@@ -107,6 +114,9 @@ export default function FeesDuePage() {
             rows={rows}
             initialStatusFilter={searchParams.get("status")}
             onRefresh={load}
+            upiId={upiId}
+            academyName={academyName}
+            bookingPhone={bookingPhone}
           />
         )}
       </div>

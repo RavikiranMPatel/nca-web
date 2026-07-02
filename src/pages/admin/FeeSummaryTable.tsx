@@ -42,9 +42,19 @@ type Props = {
   rows: FeeCollectionSummaryRow[];
   initialStatusFilter?: string | null;
   onRefresh: () => Promise<void>;
+  upiId?: string;
+  academyName?: string;
+  bookingPhone?: string;
 };
 
-export function FeeSummaryTable({ rows, initialStatusFilter, onRefresh }: Props) {
+export function FeeSummaryTable({
+  rows,
+  initialStatusFilter,
+  onRefresh,
+  upiId,
+  academyName,
+  bookingPhone,
+}: Props) {
   const [feeStatusFilter, setFeeStatusFilter] = useState<StatusFilter>(() => {
     const s = (initialStatusFilter ?? "").toUpperCase();
     // Both ?status=DUE and ?status=OVERDUE resolve to the combined Due/Overdue tab.
@@ -95,12 +105,77 @@ export function FeeSummaryTable({ rows, initialStatusFilter, onRefresh }: Props)
 
   const whatsappHref = (row: FeeCollectionSummaryRow) => {
     const phone = (row.parentsPhone || row.phone || "").replace(/\D/g, "");
-    const msg = `Hi, this is a reminder that NextGen Cricket Academy fees are pending for ${row.playerName}. ${
+    const academy = academyName?.trim() || "NextGen Cricket Academy";
+
+    const WAVE   = "\u{1F44B}"; // 👋
+    const CAL    = "\u{1F4C5}"; // 📅
+    const CARD   = "\u{1F4B3}"; // 💳
+    const MONY   = "\u{1F4B0}"; // 💰
+    const PRAY   = "\u{1F64F}"; // 🙏
+    const CAMERA = "\u{1F4F8}"; // 📸
+
+    const dueLine =
       row.hasInstallmentPlan && row.installmentBalance
-        ? `Balance due: ₹${row.installmentBalance}.`
-        : `Due date: ${row.nextDueOn ? new Date(row.nextDueOn).toLocaleDateString("en-IN") : ""}.`
-    } Please pay at your earliest convenience. Thank you!`;
-    return `https://wa.me/91${phone}?text=${encodeURIComponent(msg)}`;
+        ? `${MONY} Balance: *₹${Number(row.installmentBalance).toLocaleString("en-IN")}*`
+        : `${CAL} Due: *${fmtDate(row.nextDueOn)}*`;
+
+    const upiLine = upiId?.trim() ? `\n${CARD} UPI: *${upiId.trim()}*` : "";
+
+    const closingLine = bookingPhone?.trim()
+      ? `Just a friendly reminder. Questions? Call *${bookingPhone.trim()}*.`
+      : "Just a friendly reminder.";
+
+    const msg = [
+      `Hi ${row.playerName} ${WAVE}`,
+      ``,
+      `*${academy}* fee reminder:`,
+      ``,
+      `${dueLine}${upiLine}\n${CAMERA} Please share a screenshot/UPI ref after paying — helps us confirm faster!`,
+      ``,
+      closingLine,
+      ``,
+      `Thank you! ${PRAY}`,
+      `- Team ${academy}`,
+    ].join("\n");
+
+    // ── DEBUG: open browser DevTools console before clicking ──────────────────
+    // Check 1: are the emoji intact in the JS string right before encoding?
+    const emojiCheck: Record<string, string> = {};
+    Array.from(msg).forEach((ch) => {
+      const cp = ch.codePointAt(0)!;
+      if (cp > 0x7f) {
+        emojiCheck[`U+${cp.toString(16).toUpperCase().padStart(5, "0")}`] = ch;
+      }
+    });
+    console.log("[WA-DEBUG] Non-ASCII chars in msg (should include all 5 emoji):", emojiCheck);
+
+    // Check 2: produce both encodings and compare
+    const encodedFull = encodeURIComponent(msg);
+    const encodedPerChar = Array.from(msg).map((c) => encodeURIComponent(c)).join("");
+    console.log("[WA-DEBUG] Full encodeURIComponent === per-char:", encodedFull === encodedPerChar);
+
+    // Check 3: confirm the correct 4-byte sequences are present
+    const expected: Record<string, string> = {
+      "👋": "%F0%9F%91%8B",
+      "📅": "%F0%9F%93%85",
+      "💳": "%F0%9F%92%B3",
+      "💰": "%F0%9F%92%B0",
+      "🙏": "%F0%9F%99%8F",
+      "📸": "%F0%9F%93%B8",
+    };
+    Object.entries(expected).forEach(([emoji, hex]) => {
+      console.log(`[WA-DEBUG] ${emoji} → ${hex}: ${encodedPerChar.includes(hex) ? "✅ PRESENT" : "❌ MISSING — corrupt encoding detected"}`);
+    });
+
+    const encoded = encodedPerChar;
+    // Check 4: log the full URL so you can paste it into the browser bar directly
+    console.log("[WA-DEBUG] Full URL:\n", `https://api.whatsapp.com/send/?phone=91${phone}&text=${encoded}`);
+    // ── END DEBUG ─────────────────────────────────────────────────────────────
+
+    // Use api.whatsapp.com/send directly — skips the wa.me redirect server which
+    // may corrupt multi-byte percent-encoded sequences during its server-side
+    // re-encoding step before handing off to WhatsApp Desktop/Web.
+    return `https://api.whatsapp.com/send/?phone=91${phone}&text=${encoded}`;
   };
 
   const openEditDueDate = (row: FeeCollectionSummaryRow) => {
