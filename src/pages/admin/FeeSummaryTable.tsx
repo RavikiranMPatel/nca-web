@@ -109,17 +109,31 @@ export function FeeSummaryTable({
 
     const WAVE   = "\u{1F44B}"; // 👋
     const CAL    = "\u{1F4C5}"; // 📅
-    const CARD   = "\u{1F4B3}"; // 💳
     const MONY   = "\u{1F4B0}"; // 💰
     const PRAY   = "\u{1F64F}"; // 🙏
     const CAMERA = "\u{1F4F8}"; // 📸
 
-    const dueLine =
-      row.hasInstallmentPlan && row.installmentBalance
-        ? `${MONY} Balance: *₹${Number(row.installmentBalance).toLocaleString("en-IN")}*`
-        : `${CAL} Due: *${fmtDate(row.nextDueOn)}*`;
+    // Real pending balance: installmentBalance covers partial-payment cases;
+    // planAmount is the fallback for non-installment accounts.
+    const amount = row.hasInstallmentPlan && row.installmentBalance
+      ? row.installmentBalance
+      : row.planAmount;
 
-    const upiLine = upiId?.trim() ? `\n${CARD} UPI: *${upiId.trim()}*` : "";
+    const dueLine   = `${CAL} Due date: *${fmtDate(row.nextDueOn)}*`;
+    const amountLine = `${MONY} Amount due: *₹${Number(amount).toLocaleString("en-IN")}*`;
+
+    const dueMonth = row.nextDueOn
+      ? new Date(row.nextDueOn)
+          .toLocaleString("en-US", { month: "short", year: "numeric" })
+          .replace(" ", "")
+      : "";
+    const safePn = encodeURIComponent(academy);
+    const tn = encodeURIComponent(
+      `Fee-${row.playerName.replace(/[^\w\s]/g, "").trim()}-${dueMonth}`,
+    );
+    const upiDeepLink = upiId?.trim()
+      ? `upi://pay?pa=${upiId.trim()}&pn=${safePn}&am=${amount}&cu=INR&tn=${tn}`
+      : "";
 
     const closingLine = bookingPhone?.trim()
       ? `Just a friendly reminder. Questions? Call *${bookingPhone.trim()}*.`
@@ -130,7 +144,10 @@ export function FeeSummaryTable({
       ``,
       `*${academy}* fee reminder:`,
       ``,
-      `${dueLine}${upiLine}\n${CAMERA} Please share a screenshot/UPI ref after paying — helps us confirm faster!`,
+      dueLine,
+      amountLine,
+      ...(upiDeepLink ? [upiDeepLink] : []),
+      `${CAMERA} Please share a screenshot/UPI ref after paying — helps us confirm faster!`,
       ``,
       closingLine,
       ``,
@@ -158,7 +175,6 @@ export function FeeSummaryTable({
     const expected: Record<string, string> = {
       "👋": "%F0%9F%91%8B",
       "📅": "%F0%9F%93%85",
-      "💳": "%F0%9F%92%B3",
       "💰": "%F0%9F%92%B0",
       "🙏": "%F0%9F%99%8F",
       "📸": "%F0%9F%93%B8",
