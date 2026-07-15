@@ -1,12 +1,24 @@
 import { useState, useRef, useEffect } from "react";
 
-const API_BASE = "https://cricket-api.ncamysuru.com";
+//const API_BASE = "https://cricket-api.ncamysuru.com";
+const API_BASE = "http://localhost:8000";
+
+const getPageImageUrl = (source: string, format: string | null, page: number) =>
+  `${API_BASE}/api/page-image?source=${source}&format=${format || ""}&page=${page}`;
+
+const getPageDownloadUrl = (
+  source: string,
+  format: string | null,
+  page: number,
+) =>
+  `${API_BASE}/api/page-download?source=${source}&format=${format || ""}&page=${page}`;
 
 // ─── Types ───────────────────────────────────────────────────
 interface Message {
   role: "user" | "assistant";
   content: string;
   sources?: Source[];
+  mode?: string;
 }
 
 interface CalcResult {
@@ -17,34 +29,379 @@ interface Source {
   source: string;
   format: string | null;
   page: number;
+  heading?: string;
   preview: string;
   full_text: string;
 }
 
-// ─── Source Card ─────────────────────────────────────────────
-function SourceCard({ source }: { source: Source }) {
-  const [expanded, setExpanded] = useState(false);
+// ─── PDF Viewer (Desktop right panel) ───────────────────────
+interface PDFSource {
+  source: string;
+  format: string | null;
+  page: number;
+  heading?: string;
+}
+
+function PDFViewer({
+  pdfSources,
+  activeTab,
+  onTabChange,
+}: {
+  pdfSources: PDFSource[];
+  activeTab: number;
+  onTabChange: (tab: number) => void;
+}) {
+  const [currentPages, setCurrentPages] = useState<Record<number, number>>({});
+  const [imageLoading, setImageLoading] = useState(false);
+  const [imageError, setImageError] = useState(false);
+
+  const sourceConfig: Record<
+    string,
+    {
+      emoji: string;
+      label: string;
+      color: string;
+      bg: string;
+    }
+  > = {
+    KSCA: {
+      emoji: "🏏",
+      label: "KSCA",
+      color: "text-green-700",
+      bg: "bg-green-50",
+    },
+    TomSmith: {
+      emoji: "📚",
+      label: "Tom Smith",
+      color: "text-amber-700",
+      bg: "bg-amber-50",
+    },
+    MCC: {
+      emoji: "📖",
+      label: "MCC",
+      color: "text-blue-700",
+      bg: "bg-blue-50",
+    },
+    ICC: {
+      emoji: "🌍",
+      label: "ICC",
+      color: "text-purple-700",
+      bg: "bg-purple-50",
+    },
+    BCCI: {
+      emoji: "🏆",
+      label: "BCCI",
+      color: "text-orange-700",
+      bg: "bg-orange-50",
+    },
+  };
+
+  useEffect(() => {
+    const pages: Record<number, number> = {};
+    pdfSources.forEach((s, idx) => {
+      pages[idx] = s.page;
+    });
+    setCurrentPages(pages);
+    setImageError(false);
+  }, [pdfSources]);
+
+  useEffect(() => {
+    setImageError(false);
+    setImageLoading(false);
+  }, [activeTab]);
+
+  if (pdfSources.length === 0) return null;
+
+  const currentSource = pdfSources[activeTab];
+  if (!currentSource) return null;
+
+  const currentPage = currentPages[activeTab] ?? currentSource.page;
+  const cfg = sourceConfig[currentSource.source] || {
+    emoji: "📄",
+    label: currentSource.source,
+    color: "text-gray-700",
+    bg: "bg-gray-50",
+  };
+
+  const imageUrl = getPageImageUrl(
+    currentSource.source,
+    currentSource.format,
+    currentPage,
+  );
+  const downloadUrl = getPageDownloadUrl(
+    currentSource.source,
+    currentSource.format,
+    currentPage,
+  );
+
+  const setPage = (page: number) => {
+    setCurrentPages((prev) => ({ ...prev, [activeTab]: page }));
+    setImageError(false);
+  };
+
   return (
-    <div className="border border-gray-200 rounded-lg p-3 mt-2 bg-gray-50 text-sm">
-      <div className="flex items-center justify-between">
-        <span className="font-medium text-blue-700">
-          {source.source} {source.format || ""} · Page {source.page}
-        </span>
-        <button
-          onClick={() => setExpanded(!expanded)}
-          className="text-xs text-blue-600 underline ml-2"
+    <div className="flex flex-col h-full bg-white border-l border-gray-200">
+      {/* Tabs — only show if multiple sources */}
+      {pdfSources.length > 1 && (
+        <div className="flex border-b border-gray-200 flex-shrink-0">
+          {pdfSources.map((s, idx) => {
+            const tabCfg = sourceConfig[s.source] || {
+              emoji: "📄",
+              label: s.source,
+              color: "text-gray-700",
+              bg: "bg-gray-50",
+            };
+            const isActive = idx === activeTab;
+            return (
+              <button
+                key={idx}
+                onClick={() => onTabChange(idx)}
+                className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2.5
+                           text-xs font-semibold border-b-2 transition-all
+                           ${
+                             isActive
+                               ? `border-blue-600 text-blue-700 ${tabCfg.bg}`
+                               : "border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-50"
+                           }`}
+              >
+                <span>{tabCfg.emoji}</span>
+                <span>{tabCfg.label}</span>
+              </button>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Source header */}
+      <div
+        className={`px-4 py-2 border-b border-gray-200 flex-shrink-0 ${cfg.bg}`}
+      >
+        <div className="flex items-center gap-2">
+          <span className="text-base">{cfg.emoji}</span>
+          <div className="min-w-0">
+            <p className={`text-xs font-bold ${cfg.color}`}>
+              {cfg.label}
+              {currentSource.format ? ` · ${currentSource.format}` : ""}
+            </p>
+            {currentSource.heading && (
+              <p className="text-xs text-gray-600 mt-0.5 leading-tight truncate">
+                {currentSource.heading}
+              </p>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* PDF Image */}
+      <div className="flex-1 overflow-y-auto bg-gray-100 relative">
+        {imageLoading && (
+          <div className="absolute inset-0 flex items-center justify-center bg-gray-100 z-10">
+            <div className="flex flex-col items-center gap-2">
+              <div className="animate-spin rounded-full h-8 w-8 border-2 border-blue-600 border-t-transparent" />
+              <p className="text-xs text-gray-500">Loading page...</p>
+            </div>
+          </div>
+        )}
+        {imageError ? (
+          <div className="flex items-center justify-center h-full p-8 text-center">
+            <div>
+              <p className="text-4xl mb-3">📄</p>
+              <p className="text-sm text-gray-500">
+                Could not load page {currentPage}
+              </p>
+              <button
+                onClick={() => {
+                  setImageError(false);
+                  setImageLoading(false);
+                }}
+                className="mt-2 text-xs text-blue-500 underline"
+              >
+                Try again
+              </button>
+            </div>
+          </div>
+        ) : (
+          <img
+            src={imageUrl}
+            alt={`Page ${currentPage}`}
+            className="w-full h-auto"
+            onLoadStart={() => {
+              setImageLoading(true);
+              setImageError(false);
+            }}
+            onLoad={() => setImageLoading(false)}
+            onError={() => {
+              setImageLoading(false);
+              setImageError(true);
+            }}
+          />
+        )}
+      </div>
+
+      {/* Navigation */}
+      <div className="flex-shrink-0 border-t border-gray-200 bg-white">
+        <div className="flex items-center justify-between px-4 py-2">
+          <button
+            onClick={() => setPage(Math.max(1, currentPage - 1))}
+            disabled={currentPage <= 1}
+            className="flex items-center gap-1 text-xs font-medium px-3 py-1.5
+                       bg-gray-100 hover:bg-gray-200 rounded-lg transition
+                       disabled:opacity-30 disabled:cursor-not-allowed text-gray-700"
+          >
+            ◀ Prev
+          </button>
+
+          <div className="text-center">
+            <span className="text-xs font-semibold text-gray-700">
+              Page {currentPage}
+            </span>
+            {currentPage !== currentSource.page && (
+              <button
+                onClick={() => setPage(currentSource.page)}
+                className="block text-[10px] text-blue-500 hover:underline mx-auto mt-0.5"
+              >
+                ↩ Back to source
+              </button>
+            )}
+          </div>
+
+          <button
+            onClick={() => setPage(currentPage + 1)}
+            className="flex items-center gap-1 text-xs font-medium px-3 py-1.5
+                       bg-gray-100 hover:bg-gray-200 rounded-lg transition text-gray-700"
+          >
+            Next ▶
+          </button>
+        </div>
+
+        {/* Download */}
+        <a
+          href={downloadUrl}
+          download={`${currentSource.source}_page_${currentPage}.pdf`}
+          className="flex items-center justify-center gap-2 mx-4 mb-3 py-2
+                     bg-blue-600 hover:bg-blue-700 text-white text-xs
+                     font-semibold rounded-xl transition"
         >
-          {expanded ? "Hide" : "View full text"}
+          ⬇ Download Page {currentPage}
+        </a>
+      </div>
+    </div>
+  );
+}
+
+// ─── PDF Viewer (Mobile inline) ──────────────────────────────
+function MobilePDFViewer({ pdfSource }: { pdfSource: PDFSource | null }) {
+  const [currentPage, setCurrentPage] = useState(1);
+  const [imageError, setImageError] = useState(false);
+  const [imageLoading, setImageLoading] = useState(false);
+
+  useEffect(() => {
+    if (pdfSource) {
+      setCurrentPage(pdfSource.page);
+      setImageError(false);
+    }
+  }, [pdfSource?.source, pdfSource?.format, pdfSource?.page]);
+
+  if (!pdfSource) return null;
+
+  const imageUrl = getPageImageUrl(
+    pdfSource.source,
+    pdfSource.format,
+    currentPage,
+  );
+  const downloadUrl = getPageDownloadUrl(
+    pdfSource.source,
+    pdfSource.format,
+    currentPage,
+  );
+
+  return (
+    <div className="mt-3 bg-white border border-gray-200 rounded-xl overflow-hidden">
+      {/* Header */}
+      <div className="px-3 py-2 bg-gray-50 border-b border-gray-200">
+        <p className="text-xs font-semibold text-gray-700">
+          📄 {pdfSource.source}
+          {pdfSource.format ? ` · ${pdfSource.format}` : ""}
+          {pdfSource.heading ? ` — ${pdfSource.heading}` : ""}
+        </p>
+      </div>
+
+      {/* Image */}
+      <div className="relative bg-gray-100 min-h-[200px] flex items-center justify-center">
+        {imageLoading && (
+          <div className="absolute inset-0 flex items-center justify-center">
+            <div className="animate-spin rounded-full h-6 w-6 border-2 border-blue-600 border-t-transparent" />
+          </div>
+        )}
+        {imageError ? (
+          <div className="py-8 text-center">
+            <p className="text-sm text-gray-400">Could not load page</p>
+          </div>
+        ) : (
+          <img
+            src={imageUrl}
+            alt={`Page ${currentPage}`}
+            className="w-full h-auto"
+            onLoadStart={() => {
+              setImageLoading(true);
+              setImageError(false);
+            }}
+            onLoad={() => setImageLoading(false)}
+            onError={() => {
+              setImageLoading(false);
+              setImageError(true);
+            }}
+          />
+        )}
+      </div>
+
+      {/* Nav */}
+      <div className="flex items-center justify-between px-3 py-2 bg-gray-50 border-t border-gray-200">
+        <button
+          onClick={() => {
+            setCurrentPage((p) => Math.max(1, p - 1));
+            setImageError(false);
+          }}
+          disabled={currentPage <= 1}
+          className="text-xs font-medium px-3 py-1.5 bg-white border border-gray-200
+                     rounded-lg disabled:opacity-30 text-gray-700"
+        >
+          ◀ Prev
+        </button>
+        <div className="text-center">
+          <span className="text-xs font-semibold text-gray-700">
+            Page {currentPage}
+          </span>
+          {currentPage !== pdfSource.page && (
+            <button
+              onClick={() => setCurrentPage(pdfSource.page)}
+              className="block text-[10px] text-blue-500 hover:underline mx-auto"
+            >
+              ↩ Source page
+            </button>
+          )}
+        </div>
+        <button
+          onClick={() => {
+            setCurrentPage((p) => p + 1);
+            setImageError(false);
+          }}
+          className="text-xs font-medium px-3 py-1.5 bg-white border border-gray-200
+                     rounded-lg text-gray-700"
+        >
+          Next ▶
         </button>
       </div>
-      <p className="text-gray-500 text-xs mt-1 line-clamp-2">
-        {source.preview}
-      </p>
-      {expanded && (
-        <pre className="mt-2 text-xs text-gray-700 whitespace-pre-wrap bg-white border rounded p-2 max-h-60 overflow-y-auto">
-          {source.full_text}
-        </pre>
-      )}
+
+      {/* Download */}
+      <a
+        href={downloadUrl}
+        download={`${pdfSource.source}_page_${currentPage}.pdf`}
+        className="flex items-center justify-center gap-2 w-full py-2.5
+                   bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold transition"
+      >
+        ⬇ Download Page {currentPage}
+      </a>
     </div>
   );
 }
@@ -64,6 +421,8 @@ const QUICK_QUESTIONS = [
   "Minimum overs for KSCA PC2 match?",
   "Can substitute fielder keep wickets in KSCA?",
   "What is a Wide ball in KSCA?",
+  "What does Tom Smith say about wide ball?",
+  "Debate LBW with Tom Smith",
 ];
 
 const INITIAL_MESSAGE: Message = {
@@ -127,6 +486,8 @@ function ChatTab() {
   const [listening, setListening] = useState(false);
   const [sttSupported, setSttSupported] = useState(true);
   const [sttLang, setSttLang] = useState<"en-IN" | "kn-IN">("en-IN");
+  const [activePdfSources, setActivePdfSources] = useState<PDFSource[]>([]);
+  const [activePdfTab, setActivePdfTab] = useState(0);
   const recognitionRef = useRef<SpeechRecognition | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
 
@@ -153,9 +514,39 @@ function ChatTab() {
         body: JSON.stringify({ question: q, history }),
       });
       const data = await res.json();
+
+      // Extract unique sources by source name for PDF viewer tabs
+      if (data.sources && data.sources.length > 0) {
+        const seen = new Set<string>();
+        const uniqueSources: PDFSource[] = [];
+
+        for (const s of data.sources) {
+          const key = s.source;
+          if (!seen.has(key)) {
+            seen.add(key);
+            uniqueSources.push({
+              source: s.source,
+              format: s.format,
+              page: s.page,
+              heading: s.heading,
+            });
+          }
+        }
+        setActivePdfSources(uniqueSources);
+        setActivePdfTab(0);
+      } else {
+        setActivePdfSources([]);
+        setActivePdfTab(0);
+      }
+
       setMessages([
         ...updatedMessages,
-        { role: "assistant", content: data.answer, sources: data.sources },
+        {
+          role: "assistant",
+          content: data.answer,
+          sources: data.sources,
+          mode: data.mode,
+        },
       ]);
     } catch {
       setMessages([
@@ -180,6 +571,8 @@ function ChatTab() {
     setMessages([INITIAL_MESSAGE]);
     setInput("");
     setLoading(false);
+    setActivePdfSources([]);
+    setActivePdfTab(0);
   };
 
   useEffect(() => {
@@ -216,175 +609,246 @@ function ChatTab() {
   };
 
   const showChips = messages.length <= 1;
+  const hasPdf = activePdfSources.length > 0;
 
   return (
-    <div className="flex flex-col h-full">
-      {messages.length > 1 && (
-        <div className="flex justify-end px-4 pt-2">
-          <button
-            onClick={newConversation}
-            className="text-xs text-gray-500 hover:text-blue-600 border border-gray-200 rounded-full px-3 py-1 flex items-center gap-1"
-          >
-            ↻ New conversation
-          </button>
-        </div>
-      )}
-      <div className="flex-1 overflow-y-auto p-4 space-y-4">
-        {messages.map((msg, i) => (
-          <div
-            key={i}
-            className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
-          >
+    <div className="flex h-full transition-all duration-300">
+      {/* ── LEFT: Chat Panel ── */}
+      <div className="flex flex-col flex-1 min-w-0 h-full">
+        {messages.length > 1 && (
+          <div className="flex justify-end px-4 pt-2 flex-shrink-0">
+            <button
+              onClick={newConversation}
+              className="text-xs text-gray-500 hover:text-blue-600 border border-gray-200 rounded-full px-3 py-1 flex items-center gap-1"
+            >
+              ↻ New conversation
+            </button>
+          </div>
+        )}
+
+        {/* Messages */}
+        <div className="flex-1 overflow-y-auto p-4 pb-2 space-y-4">
+          {messages.map((msg, i) => (
             <div
-              className={`max-w-[85%] ${msg.role === "user" ? "order-2" : "order-1"}`}
+              key={i}
+              className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
             >
               <div
-                className={`rounded-2xl px-4 py-3 text-sm ${
-                  msg.role === "user"
-                    ? "bg-blue-600 text-white rounded-br-sm"
-                    : "bg-white border border-gray-200 text-gray-800 rounded-bl-sm shadow-sm"
-                }`}
+                className={`max-w-[90%] ${msg.role === "user" ? "order-2" : "order-1"}`}
               >
-                {msg.role === "user" ? (
-                  msg.content
-                ) : (
-                  <div className="space-y-1 whitespace-normal">
-                    {msg.content.split("\n").map((line, j) => {
-                      const trimmed = line.trim();
-                      if (!trimmed) return null;
-                      if (trimmed.startsWith("- ")) {
-                        return (
-                          <div key={j} className="flex gap-2">
-                            <span className="mt-0.5 text-blue-500">•</span>
-                            <span>{renderBold(trimmed.slice(2))}</span>
-                          </div>
-                        );
-                      }
-                      return <p key={j}>{renderBold(trimmed)}</p>;
-                    })}
+                {/* Mode badge */}
+                {msg.role === "assistant" && i > 0 && msg.mode && (
+                  <div className="flex items-center gap-1.5 mb-1 px-1">
+                    {msg.mode === "KSCA_PRECISE" && (
+                      <span className="text-[10px] font-semibold bg-green-100 text-green-700 px-2 py-0.5 rounded-full">
+                        🎯 KSCA Precise
+                      </span>
+                    )}
+                    {msg.mode === "DEBATE" && (
+                      <span className="text-[10px] font-semibold bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full">
+                        ⚖️ Tom Smith Debate
+                      </span>
+                    )}
+                    {msg.mode === "GENERAL" && (
+                      <span className="text-[10px] font-semibold bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">
+                        🌐 General
+                      </span>
+                    )}
                   </div>
                 )}
-              </div>
-              {msg.role === "assistant" && i > 0 && (
-                <button
-                  onClick={() => copyAnswer(msg.content, i)}
-                  className="mt-1 text-xs text-gray-400 hover:text-gray-600 flex items-center gap-1 px-1"
+
+                {/* Message bubble */}
+                <div
+                  className={`rounded-2xl px-4 py-3 text-sm ${
+                    msg.role === "user"
+                      ? "bg-blue-600 text-white rounded-br-sm"
+                      : "bg-white border border-gray-200 text-gray-800 rounded-bl-sm shadow-sm"
+                  }`}
                 >
-                  {copied === i ? (
-                    <span className="text-green-500">✓ Copied!</span>
+                  {msg.role === "user" ? (
+                    msg.content
                   ) : (
-                    <span>📋 Copy answer</span>
+                    <div className="space-y-1 whitespace-normal">
+                      {msg.content.split("\n").map((line, j) => {
+                        const trimmed = line.trim();
+                        if (!trimmed) return null;
+                        if (trimmed.startsWith("- ")) {
+                          return (
+                            <div key={j} className="flex gap-2">
+                              <span className="mt-0.5 text-blue-500">•</span>
+                              <span>{renderBold(trimmed.slice(2))}</span>
+                            </div>
+                          );
+                        }
+                        return <p key={j}>{renderBold(trimmed)}</p>;
+                      })}
+
+                      {/* Mobile PDF viewer — inline below answer */}
+                      {msg.role === "assistant" &&
+                        i > 0 &&
+                        msg.sources &&
+                        msg.sources.length > 0 && (
+                          <div className="md:hidden mt-2 space-y-2">
+                            {(() => {
+                              const seen = new Set<string>();
+                              const unique: Source[] = [];
+                              for (const s of msg.sources) {
+                                if (!seen.has(s.source)) {
+                                  seen.add(s.source);
+                                  unique.push(s);
+                                }
+                              }
+                              return unique.map((s, idx) => (
+                                <MobilePDFViewer
+                                  key={idx}
+                                  pdfSource={{
+                                    source: s.source,
+                                    format: s.format,
+                                    page: s.page,
+                                    heading: s.heading,
+                                  }}
+                                />
+                              ));
+                            })()}
+                          </div>
+                        )}
+                    </div>
                   )}
-                </button>
-              )}
-              {msg.sources && msg.sources.length > 0 && (
-                <div className="mt-1">
-                  {msg.sources
-                    .filter((s) => s.preview && s.preview.length > 50)
-                    .slice(0, 2)
-                    .map((s, j) => (
-                      <SourceCard key={j} source={s} />
-                    ))}
                 </div>
-              )}
-            </div>
-          </div>
-        ))}
-        {loading && (
-          <div className="flex justify-start">
-            <div className="bg-white border border-gray-200 rounded-2xl rounded-bl-sm px-4 py-3 shadow-sm">
-              <div className="flex space-x-1">
-                <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" />
-                <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce delay-100" />
-                <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce delay-200" />
+
+                {/* Copy button */}
+                {msg.role === "assistant" && i > 0 && (
+                  <button
+                    onClick={() => copyAnswer(msg.content, i)}
+                    className="mt-1 text-xs text-gray-400 hover:text-gray-600 flex items-center gap-1 px-1"
+                  >
+                    {copied === i ? (
+                      <span className="text-green-500">✓ Copied!</span>
+                    ) : (
+                      <span>📋 Copy answer</span>
+                    )}
+                  </button>
+                )}
               </div>
+            </div>
+          ))}
+
+          {/* Loading */}
+          {loading && (
+            <div className="flex justify-start">
+              <div className="bg-white border border-gray-200 rounded-2xl rounded-bl-sm px-4 py-3 shadow-sm">
+                <div className="flex space-x-1">
+                  <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" />
+                  <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce delay-100" />
+                  <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce delay-200" />
+                </div>
+              </div>
+            </div>
+          )}
+          <div ref={bottomRef} />
+        </div>
+
+        {/* Quick chips */}
+        {showChips && (
+          <div className="px-4 pb-2 flex-shrink-0">
+            <p className="text-xs text-gray-400 mb-2">Quick questions:</p>
+            <div className="flex flex-wrap gap-2 max-h-32 overflow-y-auto">
+              {QUICK_QUESTIONS.map((q, i) => (
+                <button
+                  key={i}
+                  onClick={() => sendMessage(q)}
+                  disabled={loading}
+                  className="text-xs bg-blue-50 text-blue-700 border border-blue-200 rounded-full px-3 py-1.5 hover:bg-blue-100 transition-colors disabled:opacity-50"
+                >
+                  {q}
+                </button>
+              ))}
             </div>
           </div>
         )}
-        <div ref={bottomRef} />
-      </div>
-      {showChips && (
-        <div className="px-4 pb-2">
-          <p className="text-xs text-gray-400 mb-2">Quick questions:</p>
-          <div className="flex flex-wrap gap-2">
-            {QUICK_QUESTIONS.map((q, i) => (
+
+        {/* Input */}
+        <div className="border-t border-gray-200 p-4 pb-safe bg-white flex-shrink-0 pb-6 sm:pb-4">
+          <div className="flex gap-2">
+            <input
+              type="text"
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && !loading && sendMessage()}
+              placeholder={
+                listening
+                  ? "Listening…"
+                  : "Ask about KSCA, MCC, ICC or BCCI rules..."
+              }
+              className="flex-1 border border-gray-300 rounded-xl px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+            {sttSupported && (
               <button
-                key={i}
-                onClick={() => sendMessage(q)}
+                onClick={toggleListening}
                 disabled={loading}
-                className="text-xs bg-blue-50 text-blue-700 border border-blue-200 rounded-full px-3 py-1.5 hover:bg-blue-100 transition-colors disabled:opacity-50"
+                title="Speak your question"
+                className={`px-3 py-2 rounded-xl text-sm font-medium transition disabled:opacity-50 ${
+                  listening
+                    ? "bg-red-500 text-white animate-pulse"
+                    : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                }`}
               >
-                {q}
+                {listening ? "■" : "🎤"}
               </button>
-            ))}
+            )}
+            <button
+              onClick={() => sendMessage()}
+              disabled={loading || !input.trim()}
+              className="bg-blue-600 text-white px-4 py-2 rounded-xl text-sm font-medium disabled:opacity-50 hover:bg-blue-700"
+            >
+              Send
+            </button>
+          </div>
+          <div className="flex items-center justify-center gap-3 mt-2">
+            <p className="text-xs text-gray-400">
+              Tip: tap 🎤 to speak — works best on Chrome
+            </p>
+            {sttSupported && (
+              <div className="flex gap-1">
+                <button
+                  onClick={() => setSttLang("en-IN")}
+                  className={`text-[11px] px-2 py-0.5 rounded-full border transition ${
+                    sttLang === "en-IN"
+                      ? "bg-blue-50 text-blue-600 border-blue-200"
+                      : "text-gray-400 border-gray-200 hover:bg-gray-50"
+                  }`}
+                >
+                  EN
+                </button>
+                <button
+                  onClick={() => setSttLang("kn-IN")}
+                  className={`text-[11px] px-2 py-0.5 rounded-full border transition ${
+                    sttLang === "kn-IN"
+                      ? "bg-blue-50 text-blue-600 border-blue-200"
+                      : "text-gray-400 border-gray-200 hover:bg-gray-50"
+                  }`}
+                >
+                  ಕನ್ನಡ
+                </button>
+              </div>
+            )}
           </div>
         </div>
-      )}
-      <div className="border-t border-gray-200 p-4 bg-white">
-        <div className="flex gap-2">
-          <input
-            type="text"
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && !loading && sendMessage()}
-            placeholder={
-              listening
-                ? "Listening…"
-                : "Ask about KSCA, MCC, ICC or BCCI rules..."
-            }
-            className="flex-1 border border-gray-300 rounded-xl px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+      </div>
+
+      {/* ── RIGHT: Desktop PDF Viewer ── */}
+      <div
+        className={`hidden md:flex flex-col border-l border-gray-200 flex-shrink-0
+                    transition-all duration-300 overflow-hidden
+                    ${hasPdf ? "w-[420px]" : "w-0 border-0"}`}
+      >
+        {hasPdf && (
+          <PDFViewer
+            pdfSources={activePdfSources}
+            activeTab={activePdfTab}
+            onTabChange={setActivePdfTab}
           />
-          {sttSupported && (
-            <button
-              onClick={toggleListening}
-              disabled={loading}
-              title="Speak your question"
-              className={`px-3 py-2 rounded-xl text-sm font-medium transition disabled:opacity-50 ${
-                listening
-                  ? "bg-red-500 text-white animate-pulse"
-                  : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-              }`}
-            >
-              {listening ? "■" : "🎤"}
-            </button>
-          )}
-          <button
-            onClick={() => sendMessage()}
-            disabled={loading || !input.trim()}
-            className="bg-blue-600 text-white px-4 py-2 rounded-xl text-sm font-medium disabled:opacity-50 hover:bg-blue-700"
-          >
-            Send
-          </button>
-        </div>
-        <div className="flex items-center justify-center gap-3 mt-2">
-          <p className="text-xs text-gray-400">
-            Tip: tap 🎤 to speak — works best on Chrome
-          </p>
-          {sttSupported && (
-            <div className="flex gap-1">
-              <button
-                onClick={() => setSttLang("en-IN")}
-                className={`text-[11px] px-2 py-0.5 rounded-full border transition ${
-                  sttLang === "en-IN"
-                    ? "bg-blue-50 text-blue-600 border-blue-200"
-                    : "text-gray-400 border-gray-200 hover:bg-gray-50"
-                }`}
-              >
-                EN
-              </button>
-              <button
-                onClick={() => setSttLang("kn-IN")}
-                className={`text-[11px] px-2 py-0.5 rounded-full border transition ${
-                  sttLang === "kn-IN"
-                    ? "bg-blue-50 text-blue-600 border-blue-200"
-                    : "text-gray-400 border-gray-200 hover:bg-gray-50"
-                }`}
-              >
-                ಕನ್ನಡ
-              </button>
-            </div>
-          )}
-        </div>
+        )}
       </div>
     </div>
   );
@@ -702,6 +1166,26 @@ function toTime(m: number): string {
   return `${String(h).padStart(2, "0")}:${String(mins).padStart(2, "0")}`;
 }
 
+function toTime12(m: number): string {
+  const totalMins = ((m % 1440) + 1440) % 1440;
+  let h = Math.floor(totalMins / 60);
+  const mins = Math.round(totalMins % 60);
+  const period = h >= 12 ? "PM" : "AM";
+  h = h % 12;
+  if (h === 0) h = 12;
+  return `${h}:${String(mins).padStart(2, "0")} ${period}`;
+}
+
+function to12Hour(time24: string): string {
+  if (!time24 || !time24.includes(":")) return time24;
+  const [hStr, mStr] = time24.split(":");
+  let h = parseInt(hStr, 10);
+  const period = h >= 12 ? "PM" : "AM";
+  h = h % 12;
+  if (h === 0) h = 12;
+  return `${h}:${mStr} ${period}`;
+}
+
 function bowlerDist(I: number, divisor: number = 5): number[] {
   const base = Math.floor(I / divisor);
   const extra = I % divisor;
@@ -720,6 +1204,18 @@ function calcPP(I: number, maxOvers: number, isT20: boolean) {
   const pp2 = Math.round((I * 30) / maxOvers);
   const pp3 = I - pp1 - pp2;
   return { pp1, pp2, pp3: Math.max(0, pp3) };
+}
+
+function summarizeBowlerDist(
+  dist: number[],
+): { count: number; overs: number; total: number }[] {
+  const counts = new Map<number, number>();
+  for (const overs of dist) {
+    counts.set(overs, (counts.get(overs) || 0) + 1);
+  }
+  return Array.from(counts.entries())
+    .sort((a, b) => b[0] - a[0])
+    .map(([overs, count]) => ({ count, overs, total: count * overs }));
 }
 
 // ─── Shared UI primitives ─────────────────────────────────────
@@ -806,6 +1302,66 @@ function NumInput({
   );
 }
 
+function SignedNumInput({
+  value,
+  onChange,
+  placeholder,
+}: {
+  value: string | number;
+  onChange: (v: number) => void;
+  placeholder?: string;
+}) {
+  const [text, setText] = useState(String(value ?? ""));
+
+  useEffect(() => {
+    setText(String(value ?? ""));
+  }, [value]);
+
+  const handleChange = (raw: string) => {
+    if (raw === "" || raw === "-" || /^-?\d+$/.test(raw)) {
+      setText(raw);
+      if (raw !== "" && raw !== "-") onChange(Number(raw));
+      else if (raw === "") onChange(0);
+    }
+  };
+
+  return (
+    <div className="flex items-center gap-1">
+      <button
+        type="button"
+        onClick={() => {
+          const n = (Number(text) || 0) - 1;
+          setText(String(n));
+          onChange(n);
+        }}
+        className="px-2 py-2 border border-gray-300 rounded-lg text-sm text-gray-600 hover:bg-gray-50"
+      >
+        −
+      </button>
+      <input
+        type="text"
+        inputMode="numeric"
+        pattern="-?[0-9]*"
+        value={text}
+        placeholder={placeholder}
+        onChange={(e) => handleChange(e.target.value)}
+        className={inputCls + " text-center"}
+      />
+      <button
+        type="button"
+        onClick={() => {
+          const n = (Number(text) || 0) + 1;
+          setText(String(n));
+          onChange(n);
+        }}
+        className="px-2 py-2 border border-gray-300 rounded-lg text-sm text-gray-600 hover:bg-gray-50"
+      >
+        +
+      </button>
+    </div>
+  );
+}
+
 function PPBadges({
   I,
   maxOvers,
@@ -851,13 +1407,16 @@ function Table1({ pcKey }: { pcKey: string }) {
   const [C, setC] = useState("");
   const [D, setD] = useState(0);
   const [E, setE] = useState(0);
+  const [mOverride, setMOverride] = useState<string | null>(null);
   const [J, setJ] = useState("");
   const [result, setResult] = useState<Record<string, string | number> | null>(
     null,
   );
+  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     setResult(null);
+    setMOverride(null);
   }, [pcKey]);
 
   // Live computed values for rows that show before Calculate is pressed
@@ -868,6 +1427,8 @@ function Table1({ pcKey }: { pcKey: string }) {
   const Iv_live = Math.min(Math.ceil(Hv_live / 2), pc.maxOvers);
   const Kv_live = Math.ceil(Iv_live * pc.X);
   const hasBC = B !== "" && C !== "";
+  const autoM = pc.interval - E;
+  const effectiveM = mOverride !== null ? Number(mOverride) : autoM;
 
   const calculate = () => {
     const Bv = parseInt(B) || 0;
@@ -878,10 +1439,10 @@ function Table1({ pcKey }: { pcKey: string }) {
     const Jm = toMins(J);
     const Kv = () => Math.ceil(Iv * pc.X);
     const Lv = () => Jm + Math.max(0, Kv() - Bv);
-    const Mv = pc.interval - E;
+    const Mv = effectiveM;
     const Nv = () => Lv() + Mv;
     const Ov = () => Nv() + Kv();
-    const scheduledClose = Jm + (pc.Z - Bv) + (pc.interval - E) - Fv;
+    const scheduledClose = Jm + (pc.Z - Bv) + Mv - Fv;
     const origI = Iv;
     while (Ov() < scheduledClose && Iv < pc.maxOvers) Iv += 1;
     setResult({
@@ -962,11 +1523,10 @@ function Table1({ pcKey }: { pcKey: string }) {
 
             {/* FIX 5: Row E — exact PDF wording, no "(mins)" */}
             <FormRow rowId="E" description="Time made up from reduced interval">
-              <NumInput
+              <SignedNumInput
                 value={E}
                 onChange={(v) => setE(v)}
                 placeholder="0"
-                min={-100}
               />
             </FormRow>
 
@@ -1077,13 +1637,14 @@ function Table1({ pcKey }: { pcKey: string }) {
               value={result ? (result.L as string) : "—"}
             />
 
-            {/* FIX 9: Row M — exact PDF wording "Length of interval" only */}
-            <FormRow
-              rowId="M"
-              description="Length of interval"
-              computed
-              value={`${pc.interval - E} mins`}
-            />
+            {/* FIX 9: Row M — auto-calculates from pc.interval − E; user can override */}
+            <FormRow rowId="M" description="Length of interval">
+              <NumInput
+                value={mOverride !== null ? mOverride : autoM}
+                onChange={(v) => setMOverride(String(v))}
+                placeholder={`${autoM}`}
+              />
+            </FormRow>
 
             <FormRow
               rowId="N"
@@ -1113,40 +1674,171 @@ function Table1({ pcKey }: { pcKey: string }) {
 
       {result && (
         <div
-          className={`rounded-xl p-4 text-center ${result.valid ? "bg-green-50 border border-green-200" : "bg-red-50 border border-red-200"}`}
+          className={`rounded-xl p-4 ${result.valid ? "bg-green-50 border border-green-200" : "bg-red-50 border border-red-200"}`}
         >
-          <p className="text-xs text-gray-500 mb-1">{pc.label}</p>
-          <p className="text-6xl font-black text-gray-900">{result.I}</p>
-          <p className="text-sm text-gray-500 mt-1">overs per team</p>
+          <div className="flex items-center justify-between mb-1">
+            <p className="text-xs text-gray-500">{pc.label}</p>
+            <button
+              onClick={() => {
+                const overs = result.I as number;
+                const dist = summarizeBowlerDist(bowlerDist(overs));
+                const _pp = calcPP(overs, pc.maxOvers, pc.isT20);
+                const ppLines: string[] = [];
+                if (pc.isT20) {
+                  const { pp: ppOv, npp } = _pp as { pp: number; npp: number };
+                  ppLines.push(`  Powerplay: overs 1–${ppOv}`);
+                  if (npp > 0)
+                    ppLines.push(`  Non-powerplay: overs ${ppOv + 1}–${overs}`);
+                } else {
+                  const { pp1, pp2, pp3 } = _pp as {
+                    pp1: number;
+                    pp2: number;
+                    pp3: number;
+                  };
+                  ppLines.push(`  PP1: overs 1–${pp1}`);
+                  if (pp2 > 0)
+                    ppLines.push(`  PP2: overs ${pp1 + 1}–${pp1 + pp2}`);
+                  if (pp3 > 0)
+                    ppLines.push(
+                      `  PP3: overs ${pp1 + pp2 + 1}–${pp1 + pp2 + pp3}`,
+                    );
+                }
+                navigator.clipboard.writeText(
+                  [
+                    `MATCH SUMMARY — ${pc.label}`,
+                    `Overs per team: ${overs}`,
+                    `1st inn ends: ${to12Hour(result.L as string)}`,
+                    `2nd inn starts: ${to12Hour(result.N as string)}`,
+                    `Match ends: ${to12Hour(result.O as string)}`,
+                    ``,
+                    `Bowler limit:`,
+                    ...dist.map(
+                      (g) =>
+                        `  ${g.count} bowler${g.count > 1 ? "s" : ""} × ${g.overs} over${g.overs > 1 ? "s" : ""} = ${g.total} overs`,
+                    ),
+                    ``,
+                    `Powerplays:`,
+                    ...ppLines,
+                  ].join("\n"),
+                );
+                setCopied(true);
+                setTimeout(() => setCopied(false), 2000);
+              }}
+              className="text-xs px-2 py-0.5 rounded bg-gray-100 text-gray-600 hover:bg-gray-200 transition"
+            >
+              {copied ? "✓ Copied" : "📋 Copy"}
+            </button>
+          </div>
+          <p className="text-6xl font-black text-gray-900 text-center">
+            {result.I}
+          </p>
+          <p className="text-sm text-gray-500 mt-1 text-center">
+            overs per team
+          </p>
           {result.adjusted ? (
-            <p className="text-xs text-amber-600 mt-1">
+            <p className="text-xs text-amber-600 mt-1 text-center">
               ↑ Raised from {result.origI} (Clause 13.7.2)
             </p>
           ) : null}
-          <div className="flex justify-center gap-4 mt-3 text-sm flex-wrap">
-            <span className="text-gray-500">
-              Bowler limit:{" "}
-              <b className="text-gray-900">{result.bowlerLimit}</b>
-            </span>
-            <span className="text-gray-500">
-              1st inn ends: <b className="text-gray-900">{result.L}</b>
-            </span>
-            <span className="text-gray-500">
-              2nd inn starts: <b className="text-gray-900">{result.N}</b>
-            </span>
-            <span className="text-gray-500">
-              Match ends: <b className="text-gray-900">{result.O}</b>
-            </span>
+          <div className="mt-4 pt-4 border-t border-gray-200 space-y-1 text-sm text-left">
+            <p className="font-semibold text-gray-700 mb-1">Bowler limit:</p>
+            {summarizeBowlerDist(bowlerDist(result.I as number)).map((g, i) => (
+              <p key={i} className="text-gray-700 pl-2">
+                {g.count} bowler{g.count > 1 ? "s" : ""} × {g.overs} over
+                {g.overs > 1 ? "s" : ""} = {g.total} overs
+              </p>
+            ))}
           </div>
-          <div className="mt-3 flex justify-center">
-            <PPBadges
-              I={result.I as number}
-              maxOvers={pc.maxOvers}
-              isT20={pc.isT20}
-            />
+          <div className="mt-3 pt-3 border-t border-gray-200 space-y-1 text-sm">
+            <p className="text-gray-700">
+              1st inn ends:{" "}
+              <b className="text-gray-900">{to12Hour(result.L as string)}</b>
+            </p>
+            <p className="text-gray-700">
+              2nd inn starts:{" "}
+              <b className="text-gray-900">{to12Hour(result.N as string)}</b>
+            </p>
+            <p className="text-gray-700">
+              Match ends:{" "}
+              <b className="text-gray-900">{to12Hour(result.O as string)}</b>
+            </p>
+          </div>
+          <div className="mt-3 pt-3 border-t border-gray-200 space-y-1.5">
+            <p className="font-semibold text-gray-700 text-sm mb-1">
+              Powerplays:
+            </p>
+            {(() => {
+              const I = result.I as number;
+              const pp = calcPP(I, pc.maxOvers, pc.isT20);
+              if (pc.isT20) {
+                const { pp: ppOvers, npp } = pp as { pp: number; npp: number };
+                return (
+                  <>
+                    <div className="flex items-center gap-2 pl-2">
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-green-100 text-green-800">
+                        Powerplay
+                      </span>
+                      <span className="font-mono text-sm text-gray-800">
+                        overs 1–{ppOvers}
+                      </span>
+                    </div>
+                    {npp > 0 && (
+                      <div className="flex items-center gap-2 pl-2">
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-gray-100 text-gray-700">
+                          Non-powerplay
+                        </span>
+                        <span className="font-mono text-sm text-gray-800">
+                          overs {ppOvers + 1}–{I}
+                        </span>
+                      </div>
+                    )}
+                  </>
+                );
+              }
+              const { pp1, pp2, pp3 } = pp as {
+                pp1: number;
+                pp2: number;
+                pp3: number;
+              };
+              const pp1End = pp1;
+              const pp2End = pp1 + pp2;
+              const pp3End = pp1 + pp2 + pp3;
+              return (
+                <>
+                  <div className="flex items-center gap-2 pl-2">
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-green-100 text-green-800">
+                      PP1
+                    </span>
+                    <span className="font-mono text-sm text-gray-800">
+                      overs 1–{pp1End}
+                    </span>
+                  </div>
+                  {pp2 > 0 && (
+                    <div className="flex items-center gap-2 pl-2">
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-yellow-100 text-yellow-800">
+                        PP2
+                      </span>
+                      <span className="font-mono text-sm text-gray-800">
+                        overs {pp1End + 1}–{pp2End}
+                      </span>
+                    </div>
+                  )}
+                  {pp3 > 0 && (
+                    <div className="flex items-center gap-2 pl-2">
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-orange-100 text-orange-800">
+                        PP3
+                      </span>
+                      <span className="font-mono text-sm text-gray-800">
+                        overs {pp2End + 1}–{pp3End}
+                      </span>
+                    </div>
+                  )}
+                </>
+              );
+            })()}
           </div>
           <p
-            className={`text-sm font-semibold mt-3 ${result.valid ? "text-green-700" : "text-red-700"}`}
+            className={`text-sm font-semibold mt-4 pt-3 border-t border-gray-200 text-center ${result.valid ? "text-green-700" : "text-red-700"}`}
           >
             {result.valid
               ? `✅ Match valid (min ${pc.minOvers} overs)`
@@ -1292,6 +1984,7 @@ function Table3({ pcKey }: { pcKey: string }) {
   const [result, setResult] = useState<Record<string, string | number> | null>(
     null,
   );
+  const [copied, setCopied] = useState(false);
 
   const Av = parseInt(A) || 0;
   const Bv_live = A ? Math.ceil(Av * pc.X) : null;
@@ -1429,29 +2122,156 @@ function Table3({ pcKey }: { pcKey: string }) {
       </button>
       {result && (
         <div
-          className={`rounded-xl p-4 text-center ${result.valid ? "bg-green-50 border border-green-200" : "bg-red-50 border border-red-200"}`}
+          className={`rounded-xl p-4 ${result.valid ? "bg-green-50 border border-green-200" : "bg-red-50 border border-red-200"}`}
         >
-          <p className="text-xs text-gray-500 mb-1">{pc.label}</p>
-          <p className="text-6xl font-black text-gray-900">{result.A}</p>
-          <p className="text-sm text-gray-500 mt-1">overs per team</p>
-          <div className="flex justify-center gap-4 mt-3 text-sm">
-            <span className="text-gray-500">
-              Bowler limit:{" "}
-              <b className="text-gray-900">{result.bowlerLimit}</b>
-            </span>
-            <span className="text-gray-500">
-              Ends at: <b className="text-gray-900">{result.D}</b>
-            </span>
+          <div className="flex items-center justify-between mb-1">
+            <p className="text-xs text-gray-500">{pc.label}</p>
+            <button
+              onClick={() => {
+                const overs = result.A as number;
+                const dist = summarizeBowlerDist(bowlerDist(overs));
+                const _pp = calcPP(overs, pc.maxOvers, pc.isT20);
+                const ppLines: string[] = [];
+                if (pc.isT20) {
+                  const { pp: ppOv, npp } = _pp as { pp: number; npp: number };
+                  ppLines.push(`  Powerplay: overs 1–${ppOv}`);
+                  if (npp > 0)
+                    ppLines.push(`  Non-powerplay: overs ${ppOv + 1}–${overs}`);
+                } else {
+                  const { pp1, pp2, pp3 } = _pp as {
+                    pp1: number;
+                    pp2: number;
+                    pp3: number;
+                  };
+                  ppLines.push(`  PP1: overs 1–${pp1}`);
+                  if (pp2 > 0)
+                    ppLines.push(`  PP2: overs ${pp1 + 1}–${pp1 + pp2}`);
+                  if (pp3 > 0)
+                    ppLines.push(
+                      `  PP3: overs ${pp1 + pp2 + 1}–${pp1 + pp2 + pp3}`,
+                    );
+                }
+                navigator.clipboard.writeText(
+                  [
+                    `MATCH SUMMARY — ${pc.label}`,
+                    `Overs per team: ${overs}`,
+                    `Match ends: ${to12Hour(result.D as string)}`,
+                    ``,
+                    `Bowler limit:`,
+                    ...dist.map(
+                      (g) =>
+                        `  ${g.count} bowler${g.count > 1 ? "s" : ""} × ${g.overs} over${g.overs > 1 ? "s" : ""} = ${g.total} overs`,
+                    ),
+                    ``,
+                    `Powerplays:`,
+                    ...ppLines,
+                  ].join("\n"),
+                );
+                setCopied(true);
+                setTimeout(() => setCopied(false), 2000);
+              }}
+              className="text-xs px-2 py-0.5 rounded bg-gray-100 text-gray-600 hover:bg-gray-200 transition"
+            >
+              {copied ? "✓ Copied" : "📋 Copy"}
+            </button>
           </div>
-          <div className="mt-3 flex justify-center">
-            <PPBadges
-              I={result.A as number}
-              maxOvers={pc.maxOvers}
-              isT20={pc.isT20}
-            />
+          <p className="text-6xl font-black text-gray-900 text-center">
+            {result.A}
+          </p>
+          <p className="text-sm text-gray-500 mt-1 text-center">
+            overs per team
+          </p>
+          <div className="mt-4 pt-4 border-t border-gray-200 space-y-1 text-sm text-left">
+            <p className="font-semibold text-gray-700 mb-1">Bowler limit:</p>
+            {summarizeBowlerDist(bowlerDist(result.A as number)).map((g, i) => (
+              <p key={i} className="text-gray-700 pl-2">
+                {g.count} bowler{g.count > 1 ? "s" : ""} × {g.overs} over
+                {g.overs > 1 ? "s" : ""} = {g.total} overs
+              </p>
+            ))}
+          </div>
+          <div className="mt-3 pt-3 border-t border-gray-200 space-y-1 text-sm">
+            <p className="text-gray-700">
+              Match ends:{" "}
+              <b className="text-gray-900">{to12Hour(result.D as string)}</b>
+            </p>
+          </div>
+          <div className="mt-3 pt-3 border-t border-gray-200 space-y-1.5">
+            <p className="font-semibold text-gray-700 text-sm mb-1">
+              Powerplays:
+            </p>
+            {(() => {
+              const I = result.A as number;
+              const pp = calcPP(I, pc.maxOvers, pc.isT20);
+              if (pc.isT20) {
+                const { pp: ppOvers, npp } = pp as { pp: number; npp: number };
+                return (
+                  <>
+                    <div className="flex items-center gap-2 pl-2">
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-green-100 text-green-800">
+                        Powerplay
+                      </span>
+                      <span className="font-mono text-sm text-gray-800">
+                        overs 1–{ppOvers}
+                      </span>
+                    </div>
+                    {npp > 0 && (
+                      <div className="flex items-center gap-2 pl-2">
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-gray-100 text-gray-700">
+                          Non-powerplay
+                        </span>
+                        <span className="font-mono text-sm text-gray-800">
+                          overs {ppOvers + 1}–{I}
+                        </span>
+                      </div>
+                    )}
+                  </>
+                );
+              }
+              const { pp1, pp2, pp3 } = pp as {
+                pp1: number;
+                pp2: number;
+                pp3: number;
+              };
+              const pp1End = pp1;
+              const pp2End = pp1 + pp2;
+              const pp3End = pp1 + pp2 + pp3;
+              return (
+                <>
+                  <div className="flex items-center gap-2 pl-2">
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-green-100 text-green-800">
+                      PP1
+                    </span>
+                    <span className="font-mono text-sm text-gray-800">
+                      overs 1–{pp1End}
+                    </span>
+                  </div>
+                  {pp2 > 0 && (
+                    <div className="flex items-center gap-2 pl-2">
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-yellow-100 text-yellow-800">
+                        PP2
+                      </span>
+                      <span className="font-mono text-sm text-gray-800">
+                        overs {pp1End + 1}–{pp2End}
+                      </span>
+                    </div>
+                  )}
+                  {pp3 > 0 && (
+                    <div className="flex items-center gap-2 pl-2">
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-orange-100 text-orange-800">
+                        PP3
+                      </span>
+                      <span className="font-mono text-sm text-gray-800">
+                        overs {pp2End + 1}–{pp3End}
+                      </span>
+                    </div>
+                  )}
+                </>
+              );
+            })()}
           </div>
           <p
-            className={`text-sm font-semibold mt-3 ${result.valid ? "text-green-700" : "text-red-700"}`}
+            className={`text-sm font-semibold mt-4 pt-3 border-t border-gray-200 text-center ${result.valid ? "text-green-700" : "text-red-700"}`}
           >
             {result.valid
               ? `✅ Match valid (min ${pc.minOvers} overs)`
@@ -1475,6 +2295,7 @@ function Table4({ pcKey }: { pcKey: string }) {
   const [result, setResult] = useState<Record<string, string | number> | null>(
     null,
   );
+  const [copied, setCopied] = useState(false);
 
   // Live computed values
   const Cv_live = A && B ? Math.max(0, toMins(B) - toMins(A) - prev) : null;
@@ -1706,32 +2527,159 @@ function Table4({ pcKey }: { pcKey: string }) {
       </button>
       {result && (
         <div
-          className={`rounded-xl p-4 text-center ${result.valid ? "bg-green-50 border border-green-200" : "bg-red-50 border border-red-200"}`}
+          className={`rounded-xl p-4 ${result.valid ? "bg-green-50 border border-green-200" : "bg-red-50 border border-red-200"}`}
         >
-          <p className="text-xs text-gray-500 mb-1">{pc.label}</p>
-          <p className="text-6xl font-black text-gray-900">{result.J}</p>
-          <p className="text-sm text-gray-500 mt-1">revised overs</p>
-          <div className="flex justify-center gap-4 mt-3 text-sm flex-wrap">
-            <span className="text-gray-500">
-              Overs lost: <b className="text-red-600">{result.I}</b>
-            </span>
-            <span className="text-gray-500">
-              Bowler limit:{" "}
-              <b className="text-gray-900">{result.bowlerLimit}</b>
-            </span>
-            <span className="text-gray-500">
-              Ends: <b className="text-gray-900">{result.L}</b>
-            </span>
+          <div className="flex items-center justify-between mb-1">
+            <p className="text-xs text-gray-500">{pc.label}</p>
+            <button
+              onClick={() => {
+                const overs = result.J as number;
+                const dist = summarizeBowlerDist(bowlerDist(overs));
+                const _pp = calcPP(overs, pc.maxOvers, pc.isT20);
+                const ppLines: string[] = [];
+                if (pc.isT20) {
+                  const { pp: ppOv, npp } = _pp as { pp: number; npp: number };
+                  ppLines.push(`  Powerplay: overs 1–${ppOv}`);
+                  if (npp > 0)
+                    ppLines.push(`  Non-powerplay: overs ${ppOv + 1}–${overs}`);
+                } else {
+                  const { pp1, pp2, pp3 } = _pp as {
+                    pp1: number;
+                    pp2: number;
+                    pp3: number;
+                  };
+                  ppLines.push(`  PP1: overs 1–${pp1}`);
+                  if (pp2 > 0)
+                    ppLines.push(`  PP2: overs ${pp1 + 1}–${pp1 + pp2}`);
+                  if (pp3 > 0)
+                    ppLines.push(
+                      `  PP3: overs ${pp1 + pp2 + 1}–${pp1 + pp2 + pp3}`,
+                    );
+                }
+                navigator.clipboard.writeText(
+                  [
+                    `MATCH SUMMARY — ${pc.label}`,
+                    `Revised overs: ${overs} (${result.I} overs lost)`,
+                    `Match ends: ${to12Hour(result.L as string)}`,
+                    ``,
+                    `Bowler limit:`,
+                    ...dist.map(
+                      (g) =>
+                        `  ${g.count} bowler${g.count > 1 ? "s" : ""} × ${g.overs} over${g.overs > 1 ? "s" : ""} = ${g.total} overs`,
+                    ),
+                    ``,
+                    `Powerplays:`,
+                    ...ppLines,
+                  ].join("\n"),
+                );
+                setCopied(true);
+                setTimeout(() => setCopied(false), 2000);
+              }}
+              className="text-xs px-2 py-0.5 rounded bg-gray-100 text-gray-600 hover:bg-gray-200 transition"
+            >
+              {copied ? "✓ Copied" : "📋 Copy"}
+            </button>
           </div>
-          <div className="mt-3 flex justify-center">
-            <PPBadges
-              I={result.J as number}
-              maxOvers={pc.maxOvers}
-              isT20={pc.isT20}
-            />
+          <p className="text-6xl font-black text-gray-900 text-center">
+            {result.J}
+          </p>
+          <p className="text-sm text-gray-500 mt-1 text-center">
+            revised overs
+          </p>
+          <p className="text-xs text-red-600 text-center">
+            {result.I} overs lost
+          </p>
+          <div className="mt-4 pt-4 border-t border-gray-200 space-y-1 text-sm text-left">
+            <p className="font-semibold text-gray-700 mb-1">Bowler limit:</p>
+            {summarizeBowlerDist(bowlerDist(result.J as number)).map((g, i) => (
+              <p key={i} className="text-gray-700 pl-2">
+                {g.count} bowler{g.count > 1 ? "s" : ""} × {g.overs} over
+                {g.overs > 1 ? "s" : ""} = {g.total} overs
+              </p>
+            ))}
+          </div>
+          <div className="mt-3 pt-3 border-t border-gray-200 space-y-1 text-sm">
+            <p className="text-gray-700">
+              Match ends:{" "}
+              <b className="text-gray-900">{to12Hour(result.L as string)}</b>
+            </p>
+          </div>
+          <div className="mt-3 pt-3 border-t border-gray-200 space-y-1.5">
+            <p className="font-semibold text-gray-700 text-sm mb-1">
+              Powerplays:
+            </p>
+            {(() => {
+              const I = result.J as number;
+              const pp = calcPP(I, pc.maxOvers, pc.isT20);
+              if (pc.isT20) {
+                const { pp: ppOvers, npp } = pp as { pp: number; npp: number };
+                return (
+                  <>
+                    <div className="flex items-center gap-2 pl-2">
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-green-100 text-green-800">
+                        Powerplay
+                      </span>
+                      <span className="font-mono text-sm text-gray-800">
+                        overs 1–{ppOvers}
+                      </span>
+                    </div>
+                    {npp > 0 && (
+                      <div className="flex items-center gap-2 pl-2">
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-gray-100 text-gray-700">
+                          Non-powerplay
+                        </span>
+                        <span className="font-mono text-sm text-gray-800">
+                          overs {ppOvers + 1}–{I}
+                        </span>
+                      </div>
+                    )}
+                  </>
+                );
+              }
+              const { pp1, pp2, pp3 } = pp as {
+                pp1: number;
+                pp2: number;
+                pp3: number;
+              };
+              const pp1End = pp1;
+              const pp2End = pp1 + pp2;
+              const pp3End = pp1 + pp2 + pp3;
+              return (
+                <>
+                  <div className="flex items-center gap-2 pl-2">
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-green-100 text-green-800">
+                      PP1
+                    </span>
+                    <span className="font-mono text-sm text-gray-800">
+                      overs 1–{pp1End}
+                    </span>
+                  </div>
+                  {pp2 > 0 && (
+                    <div className="flex items-center gap-2 pl-2">
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-yellow-100 text-yellow-800">
+                        PP2
+                      </span>
+                      <span className="font-mono text-sm text-gray-800">
+                        overs {pp1End + 1}–{pp2End}
+                      </span>
+                    </div>
+                  )}
+                  {pp3 > 0 && (
+                    <div className="flex items-center gap-2 pl-2">
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-orange-100 text-orange-800">
+                        PP3
+                      </span>
+                      <span className="font-mono text-sm text-gray-800">
+                        overs {pp2End + 1}–{pp3End}
+                      </span>
+                    </div>
+                  )}
+                </>
+              );
+            })()}
           </div>
           <p
-            className={`text-sm font-semibold mt-3 ${result.valid ? "text-green-700" : "text-red-700"}`}
+            className={`text-sm font-semibold mt-4 pt-3 border-t border-gray-200 text-center ${result.valid ? "text-green-700" : "text-red-700"}`}
           >
             {result.valid
               ? `✅ Match valid (min ${pc.minOvers} overs)`
@@ -1818,7 +2766,7 @@ export default function UmpireAssistPage() {
   const [tab, setTab] = useState<"chat" | "nrr" | "revised">("chat");
 
   return (
-    <div className="flex flex-col h-[calc(100vh-120px)] max-w-2xl mx-auto">
+    <div className="flex flex-col h-[calc(100vh-64px)] sm:h-[calc(100vh-120px)] w-full max-w-5xl mx-auto">
       <div className="px-4 pt-4 pb-2">
         <h1 className="text-xl font-semibold text-gray-900">
           🏏 Umpire Assist ·{" "}
