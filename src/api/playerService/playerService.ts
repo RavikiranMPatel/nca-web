@@ -223,13 +223,6 @@ export const playerService = {
   },
 
   /**
-   * Delete player photo
-   */
-  deletePhoto: async (publicId: string): Promise<void> => {
-    await api.delete(`/admin/players/${publicId}/photo`);
-  },
-
-  /**
    * Delete EXT player (Super Admin only)
    */
   deleteExtPlayer: async (publicId: string): Promise<void> => {

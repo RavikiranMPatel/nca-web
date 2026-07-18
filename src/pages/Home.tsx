@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 import {
   Trophy,
   Award,
@@ -14,11 +14,13 @@ import {
   Twitter,
   Instagram,
   Facebook,
+  Users,
 } from "lucide-react";
 import LoginPromptModal from "../components/LoginPromptModal";
 import publicApi from "../api/publicApi";
 import { getImageUrl } from "../utils/imageUrl";
 import ContactForm from "../components/ContactForm";
+import type { PublicClub, ClubSeasonStandingData } from "../types/club";
 import { Swiper, SwiperSlide } from "swiper/react";
 import { Autoplay, Pagination, Navigation } from "swiper/modules";
 import "swiper/css";
@@ -353,6 +355,42 @@ function InstagramGrid({
   );
 }
 
+function publicStandingOrdinal(n: number): string {
+  const s = ["th", "st", "nd", "rd"];
+  const v = n % 100;
+  return n + (s[(v - 20) % 10] || s[v] || s[0]);
+}
+
+function PublicClubStandingBadge({ standing }: { standing: ClubSeasonStandingData }) {
+  const { division, position, movement } = standing;
+  const label = position === 1
+    ? `🏆 Champions · Div ${division}`
+    : position === 2
+    ? `🥈 Runners-up · Div ${division}`
+    : position
+    ? `Div ${division} · ${publicStandingOrdinal(position)}`
+    : `Div ${division}`;
+
+  const movStyle =
+    movement === "PROMOTED" ? "bg-emerald-100 text-emerald-700" :
+    movement === "RELEGATED" ? "bg-red-100 text-red-700" :
+    "bg-slate-100 text-slate-600";
+  const movArrow = movement === "PROMOTED" ? "↑" : movement === "RELEGATED" ? "↓" : movement === "RETAINED" ? "→" : null;
+
+  return (
+    <div className="flex items-center gap-2 flex-wrap">
+      <span className="text-xs font-semibold text-slate-700 bg-slate-100 px-2.5 py-1 rounded-full">
+        {label}
+      </span>
+      {movArrow && movement && (
+        <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${movStyle}`}>
+          {movArrow} {movement.charAt(0) + movement.slice(1).toLowerCase()}
+        </span>
+      )}
+    </div>
+  );
+}
+
 function SectionHeading({
   title,
   subtitle,
@@ -396,6 +434,10 @@ function Home() {
   const [gallery, setGallery] = useState<GalleryImage[]>([]);
   const [selectedGalleryImage, setSelectedGalleryImage] =
     useState<GalleryImage | null>(null);
+  const [homepageSections, setHomepageSections] = useState<
+    Array<{ sectionType: string; displayOrder: number }>
+  >([]);
+  const [clubs, setClubs] = useState<PublicClub[]>([]);
   const [publicStats, setPublicStats] = useState<{
     totalPlayers: number;
     activePlayers: number;
@@ -425,10 +467,6 @@ function Home() {
   const shadowIntensity = settings.SHADOW_INTENSITY || "md";
   const slideDuration = parseInt(settings.SLIDE_DURATION || "5000");
   const sliderEnabled = settings.SECTION_SLIDER_ENABLED !== "false";
-  const facilitiesEnabled = settings.SECTION_FACILITIES_ENABLED !== "false";
-  const testimonialsEnabled = settings.SECTION_TESTIMONIALS_ENABLED !== "false";
-  const newsEnabled = settings.SECTION_NEWS_ENABLED !== "false";
-  const galleryEnabled = settings.SECTION_GALLERY_ENABLED !== "false";
   const starPerformerEnabled =
     settings.SECTION_STAR_PERFORMER_ENABLED !== "false";
   const youtubeEnabled = settings.SECTION_YOUTUBE_ENABLED !== "false";
@@ -555,6 +593,8 @@ function Home() {
         newsRes,
         statsRes,
         topPerformersRes,
+        homepageSectionsRes,
+        clubsRes,
       ] = await Promise.allSettled([
         publicApi.get("/settings/public"),
         publicApi.get("/cms/gallery"),
@@ -565,6 +605,8 @@ function Home() {
         publicApi.get("/cms/news?status=PUBLISHED"),
         publicApi.get("/public/stats"),
         publicApi.get("/public/cricket-stats/top-performers?period=alltime"),
+        publicApi.get("/public/homepage-sections"),
+        publicApi.get("/public/clubs"),
       ]);
 
       if (settingsRes.status === "fulfilled")
@@ -587,6 +629,10 @@ function Home() {
         setPublicStats(statsRes.value.data);
       if (topPerformersRes.status === "fulfilled")
         setTopPerformers(topPerformersRes.value.data);
+      if (homepageSectionsRes.status === "fulfilled")
+        setHomepageSections(homepageSectionsRes.value.data);
+      if (clubsRes.status === "fulfilled")
+        setClubs(clubsRes.value.data);
       setLoading(false);
     };
     loadAllData();
@@ -1341,262 +1387,404 @@ function Home() {
         </section>
       )}
 
-      {/* ── FACILITIES ── */}
-      {facilitiesEnabled && (
-        <section id="facilities" className="py-8 md:py-14 px-4 bg-white">
-          <div className="max-w-6xl mx-auto">
-            <SectionHeading
-              title="World-Class Facilities"
-              subtitle="State-of-the-art infrastructure designed to bring out the best in every player"
-              primaryColor={primaryColor}
-            />
-            {facilities.length > 0 ? (
-            <div className="flex md:grid md:grid-cols-3 gap-4 overflow-x-auto pb-2 md:overflow-visible md:pb-0 -mx-4 px-4 md:mx-0 md:px-0 snap-x snap-mandatory scroll-smooth">
-              {facilities.map((facility) => (
-                <div
-                  key={facility.id}
-                  className={`bg-white p-5 md:p-7 border-t-4 ${getShadowClass()} flex-shrink-0 w-[72vw] md:w-auto snap-start`}
-                  style={{ borderColor: primaryColor, ...getCardStyle() }}
-                >
-                  <div
-                    className="w-11 h-11 md:w-14 md:h-14 rounded-xl mb-4 flex items-center justify-center"
-                    style={{ backgroundColor: `${primaryColor}12` }}
-                  >
-                    <Award size={24} style={{ color: primaryColor }} />
-                  </div>
-                  <h3 className="text-base md:text-lg font-bold mb-1.5 text-gray-800">
-                    {facility.title}
-                  </h3>
-                  <p className="text-gray-500 text-xs md:text-sm leading-relaxed">
-                    {facility.description}
-                  </p>
-                </div>
-              ))}
-            </div>
-            ) : null}
-          </div>
-        </section>
-      )}
-
-      {/* ── TEAM ── */}
-      {settings.SECTION_TEAM_ENABLED !== "false" && team.length > 0 && (
-        <section
-          id="team"
-          className="py-8 md:py-14 px-4"
-          style={{ backgroundColor: `${primaryColor}06` }}
-        >
-          <div className="max-w-6xl mx-auto">
-            <SectionHeading
-              title="Meet Our Team"
-              subtitle={`The coaches and management team${academyName ? ` behind ${academyName}` : ""}`}
-              primaryColor={primaryColor}
-            />
-            <div className="flex md:grid md:grid-cols-3 gap-4 overflow-x-auto pb-2 md:overflow-visible md:pb-0 -mx-4 px-4 md:mx-0 md:px-0 snap-x snap-mandatory scroll-smooth">
-              {team.map((member) => (
-                <div
-                  key={member.id}
-                  className={`bg-white text-center p-5 hover:shadow-xl transition-shadow relative group ${getShadowClass()} flex-shrink-0 w-[56vw] md:w-auto snap-start`}
-                  style={getCardStyle()}
-                  onClick={() =>
-                    setExpandedMemberId(
-                      expandedMemberId === member.id ? null : member.id,
-                    )
-                  }
-                >
-                  <div
-                    className="w-16 h-16 md:w-20 md:h-20 rounded-full overflow-hidden mx-auto mb-3"
-                    style={{ border: `3px solid ${primaryColor}30` }}
-                  >
-                    {member.photoUrl ? (
-                      <img
-                        src={getImageUrl(member.photoUrl) || ""}
-                        alt={member.name}
-                        className="w-full h-full object-cover"
-                      />
-                    ) : (
+      {/* ── CMS SECTIONS — ordered and visibility-controlled via HomepageSection API ── */}
+      {homepageSections.map((section) => {
+        switch (section.sectionType) {
+          case "FACILITIES":
+            return facilities.length > 0 ? (
+              <section key="facilities" id="facilities" className="py-8 md:py-14 px-4 bg-white">
+                <div className="max-w-6xl mx-auto">
+                  <SectionHeading
+                    title="World-Class Facilities"
+                    subtitle="State-of-the-art infrastructure designed to bring out the best in every player"
+                    primaryColor={primaryColor}
+                  />
+                  <div className="flex md:grid md:grid-cols-3 gap-4 overflow-x-auto pb-2 md:overflow-visible md:pb-0 -mx-4 px-4 md:mx-0 md:px-0 snap-x snap-mandatory scroll-smooth">
+                    {facilities.map((facility) => (
                       <div
-                        className="w-full h-full flex items-center justify-center text-white text-xl font-bold"
-                        style={{ backgroundColor: primaryColor }}
+                        key={facility.id}
+                        className={`bg-white p-5 md:p-7 border-t-4 ${getShadowClass()} flex-shrink-0 w-[72vw] md:w-auto snap-start`}
+                        style={{ borderColor: primaryColor, ...getCardStyle() }}
                       >
-                        {member.name.charAt(0)}
+                        <div
+                          className="w-11 h-11 md:w-14 md:h-14 rounded-xl mb-4 flex items-center justify-center"
+                          style={{ backgroundColor: `${primaryColor}12` }}
+                        >
+                          <Award size={24} style={{ color: primaryColor }} />
+                        </div>
+                        <h3 className="text-base md:text-lg font-bold mb-1.5 text-gray-800">
+                          {facility.title}
+                        </h3>
+                        <p className="text-gray-500 text-xs md:text-sm leading-relaxed">
+                          {facility.description}
+                        </p>
                       </div>
-                    )}
-                  </div>
-                  <h3 className="font-bold text-gray-800 text-sm md:text-base">
-                    {member.name}
-                  </h3>
-                  <p
-                    className="text-xs md:text-sm font-medium mt-0.5"
-                    style={{ color: primaryColor }}
-                  >
-                    {member.role}
-                  </p>
-                  {member.bio && (
-                    <p className="text-xs text-gray-400 mt-2 leading-relaxed line-clamp-2 md:line-clamp-3">
-                      {member.bio}
-                    </p>
-                  )}
-                  {member.bio && (
-                    <p
-                      className="sm:hidden text-xs mt-2 font-medium"
-                      style={{ color: primaryColor }}
-                    >
-                      {expandedMemberId === member.id
-                        ? "Tap to close ▲"
-                        : "Tap to read more ▼"}
-                    </p>
-                  )}
-                  {member.bio && expandedMemberId === member.id && (
-                    <div
-                      className="sm:hidden mt-3 p-3 rounded-xl text-xs text-left leading-relaxed text-white"
-                      style={{ backgroundColor: "#1f2937" }}
-                    >
-                      {member.bio}
-                    </div>
-                  )}
-                  {member.bio && (
-                    <div
-                      className="hidden sm:block absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-64 p-4 bg-gray-900 text-white text-xs leading-relaxed rounded-xl shadow-xl opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity duration-200 z-30 text-left"
-                      style={{ maxWidth: "min(256px, 90vw)" }}
-                    >
-                      {member.bio}
-                      <div className="absolute top-full left-1/2 -translate-x-1/2 w-0 h-0 border-l-8 border-r-8 border-t-8 border-l-transparent border-r-transparent border-t-gray-900" />
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
-          </div>
-        </section>
-      )}
-
-      {/* ── TESTIMONIALS ── */}
-      {testimonialsEnabled && (
-        <section id="testimonials" className="py-10 md:py-14 px-4 bg-white">
-          <div className="max-w-6xl mx-auto">
-            <SectionHeading
-              title={testimonialsHeading}
-              subtitle={testimonialsSubheading}
-              primaryColor={primaryColor}
-            />
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              {testimonials.length > 0
-                ? testimonials.slice(0, 3).map((t) => (
-                <div
-                  key={t.id}
-                  className={`bg-white p-7 hover:shadow-xl transition-shadow flex flex-col ${getShadowClass()}`}
-                  style={getCardStyle()}
-                >
-                  <div className="flex gap-1 mb-4">
-                    {[...Array(t.rating || 5)].map((_, i) => (
-                      <Star
-                        key={i}
-                        size={15}
-                        fill={primaryColor}
-                        style={{ color: primaryColor }}
-                      />
                     ))}
                   </div>
-                  <p className="text-gray-600 text-sm leading-relaxed italic flex-1 mb-5 line-clamp-4">
-                    "{t.text}"
-                  </p>
-                  <div className="flex items-center gap-3">
-                    {"photoUrl" in t && t.photoUrl ? (
-                      <img
-                        src={getImageUrl(t.photoUrl as string) || ""}
-                        alt={t.name}
-                        className="w-10 h-10 rounded-full object-cover"
-                      />
-                    ) : (
+                </div>
+              </section>
+            ) : null;
+
+          case "TEAM":
+            return team.length > 0 ? (
+              <section
+                key="team"
+                id="team"
+                className="py-8 md:py-14 px-4"
+                style={{ backgroundColor: `${primaryColor}06` }}
+              >
+                <div className="max-w-6xl mx-auto">
+                  <SectionHeading
+                    title="Meet Our Team"
+                    subtitle={`The coaches and management team${academyName ? ` behind ${academyName}` : ""}`}
+                    primaryColor={primaryColor}
+                  />
+                  <div className="flex md:grid md:grid-cols-3 gap-4 overflow-x-auto pb-2 md:overflow-visible md:pb-0 -mx-4 px-4 md:mx-0 md:px-0 snap-x snap-mandatory scroll-smooth">
+                    {team.map((member) => (
                       <div
-                        className="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold text-sm shrink-0"
-                        style={{ backgroundColor: primaryColor }}
-                      >
-                        {t.name.charAt(0)}
-                      </div>
-                    )}
-                    <div>
-                      <div className="font-semibold text-sm text-gray-800">
-                        {t.name}
-                      </div>
-                      <div className="text-xs text-gray-400">{t.role}</div>
-                    </div>
-                  </div>
-                </div>
-              ))
-                : null}
-            </div>
-          </div>
-        </section>
-      )}
-
-      {/* ── NEWS ── */}
-      {newsEnabled && (
-        <section
-          id="news"
-          className="py-10 md:py-14 px-4"
-          style={{ backgroundColor: `${primaryColor}06` }}
-        >
-          <div className="max-w-6xl mx-auto">
-            <SectionHeading
-              title={newsHeading}
-              subtitle={newsSubheading}
-              primaryColor={primaryColor}
-            />
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              {news.length > 0
-                ? news.map((article) => (
-                <div
-                  key={article.id}
-                  className={`bg-white overflow-hidden hover:shadow-xl transition-shadow ${getShadowClass()}`}
-                  style={getCardStyle()}
-                >
-                  {"featuredImageUrl" in article && article.featuredImageUrl ? (
-                    <div className="h-44 overflow-hidden">
-                      <img
-                        src={
-                          getImageUrl(article.featuredImageUrl as string) || ""
+                        key={member.id}
+                        className={`bg-white text-center p-5 hover:shadow-xl transition-shadow relative group ${getShadowClass()} flex-shrink-0 w-[56vw] md:w-auto snap-start`}
+                        style={getCardStyle()}
+                        onClick={() =>
+                          setExpandedMemberId(
+                            expandedMemberId === member.id ? null : member.id,
+                          )
                         }
-                        alt={article.title}
-                        className="w-full h-full object-cover hover:scale-105 transition-transform duration-500"
-                      />
-                    </div>
-                  ) : (
-                    <div
-                      className="h-1.5"
-                      style={{
-                        background: `linear-gradient(90deg, ${primaryColor}, ${secondaryColor})`,
-                      }}
-                    />
-                  )}
-                  <div className="p-5">
-                    <div className="flex items-center gap-2 mb-3">
-                      <span
-                        className="text-xs px-2.5 py-0.5 rounded-full font-semibold text-white"
-                        style={{ backgroundColor: secondaryColor }}
                       >
-                        {article.category || "News"}
-                      </span>
-                      <span className="text-xs text-gray-400">
-                        {new Date(article.publishedAt).toLocaleDateString()}
-                      </span>
-                    </div>
-                    <h3 className="font-bold text-gray-800 mb-2 line-clamp-2 leading-snug">
-                      {article.title}
-                    </h3>
-                    <p className="text-gray-500 text-sm leading-relaxed line-clamp-3">
-                      {article.shortDescription}
-                    </p>
+                        <div
+                          className="w-16 h-16 md:w-20 md:h-20 rounded-full overflow-hidden mx-auto mb-3"
+                          style={{ border: `3px solid ${primaryColor}30` }}
+                        >
+                          {member.photoUrl ? (
+                            <img
+                              src={getImageUrl(member.photoUrl) || ""}
+                              alt={member.name}
+                              className="w-full h-full object-cover"
+                            />
+                          ) : (
+                            <div
+                              className="w-full h-full flex items-center justify-center text-white text-xl font-bold"
+                              style={{ backgroundColor: primaryColor }}
+                            >
+                              {member.name.charAt(0)}
+                            </div>
+                          )}
+                        </div>
+                        <h3 className="font-bold text-gray-800 text-sm md:text-base">
+                          {member.name}
+                        </h3>
+                        <p
+                          className="text-xs md:text-sm font-medium mt-0.5"
+                          style={{ color: primaryColor }}
+                        >
+                          {member.role}
+                        </p>
+                        {member.bio && (
+                          <p className="text-xs text-gray-400 mt-2 leading-relaxed line-clamp-2 md:line-clamp-3">
+                            {member.bio}
+                          </p>
+                        )}
+                        {member.bio && (
+                          <p
+                            className="sm:hidden text-xs mt-2 font-medium"
+                            style={{ color: primaryColor }}
+                          >
+                            {expandedMemberId === member.id
+                              ? "Tap to close ▲"
+                              : "Tap to read more ▼"}
+                          </p>
+                        )}
+                        {member.bio && expandedMemberId === member.id && (
+                          <div
+                            className="sm:hidden mt-3 p-3 rounded-xl text-xs text-left leading-relaxed text-white"
+                            style={{ backgroundColor: "#1f2937" }}
+                          >
+                            {member.bio}
+                          </div>
+                        )}
+                        {member.bio && (
+                          <div
+                            className="hidden sm:block absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-64 p-4 bg-gray-900 text-white text-xs leading-relaxed rounded-xl shadow-xl opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity duration-200 z-30 text-left"
+                            style={{ maxWidth: "min(256px, 90vw)" }}
+                          >
+                            {member.bio}
+                            <div className="absolute top-full left-1/2 -translate-x-1/2 w-0 h-0 border-l-8 border-r-8 border-t-8 border-l-transparent border-r-transparent border-t-gray-900" />
+                          </div>
+                        )}
+                      </div>
+                    ))}
                   </div>
                 </div>
-              ))
-                : null}
-            </div>
-          </div>
-        </section>
-      )}
+              </section>
+            ) : null;
 
-      {/* ── YOUTUBE ── */}
+          case "TESTIMONIALS":
+            return testimonials.length > 0 ? (
+              <section key="testimonials" id="testimonials" className="py-10 md:py-14 px-4 bg-white">
+                <div className="max-w-6xl mx-auto">
+                  <SectionHeading
+                    title={testimonialsHeading}
+                    subtitle={testimonialsSubheading}
+                    primaryColor={primaryColor}
+                  />
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    {testimonials.slice(0, 3).map((t) => (
+                      <div
+                        key={t.id}
+                        className={`bg-white p-7 hover:shadow-xl transition-shadow flex flex-col ${getShadowClass()}`}
+                        style={getCardStyle()}
+                      >
+                        <div className="flex gap-1 mb-4">
+                          {[...Array(t.rating || 5)].map((_, i) => (
+                            <Star
+                              key={i}
+                              size={15}
+                              fill={primaryColor}
+                              style={{ color: primaryColor }}
+                            />
+                          ))}
+                        </div>
+                        <p className="text-gray-600 text-sm leading-relaxed italic flex-1 mb-5 line-clamp-4">
+                          "{t.text}"
+                        </p>
+                        <div className="flex items-center gap-3">
+                          {"photoUrl" in t && t.photoUrl ? (
+                            <img
+                              src={getImageUrl(t.photoUrl as string) || ""}
+                              alt={t.name}
+                              className="w-10 h-10 rounded-full object-cover"
+                            />
+                          ) : (
+                            <div
+                              className="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold text-sm shrink-0"
+                              style={{ backgroundColor: primaryColor }}
+                            >
+                              {t.name.charAt(0)}
+                            </div>
+                          )}
+                          <div>
+                            <div className="font-semibold text-sm text-gray-800">
+                              {t.name}
+                            </div>
+                            <div className="text-xs text-gray-400">{t.role}</div>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </section>
+            ) : null;
+
+          case "NEWS":
+            return news.length > 0 ? (
+              <section
+                key="news"
+                id="news"
+                className="py-10 md:py-14 px-4"
+                style={{ backgroundColor: `${primaryColor}06` }}
+              >
+                <div className="max-w-6xl mx-auto">
+                  <SectionHeading
+                    title={newsHeading}
+                    subtitle={newsSubheading}
+                    primaryColor={primaryColor}
+                  />
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    {news.map((article) => (
+                      <div
+                        key={article.id}
+                        className={`bg-white overflow-hidden hover:shadow-xl transition-shadow ${getShadowClass()}`}
+                        style={getCardStyle()}
+                      >
+                        {"featuredImageUrl" in article && article.featuredImageUrl ? (
+                          <div className="h-44 overflow-hidden">
+                            <img
+                              src={getImageUrl(article.featuredImageUrl as string) || ""}
+                              alt={article.title}
+                              className="w-full h-full object-cover hover:scale-105 transition-transform duration-500"
+                            />
+                          </div>
+                        ) : (
+                          <div
+                            className="h-1.5"
+                            style={{
+                              background: `linear-gradient(90deg, ${primaryColor}, ${secondaryColor})`,
+                            }}
+                          />
+                        )}
+                        <div className="p-5">
+                          <div className="flex items-center gap-2 mb-3">
+                            <span
+                              className="text-xs px-2.5 py-0.5 rounded-full font-semibold text-white"
+                              style={{ backgroundColor: secondaryColor }}
+                            >
+                              {article.category || "News"}
+                            </span>
+                            <span className="text-xs text-gray-400">
+                              {new Date(article.publishedAt).toLocaleDateString()}
+                            </span>
+                          </div>
+                          <h3 className="font-bold text-gray-800 mb-2 line-clamp-2 leading-snug">
+                            {article.title}
+                          </h3>
+                          <p className="text-gray-500 text-sm leading-relaxed line-clamp-3">
+                            {article.shortDescription}
+                          </p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </section>
+            ) : null;
+
+          case "GALLERY":
+            return (
+              <section key="gallery" id="gallery" className="py-10 md:py-14 px-4 bg-white">
+                <div className="max-w-6xl mx-auto">
+                  <SectionHeading
+                    title={galleryHeading}
+                    subtitle={gallerySubheading}
+                    primaryColor={primaryColor}
+                  />
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                    {gallery.length > 0
+                      ? gallery.map((image) => (
+                          <div
+                            key={image.id}
+                            onClick={() => setSelectedGalleryImage(image)}
+                            className={`overflow-hidden shadow-sm hover:shadow-xl transition cursor-pointer relative group ${wideImages[image.id] ? "col-span-2 aspect-[16/9]" : "col-span-1 aspect-square"}`}
+                            style={{ borderRadius: `${cardRadius}px` }}
+                          >
+                            <img
+                              src={getImageUrl(image.imageUrl) || ""}
+                              alt={image.caption || "Gallery"}
+                              className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
+                              onLoad={(e) => {
+                                const imgEl = e.currentTarget;
+                                const wide =
+                                  imgEl.naturalWidth / imgEl.naturalHeight > 1.25;
+                                setWideImages((prev) => {
+                                  if (prev[image.id] === wide) return prev;
+                                  return { ...prev, [image.id]: wide };
+                                });
+                              }}
+                            />
+                            {image.caption && (
+                              <div
+                                className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center p-4"
+                                style={{ backgroundColor: `${primaryColor}90` }}
+                              >
+                                <span className="text-white font-semibold text-center text-sm">
+                                  {image.caption}
+                                </span>
+                              </div>
+                            )}
+                          </div>
+                        ))
+                      : [1, 2, 3, 4, 5, 6, 7, 8].map((i) => (
+                          <div
+                            key={i}
+                            className="aspect-square overflow-hidden shadow-sm hover:shadow-xl transition cursor-pointer relative group"
+                            style={{
+                              backgroundColor: `${primaryColor}10`,
+                              borderRadius: `${cardRadius}px`,
+                            }}
+                          >
+                            <div className="absolute inset-0 flex items-center justify-center text-gray-300">
+                              <span className="text-sm">Photo {i}</span>
+                            </div>
+                            <div
+                              className="absolute inset-0 opacity-0 group-hover:opacity-100 transition flex items-center justify-center"
+                              style={{ backgroundColor: `${primaryColor}90` }}
+                            >
+                              <span className="text-white font-semibold text-sm">
+                                View
+                              </span>
+                            </div>
+                          </div>
+                        ))}
+                  </div>
+                </div>
+              </section>
+            );
+
+          case "CLUB":
+            return clubs.length > 0 ? (
+              <section
+                key="clubs"
+                id="clubs"
+                className="py-10 md:py-14 px-4"
+                style={{ backgroundColor: `${primaryColor}06` }}
+              >
+                <div className="max-w-6xl mx-auto">
+                  <SectionHeading
+                    title="Our Clubs"
+                    subtitle="Meet the clubs representing our academy"
+                    primaryColor={primaryColor}
+                  />
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {clubs.map((club) => (
+                      <div
+                        key={club.publicId}
+                        className={`bg-white p-6 flex flex-col ${getShadowClass()}`}
+                        style={getCardStyle()}
+                      >
+                        <h3 className="text-xl font-bold text-gray-800 mb-1">
+                          {club.name}
+                        </h3>
+                        {club.ownerName && (
+                          <p
+                            className="text-sm font-medium mb-3"
+                            style={{ color: primaryColor }}
+                          >
+                            {club.ownerName}
+                          </p>
+                        )}
+                        {club.history && (
+                          <p className="text-gray-500 text-sm leading-relaxed line-clamp-3 whitespace-pre-line mb-4 flex-1">
+                            {club.history}
+                          </p>
+                        )}
+                        {club.currentStanding && (
+                          <div className="mb-3">
+                            <PublicClubStandingBadge standing={club.currentStanding} />
+                          </div>
+                        )}
+                        <div className="flex items-center gap-4 mb-4">
+                          <div className="flex items-center gap-1.5 text-sm text-gray-600">
+                            <Users size={14} style={{ color: primaryColor }} />
+                            <span>
+                              <strong>{club.totalMembers}</strong> current
+                            </span>
+                          </div>
+                          {club.alumniCount > 0 && (
+                            <div className="text-sm text-gray-500">
+                              {club.alumniCount} alumni
+                            </div>
+                          )}
+                        </div>
+                        <Link
+                          to={`/clubs/${club.publicId}`}
+                          className="inline-flex items-center gap-1 text-sm font-semibold self-start"
+                          style={{ color: primaryColor }}
+                        >
+                          View Club <ArrowRight size={14} />
+                        </Link>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </section>
+            ) : null;
+
+          default:
+            return null;
+        }
+      })}
+
+      {/* ── YOUTUBE (not CMS-managed, fixed position after CMS sections) ── */}
       {youtubeEnabled && youtubeVideos.length > 0 && (
         <section id="videos" className="py-10 md:py-14 px-4 bg-white">
           <div className="max-w-6xl mx-auto">
@@ -1617,7 +1805,7 @@ function Home() {
         </section>
       )}
 
-      {/* ── INSTAGRAM ── */}
+      {/* ── INSTAGRAM (not CMS-managed, fixed position after CMS sections) ── */}
       {instagramEnabled && instagramPosts.length > 0 && (
         <section
           id="instagram"
@@ -1638,77 +1826,6 @@ function Home() {
               getButtonStyle={getButtonStyle}
               instagramUrl={socialLinks.instagram}
             />
-          </div>
-        </section>
-      )}
-
-      {/* ── GALLERY ── */}
-      {galleryEnabled && (
-        <section id="gallery" className="py-10 md:py-14 px-4 bg-white">
-          <div className="max-w-6xl mx-auto">
-            <SectionHeading
-              title={galleryHeading}
-              subtitle={gallerySubheading}
-              primaryColor={primaryColor}
-            />
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-              {gallery.length > 0
-                ? gallery.map((image) => (
-                    <div
-                      key={image.id}
-                      onClick={() => setSelectedGalleryImage(image)}
-                      className={`overflow-hidden shadow-sm hover:shadow-xl transition cursor-pointer relative group ${wideImages[image.id] ? "col-span-2 aspect-[16/9]" : "col-span-1 aspect-square"}`}
-                      style={{ borderRadius: `${cardRadius}px` }}
-                    >
-                      <img
-                        src={getImageUrl(image.imageUrl) || ""}
-                        alt={image.caption || "Gallery"}
-                        className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
-                        onLoad={(e) => {
-                          const imgEl = e.currentTarget;
-                          const wide =
-                            imgEl.naturalWidth / imgEl.naturalHeight > 1.25;
-                          setWideImages((prev) => {
-                            if (prev[image.id] === wide) return prev;
-                            return { ...prev, [image.id]: wide };
-                          });
-                        }}
-                      />
-                      {image.caption && (
-                        <div
-                          className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center p-4"
-                          style={{ backgroundColor: `${primaryColor}90` }}
-                        >
-                          <span className="text-white font-semibold text-center text-sm">
-                            {image.caption}
-                          </span>
-                        </div>
-                      )}
-                    </div>
-                  ))
-                : [1, 2, 3, 4, 5, 6, 7, 8].map((i) => (
-                    <div
-                      key={i}
-                      className="aspect-square overflow-hidden shadow-sm hover:shadow-xl transition cursor-pointer relative group"
-                      style={{
-                        backgroundColor: `${primaryColor}10`,
-                        borderRadius: `${cardRadius}px`,
-                      }}
-                    >
-                      <div className="absolute inset-0 flex items-center justify-center text-gray-300">
-                        <span className="text-sm">Photo {i}</span>
-                      </div>
-                      <div
-                        className="absolute inset-0 opacity-0 group-hover:opacity-100 transition flex items-center justify-center"
-                        style={{ backgroundColor: `${primaryColor}90` }}
-                      >
-                        <span className="text-white font-semibold text-sm">
-                          View
-                        </span>
-                      </div>
-                    </div>
-                  ))}
-            </div>
           </div>
         </section>
       )}
@@ -1787,6 +1904,10 @@ function Home() {
         <p className="text-gray-400 text-sm">
           © {new Date().getFullYear()} {academyName}. All rights reserved.
         </p>
+        <div className="flex justify-center gap-4 mt-3 text-xs text-gray-400">
+          <Link to="/terms" className="hover:text-gray-600 hover:underline">Terms of Service</Link>
+          <Link to="/privacy" className="hover:text-gray-600 hover:underline">Privacy Policy</Link>
+        </div>
       </footer>
 
       <LoginPromptModal

@@ -5,6 +5,8 @@ import {
   Menu,
   X,
   User,
+  Users,
+  Globe,
   LogOut,
   LogIn,
   UserPlus,
@@ -644,13 +646,35 @@ function Navbar() {
               <DrawerItem
                 icon={LayoutDashboard}
                 label="Admin Dashboard"
-                active={location.pathname.startsWith("/admin")}
+                active={location.pathname === "/admin"}
                 onClick={() => {
                   navigate("/admin");
                   setMobileOpen(false);
                 }}
                 iconBg="#fef3c7"
                 iconColor="#d97706"
+              />
+              <DrawerItem
+                icon={Users}
+                label="Clubs"
+                active={location.pathname.startsWith("/admin/clubs")}
+                onClick={() => {
+                  navigate("/admin/clubs");
+                  setMobileOpen(false);
+                }}
+                iconBg="#eff6ff"
+                iconColor="#2563eb"
+              />
+              <DrawerItem
+                icon={Globe}
+                label="Homepage Sections"
+                active={location.pathname === "/admin/settings/homepage"}
+                onClick={() => {
+                  navigate("/admin/settings/homepage");
+                  setMobileOpen(false);
+                }}
+                iconBg="#f5f3ff"
+                iconColor="#7c3aed"
               />
             </>
           )}

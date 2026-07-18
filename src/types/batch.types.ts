@@ -56,7 +56,10 @@ export type Player = {
 };
 
 // Attendance types updated for flexible batches
-export type AttendanceStatus = "PRESENT" | "ABSENT" | "OVERRIDDEN";
+// Status values accepted by the backend for submission (PRESENT/ABSENT only)
+export type AttendanceStatus = "PRESENT" | "ABSENT";
+// Display-only: OVERRIDDEN is derived from the `overridden: boolean` flag on AttendanceRecord, not a real backend status value
+export type AttendanceDisplayStatus = "PRESENT" | "ABSENT" | "OVERRIDDEN";
 
 export type AttendanceRecord = {
   id: string;

@@ -22,7 +22,8 @@ import AttendanceSummaryCards from "../../components/attendance-component/Attend
 type AttendanceSession = {
   date: string;
   batchName: string;
-  status: "PRESENT" | "ABSENT" | "OVERRIDDEN";
+  status: "PRESENT" | "ABSENT";
+  overridden: boolean;
   markedAt: string;
   markedBy: string;
   oldStatus?: string;
@@ -41,7 +42,7 @@ type PlayerSummary = {
   publicId: string;
   displayName: string;
   gender: string;
-  batchNames: string;
+  batch: string;
   joiningDate: string;
   active: boolean;
 };
@@ -287,7 +288,7 @@ function PlayerAttendanceHistoryPage() {
             {player.displayName}
           </h1>
           <p className="text-xs text-gray-500">
-            Attendance History • {player.batchNames}
+            Attendance History • {player.batch}
           </p>
         </div>
       </div>

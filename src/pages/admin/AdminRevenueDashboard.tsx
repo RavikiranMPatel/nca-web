@@ -389,6 +389,8 @@ export default function AdminRevenueDashboard() {
   const [subRevenue, setSubRevenue] = useState<SubRevenueRow[]>([]);
   const [subRevenueSearch, setSubRevenueSearch] = useState("");
 
+  const [flags, setFlags] = useState<Record<string, string>>({});
+
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [activeTab, setActiveTab] = useState<Tab>("overview");
@@ -496,6 +498,7 @@ export default function AdminRevenueDashboard() {
         feeSummaryRes,
         regFeesRes,
         subRevenueRes,
+        settingsRes,
       ] = await Promise.all([
         api.get("/admin/fees/payments"),
         api.get("/admin/bookings"),
@@ -505,6 +508,7 @@ export default function AdminRevenueDashboard() {
         api.get("/admin/fees/collection-summary").catch(() => ({ data: [] })),
         api.get("/admin/fees/registration-fees").catch(() => ({ data: [] })),
         api.get("/admin/subscriptions/revenue").catch(() => ({ data: [] })),
+        api.get("/admin/settings").catch(() => ({ data: {} })),
       ]);
       if (thisLoad !== loadRef.current) return;
 
@@ -540,6 +544,7 @@ export default function AdminRevenueDashboard() {
       setExpenses(newExpenses);
       setPartnerSpending(newPartnerSpending);
       setSuggestions(newSuggestions);
+      setFlags(settingsRes.data || {});
     } catch {
       if (thisLoad !== loadRef.current) return;
       setError("Failed to load revenue data");
@@ -594,6 +599,10 @@ export default function AdminRevenueDashboard() {
   useEffect(() => {
     loadMonthly(monthYear.year, monthYear.month);
   }, [monthYear, isSuperAdmin]);
+
+  const showCampFees    = flags["SUMMER_CAMP_ENABLED"]       !== "false";
+  const showBookings    = flags["MODULE_BOOKINGS_ENABLED"]   !== "false";
+  const showMemberships = flags["MODULE_BM_MEMBERS_ENABLED"] !== "false";
 
   const { from, to } = getDateBounds(dateRange, customFrom, customTo);
   const inRange = (d: string) => {
@@ -753,14 +762,13 @@ export default function AdminRevenueDashboard() {
     [subRevenue, subRevenueSearch],
   );
 
-  // ── grossRevenue now includes reg fees ──
   const grossRevenue =
     feesTotal +
-    bookingsTotal +
-    campFeesTotal +
+    (showBookings    ? bookingsTotal  : 0) +
+    (showCampFees    ? campFeesTotal  : 0) +
     otherIncomeTotal +
     regFeesTotal +
-    subRevenueTotal;
+    (showMemberships ? subRevenueTotal : 0);
   const netRevenue = grossRevenue - expensesTotal;
 
   const rangeLabels: Record<DateRange, string> = {
@@ -900,21 +908,23 @@ export default function AdminRevenueDashboard() {
         "Mode",
       ],
     ];
-    filteredCampFees.forEach((p) =>
-      rows.push([
-        "Camp Fee",
-        fmtDate(p.paidAt),
-        `${p.campName} (${p.enrolledBatchCount} sessions)`,
-        "",
-        "",
-        "",
-        "",
-        "",
-        "",
-        String(p.amount),
-        fmtMode(p.paymentMode),
-      ]),
-    );
+    if (showCampFees) {
+      filteredCampFees.forEach((p) =>
+        rows.push([
+          "Camp Fee",
+          fmtDate(p.paidAt),
+          `${p.campName} (${p.enrolledBatchCount} sessions)`,
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          String(p.amount),
+          fmtMode(p.paymentMode),
+        ]),
+      );
+    }
     filteredFees.forEach((p) =>
       rows.push([
         "Fee",
@@ -930,21 +940,23 @@ export default function AdminRevenueDashboard() {
         fmtMode(p.paymentMode),
       ]),
     );
-    filteredBookings.forEach((b) =>
-      rows.push([
-        "Booking",
-        fmtDate(b.slotDate),
-        `${b.resourceType} ${b.startTime}-${b.endTime}`,
-        "",
-        "",
-        "",
-        "",
-        "",
-        "",
-        String(b.amount),
-        fmtMode(b.paymentMode),
-      ]),
-    );
+    if (showBookings) {
+      filteredBookings.forEach((b) =>
+        rows.push([
+          "Booking",
+          fmtDate(b.slotDate),
+          `${b.resourceType} ${b.startTime}-${b.endTime}`,
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          String(b.amount),
+          fmtMode(b.paymentMode),
+        ]),
+      );
+    }
     // ── NEW: include reg fees in CSV ──
     regFees
       .filter((r) => r.regFeePaid && inRange(r.regFeePaidOn || ""))
@@ -1821,8 +1833,7 @@ export default function AdminRevenueDashboard() {
               Revenue
             </h1>
             <p className="text-xs text-slate-500 hidden sm:block">
-              Fees + Camp Fees + Bookings + Reg Fees
-              {isSuperAdmin ? " + Expenses" : ""}
+              Fees{showCampFees ? " + Camp Fees" : ""}{showBookings ? " + Bookings" : ""} + Reg Fees{showMemberships ? " + Memberships" : ""}{isSuperAdmin ? " + Expenses" : ""}
             </p>
           </div>
         </div>
@@ -1952,9 +1963,7 @@ export default function AdminRevenueDashboard() {
       </div>
 
       {/* ── Summary Cards ── */}
-      <div
-        className={`grid gap-2 sm:gap-3 ${isSuperAdmin ? "grid-cols-2 sm:grid-cols-3 lg:grid-cols-8" : "grid-cols-2 lg:grid-cols-5"}`}
-      >
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2 sm:gap-3">
         {isSuperAdmin && (
           <SummaryCard
             label="Net Revenue"
@@ -1975,26 +1984,32 @@ export default function AdminRevenueDashboard() {
           bg="bg-gradient-to-br from-blue-50 to-indigo-50"
           border="border-blue-200"
           valueClass="text-blue-700"
+          onClick={() => setActiveTab("fees")}
         />
-        <SummaryCard
-          label="Camp Fees"
-          value={fmt(campFeesTotal)}
-          sub={`${filteredCampFees.length} paid`}
-          icon={<Users size={15} className="text-teal-600" />}
-          bg="bg-gradient-to-br from-teal-50 to-cyan-50"
-          border="border-teal-200"
-          valueClass="text-teal-700"
-        />
-        <SummaryCard
-          label="Bookings"
-          value={fmt(bookingsTotal)}
-          sub={`${filteredBookings.length} paid`}
-          icon={<BookOpen size={15} className="text-orange-500" />}
-          bg="bg-gradient-to-br from-orange-50 to-amber-50"
-          border="border-orange-200"
-          valueClass="text-orange-600"
-        />
-        {/* ── NEW: Reg Fees summary card ── */}
+        {showCampFees && (
+          <SummaryCard
+            label="Camp Fees"
+            value={fmt(campFeesTotal)}
+            sub={`${filteredCampFees.length} paid`}
+            icon={<Users size={15} className="text-teal-600" />}
+            bg="bg-gradient-to-br from-teal-50 to-cyan-50"
+            border="border-teal-200"
+            valueClass="text-teal-700"
+            onClick={() => setActiveTab("campfees")}
+          />
+        )}
+        {showBookings && (
+          <SummaryCard
+            label="Bookings"
+            value={fmt(bookingsTotal)}
+            sub={`${filteredBookings.length} paid`}
+            icon={<BookOpen size={15} className="text-orange-500" />}
+            bg="bg-gradient-to-br from-orange-50 to-amber-50"
+            border="border-orange-200"
+            valueClass="text-orange-600"
+            onClick={() => setActiveTab("bookings")}
+          />
+        )}
         <SummaryCard
           label="Reg Fees"
           value={fmt(regFeesTotal)}
@@ -2003,16 +2018,20 @@ export default function AdminRevenueDashboard() {
           bg="bg-gradient-to-br from-purple-50 to-fuchsia-50"
           border="border-purple-200"
           valueClass="text-purple-700"
+          onClick={() => setActiveTab("regfees")}
         />
-        <SummaryCard
-          label="Bowling Machine Memberships"
-          value={fmt(subRevenueTotal)}
-          sub={`${subRevenue.filter((r) => inRange(r.activatedAt || "")).length} activated`}
-          icon={<CreditCard size={15} className="text-cyan-600" />}
-          bg="bg-gradient-to-br from-cyan-50 to-sky-50"
-          border="border-cyan-200"
-          valueClass="text-cyan-700"
-        />
+        {showMemberships && (
+          <SummaryCard
+            label="Memberships"
+            value={fmt(subRevenueTotal)}
+            sub={`${subRevenue.filter((r) => inRange(r.activatedAt || "")).length} activated`}
+            icon={<CreditCard size={15} className="text-cyan-600" />}
+            bg="bg-gradient-to-br from-cyan-50 to-sky-50"
+            border="border-cyan-200"
+            valueClass="text-cyan-700"
+            onClick={() => setActiveTab("subscriptions")}
+          />
+        )}
         {isSuperAdmin && (
           <SummaryCard
             label="Other Income"
@@ -2022,6 +2041,7 @@ export default function AdminRevenueDashboard() {
             bg="bg-gradient-to-br from-violet-50 to-purple-50"
             border="border-violet-200"
             valueClass="text-violet-700"
+            onClick={() => setActiveTab("income")}
           />
         )}
         {isSuperAdmin && (
@@ -2033,17 +2053,21 @@ export default function AdminRevenueDashboard() {
             bg="bg-gradient-to-br from-red-50 to-rose-50"
             border="border-red-200"
             valueClass="text-red-600"
+            onClick={() => setActiveTab("expenses")}
           />
         )}
-        <SummaryCard
-          label="Pending"
-          value={String(pendingBookings)}
-          sub="awaiting payment"
-          icon={<Clock size={15} className="text-rose-500" />}
-          bg="bg-gradient-to-br from-rose-50 to-pink-50"
-          border="border-rose-200"
-          valueClass="text-rose-600"
-        />
+        {showBookings && (
+          <SummaryCard
+            label="Pending"
+            value={String(pendingBookings)}
+            sub="awaiting payment"
+            icon={<Clock size={15} className="text-rose-500" />}
+            bg="bg-gradient-to-br from-rose-50 to-pink-50"
+            border="border-rose-200"
+            valueClass="text-rose-600"
+            onClick={() => setActiveTab("bookings")}
+          />
+        )}
       </div>
 
       {/* ── Main Tabs ── */}
@@ -2055,11 +2079,11 @@ export default function AdminRevenueDashboard() {
           [
             ["overview", "Overview"],
             ["fees", `Fees (${filteredFees.length})`],
-            ["bookings", `Bookings (${filteredBookings.length})`],
-            ["campfees", `Camp Fees (${filteredCampFees.length})`],
+            ...(showBookings ? [["bookings", `Bookings (${filteredBookings.length})`]] : []),
+            ...(showCampFees ? [["campfees", `Camp Fees (${filteredCampFees.length})`]] : []),
             ["feesummary", `Fee Summary (${feeSummary.length})`],
             ["regfees", `Reg Fees (${regFees.length})`],
-            ["subscriptions", `Memberships (${subRevenue.length})`],
+            ...(showMemberships ? [["subscriptions", `Memberships (${subRevenue.length})`]] : []),
             ...(isSuperAdmin
               ? [
                   ["expenses", `Expenses (${filteredExpenses.length})`],
@@ -4198,6 +4222,7 @@ function SummaryCard({
   border,
   valueClass,
   spanFull,
+  onClick,
 }: {
   label: string;
   value: string;
@@ -4207,10 +4232,12 @@ function SummaryCard({
   border: string;
   valueClass: string;
   spanFull?: boolean;
+  onClick?: () => void;
 }) {
   return (
     <div
-      className={`rounded-xl border p-3 sm:p-4 ${bg} ${border} shadow-sm ${spanFull ? "col-span-2 sm:col-span-1" : ""}`}
+      onClick={onClick}
+      className={`rounded-xl border p-3 sm:p-4 ${bg} ${border} shadow-sm ${spanFull ? "col-span-2 sm:col-span-1" : ""} ${onClick ? "cursor-pointer hover:shadow-md active:scale-[0.98] transition-all" : ""}`}
     >
       <div className="flex items-center justify-between mb-1.5">
         <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide leading-tight">

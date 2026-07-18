@@ -4,6 +4,7 @@ import {
   Activity,
   Calendar,
   ClipboardList,
+  Globe,
   Power,
   Settings,
   TrendingUp,
@@ -230,18 +231,21 @@ function AdminDashboard() {
             label="Total Players"
             value={summary.totalPlayers}
             icon={Users}
+            onClick={() => navigate("/admin/players")}
           />
           <StatCard
             label="Active Players"
             value={summary.activePlayers}
             icon={UserCheck}
             color="green"
+            onClick={() => navigate("/admin/players?status=active")}
           />
           <StatCard
             label="Inactive"
             value={summary.inactivePlayers}
             icon={UserX}
             color="red"
+            onClick={() => navigate("/admin/players?status=inactive")}
           />
           <StatCard label="Boys" value={summary.malePlayers} icon={Users} />
           <StatCard label="Girls" value={summary.femalePlayers} icon={Users} />
@@ -250,28 +254,33 @@ function AdminDashboard() {
             value={summary.morningBatch}
             icon={Sun}
             color="orange"
+            onClick={() => navigate("/admin/batches")}
           />
           <StatCard
             label="Evening Batch"
             value={summary.eveningBatch}
             icon={Moon}
+            onClick={() => navigate("/admin/batches")}
           />
           <StatCard
             label="Both Batches"
             value={summary.bothBatch}
             icon={Users}
+            onClick={() => navigate("/admin/batches")}
           />
           <StatCard
             label="Present Today"
             value={summary.todayPresent}
             icon={CheckCircle}
             color="green"
+            onClick={() => navigate("/admin/attendance")}
           />
           <StatCard
             label="Absent Today"
             value={summary.todayAbsent}
             icon={XCircle}
             color="red"
+            onClick={() => navigate("/admin/attendance")}
           />
           <StatCard
             label="Fees Due"
@@ -369,6 +378,13 @@ function AdminDashboard() {
             gradient="bg-gradient-to-br from-yellow-500 to-orange-500"
             textLight="text-yellow-100"
           />
+          <PlainCard
+            icon={Users}
+            title="Clubs"
+            description="Manage club members, alumni and honors"
+            onClick={() => navigate("/admin/clubs")}
+            iconColor="text-blue-600"
+          />
         </div>
       </section>
 
@@ -456,6 +472,13 @@ function AdminDashboard() {
             onClick={() => navigate("/admin/summer-camps")}
             gradient="bg-gradient-to-br from-orange-500 to-orange-600"
             textLight="text-orange-100"
+          />
+          <PlainCard
+            icon={Globe}
+            title="Homepage Sections"
+            description="Configure public homepage section order and visibility"
+            onClick={() => navigate("/admin/settings/homepage")}
+            iconColor="text-purple-600"
           />
           {isSuperAdmin && (
             <PlainCard

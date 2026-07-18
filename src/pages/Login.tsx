@@ -130,7 +130,16 @@ function Login() {
           </button>
         </form>
 
-        <p className="text-sm mt-4 text-center">
+        <div className="text-sm mt-3 text-center">
+          <Link
+            to="/forgot-password"
+            className="text-gray-500 hover:text-blue-600 hover:underline"
+          >
+            Forgot password?
+          </Link>
+        </div>
+
+        <p className="text-sm mt-3 text-center">
           Don't have an account?{" "}
           <Link
             to="/signup"
@@ -138,6 +147,13 @@ function Login() {
           >
             Sign up
           </Link>
+        </p>
+
+        <p className="text-xs mt-6 text-center text-gray-400">
+          By signing in you agree to our{" "}
+          <Link to="/terms" className="underline hover:text-gray-600">Terms of Service</Link>
+          {" "}and{" "}
+          <Link to="/privacy" className="underline hover:text-gray-600">Privacy Policy</Link>
         </p>
       </div>
     </div>

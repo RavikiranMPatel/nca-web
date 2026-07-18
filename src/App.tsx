@@ -36,6 +36,9 @@ import EnquiryListPage from "./pages/enquiry/EnquiryListPage";
 import AddEnquiryPage from "./pages/enquiry/AddEnquiryPage";
 import EnquiryDetailsPage from "./pages/enquiry/EnquiryDetailsPage";
 import UpdateEnquiryPage from "./pages/enquiry/UpdateEnquiryPage";
+import HomepageSectionsPage from "./pages/admin/HomepageSectionsPage";
+import ClubsListPage from "./pages/admin/clubs/ClubsListPage";
+import ClubDetailPage from "./pages/admin/clubs/ClubDetailPage";
 import SummerCampList from "./pages/summercamp/SummerCampList";
 import SummerCampCreate from "./pages/summercamp/SummerCampCreate";
 import SummerCampDetails from "./pages/summercamp/SummerCampDetails";
@@ -70,12 +73,17 @@ import LiveScorerPage from "./pages/scoring/LiveScorerPage";
 import ManualEntryPage from "./pages/scoring/ManualEntryPage";
 import PublicScorecardPage from "./pages/scoring/PublicScorecardPage";
 import PublicPlayerProfilePage from "./pages/scoring/PublicPlayerProfilePage";
+import PublicClubDetail from "./pages/PublicClubDetail";
 import MatchListPage from "./pages/scoring/MatchListPage";
 import TournamentCreatePage from "./pages/scoring/TournamentCreatePage";
 import TournamentDetailPage from "./pages/scoring/TournamentDetailPage";
 import TournamentListPage from "./pages/scoring/TournamentListPage";
 import CricketStatsPage from "./pages/CricketStatsPage";
 import PlatformAdminPage from "./pages/platform/PlatformAdminPage";
+import ForgotPasswordPage from "./pages/ForgotPasswordPage";
+import ResetPasswordPage from "./pages/ResetPasswordPage";
+import TermsOfServicePage from "./pages/TermsOfServicePage";
+import PrivacyPolicyPage from "./pages/PrivacyPolicyPage";
 
 // Add route after /my-bookings route:
 <Route
@@ -182,6 +190,10 @@ function App() {
       {/* PUBLIC */}
       <Route path="/login" element={<Login />} />
       <Route path="/signup" element={<Signup />} />
+      <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+      <Route path="/reset-password" element={<ResetPasswordPage />} />
+      <Route path="/terms" element={<TermsOfServicePage />} />
+      <Route path="/privacy" element={<PrivacyPolicyPage />} />
       <Route
         path="/home"
         element={
@@ -323,7 +335,13 @@ function App() {
       />
       <Route
         path="/admin/players/:playerId/attendance-history"
-        element={<PlayerAttendanceHistoryPage />}
+        element={
+          <ProtectedRoute roles={["ROLE_ADMIN", "ROLE_SUPER_ADMIN"]}>
+            <AppLayout>
+              <PlayerAttendanceHistoryPage />
+            </AppLayout>
+          </ProtectedRoute>
+        }
       />
       <Route
         path="/admin/slider"
@@ -337,7 +355,13 @@ function App() {
       />
       <Route
         path="/admin/attendance/day/:date"
-        element={<AttendanceDayHistoryPage />}
+        element={
+          <ProtectedRoute roles={["ROLE_ADMIN", "ROLE_SUPER_ADMIN"]}>
+            <AppLayout>
+              <AttendanceDayHistoryPage />
+            </AppLayout>
+          </ProtectedRoute>
+        }
       />
       <Route
         path="/admin/users"
@@ -385,6 +409,38 @@ function App() {
           <ProtectedRoute roles={["ROLE_ADMIN", "ROLE_SUPER_ADMIN"]}>
             <AppLayout>
               <AcademySettings />
+            </AppLayout>
+          </ProtectedRoute>
+        }
+      />
+
+      {/* ================= HOMEPAGE & CLUBS ================= */}
+      <Route
+        path="/admin/settings/homepage"
+        element={
+          <ProtectedRoute roles={["ROLE_ADMIN", "ROLE_SUPER_ADMIN"]}>
+            <AppLayout>
+              <HomepageSectionsPage />
+            </AppLayout>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/clubs"
+        element={
+          <ProtectedRoute roles={["ROLE_ADMIN", "ROLE_SUPER_ADMIN"]}>
+            <AppLayout>
+              <ClubsListPage />
+            </AppLayout>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/clubs/:publicId"
+        element={
+          <ProtectedRoute roles={["ROLE_ADMIN", "ROLE_SUPER_ADMIN"]}>
+            <AppLayout>
+              <ClubDetailPage />
             </AppLayout>
           </ProtectedRoute>
         }
@@ -589,7 +645,13 @@ function App() {
       />
       <Route
         path="/admin/player-assessment"
-        element={<PlayerAssessmentDashboardPage />}
+        element={
+          <ProtectedRoute roles={["ROLE_ADMIN", "ROLE_SUPER_ADMIN"]}>
+            <AppLayout>
+              <PlayerAssessmentDashboardPage />
+            </AppLayout>
+          </ProtectedRoute>
+        }
       />
       <Route
         path="/admin/slot-templates"
@@ -813,8 +875,12 @@ function App() {
         path="/players/:playerPublicId/profile"
         element={<PublicPlayerProfilePage />}
       />
+      <Route
+        path="/clubs/:publicId"
+        element={<PublicClubDetail />}
+      />
 
-      {/* CATCH-ALL */}
+      {/* Platform admin — self-managed auth, no ProtectedRoute wrapper */}
       <Route path="/platform" element={<PlatformAdminPage />} />
       <Route path="*" element={<Navigate to="/home" replace />} />
     </Routes>

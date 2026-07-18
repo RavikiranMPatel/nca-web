@@ -32,10 +32,27 @@ function Signup() {
     loadSettings();
   }, []);
 
+  const PASSWORD_PATTERN =
+    /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/;
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
 
+    if (!name.trim()) {
+      setError("Full name is required");
+      return;
+    }
+    if (!email.trim()) {
+      setError("Email is required");
+      return;
+    }
+    if (!PASSWORD_PATTERN.test(password)) {
+      setError(
+        "Password must be at least 8 characters and include an uppercase letter, a digit, and a special character (@$!%*?&)",
+      );
+      return;
+    }
     if (password !== confirmPassword) {
       setError("Passwords do not match");
       return;
@@ -94,6 +111,7 @@ function Signup() {
 
         <form onSubmit={handleSubmit}>
           <input
+            required
             placeholder="Full Name"
             className="w-full border rounded px-3 py-2 mb-3"
             value={name}
@@ -101,6 +119,7 @@ function Signup() {
           />
 
           <input
+            required
             type="email"
             placeholder="Email"
             className="w-full border rounded px-3 py-2 mb-3"

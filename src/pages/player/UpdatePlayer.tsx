@@ -138,15 +138,7 @@ function UpdatePlayer() {
       }
     }
 
-    // ── Phone format validation ────────────────────────────────────
-    if (formData.phone?.trim()) {
-      if (!/^[6-9]\d{9}$/.test(formData.phone.trim())) {
-        toast.error("Invalid phone number format");
-        return;
-      }
-    }
-
-    // ── Phone uniqueness check ─────────────────────────────────────
+    // ── Phone format + uniqueness check ───────────────────────────
     if (formData.phone?.trim()) {
       if (!/^[6-9]\d{9}$/.test(formData.phone.trim())) {
         toast.error("Invalid phone number format");

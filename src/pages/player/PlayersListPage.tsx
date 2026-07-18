@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { playerService } from "../../api/playerService/playerService";
 import {
   ArrowLeft,
@@ -243,6 +243,7 @@ function ShareModal({
 
 function PlayersListPage() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { userRole } = useAuth();
   const isSuperAdmin = userRole === "ROLE_SUPER_ADMIN";
   const [branches, setBranches] = useState<Branch[]>([]);
@@ -251,9 +252,10 @@ function PlayersListPage() {
   const [players, setPlayers] = useState<Player[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState<
-    "all" | "active" | "inactive"
-  >("all");
+  const [statusFilter, setStatusFilter] = useState<"all" | "active" | "inactive">(() => {
+    const p = searchParams.get("status");
+    return p === "active" || p === "inactive" ? p : "all";
+  });
   const [professionFilter, setProfessionFilter] = useState<string>("all");
   const [ageGroupFilter, setAgeGroupFilter] = useState<string>("all");
   const [currentPage, setCurrentPage] = useState(1);

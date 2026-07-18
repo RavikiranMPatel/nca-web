@@ -108,13 +108,9 @@ function UpdateEnquiryPage() {
         setSelectedBranchId(enquiry.preferredBatches[0].branchId);
       }
 
-      // Pre-select the batch based on existing batch
       const options = await enquiryService.getBatchOptions();
       setBatchOptions(options);
-      // Pre-select the first batch if available
-      if (existingBatchIds.length > 0) {
-        setPreferredBatchIds([existingBatchIds[0]]);
-      }
+      // existingBatchIds is already set above — no overwrite needed
     } catch (error) {
       toast.error("Failed to load enquiry data");
       navigate("/admin/enquiries");

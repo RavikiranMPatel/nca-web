@@ -6,7 +6,6 @@ import {
   getScoringState,
   getThisOver,
   recordResult,
-  awardPenalty,
 } from "../../api/scoring/scoringApi";
 import { getMatch, getTeams } from "../../api/scoring/matchApi";
 import type {
