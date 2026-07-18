@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 
-//const API_BASE = "https://cricket-api.ncamysuru.com";
-const API_BASE = "http://localhost:8000";
+const API_BASE = "https://cricket-api.ncamysuru.com";
+//const API_BASE = "http://localhost:8000";
 
 const getPageImageUrl = (source: string, format: string | null, page: number) =>
   `${API_BASE}/api/page-image?source=${source}&format=${format || ""}&page=${page}`;
