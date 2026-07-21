@@ -7,12 +7,14 @@ type Props = {
     displayName: string;
     batch?: string;
     gender?: string;
+    photoUrl?: string;
   };
   value?: "PRESENT" | "ABSENT";
   disabled?: boolean;
   onChange: (id: string, status: "PRESENT" | "ABSENT") => void;
   canOverride?: boolean;
   onOverride?: () => void;
+  onPhotoClick?: (url: string, name: string) => void;
 };
 
 function AttendanceRow({
@@ -22,6 +24,7 @@ function AttendanceRow({
   onChange,
   canOverride = false,
   onOverride,
+  onPhotoClick,
 }: Props) {
   const [showMenu, setShowMenu] = useState(false);
 
@@ -57,10 +60,29 @@ function AttendanceRow({
     >
       <div className="flex items-center gap-4 p-4">
         {/* AVATAR */}
+        {player.photoUrl ? (
+          <button
+            type="button"
+            onClick={() => onPhotoClick?.(player.photoUrl!, player.displayName)}
+            className="flex-shrink-0 w-12 h-12 rounded-full overflow-hidden shadow-md focus:outline-none focus:ring-2 focus:ring-blue-400"
+            title="View photo"
+          >
+            <img
+              src={player.photoUrl}
+              alt={player.displayName}
+              className="w-full h-full object-cover"
+              onError={(e) => {
+                const parent = e.currentTarget.parentElement;
+                if (parent) parent.style.display = "none";
+                const fallback = parent?.nextElementSibling as HTMLElement | null;
+                if (fallback) fallback.style.display = "flex";
+              }}
+            />
+          </button>
+        ) : null}
         <div
-          className={`flex-shrink-0 w-12 h-12 rounded-full flex items-center justify-center text-white font-bold text-sm ${getAvatarColor(
-            player.gender,
-          )} shadow-md`}
+          className={`flex-shrink-0 w-12 h-12 rounded-full flex items-center justify-center text-white font-bold text-sm ${getAvatarColor(player.gender)} shadow-md`}
+          style={player.photoUrl ? { display: "none" } : {}}
         >
           {getInitials(player.displayName)}
         </div>

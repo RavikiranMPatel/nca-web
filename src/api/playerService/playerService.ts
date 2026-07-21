@@ -32,6 +32,7 @@ export interface Player {
   joiningDate?: string;
   active: boolean;
   status: string;
+  excludeFromAttendance?: boolean;
   batches?: Batch[];
   photoUrl?: string;
   kscaId?: string;
@@ -220,6 +221,13 @@ export const playerService = {
   ): Promise<AttendanceRecord[]> => {
     const response = await api.get(`/admin/players/${playerId}/attendance`);
     return response.data;
+  },
+
+  /**
+   * Toggle whether a player is excluded from attendance tracking
+   */
+  toggleAttendanceExclusion: async (publicId: string, exclude: boolean): Promise<void> => {
+    await api.patch(`/admin/players/${publicId}/attendance-exclusion`, { exclude });
   },
 
   /**

@@ -17,8 +17,11 @@ import {
   Building2,
   UserPlus,
   Trash2,
+  Eye,
+  EyeOff,
 } from "lucide-react";
 import { getImageUrl } from "../../utils/imageUrl";
+import PlayerStatusToggleModal from "../../components/player/PlayerStatusToggleModal";
 import { toast } from "react-hot-toast";
 import api from "../../api/axios";
 import { useAuth } from "../../auth/useAuth";
@@ -40,6 +43,7 @@ type Player = {
   feeType?: "MONTHLY" | "ANNUAL" | "OTHER" | null; // ← NEW
   feeStatus?: "PAID" | "DUE" | "OVERDUE" | null; // ← NEW
   nextDueOn?: string | null;
+  excludeFromAttendance?: boolean;
 };
 
 const ITEMS_PER_PAGE = 10;
@@ -96,6 +100,15 @@ function isEligibleForGroup(
   return (
     dobDate >= lowerCutoff && (upperCutoff === null || dobDate < upperCutoff)
   );
+}
+
+function formatDate(dateStr?: string): string {
+  if (!dateStr) return "—";
+  const parts = dateStr.split("T")[0].split("-");
+  if (parts.length < 3) return "—";
+  const [y, m, d] = parts.map(Number);
+  const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  return `${d} ${months[m - 1]} ${y}`;
 }
 
 // ─── SHARE MODAL ────────────────────────────────────────
@@ -274,6 +287,17 @@ function PlayersListPage() {
   }>({ open: false, player: null });
   const [deleting, setDeleting] = useState(false);
 
+  const [statusToggle, setStatusToggle] = useState<{
+    open: boolean;
+    player: Player | null;
+    loading: boolean;
+  }>({ open: false, player: null, loading: false });
+
+  const [lightbox, setLightbox] = useState<{
+    url: string;
+    name: string;
+  } | null>(null);
+
   const handleDeleteExt = async () => {
     if (!deleteConfirm.player) return;
     setDeleting(true);
@@ -287,6 +311,41 @@ function PlayersListPage() {
     } finally {
       setDeleting(false);
     }
+  };
+
+  const handleStatusToggle = async (reason: string) => {
+    if (!statusToggle.player) return;
+    setStatusToggle((s) => ({ ...s, loading: true }));
+    try {
+      const wasActive = statusToggle.player.active;
+      await playerService.togglePlayerStatus(statusToggle.player.publicId, reason);
+      toast.success(
+        `${statusToggle.player.displayName} ${wasActive ? "disabled" : "enabled"}`,
+      );
+      setStatusToggle({ open: false, player: null, loading: false });
+      loadPlayers();
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || "Failed to update status");
+      setStatusToggle((s) => ({ ...s, loading: false }));
+    }
+  };
+
+  const handleExclusionToggle = async (player: Player) => {
+    const nowExcluding = !player.excludeFromAttendance;
+    try {
+      await playerService.toggleAttendanceExclusion(player.publicId, nowExcluding);
+      toast.success(
+        `${player.displayName} ${nowExcluding ? "excluded from" : "restored to"} attendance`,
+      );
+      loadPlayers();
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || "Failed to update");
+    }
+  };
+
+  const openLightbox = (url: string, name: string) => {
+    const fullUrl = getImageUrl(url);
+    if (fullUrl) setLightbox({ url: fullUrl, name });
   };
 
   const loadPlayers = async (showLoadingSpinner = false) => {
@@ -715,7 +774,11 @@ function PlayersListPage() {
                       <img
                         src={getImageUrl(p.photoUrl) || undefined}
                         alt={p.displayName}
-                        className="w-12 h-12 rounded-full object-cover border-2 border-slate-200"
+                        className="w-12 h-12 rounded-full object-cover border-2 border-slate-200 cursor-pointer hover:border-blue-400 transition"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          openLightbox(p.photoUrl!, p.displayName);
+                        }}
                         onError={(e) => {
                           e.currentTarget.style.display = "none";
                           (
@@ -739,15 +802,32 @@ function PlayersListPage() {
                       <p className="font-semibold text-slate-900 text-sm truncate">
                         {p.displayName}
                       </p>
-                      <span
-                        className={`flex-shrink-0 px-2 py-0.5 rounded-full text-[10px] font-semibold ${
-                          p.active
-                            ? "bg-emerald-100 text-emerald-700"
-                            : "bg-slate-200 text-slate-600"
-                        }`}
-                      >
-                        {p.active ? "Active" : "Inactive"}
-                      </span>
+                      {isSuperAdmin ? (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setStatusToggle({ open: true, player: p, loading: false });
+                          }}
+                          className={`flex-shrink-0 px-2 py-0.5 rounded-full text-[10px] font-semibold hover:opacity-75 transition ${
+                            p.active
+                              ? "bg-emerald-100 text-emerald-700"
+                              : "bg-slate-200 text-slate-600"
+                          }`}
+                          title={p.active ? "Click to disable" : "Click to enable"}
+                        >
+                          {p.active ? "Active" : "Inactive"}
+                        </button>
+                      ) : (
+                        <span
+                          className={`flex-shrink-0 px-2 py-0.5 rounded-full text-[10px] font-semibold ${
+                            p.active
+                              ? "bg-emerald-100 text-emerald-700"
+                              : "bg-slate-200 text-slate-600"
+                          }`}
+                        >
+                          {p.active ? "Active" : "Inactive"}
+                        </span>
+                      )}
                     </div>
 
                     <div className="flex items-center gap-2 mt-0.5 flex-wrap">
@@ -757,6 +837,25 @@ function PlayersListPage() {
                       {ageGroup && ageGroup !== "Senior" && (
                         <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-blue-50 text-blue-700">
                           {ageGroup}
+                        </span>
+                      )}
+                      {p.feeStatus && (
+                        <span
+                          className={`px-1.5 py-0.5 rounded-full text-[10px] font-semibold ${
+                            p.feeStatus === "PAID"
+                              ? "bg-emerald-100 text-emerald-700"
+                              : p.feeStatus === "OVERDUE"
+                                ? "bg-red-100 text-red-700"
+                                : "bg-amber-100 text-amber-700"
+                          }`}
+                        >
+                          {p.feeStatus}
+                        </span>
+                      )}
+                      {p.excludeFromAttendance && (
+                        <span className="flex items-center gap-0.5 text-[10px] text-amber-600 font-medium">
+                          <EyeOff size={9} />
+                          Excl. Att.
                         </span>
                       )}
                     </div>
@@ -773,7 +872,7 @@ function PlayersListPage() {
                     </div>
                   </div>
 
-                  {/* Chevron hint */}
+                  {/* Right actions */}
                   <div className="flex flex-col items-end justify-between gap-1 flex-shrink-0">
                     {isSuperAdmin && (
                       <button
@@ -786,6 +885,28 @@ function PlayersListPage() {
                         <Trash2 size={14} />
                       </button>
                     )}
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleExclusionToggle(p);
+                      }}
+                      className={`p-1.5 rounded-lg transition ${
+                        p.excludeFromAttendance
+                          ? "text-amber-500 hover:bg-amber-50"
+                          : "text-slate-300 hover:text-slate-500 hover:bg-slate-50"
+                      }`}
+                      title={
+                        p.excludeFromAttendance
+                          ? "Include in attendance"
+                          : "Exclude from attendance"
+                      }
+                    >
+                      {p.excludeFromAttendance ? (
+                        <EyeOff size={14} />
+                      ) : (
+                        <Eye size={14} />
+                      )}
+                    </button>
                     <ChevronRight size={16} className="text-slate-300" />
                   </div>
                 </div>
@@ -850,7 +971,11 @@ function PlayersListPage() {
                           <img
                             src={getImageUrl(p.photoUrl) || undefined}
                             alt={p.displayName}
-                            className="w-10 h-10 rounded-full object-cover border-2 border-slate-200"
+                            className="w-10 h-10 rounded-full object-cover border-2 border-slate-200 cursor-pointer hover:border-blue-400 transition"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              openLightbox(p.photoUrl!, p.displayName);
+                            }}
                             onError={(e) => {
                               e.currentTarget.style.display = "none";
                               (
@@ -939,26 +1064,61 @@ function PlayersListPage() {
                       </td>
                       <td className="px-6 py-4">
                         <span className="text-sm text-slate-600">
-                          {p.joiningDate
-                            ? new Date(p.joiningDate).toLocaleDateString(
-                                "en-GB",
-                              )
-                            : "-"}
+                          {formatDate(p.joiningDate)}
                         </span>
                       </td>
                       <td className="px-6 py-4">
-                        <span
-                          className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ${
-                            p.active
-                              ? "bg-emerald-100 text-emerald-700"
-                              : "bg-slate-200 text-slate-600"
-                          }`}
-                        >
-                          {p.active ? "Active" : "Inactive"}
-                        </span>
+                        {isSuperAdmin ? (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setStatusToggle({ open: true, player: p, loading: false });
+                            }}
+                            className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium hover:opacity-75 transition ${
+                              p.active
+                                ? "bg-emerald-100 text-emerald-700"
+                                : "bg-slate-200 text-slate-600"
+                            }`}
+                            title={p.active ? "Click to disable player" : "Click to enable player"}
+                          >
+                            {p.active ? "Active" : "Inactive"}
+                          </button>
+                        ) : (
+                          <span
+                            className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ${
+                              p.active
+                                ? "bg-emerald-100 text-emerald-700"
+                                : "bg-slate-200 text-slate-600"
+                            }`}
+                          >
+                            {p.active ? "Active" : "Inactive"}
+                          </span>
+                        )}
                       </td>
                       <td className="px-6 py-4 text-right">
                         <div className="flex items-center justify-end gap-2">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleExclusionToggle(p);
+                            }}
+                            className={`p-2 rounded-lg transition ${
+                              p.excludeFromAttendance
+                                ? "text-amber-500 hover:bg-amber-50"
+                                : "text-slate-400 hover:text-slate-600 hover:bg-slate-50"
+                            }`}
+                            title={
+                              p.excludeFromAttendance
+                                ? "Include in attendance"
+                                : "Exclude from attendance"
+                            }
+                          >
+                            {p.excludeFromAttendance ? (
+                              <EyeOff size={15} />
+                            ) : (
+                              <Eye size={15} />
+                            )}
+                          </button>
                           {isSuperAdmin && (
                             <button
                               onClick={(e) => {
@@ -1127,6 +1287,46 @@ function PlayersListPage() {
         playerCount={filteredPlayers.length}
         filterLabel={getFilterLabel()}
         playerPublicIds={getFilteredPublicIds()}
+      />
+
+      {/* ── PHOTO LIGHTBOX ── */}
+      {lightbox && (
+        <div
+          className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4"
+          onClick={() => setLightbox(null)}
+        >
+          <div
+            className="relative max-w-sm w-full"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <img
+              src={lightbox.url}
+              alt={lightbox.name}
+              className="w-full rounded-xl shadow-2xl object-contain max-h-[80vh]"
+            />
+            <button
+              onClick={() => setLightbox(null)}
+              className="absolute top-2 right-2 bg-black/50 text-white rounded-full p-1.5 hover:bg-black/70 transition"
+            >
+              <X size={16} />
+            </button>
+            <p className="text-center text-white text-sm mt-2 font-medium">
+              {lightbox.name}
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* ── STATUS TOGGLE MODAL ── */}
+      <PlayerStatusToggleModal
+        open={statusToggle.open}
+        playerName={statusToggle.player?.displayName ?? ""}
+        currentStatus={statusToggle.player?.active ?? true}
+        onConfirm={handleStatusToggle}
+        onCancel={() =>
+          setStatusToggle({ open: false, player: null, loading: false })
+        }
+        loading={statusToggle.loading}
       />
     </div>
   );

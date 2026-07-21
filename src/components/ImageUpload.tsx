@@ -9,6 +9,7 @@ type ImageUploadProps = {
     | "logo"
     | "slider"
     | "hero"
+    | "hero-photo"
     | "team"
     | "testimonial"
     | "gallery"

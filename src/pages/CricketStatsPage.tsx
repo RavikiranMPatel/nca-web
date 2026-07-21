@@ -47,15 +47,6 @@ export default function CricketStatsPage() {
   }, []);
 
   useEffect(() => {
-    publicApi
-      .get("/settings/public")
-      .then((r) => {
-        setPrimaryColor(r.data.PRIMARY_COLOR || "#2563eb");
-      })
-      .catch(() => {});
-  }, []);
-
-  useEffect(() => {
     setLoading(true);
     Promise.allSettled([
       publicApi.get(`/public/cricket-stats/top-performers?period=${period}`),
@@ -354,8 +345,9 @@ export default function CricketStatsPage() {
                                 ? "bg-gray-100 text-gray-600"
                                 : i === 2
                                   ? "bg-orange-100 text-orange-600"
-                                  : "bg-blue-50 text-blue-500"
+                                  : ""
                           }`}
+                          style={i >= 3 ? { backgroundColor: `${primaryColor}18`, color: primaryColor } : {}}
                         >
                           {i === 0
                             ? "🥇"
@@ -446,8 +438,9 @@ export default function CricketStatsPage() {
                                 ? "bg-gray-100 text-gray-600"
                                 : i === 2
                                   ? "bg-orange-100 text-orange-600"
-                                  : "bg-blue-50 text-blue-500"
+                                  : ""
                           }`}
+                          style={i >= 3 ? { backgroundColor: `${primaryColor}18`, color: primaryColor } : {}}
                         >
                           {i === 0
                             ? "🥇"

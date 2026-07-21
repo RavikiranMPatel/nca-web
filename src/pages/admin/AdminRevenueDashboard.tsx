@@ -150,6 +150,17 @@ type SubRevenueRow = {
   sessionsPerMonth: number;
   planMonths: number;
 };
+type InstallmentPaymentRow = {
+  publicId: string;
+  amount: number;
+  paymentMode: string;
+  referenceNumber: string | null;
+  paidOn: string;
+  playerPublicId: string;
+  playerName: string;
+  planDescription: string | null;
+  installmentNumber: number;
+};
 
 type Tab =
   | "overview"
@@ -388,6 +399,7 @@ export default function AdminRevenueDashboard() {
 
   const [subRevenue, setSubRevenue] = useState<SubRevenueRow[]>([]);
   const [subRevenueSearch, setSubRevenueSearch] = useState("");
+  const [installmentPayments, setInstallmentPayments] = useState<InstallmentPaymentRow[]>([]);
 
   const [flags, setFlags] = useState<Record<string, string>>({});
 
@@ -499,6 +511,7 @@ export default function AdminRevenueDashboard() {
         regFeesRes,
         subRevenueRes,
         settingsRes,
+        installmentPaymentsRes,
       ] = await Promise.all([
         api.get("/admin/fees/payments"),
         api.get("/admin/bookings"),
@@ -509,6 +522,7 @@ export default function AdminRevenueDashboard() {
         api.get("/admin/fees/registration-fees").catch(() => ({ data: [] })),
         api.get("/admin/subscriptions/revenue").catch(() => ({ data: [] })),
         api.get("/admin/settings").catch(() => ({ data: {} })),
+        api.get("/admin/fee-installments/all-payments").catch(() => ({ data: [] })),
       ]);
       if (thisLoad !== loadRef.current) return;
 
@@ -541,6 +555,7 @@ export default function AdminRevenueDashboard() {
       setFeeSummary(feeSummaryRes.data || []);
       setRegFees(regFeesRes.data || []);
       setSubRevenue(subRevenueRes.data || []);
+      setInstallmentPayments(installmentPaymentsRes.data || []);
       setExpenses(newExpenses);
       setPartnerSpending(newPartnerSpending);
       setSuggestions(newSuggestions);
@@ -616,6 +631,10 @@ export default function AdminRevenueDashboard() {
   const filteredFees = useMemo(
     () => feePayments.filter((p) => p.type !== "REVERSAL" && inRange(p.paidOn)),
     [feePayments, from, to],
+  );
+  const filteredInstallmentPayments = useMemo(
+    () => installmentPayments.filter((p) => inRange(p.paidOn)),
+    [installmentPayments, from, to],
   );
   const filteredBookings = useMemo(
     () =>
@@ -709,7 +728,9 @@ export default function AdminRevenueDashboard() {
     [filteredIncomes, incomeSearch, incomeFilterBudgetHead, incomeFilterPaidBy],
   );
 
-  const feesTotal = filteredFees.reduce((s, p) => s + (p.amount || 0), 0);
+  const feesTotal =
+    filteredFees.reduce((s, p) => s + (p.amount || 0), 0) +
+    filteredInstallmentPayments.reduce((s, p) => s + (p.amount || 0), 0);
   const bookingsTotal = filteredBookings.reduce(
     (s, b) => s + (b.amount || 0),
     0,
@@ -925,6 +946,21 @@ export default function AdminRevenueDashboard() {
         ]),
       );
     }
+    filteredInstallmentPayments.forEach((p) =>
+      rows.push([
+        "Installment",
+        fmtDate(p.paidOn),
+        p.planDescription || "Installment Payment",
+        "",
+        "",
+        "",
+        "",
+        "",
+        p.playerName,
+        String(p.amount),
+        fmtMode(p.paymentMode),
+      ]),
+    );
     filteredFees.forEach((p) =>
       rows.push([
         "Fee",
@@ -1158,6 +1194,15 @@ export default function AdminRevenueDashboard() {
         amount: r.pricePaid,
         mode: fmtMode(r.paymentMode),
       }));
+    const instPays: TxRow[] = filteredInstallmentPayments.map((p) => ({
+      key: "inst-" + p.publicId,
+      date: p.paidOn,
+      type: "fee" as const,
+      name: p.playerName,
+      description: p.planDescription ? `Installment · ${p.planDescription}` : "Installment Payment",
+      amount: p.amount,
+      mode: fmtMode(p.paymentMode),
+    }));
     const exps: TxRow[] = isSuperAdmin
       ? filteredExpenses.map((e) => ({
           key: "e-" + e.publicId,
@@ -1180,7 +1225,7 @@ export default function AdminRevenueDashboard() {
           mode: "—",
         }))
       : [];
-    return [...fees, ...camps, ...bks, ...regs, ...subs, ...exps, ...incs]
+    return [...fees, ...camps, ...bks, ...regs, ...subs, ...instPays, ...exps, ...incs]
       .sort((a, b) => (b.date > a.date ? 1 : -1))
       .slice(0, 20);
   }, [
@@ -1190,6 +1235,7 @@ export default function AdminRevenueDashboard() {
     regFees,
     filteredExpenses,
     filteredIncomes,
+    filteredInstallmentPayments,
     isSuperAdmin,
     from,
     subRevenue,

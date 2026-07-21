@@ -25,6 +25,51 @@ type Batch = {
   name: string;
 };
 
+type FeeStatus = "PAID" | "DUE" | "OVERDUE";
+
+type FeeSummaryRow = {
+  playerPublicId: string;
+  feeStatus: FeeStatus;
+};
+
+function FeeStatusBadge({ status }: { status?: FeeStatus }) {
+  if (!status) return null;
+  const styles: Record<FeeStatus, string> = {
+    PAID: "bg-emerald-100 text-emerald-700",
+    DUE: "bg-amber-100 text-amber-700",
+    OVERDUE: "bg-red-100 text-red-700",
+  };
+  return (
+    <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${styles[status]}`}>
+      {status}
+    </span>
+  );
+}
+
+function PlayerAvatar({ photoUrl, name, size = 32 }: { photoUrl?: string | null; name: string; size?: number }) {
+  const initials = name.split(" ").map((n) => n[0]).join("").toUpperCase().slice(0, 2);
+  const [imgError, setImgError] = useState(false);
+  if (photoUrl && !imgError) {
+    return (
+      <img
+        src={photoUrl}
+        alt={name}
+        className="rounded-full object-cover flex-shrink-0"
+        style={{ width: size, height: size }}
+        onError={() => setImgError(true)}
+      />
+    );
+  }
+  return (
+    <div
+      className="rounded-full bg-gradient-to-br from-blue-400 to-blue-600 flex items-center justify-center text-white font-bold flex-shrink-0"
+      style={{ width: size, height: size, fontSize: size * 0.35 }}
+    >
+      {initials}
+    </div>
+  );
+}
+
 // ── Pure-CSS mini bar chart ───────────────────────────────────────
 function MiniBarChart({ stats }: { stats: PlayerAttendancePercentage[] }) {
   if (stats.length === 0) return null;
@@ -87,6 +132,7 @@ const AttendanceStatsPage = () => {
   const [todayMap, setTodayMap] = useState<Record<string, string>>({});
   const [expandedPlayer, setExpandedPlayer] = useState<string | null>(null);
   const [monthDetails, setMonthDetails] = useState<any>(null);
+  const [feeMap, setFeeMap] = useState<Record<string, FeeStatus>>({});
 
   /* ===============================
      LOAD BATCHES (ONCE)
@@ -112,15 +158,26 @@ const AttendanceStatsPage = () => {
 
     const loadData = async () => {
       try {
-        const data = await fetchAttendanceStats(range, selectedBatchId);
+        const [data, records, feeRes] = await Promise.all([
+          fetchAttendanceStats(range, selectedBatchId),
+          fetchTodayRecords(today, selectedBatchId),
+          api.get("/admin/fees/collection-summary").catch(() => ({ data: [] })),
+        ]);
         setStats(data);
 
-        const records = await fetchTodayRecords(today, selectedBatchId);
         const map: Record<string, string> = {};
         records.forEach((r: any) => {
           map[r.playerId] = r.status;
         });
         setTodayMap(map);
+
+        const fm: Record<string, FeeStatus> = {};
+        (feeRes.data as FeeSummaryRow[]).forEach((row) => {
+          if (row.playerPublicId && row.feeStatus) {
+            fm[row.playerPublicId] = row.feeStatus;
+          }
+        });
+        setFeeMap(fm);
       } catch (err) {
         console.error("Failed loading attendance stats:", err);
       }
@@ -183,7 +240,7 @@ const AttendanceStatsPage = () => {
           </button>
           <div className="flex-1 min-w-0">
             <h1 className="text-lg md:text-3xl font-bold text-slate-900">
-              Attendance Analytics
+              Attendance History
             </h1>
             <p className="text-xs md:text-sm text-slate-500">
               Track player attendance performance
@@ -323,21 +380,25 @@ const AttendanceStatsPage = () => {
                       onClick={() => toggleMonth(p.playerPublicId)}
                     >
                       <td className="px-6 py-4 font-medium text-slate-800">
-                        <div className="flex items-center gap-2">
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              openPlayerHistory(p.playerPublicId);
-                            }}
-                            className="hover:text-blue-600 underline-offset-2 hover:underline"
-                          >
-                            {p.playerName}
-                          </button>
-                          {p.percentage < 75 && (
-                            <span className="text-[10px] font-bold px-1.5 py-0.5 bg-red-100 text-red-600 rounded-full flex items-center gap-0.5">
-                              <AlertTriangle size={9} /> At Risk
-                            </span>
-                          )}
+                        <div className="flex items-center gap-2.5">
+                          <PlayerAvatar photoUrl={p.photoUrl} name={p.playerName} size={32} />
+                          <div className="flex items-center gap-1.5 flex-wrap min-w-0">
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                openPlayerHistory(p.playerPublicId);
+                              }}
+                              className="hover:text-blue-600 underline-offset-2 hover:underline"
+                            >
+                              {p.playerName}
+                            </button>
+                            {p.percentage < 75 && (
+                              <span className="text-[10px] font-bold px-1.5 py-0.5 bg-red-100 text-red-600 rounded-full flex items-center gap-0.5">
+                                <AlertTriangle size={9} /> At Risk
+                              </span>
+                            )}
+                            <FeeStatusBadge status={feeMap[p.playerPublicId]} />
+                          </div>
                         </div>
                       </td>
                       <td className="text-center px-4">
@@ -438,6 +499,7 @@ const AttendanceStatsPage = () => {
                   {/* Row 1: name + today badge */}
                   <div className="flex items-center justify-between gap-2 mb-2">
                     <div className="flex items-center gap-2 min-w-0">
+                      <PlayerAvatar photoUrl={p.photoUrl} name={p.playerName} size={28} />
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
@@ -452,6 +514,7 @@ const AttendanceStatsPage = () => {
                           <AlertTriangle size={9} /> Risk
                         </span>
                       )}
+                      <FeeStatusBadge status={feeMap[p.playerPublicId]} />
                     </div>
                     {todayStatus === "PRESENT" ? (
                       <span className="flex-shrink-0 px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 text-[10px] font-bold">

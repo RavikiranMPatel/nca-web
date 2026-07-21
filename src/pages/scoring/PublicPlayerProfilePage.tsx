@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { getPublicPlayerProfile } from "../../api/scoring/publicApi";
+import publicApi from "../../api/publicApi";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 interface BattingStats {
@@ -112,6 +113,18 @@ export default function PublicPlayerProfilePage() {
   const [activeTab, setActiveTab] = useState<
     "batting" | "bowling" | "fielding"
   >("batting");
+  const [primaryColor, setPrimaryColor] = useState("#1d4ed8");
+  const [academyName, setAcademyName] = useState("");
+
+  useEffect(() => {
+    publicApi
+      .get("/settings/public")
+      .then((r) => {
+        setPrimaryColor(r.data.PRIMARY_COLOR || "#1d4ed8");
+        setAcademyName(r.data.ACADEMY_NAME || "");
+      })
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     if (!playerPublicId) return;
@@ -124,7 +137,10 @@ export default function PublicPlayerProfilePage() {
   if (loading)
     return (
       <div className="min-h-screen bg-white dark:bg-gray-950 flex items-center justify-center">
-        <div className="w-8 h-8 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
+        <div
+          className="w-8 h-8 border-2 border-t-transparent rounded-full animate-spin"
+          style={{ borderColor: `${primaryColor}60`, borderTopColor: "transparent" }}
+        />
       </div>
     );
 
@@ -147,12 +163,12 @@ export default function PublicPlayerProfilePage() {
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-950">
-      {/* ── NCA header ───────────────────────────────────────────────────── */}
-      <div className="bg-blue-700 dark:bg-blue-900 px-4 py-3">
+      {/* ── Academy header ───────────────────────────────────────────────── */}
+      <div className="px-4 py-3" style={{ backgroundColor: primaryColor }}>
         <div className="max-w-2xl mx-auto flex items-center justify-between">
           <div>
-            <div className="text-white font-bold text-sm">NCA Mysuru</div>
-            <div className="text-blue-200 text-xs">NextGen Cricket Academy</div>
+            <div className="text-white font-bold text-sm">{academyName || "Cricket Academy"}</div>
+            <div className="text-white/70 text-xs">Player Profile</div>
           </div>
           <button
             onClick={() => navigator.clipboard.writeText(window.location.href)}
@@ -168,7 +184,10 @@ export default function PublicPlayerProfilePage() {
         <div className="bg-white dark:bg-gray-900 border-b border-gray-100 dark:border-gray-800 px-4 py-5">
           <div className="flex items-center gap-4">
             {/* Avatar */}
-            <div className="w-16 h-16 rounded-2xl bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center flex-shrink-0 overflow-hidden">
+            <div
+              className="w-16 h-16 rounded-2xl flex items-center justify-center flex-shrink-0 overflow-hidden"
+              style={{ backgroundColor: `${primaryColor}15` }}
+            >
               {profile.photoUrl ? (
                 <img
                   src={profile.photoUrl}
@@ -176,7 +195,7 @@ export default function PublicPlayerProfilePage() {
                   className="w-full h-full object-cover"
                 />
               ) : (
-                <span className="text-2xl font-bold text-blue-600 dark:text-blue-400">
+                <span className="text-2xl font-bold" style={{ color: primaryColor }}>
                   {profile.displayName.charAt(0).toUpperCase()}
                 </span>
               )}
@@ -193,7 +212,14 @@ export default function PublicPlayerProfilePage() {
                   </span>
                 )}
                 {profile.bowlingStyle && (
-                  <span className="text-xs px-2 py-0.5 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-400 rounded-full border border-blue-100 dark:border-blue-900/30">
+                  <span
+                    className="text-xs px-2 py-0.5 rounded-full border"
+                    style={{
+                      backgroundColor: `${primaryColor}0d`,
+                      color: primaryColor,
+                      borderColor: `${primaryColor}25`,
+                    }}
+                  >
                     ⚾ {profile.bowlingStyle}
                   </span>
                 )}
@@ -228,11 +254,12 @@ export default function PublicPlayerProfilePage() {
               <button
                 key={tab}
                 onClick={() => setActiveTab(tab)}
-                className={`flex-1 py-3 text-sm font-medium border-b-2 transition-colors capitalize ${
+                className="flex-1 py-3 text-sm font-medium border-b-2 transition-colors capitalize"
+                style={
                   activeTab === tab
-                    ? "border-blue-600 text-blue-600 dark:text-blue-400"
-                    : "border-transparent text-gray-500 dark:text-gray-400"
-                }`}
+                    ? { borderColor: primaryColor, color: primaryColor }
+                    : { borderColor: "transparent", color: "#6b7280" }
+                }
               >
                 {tab}
               </button>
@@ -376,7 +403,7 @@ export default function PublicPlayerProfilePage() {
                         </span>
                       )}
                       {m.wickets && (
-                        <span className="text-blue-600 dark:text-blue-400">
+                        <span style={{ color: primaryColor }}>
                           ⚾ {m.wickets} wkts
                         </span>
                       )}

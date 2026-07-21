@@ -13,23 +13,21 @@ function Signup() {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [error, setError] = useState("");
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
-  const [academyName, setAcademyName] = useState("NextGen Cricket Academy");
+  const [academyName, setAcademyName] = useState("Cricket Academy");
+  const [primaryColor, setPrimaryColor] = useState("#2563eb");
 
   const { login } = useAuth();
   const navigate = useNavigate();
 
   useEffect(() => {
-    const loadSettings = async () => {
-      try {
-        const res = await publicApi.get("/settings/public");
+    publicApi
+      .get("/settings/public")
+      .then((res) => {
         setLogoUrl(res.data?.LOGO_URL || null);
-        setAcademyName(res.data?.ACADEMY_NAME || "NextGen Cricket Academy");
-      } catch (err) {
-        console.warn("Failed to load public settings", err);
-      }
-    };
-
-    loadSettings();
+        setAcademyName(res.data?.ACADEMY_NAME || "Cricket Academy");
+        setPrimaryColor(res.data?.PRIMARY_COLOR || "#2563eb");
+      })
+      .catch(() => {});
   }, []);
 
   const PASSWORD_PATTERN =
@@ -145,7 +143,8 @@ function Signup() {
 
           <button
             type="submit"
-            className="w-full bg-blue-600 text-white py-2 rounded hover:bg-blue-700"
+            className="w-full text-white py-2 rounded transition-opacity hover:opacity-90"
+            style={{ backgroundColor: primaryColor }}
           >
             Sign Up
           </button>
@@ -155,7 +154,8 @@ function Signup() {
           Already have an account?{" "}
           <Link
             to="/login"
-            className="text-blue-600 font-medium hover:underline"
+            className="font-medium hover:underline"
+            style={{ color: primaryColor }}
           >
             Login
           </Link>

@@ -44,6 +44,7 @@ export interface PaginatedMediaResponse {
   totalPages: number;
   currentPage: number;
   hasNext: boolean;
+  photoCount: number;
 }
 
 export interface AddVideoRequest {

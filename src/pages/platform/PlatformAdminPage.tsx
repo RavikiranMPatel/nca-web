@@ -58,9 +58,19 @@ type AcademyBillingDto = {
   code: string;
   ownerName: string | null;
   active: boolean;
-  monthlyAmount: number;
+  // Tiered pricing config
+  baseFee: number;
+  baseTierStudentLimit: number;
+  tier2PricePerStudent: number;
+  tier2StudentLimit: number | null;
+  tier3PricePerStudent: number | null;
+  // Live computed values
+  currentAmountDue: number;
+  activePlayerCount: number;
+  // Contact
   billingContactPhone: string | null;
   billingContactEmail: string | null;
+  // Schedule
   nextDueDate: string;      // "YYYY-MM-DD"
   lastPaidDate: string | null;
   status: "CURRENT" | "DUE_SOON" | "OVERDUE";
@@ -108,7 +118,11 @@ const BLANK_FORM = {
   ownerName: "",
   phone: "",
   customDomain: "",
-  monthlyAmount: "",
+  baseFee: "5000",
+  baseTierStudentLimit: "50",
+  tier2PricePerStudent: "90",
+  tier2StudentLimit: "150",
+  tier3PricePerStudent: "70",
 };
 
 // ── Main component ────────────────────────────────────────────────────────────
@@ -156,9 +170,17 @@ export default function PlatformAdminPage() {
     open: boolean; academyName: string; publicId: string; records: PaymentRecord[]; loading: boolean;
   }>({ open: false, academyName: "", publicId: "", records: [], loading: false });
 
+  const [pricingModal, setPricingModal] = useState<{
+    open: boolean; billing: AcademyBillingDto | null;
+    baseFee: string; baseTierStudentLimit: string;
+    tier2PricePerStudent: string; tier2StudentLimit: string; tier3PricePerStudent: string;
+  }>({ open: false, billing: null, baseFee: "", baseTierStudentLimit: "", tier2PricePerStudent: "", tier2StudentLimit: "", tier3PricePerStudent: "" });
+
   const [storage, setStorage]           = useState<StorageUsage[]>([]);
   const [storageLoading, setStorageLoading] = useState(false);
   const [recalculating, setRecalculating]   = useState(false);
+
+  const [openActionMenu, setOpenActionMenu] = useState<string | null>(null);
 
   const authHeader = () => ({ Authorization: `Bearer ${token}` });
 
@@ -246,6 +268,12 @@ export default function PlatformAdminPage() {
     if (view === "dashboard" && token) { fetchStats(); fetchBilling(); fetchStorage(); }
   }, [view, token]);
   useEffect(() => { if (view === "audit" && token) fetchAuditLog(); }, [view, token]);
+  useEffect(() => {
+    if (!openActionMenu) return;
+    const close = () => setOpenActionMenu(null);
+    document.addEventListener("click", close);
+    return () => document.removeEventListener("click", close);
+  }, [openActionMenu]);
 
   // Debounced code check
   useEffect(() => {
@@ -310,24 +338,34 @@ export default function PlatformAdminPage() {
       setError("Code must be 2-10 alphanumeric characters"); return;
     }
     if (!form.phone.trim()) { setError("Owner phone is required for billing/WhatsApp contact"); return; }
-    const amt = parseFloat(form.monthlyAmount);
-    if (!form.monthlyAmount || isNaN(amt) || amt < 0) {
-      setError("A valid monthly fee is required"); return;
+    const baseFee = parseFloat(form.baseFee);
+    if (!form.baseFee || isNaN(baseFee) || baseFee < 0) { setError("A valid base fee is required"); return; }
+    const baseTierStudentLimit = parseInt(form.baseTierStudentLimit);
+    if (!form.baseTierStudentLimit || isNaN(baseTierStudentLimit) || baseTierStudentLimit < 1) {
+      setError("Base tier student limit must be at least 1"); return;
+    }
+    const tier2PricePerStudent = parseFloat(form.tier2PricePerStudent);
+    if (!form.tier2PricePerStudent || isNaN(tier2PricePerStudent) || tier2PricePerStudent < 0) {
+      setError("A valid tier 2 price per student is required"); return;
     }
     setError(""); setCreating(true);
     try {
       const payload = {
-        academyName:   form.academyName.trim(),
-        code:          form.code.toUpperCase().trim(),
-        slug:          form.slug.trim() || slugify(form.academyName),
-        branchName:    form.branchName.trim(),
-        adminName:     form.adminName.trim(),
-        adminEmail:    form.adminEmail.trim().toLowerCase(),
-        city:          form.city.trim() || undefined,
-        ownerName:     form.ownerName.trim() || undefined,
-        phone:         form.phone.trim(),
-        customDomain:  form.customDomain.trim() || undefined,
-        monthlyAmount: amt,
+        academyName:          form.academyName.trim(),
+        code:                 form.code.toUpperCase().trim(),
+        slug:                 form.slug.trim() || slugify(form.academyName),
+        branchName:           form.branchName.trim(),
+        adminName:            form.adminName.trim(),
+        adminEmail:           form.adminEmail.trim().toLowerCase(),
+        city:                 form.city.trim() || undefined,
+        ownerName:            form.ownerName.trim() || undefined,
+        phone:                form.phone.trim(),
+        customDomain:         form.customDomain.trim() || undefined,
+        baseFee,
+        baseTierStudentLimit,
+        tier2PricePerStudent,
+        tier2StudentLimit:    form.tier2StudentLimit ? parseInt(form.tier2StudentLimit) : null,
+        tier3PricePerStudent: form.tier3PricePerStudent ? parseFloat(form.tier3PricePerStudent) : null,
       };
       const res = await api.post("/platform/academies", payload, { headers: authHeader() });
       setResult(res.data); setView("success"); setForm({ ...BLANK_FORM }); setCodeStatus("idle");
@@ -413,6 +451,39 @@ export default function PlatformAdminPage() {
     }
   };
 
+  const openPricingModal = (b: AcademyBillingDto) =>
+    setPricingModal({
+      open: true, billing: b,
+      baseFee: String(b.baseFee),
+      baseTierStudentLimit: String(b.baseTierStudentLimit),
+      tier2PricePerStudent: String(b.tier2PricePerStudent),
+      tier2StudentLimit: b.tier2StudentLimit != null ? String(b.tier2StudentLimit) : "",
+      tier3PricePerStudent: b.tier3PricePerStudent != null ? String(b.tier3PricePerStudent) : "",
+    });
+
+  const confirmPricing = async () => {
+    const b = pricingModal.billing; if (!b) return;
+    const baseFee = parseFloat(pricingModal.baseFee);
+    const baseTierStudentLimit = parseInt(pricingModal.baseTierStudentLimit);
+    const tier2PricePerStudent = parseFloat(pricingModal.tier2PricePerStudent);
+    if (isNaN(baseFee) || isNaN(baseTierStudentLimit) || isNaN(tier2PricePerStudent)) {
+      setError("Base fee, base tier limit, and tier 2 price are required"); return;
+    }
+    try {
+      await api.patch(`/platform/academies/${b.academyPublicId}/billing/pricing`, {
+        baseFee,
+        baseTierStudentLimit,
+        tier2PricePerStudent,
+        tier2StudentLimit: pricingModal.tier2StudentLimit ? parseInt(pricingModal.tier2StudentLimit) : null,
+        tier3PricePerStudent: pricingModal.tier3PricePerStudent ? parseFloat(pricingModal.tier3PricePerStudent) : null,
+      }, { headers: authHeader() });
+      setPricingModal({ open: false, billing: null, baseFee: "", baseTierStudentLimit: "", tier2PricePerStudent: "", tier2StudentLimit: "", tier3PricePerStudent: "" });
+      fetchBilling();
+    } catch (err: any) {
+      if (!handleAuthError(err)) setError("Failed to update pricing");
+    }
+  };
+
   const openWhatsApp = (b: AcademyBillingDto) => {
     if (!b.billingContactPhone) { setError("No phone number on record for this academy"); return; }
     const phone = b.billingContactPhone.replace(/[^0-9+]/g, "");
@@ -420,7 +491,7 @@ export default function PlatformAdminPage() {
       day: "numeric", month: "long", year: "numeric",
     });
     const name = b.ownerName || b.academyName;
-    const msg = `Hi ${name}, this is a reminder that your CricMaidan platform subscription of ₹${b.monthlyAmount.toLocaleString("en-IN")} was due on ${dueStr}. Please process the payment at your earliest convenience and let us know once done. Thank you!`;
+    const msg = `Hi ${name}, this is a reminder that your CricMaidan platform subscription of ₹${b.currentAmountDue.toLocaleString("en-IN")} (${b.activePlayerCount} students) was due on ${dueStr}. Please process the payment at your earliest convenience and let us know once done. Thank you!`;
     window.open(`https://wa.me/${phone}?text=${encodeURIComponent(msg)}`, "_blank", "noopener,noreferrer");
   };
 
@@ -431,7 +502,7 @@ export default function PlatformAdminPage() {
     });
     const subject = encodeURIComponent(`CricMaidan Subscription Reminder — ${b.academyName}`);
     const body = encodeURIComponent(
-      `Hi ${b.ownerName || b.academyName},\n\nThis is a friendly reminder that your CricMaidan platform subscription of ₹${b.monthlyAmount.toLocaleString("en-IN")} was due on ${dueStr}.\n\nPlease process the payment and reply to this email once done.\n\nThank you!`
+      `Hi ${b.ownerName || b.academyName},\n\nThis is a friendly reminder that your CricMaidan platform subscription of ₹${b.currentAmountDue.toLocaleString("en-IN")} (${b.activePlayerCount} students) was due on ${dueStr}.\n\nPlease process the payment and reply to this email once done.\n\nThank you!`
     );
     window.open(`mailto:${b.billingContactEmail}?subject=${subject}&body=${body}`, "_blank");
   };
@@ -584,7 +655,9 @@ export default function PlatformAdminPage() {
               <span className="font-medium text-gray-700">{markPaidModal.billing.academyName}</span>
             </p>
             <p className="text-sm text-gray-700 mb-4">
-              Recording payment of <span className="font-semibold">₹{markPaidModal.billing.monthlyAmount.toLocaleString("en-IN")}</span>.
+              Recording payment of{" "}
+              <span className="font-semibold">₹{markPaidModal.billing.currentAmountDue.toLocaleString("en-IN")}</span>{" "}
+              <span className="text-gray-400 text-xs">({markPaidModal.billing.activePlayerCount} students)</span>.
               Next due date will advance to{" "}
               <span className="font-medium">
                 {new Date(new Date().setMonth(new Date().getMonth() + 1)).toLocaleDateString("en-IN", {
@@ -610,6 +683,71 @@ export default function PlatformAdminPage() {
               <button onClick={confirmMarkPaid}
                 className="flex-1 px-4 py-2.5 bg-green-600 text-white rounded-xl text-sm font-semibold hover:bg-green-700 transition">
                 Confirm Payment
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Pricing */}
+      {pricingModal.open && pricingModal.billing && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 px-4">
+          <div className="bg-white rounded-2xl shadow-xl p-6 w-full max-w-md">
+            <h3 className="font-semibold text-gray-900 mb-1">Edit Pricing</h3>
+            <p className="text-sm text-gray-500 mb-1">{pricingModal.billing.academyName}</p>
+            <p className="text-xs text-gray-400 mb-4">
+              Currently: {pricingModal.billing.activePlayerCount} students →{" "}
+              <span className="font-medium text-gray-600">₹{pricingModal.billing.currentAmountDue.toLocaleString("en-IN")}/month</span>
+            </p>
+            <div className="space-y-3">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">Base fee (₹) *</label>
+                  <input type="number" step="1" min="0" value={pricingModal.baseFee}
+                    onChange={(e) => setPricingModal((m) => ({ ...m, baseFee: e.target.value }))}
+                    className="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">Covers first N students *</label>
+                  <input type="number" step="1" min="1" value={pricingModal.baseTierStudentLimit}
+                    onChange={(e) => setPricingModal((m) => ({ ...m, baseTierStudentLimit: e.target.value }))}
+                    className="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">Tier 2 ₹/student *</label>
+                  <input type="number" step="0.01" min="0" value={pricingModal.tier2PricePerStudent}
+                    onChange={(e) => setPricingModal((m) => ({ ...m, tier2PricePerStudent: e.target.value }))}
+                    className="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">Tier 2 limit <span className="font-normal text-gray-400">(blank = no tier 3)</span></label>
+                  <input type="number" step="1" min="1" value={pricingModal.tier2StudentLimit}
+                    onChange={(e) => setPricingModal((m) => ({ ...m, tier2StudentLimit: e.target.value }))}
+                    placeholder="e.g. 150"
+                    className="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">Tier 3 ₹/student <span className="font-normal text-gray-400">(blank = no tier 3)</span></label>
+                <input type="number" step="0.01" min="0" value={pricingModal.tier3PricePerStudent}
+                  onChange={(e) => setPricingModal((m) => ({ ...m, tier3PricePerStudent: e.target.value }))}
+                  placeholder="e.g. 70"
+                  className="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+              </div>
+              <p className="text-xs text-gray-400">
+                Bill = base fee for first [N] students, then tier 2 rate per student up to tier 2 limit, then tier 3 rate beyond.
+              </p>
+            </div>
+            <div className="flex gap-2 mt-5">
+              <button onClick={() => setPricingModal({ open: false, billing: null, baseFee: "", baseTierStudentLimit: "", tier2PricePerStudent: "", tier2StudentLimit: "", tier3PricePerStudent: "" })}
+                className="flex-1 px-4 py-2.5 border border-gray-300 rounded-xl text-sm font-medium hover:bg-gray-50 transition">
+                Cancel
+              </button>
+              <button onClick={confirmPricing}
+                className="flex-1 px-4 py-2.5 bg-blue-600 text-white rounded-xl text-sm font-semibold hover:bg-blue-700 transition">
+                Save Pricing
               </button>
             </div>
           </div>
@@ -776,122 +914,244 @@ export default function PlatformAdminPage() {
                   {dashboardRows.length === 0 ? (
                     <div className="text-center py-12 text-gray-400 text-sm">No academies yet.</div>
                   ) : (
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-sm">
-                        <thead className="bg-gray-50">
-                          <tr>
-                            <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 whitespace-nowrap">Academy</th>
-                            <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 whitespace-nowrap">Code</th>
-                            <th className="px-4 py-3 text-right text-xs font-semibold text-gray-500 whitespace-nowrap">Monthly</th>
-                            <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 whitespace-nowrap">Next Due</th>
-                            <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 whitespace-nowrap">Billing</th>
-                            <th className="px-4 py-3 text-right text-xs font-semibold text-gray-500 whitespace-nowrap">Players</th>
-                            <th className="px-4 py-3 text-right text-xs font-semibold text-gray-500 whitespace-nowrap">Storage</th>
-                            <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 whitespace-nowrap">Active</th>
-                            <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 whitespace-nowrap">Actions</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {dashboardRows.map((a, i) => {
-                            const b = billingByPublicId.get(a.publicId);
-                            return (
-                              <tr key={a.id}
-                                className={`${i % 2 === 0 ? "bg-white" : "bg-gray-50/40"} hover:bg-blue-50/30 transition`}>
-                                <td className="px-4 py-3 font-medium text-gray-900 whitespace-nowrap">
-                                  <div>{a.name}</div>
-                                  {a.city && <div className="text-xs text-gray-400">{a.city}</div>}
-                                </td>
-                                <td className="px-4 py-3 font-mono text-xs text-gray-500">{a.code}</td>
-                                <td className="px-4 py-3 text-right font-medium text-gray-800 whitespace-nowrap">
-                                  {b ? `₹${b.monthlyAmount.toLocaleString("en-IN")}` : "—"}
-                                </td>
-                                <td className="px-4 py-3 text-xs text-gray-600 whitespace-nowrap">
-                                  {b ? new Date(b.nextDueDate + "T00:00:00").toLocaleDateString("en-IN", {
-                                    day: "numeric", month: "short", year: "numeric",
-                                  }) : "—"}
-                                </td>
-                                <td className="px-4 py-3">
-                                  {b ? (
+                    <>
+                      {/* Mobile cards */}
+                      <div className="md:hidden divide-y divide-gray-100">
+                        {dashboardRows.map((a) => {
+                          const b = billingByPublicId.get(a.publicId);
+                          const su = storageByPublicId.get(a.publicId);
+                          const isTop = su ? topConsumerIds.has(a.publicId) : false;
+                          const accentColor =
+                            b?.status === "OVERDUE"  ? "bg-red-500" :
+                            b?.status === "DUE_SOON" ? "bg-amber-400" :
+                            b                        ? "bg-green-400" : "bg-gray-200";
+                          return (
+                            <div key={a.id} className="p-4">
+                              <div className="flex items-start gap-3">
+                                <div className={`w-1 self-stretch rounded-full flex-shrink-0 ${accentColor}`} />
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex items-start justify-between gap-2">
                                     <div>
-                                      <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${BILLING_STATUS_COLORS[b.status]}`}>
-                                        {b.status === "CURRENT" ? "Current" :
+                                      <div className="font-semibold text-gray-900 text-sm">{a.name}</div>
+                                      <div className="text-xs text-gray-400 mt-0.5 flex items-center gap-2">
+                                        <span className="font-mono">{a.code}</span>
+                                        {a.city && <span>· {a.city}</span>}
+                                        <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-medium
+                                          ${a.active ? "bg-green-50 text-green-700" : "bg-gray-100 text-gray-500"}`}>
+                                          {a.active ? "active" : "inactive"}
+                                        </span>
+                                      </div>
+                                    </div>
+                                    {b && (
+                                      <span className={`flex-shrink-0 px-2 py-0.5 rounded-full text-xs font-semibold ${BILLING_STATUS_COLORS[b.status]}`}>
+                                        {b.status === "CURRENT"  ? "Current" :
                                          b.status === "DUE_SOON" ? `Due in ${b.daysUntilDue}d` :
                                          `Overdue ${Math.abs(b.daysUntilDue)}d`}
                                       </span>
-                                    </div>
-                                  ) : (
-                                    <span className="text-xs text-gray-300">no billing</span>
-                                  )}
-                                </td>
-                                <td className="px-4 py-3 text-right font-medium">{a.playerCount}</td>
-                                <td className="px-4 py-3 text-right">
-                                  {(() => {
-                                    const su = storageByPublicId.get(a.publicId);
-                                    if (!su) return <span className="text-xs text-gray-300">—</span>;
-                                    const isTop = topConsumerIds.has(a.publicId);
-                                    return (
-                                      <div>
-                                        <span className={`text-xs font-semibold ${isTop ? "text-amber-600" : "text-gray-700"}`}>
-                                          {formatBytes(su.totalBytes)}
-                                        </span>
-                                        <div className="text-xs text-gray-300 mt-0.5">
-                                          {new Date(su.lastCalculatedAt).toLocaleDateString("en-IN", {
-                                            day: "numeric", month: "short",
-                                          })}
-                                        </div>
+                                    )}
+                                  </div>
+                                  <div className="mt-3 grid grid-cols-3 gap-2">
+                                    <div className="bg-gray-50 rounded-lg px-2.5 py-2">
+                                      <div className="text-[10px] text-gray-400 uppercase tracking-wide">Due</div>
+                                      <div className="font-semibold text-gray-800 text-sm mt-0.5">
+                                        {b ? `₹${b.currentAmountDue.toLocaleString("en-IN")}` : "—"}
                                       </div>
-                                    );
-                                  })()}
-                                </td>
-                                <td className="px-4 py-3">
-                                  <span className={`px-2 py-0.5 rounded-full text-xs font-medium
-                                    ${a.active ? "bg-green-50 text-green-700" : "bg-gray-100 text-gray-500"}`}>
-                                    {a.active ? "active" : "inactive"}
-                                  </span>
-                                </td>
-                                <td className="px-4 py-3">
-                                  <div className="flex gap-1 flex-wrap">
+                                      {b && <div className="text-[10px] text-gray-400">{b.activePlayerCount} students</div>}
+                                    </div>
+                                    <div className="bg-gray-50 rounded-lg px-2.5 py-2">
+                                      <div className="text-[10px] text-gray-400 uppercase tracking-wide">Next Due</div>
+                                      <div className="font-semibold text-gray-800 text-sm mt-0.5">
+                                        {b ? new Date(b.nextDueDate + "T00:00:00").toLocaleDateString("en-IN", {
+                                          day: "numeric", month: "short",
+                                        }) : "—"}
+                                      </div>
+                                    </div>
+                                    <div className="bg-gray-50 rounded-lg px-2.5 py-2">
+                                      <div className="text-[10px] text-gray-400 uppercase tracking-wide">Storage</div>
+                                      <div className={`font-semibold text-sm mt-0.5 ${isTop ? "text-amber-600" : "text-gray-800"}`}>
+                                        {su ? formatBytes(su.totalBytes) : "—"}
+                                      </div>
+                                    </div>
+                                  </div>
+                                  <div className="mt-3 flex flex-wrap gap-1.5">
                                     {b && (
                                       <>
                                         <button onClick={() => openMarkPaid(b)}
-                                          className="px-2.5 py-1 bg-green-50 border border-green-200 text-green-700 rounded-lg text-xs hover:bg-green-100 transition whitespace-nowrap">
+                                          className="px-2.5 py-1 bg-green-50 border border-green-200 text-green-700 rounded-lg text-xs hover:bg-green-100 transition">
                                           Mark Paid
                                         </button>
                                         {b.billingContactPhone && (
                                           <button onClick={() => openWhatsApp(b)}
-                                            className="px-2.5 py-1 bg-emerald-50 border border-emerald-200 text-emerald-700 rounded-lg text-xs hover:bg-emerald-100 transition whitespace-nowrap">
+                                            className="px-2.5 py-1 bg-emerald-50 border border-emerald-200 text-emerald-700 rounded-lg text-xs hover:bg-emerald-100 transition">
                                             WhatsApp
                                           </button>
                                         )}
                                         {b.billingContactEmail && (
                                           <button onClick={() => openEmail(b)}
-                                            className="px-2.5 py-1 bg-blue-50 border border-blue-200 text-blue-700 rounded-lg text-xs hover:bg-blue-100 transition whitespace-nowrap">
+                                            className="px-2.5 py-1 bg-blue-50 border border-blue-200 text-blue-700 rounded-lg text-xs hover:bg-blue-100 transition">
                                             Email
                                           </button>
                                         )}
                                         <button onClick={() => openHistory(b)}
-                                          className="px-2.5 py-1 border border-gray-200 text-gray-500 rounded-lg text-xs hover:bg-gray-50 transition whitespace-nowrap">
+                                          className="px-2.5 py-1 border border-gray-200 text-gray-500 rounded-lg text-xs hover:bg-gray-50 transition">
                                           History
+                                        </button>
+                                        <button onClick={() => openPricingModal(b)}
+                                          className="px-2.5 py-1 border border-indigo-200 text-indigo-600 rounded-lg text-xs hover:bg-indigo-50 transition">
+                                          Pricing
                                         </button>
                                       </>
                                     )}
                                     <button onClick={() => exportAcademy(a)} disabled={exporting === a.publicId}
-                                      className="px-2.5 py-1 border border-gray-200 rounded-lg text-xs hover:bg-gray-50 transition disabled:opacity-50 whitespace-nowrap">
+                                      className="px-2.5 py-1 border border-gray-200 rounded-lg text-xs hover:bg-gray-50 transition disabled:opacity-50">
                                       {exporting === a.publicId ? "…" : "Export"}
                                     </button>
                                     <button onClick={() => a.active ? openDeactivate(a) : activate(a)}
-                                      className={`px-2.5 py-1 border rounded-lg text-xs transition whitespace-nowrap
+                                      className={`px-2.5 py-1 border rounded-lg text-xs transition
                                         ${a.active ? "border-red-200 text-red-600 hover:bg-red-50" : "border-green-200 text-green-600 hover:bg-green-50"}`}>
                                       {a.active ? "Deactivate" : "Activate"}
                                     </button>
                                   </div>
-                                </td>
-                              </tr>
-                            );
-                          })}
-                        </tbody>
-                      </table>
-                    </div>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+
+                      {/* Desktop table with action dropdown */}
+                      <div className="hidden md:block overflow-x-auto">
+                        <table className="w-full text-sm">
+                          <thead className="bg-gray-50">
+                            <tr>
+                              <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 whitespace-nowrap">Academy</th>
+                              <th className="px-4 py-3 text-right text-xs font-semibold text-gray-500 whitespace-nowrap">Due This Month</th>
+                              <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 whitespace-nowrap">Next Due</th>
+                              <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 whitespace-nowrap">Status</th>
+                              <th className="px-4 py-3 text-right text-xs font-semibold text-gray-500 whitespace-nowrap">Storage</th>
+                              <th className="px-4 py-3 w-12"></th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-gray-50">
+                            {dashboardRows.map((a) => {
+                              const b = billingByPublicId.get(a.publicId);
+                              const su = storageByPublicId.get(a.publicId);
+                              const isTop = su ? topConsumerIds.has(a.publicId) : false;
+                              const rowAccent =
+                                b?.status === "OVERDUE"  ? "border-l-4 border-l-red-400 bg-red-50/20" :
+                                b?.status === "DUE_SOON" ? "border-l-4 border-l-amber-400 bg-amber-50/10" :
+                                "border-l-4 border-l-transparent";
+                              return (
+                                <tr key={a.id} className={`${rowAccent} hover:bg-blue-50/20 transition`}>
+                                  <td className="px-4 py-3">
+                                    <div className="font-medium text-gray-900">{a.name}</div>
+                                    <div className="text-xs text-gray-400 flex items-center gap-2 mt-0.5">
+                                      <span className="font-mono">{a.code}</span>
+                                      {a.city && <span>· {a.city}</span>}
+                                      <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-medium
+                                        ${a.active ? "bg-green-50 text-green-700" : "bg-gray-100 text-gray-500"}`}>
+                                        {a.active ? "active" : "inactive"}
+                                      </span>
+                                    </div>
+                                  </td>
+                                  <td className="px-4 py-3 text-right whitespace-nowrap">
+                                    {b ? (
+                                      <>
+                                        <div className="font-semibold text-gray-800">₹{b.currentAmountDue.toLocaleString("en-IN")}</div>
+                                        <div className="text-xs text-gray-400">{b.activePlayerCount} students</div>
+                                      </>
+                                    ) : <span className="text-xs text-gray-300">—</span>}
+                                  </td>
+                                  <td className="px-4 py-3 text-xs text-gray-600 whitespace-nowrap">
+                                    {b ? new Date(b.nextDueDate + "T00:00:00").toLocaleDateString("en-IN", {
+                                      day: "numeric", month: "short", year: "numeric",
+                                    }) : "—"}
+                                  </td>
+                                  <td className="px-4 py-3">
+                                    {b ? (
+                                      <span className={`px-2.5 py-1 rounded-full text-xs font-semibold ${BILLING_STATUS_COLORS[b.status]}`}>
+                                        {b.status === "CURRENT"  ? "Current" :
+                                         b.status === "DUE_SOON" ? `Due in ${b.daysUntilDue}d` :
+                                         `Overdue ${Math.abs(b.daysUntilDue)}d`}
+                                      </span>
+                                    ) : (
+                                      <span className="text-xs text-gray-300">no billing</span>
+                                    )}
+                                  </td>
+                                  <td className="px-4 py-3 text-right">
+                                    {su ? (
+                                      <>
+                                        <span className={`text-xs font-semibold ${isTop ? "text-amber-600" : "text-gray-600"}`}>
+                                          {formatBytes(su.totalBytes)}
+                                        </span>
+                                        <div className="text-[10px] text-gray-300 mt-0.5">
+                                          {new Date(su.lastCalculatedAt).toLocaleDateString("en-IN", {
+                                            day: "numeric", month: "short",
+                                          })}
+                                        </div>
+                                      </>
+                                    ) : <span className="text-xs text-gray-300">—</span>}
+                                  </td>
+                                  <td className="px-4 py-3 text-right">
+                                    <div className="relative inline-block" onClick={(e) => e.stopPropagation()}>
+                                      <button
+                                        onClick={() => setOpenActionMenu(openActionMenu === a.publicId ? null : a.publicId)}
+                                        className="w-8 h-8 flex items-center justify-center rounded-lg border border-gray-200 hover:bg-gray-100 text-gray-500 transition text-lg leading-none"
+                                        title="Actions">
+                                        ···
+                                      </button>
+                                      {openActionMenu === a.publicId && (
+                                        <div className="absolute right-0 top-full mt-1 bg-white rounded-xl border border-gray-200 shadow-xl z-30 min-w-[160px] py-1">
+                                          {b && (
+                                            <>
+                                              <button onClick={() => { openMarkPaid(b); setOpenActionMenu(null); }}
+                                                className="w-full text-left px-4 py-2 text-sm text-green-700 hover:bg-green-50 transition">
+                                                Mark Paid
+                                              </button>
+                                              {b.billingContactPhone && (
+                                                <button onClick={() => { openWhatsApp(b); setOpenActionMenu(null); }}
+                                                  className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition">
+                                                  WhatsApp
+                                                </button>
+                                              )}
+                                              {b.billingContactEmail && (
+                                                <button onClick={() => { openEmail(b); setOpenActionMenu(null); }}
+                                                  className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition">
+                                                  Email
+                                                </button>
+                                              )}
+                                              <button onClick={() => { openHistory(b); setOpenActionMenu(null); }}
+                                                className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition">
+                                                Payment History
+                                              </button>
+                                              <button onClick={() => { openPricingModal(b); setOpenActionMenu(null); }}
+                                                className="w-full text-left px-4 py-2 text-sm text-indigo-600 hover:bg-indigo-50 transition">
+                                                Edit Pricing
+                                              </button>
+                                              <div className="border-t border-gray-100 my-1" />
+                                            </>
+                                          )}
+                                          <button onClick={() => { exportAcademy(a); setOpenActionMenu(null); }}
+                                            disabled={exporting === a.publicId}
+                                            className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition disabled:opacity-50">
+                                            {exporting === a.publicId ? "Exporting…" : "Export Data"}
+                                          </button>
+                                          <button onClick={() => { a.active ? openDeactivate(a) : activate(a); setOpenActionMenu(null); }}
+                                            className={`w-full text-left px-4 py-2 text-sm transition
+                                              ${a.active ? "text-red-600 hover:bg-red-50" : "text-green-600 hover:bg-green-50"}`}>
+                                            {a.active ? "Deactivate" : "Activate"}
+                                          </button>
+                                        </div>
+                                      )}
+                                    </div>
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    </>
                   )}
                 </div>
               </>
@@ -1043,20 +1303,57 @@ export default function PlatformAdminPage() {
                 </div>
               </fieldset>
 
-              {/* Billing */}
+              {/* Pricing Tiers */}
               <fieldset>
-                <legend className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">Billing</legend>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <legend className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">Pricing Tiers</legend>
+                <div className="space-y-3">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-medium text-gray-600 mb-1">Base fee (₹) *</label>
+                      <input required type="number" step="1" min="0" value={form.baseFee}
+                        onChange={(e) => setForm((f) => ({ ...f, baseFee: e.target.value }))}
+                        placeholder="5000"
+                        className="w-full border border-gray-300 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-600 mb-1">Covers first N students *</label>
+                      <input required type="number" step="1" min="1" value={form.baseTierStudentLimit}
+                        onChange={(e) => setForm((f) => ({ ...f, baseTierStudentLimit: e.target.value }))}
+                        placeholder="50"
+                        className="w-full border border-gray-300 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-medium text-gray-600 mb-1">Tier 2 ₹/student *</label>
+                      <input required type="number" step="0.01" min="0" value={form.tier2PricePerStudent}
+                        onChange={(e) => setForm((f) => ({ ...f, tier2PricePerStudent: e.target.value }))}
+                        placeholder="90"
+                        className="w-full border border-gray-300 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-600 mb-1">
+                        Tier 2 limit <span className="font-normal text-gray-400">(blank = no tier 3)</span>
+                      </label>
+                      <input type="number" step="1" min="1" value={form.tier2StudentLimit}
+                        onChange={(e) => setForm((f) => ({ ...f, tier2StudentLimit: e.target.value }))}
+                        placeholder="150"
+                        className="w-full border border-gray-300 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                    </div>
+                  </div>
                   <div>
                     <label className="block text-xs font-medium text-gray-600 mb-1">
-                      Monthly fee (₹) *
+                      Tier 3 ₹/student <span className="font-normal text-gray-400">(blank = no tier 3)</span>
                     </label>
-                    <input required type="number" step="1" min="0" value={form.monthlyAmount}
-                      onChange={(e) => setForm((f) => ({ ...f, monthlyAmount: e.target.value }))}
-                      placeholder="5000"
+                    <input type="number" step="0.01" min="0" value={form.tier3PricePerStudent}
+                      onChange={(e) => setForm((f) => ({ ...f, tier3PricePerStudent: e.target.value }))}
+                      placeholder="70"
                       className="w-full border border-gray-300 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
-                    <p className="text-xs text-gray-400 mt-1">First payment due 1 month after creation.</p>
                   </div>
+                  <p className="text-xs text-gray-400">
+                    Bill = base fee for first [N] students, then tier 2 rate per additional student (up to tier 2 limit if set), then tier 3 rate beyond.
+                    First payment due 1 month after creation.
+                  </p>
                 </div>
               </fieldset>
 

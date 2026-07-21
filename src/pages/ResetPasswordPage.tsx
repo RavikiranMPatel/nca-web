@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import publicApi from "../api/publicApi";
 
@@ -15,13 +15,25 @@ export default function ResetPasswordPage() {
   const [loading, setLoading]       = useState(false);
   const [error, setError]           = useState("");
   const [success, setSuccess]       = useState(false);
+  const [primaryColor, setPrimaryColor] = useState("#2563eb");
+
+  useEffect(() => {
+    publicApi
+      .get("/settings/public")
+      .then((r) => setPrimaryColor(r.data?.PRIMARY_COLOR || "#2563eb"))
+      .catch(() => {});
+  }, []);
 
   if (!token) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-100">
         <div className="bg-white p-8 rounded-lg shadow-md w-96 text-center">
           <p className="text-red-600 font-medium mb-4">Invalid reset link.</p>
-          <Link to="/forgot-password" className="text-blue-600 hover:underline text-sm">
+          <Link
+            to="/forgot-password"
+            className="hover:underline text-sm font-medium"
+            style={{ color: primaryColor }}
+          >
             Request a new one
           </Link>
         </div>
@@ -89,7 +101,8 @@ export default function ResetPasswordPage() {
               <button
                 type="submit"
                 disabled={loading}
-                className="w-full bg-blue-600 text-white py-2 rounded hover:bg-blue-700 disabled:opacity-60"
+                className="w-full text-white py-2 rounded disabled:opacity-60 transition-opacity hover:opacity-90"
+                style={{ backgroundColor: primaryColor }}
               >
                 {loading ? "Saving…" : "Update password"}
               </button>

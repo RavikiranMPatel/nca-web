@@ -96,6 +96,11 @@ type AcademySettings = {
   INSTAGRAM_POST_4?: string;
   INSTAGRAM_POST_5?: string;
   SECTION_CRICKET_STATS_ENABLED?: string;
+  MODULE_SLOT_BOOKING_ENABLED?: string;
+  CORNER_STYLE?: string;
+  FONT_PAIRING?: string;
+  HERO_PHOTO_URL?: string;
+  HERO_PHOTO_PLACEMENT?: string;
 };
 type TeamMember = {
   id: string;
@@ -395,28 +400,45 @@ function SectionHeading({
   title,
   subtitle,
   primaryColor,
+  eyebrow,
 }: {
   title: string;
   subtitle?: string;
   primaryColor: string;
+  eyebrow?: string;
 }) {
   return (
-    <div className="text-center mb-6 md:mb-12">
+    <div className="text-center mb-8 md:mb-12">
+      {eyebrow && (
+        <div className="inline-flex items-center gap-2.5 mb-3">
+          <div className="h-px w-6" style={{ backgroundColor: primaryColor }} />
+          <span
+            className="text-[10px] font-extrabold tracking-[0.18em] uppercase"
+            style={{ color: primaryColor }}
+          >
+            {eyebrow}
+          </span>
+          <div className="h-px w-6" style={{ backgroundColor: primaryColor }} />
+        </div>
+      )}
       <h2 className="text-2xl md:text-4xl font-bold text-gray-900 mb-2">
         {title}
       </h2>
       {subtitle && (
-        <p className="text-gray-500 text-sm md:text-lg max-w-2xl mx-auto">
+        <p className="text-gray-500 text-sm md:text-lg max-w-2xl mx-auto leading-relaxed">
           {subtitle}
         </p>
       )}
-      <div
-        className="h-1 w-12 md:w-16 mx-auto mt-3 rounded-full"
-        style={{ backgroundColor: primaryColor }}
-      />
     </div>
   );
 }
+
+const FONT_PAIRINGS: Record<string, { heading: string; body: string; googleUrl: string }> = {
+  modern:  { heading: "'Inter', sans-serif",           body: "'Inter', sans-serif",     googleUrl: "Inter:wght@400;600;700;900" },
+  sporty:  { heading: "'Oswald', sans-serif",          body: "'Open+Sans', sans-serif", googleUrl: "Oswald:wght@600;700&family=Open+Sans:wght@400;600" },
+  premium: { heading: "'Playfair+Display', serif",     body: "'Lato', sans-serif",      googleUrl: "Playfair+Display:wght@700;800&family=Lato:wght@400;700" },
+  warm:    { heading: "'Poppins', sans-serif",         body: "'Poppins', sans-serif",   googleUrl: "Poppins:wght@400;500;600;700;800" },
+};
 
 function Home() {
   const navigate = useNavigate();
@@ -434,6 +456,10 @@ function Home() {
   const [gallery, setGallery] = useState<GalleryImage[]>([]);
   const [selectedGalleryImage, setSelectedGalleryImage] =
     useState<GalleryImage | null>(null);
+  const [selectedNewsImage, setSelectedNewsImage] = useState<{
+    url: string;
+    alt: string;
+  } | null>(null);
   const [homepageSections, setHomepageSections] = useState<
     Array<{ sectionType: string; displayOrder: number }>
   >([]);
@@ -462,9 +488,16 @@ function Home() {
   const logoUrl = settings.LOGO_URL;
   const primaryColor = settings.PRIMARY_COLOR || "#2563eb";
   const secondaryColor = settings.SECONDARY_COLOR || "#10b981";
-  const buttonRadius = settings.BUTTON_RADIUS || "8";
-  const cardRadius = settings.CARD_RADIUS || "12";
+  const cornerStyle   = settings.CORNER_STYLE;
+  const buttonRadius  = cornerStyle === "sharp" ? "0" : cornerStyle === "rounded" ? "12" : (settings.BUTTON_RADIUS || "8");
+  const cardRadius    = cornerStyle === "sharp" ? "0" : cornerStyle === "rounded" ? "16" : (settings.CARD_RADIUS || "12");
   const shadowIntensity = settings.SHADOW_INTENSITY || "md";
+  const fontPairing   = settings.FONT_PAIRING || "modern";
+  const activePairing = FONT_PAIRINGS[fontPairing] || FONT_PAIRINGS.modern;
+  const headingFont   = activePairing.heading;
+  const bodyFont      = activePairing.body;
+  const heroPhotoUrl  = settings.HERO_PHOTO_URL || "";
+  const photoLeft     = settings.HERO_PHOTO_PLACEMENT === "left";
   const slideDuration = parseInt(settings.SLIDE_DURATION || "5000");
   const sliderEnabled = settings.SECTION_SLIDER_ENABLED !== "false";
   const starPerformerEnabled =
@@ -472,6 +505,7 @@ function Home() {
   const youtubeEnabled = settings.SECTION_YOUTUBE_ENABLED !== "false";
   const cricketStatsEnabled =
     settings.SECTION_CRICKET_STATS_ENABLED !== "false";
+  const showSlotBooking = settings.MODULE_SLOT_BOOKING_ENABLED === "true";
   const youtubeHeading = settings.YOUTUBE_HEADING || "Watch Us in Action";
   const youtubeSubheading =
     settings.YOUTUBE_SUBHEADING ||
@@ -528,6 +562,9 @@ function Home() {
     shadowIntensity === "none"
       ? "border border-gray-200"
       : `shadow-${shadowIntensity}`;
+  // For homepage cards: always at least shadow-sm so cards feel elevated, never flat-bordered
+  const getCardShadow = () =>
+    shadowIntensity === "none" ? "shadow-sm" : `shadow-${shadowIntensity}`;
 
   // ── LIVE MATCHES POLL ──────────────────────────────────────────────────────
   useEffect(() => {
@@ -640,11 +677,26 @@ function Home() {
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setSelectedGalleryImage(null);
+      if (e.key === "Escape") {
+        setSelectedGalleryImage(null);
+        setSelectedNewsImage(null);
+      }
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
   }, []);
+
+  useEffect(() => {
+    const pairing = FONT_PAIRINGS[fontPairing] || FONT_PAIRINGS.modern;
+    const existing = document.getElementById("nca-gfonts");
+    if (existing) existing.remove();
+    const link = document.createElement("link");
+    link.id = "nca-gfonts";
+    link.rel = "stylesheet";
+    link.href = `https://fonts.googleapis.com/css2?family=${pairing.googleUrl}&display=swap`;
+    document.head.appendChild(link);
+    return () => { document.getElementById("nca-gfonts")?.remove(); };
+  }, [fontPairing]);
 
   if (loading) {
     return (
@@ -663,7 +715,12 @@ function Home() {
   const hasSlider = sliderEnabled && sliderImages.length > 0;
 
   return (
-    <div className="min-h-screen bg-gray-50 pb-20 sm:pb-0">
+    <>
+      <style dangerouslySetInnerHTML={{ __html: `
+        .nca-home h1,.nca-home h2,.nca-home h3,.nca-home h4,.nca-home h5{font-family:${headingFont};}
+        .nca-home{font-family:${bodyFont};}
+      `}} />
+      <div className="nca-home min-h-screen bg-gray-50 pb-20 sm:pb-0">
       {/* ── ANNOUNCEMENT BAR ── */}
       {(() => {
         const enabled = settings.ANNOUNCEMENT_ENABLED !== "false";
@@ -946,14 +1003,16 @@ function Home() {
           }}
         >
           <div className="flex gap-3 max-w-lg mx-auto">
-            <button
-              onClick={() => navigate("/book-slot")}
-              style={{ backgroundColor: primaryColor, ...getButtonStyle() }}
-              className="flex-1 py-3 text-white font-bold text-sm hover:opacity-90 transition shadow-md flex items-center justify-center gap-1.5"
-            >
-              🏏 Book a Training Slot
-              <ArrowRight size={15} />
-            </button>
+            {showSlotBooking && (
+              <button
+                onClick={() => navigate("/book-slot")}
+                style={{ backgroundColor: primaryColor, ...getButtonStyle() }}
+                className="flex-1 py-3 text-white font-bold text-sm hover:opacity-90 transition shadow-md flex items-center justify-center gap-1.5"
+              >
+                🏏 Book a Training Slot
+                <ArrowRight size={15} />
+              </button>
+            )}
             <button
               onClick={() =>
                 document
@@ -975,12 +1034,13 @@ function Home() {
 
       {/* ── ACADEMY AT A GLANCE ── */}
       {settings.SECTION_STATS_ENABLED !== "false" && publicStats && (
-        <section className="py-8 md:py-12 px-4 bg-white border-b">
+        <section className="py-10 md:py-14 px-4" style={{ background: `${primaryColor}07` }}>
           <div className="max-w-6xl mx-auto">
             <SectionHeading
               title="Academy at a Glance"
               subtitle="Live numbers from our training ground"
               primaryColor={primaryColor}
+              eyebrow="AT A GLANCE"
             />
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
               {[
@@ -1007,11 +1067,10 @@ function Home() {
               ].map(({ label, value, emoji }) => (
                 <div
                   key={label}
-                  className={`text-center p-4 md:p-5 ${getShadowClass()}`}
+                  className={`text-center p-4 md:p-5 ${getCardShadow()}`}
                   style={{
                     ...getCardStyle(),
-                    border: `1px solid ${primaryColor}20`,
-                    background: `${primaryColor}06`,
+                    background: `${primaryColor}08`,
                   }}
                 >
                   <div className="text-xl md:text-2xl mb-1">{emoji}</div>
@@ -1035,23 +1094,29 @@ function Home() {
         topPerformers &&
         (topPerformers.topBatters.length > 0 ||
           topPerformers.topBowlers.length > 0) && (
-          <section className="py-8 md:py-12 px-4 bg-white border-b">
+          <section className="py-10 md:py-14 px-4 bg-white">
             <div className="max-w-6xl mx-auto">
-              <div className="flex items-center justify-between mb-6">
+              <div className="flex items-start justify-between mb-8">
                 <div>
-                  <h2 className="text-xl md:text-2xl font-bold text-gray-900">
-                    🏆 Top Performers
+                  <div className="inline-flex items-center gap-2.5 mb-2">
+                    <div className="h-px w-6" style={{ backgroundColor: primaryColor }} />
+                    <span className="text-[10px] font-extrabold tracking-[0.18em] uppercase" style={{ color: primaryColor }}>LEADERBOARD</span>
+                    <div className="h-px w-6" style={{ backgroundColor: primaryColor }} />
+                  </div>
+                  <h2 className="text-2xl md:text-3xl font-bold text-gray-900">
+                    Top Performers
                   </h2>
-                  <p className="text-sm text-gray-400 mt-0.5">
+                  <p className="text-sm text-gray-400 mt-1">
                     Academy cricket leaderboard
                   </p>
                 </div>
                 <button
                   onClick={() => navigate("/cricket-stats")}
-                  className="flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-xl transition"
+                  className="flex items-center gap-1.5 text-xs font-semibold px-3 py-2 transition"
                   style={{
                     color: primaryColor,
                     background: `${primaryColor}10`,
+                    borderRadius: `${buttonRadius}px`,
                   }}
                 >
                   View All →
@@ -1061,11 +1126,8 @@ function Home() {
                 {/* Top Batter */}
                 {topPerformers.topBatters[0] && (
                   <div
-                    className={`bg-white overflow-hidden cursor-pointer ${getShadowClass()}`}
-                    style={{
-                      ...getCardStyle(),
-                      border: `1px solid ${primaryColor}20`,
-                    }}
+                    className={`bg-white overflow-hidden cursor-pointer hover:shadow-xl transition-shadow ${getCardShadow()}`}
+                    style={{ ...getCardStyle() }}
                     onClick={() => navigate("/cricket-stats")}
                   >
                     <div
@@ -1138,11 +1200,8 @@ function Home() {
                 {/* Top Bowler */}
                 {topPerformers.topBowlers[0] && (
                   <div
-                    className={`bg-white overflow-hidden cursor-pointer ${getShadowClass()}`}
-                    style={{
-                      ...getCardStyle(),
-                      border: `1px solid ${primaryColor}20`,
-                    }}
+                    className={`bg-white overflow-hidden cursor-pointer hover:shadow-xl transition-shadow ${getCardShadow()}`}
+                    style={{ ...getCardStyle() }}
                     onClick={() => navigate("/cricket-stats")}
                   >
                     <div
@@ -1219,82 +1278,169 @@ function Home() {
 
       {/* ── HERO (no slider) ── */}
       {!hasSlider && (
-        <section
-          className="py-16 md:py-24 px-4 text-center"
-          style={{
-            background: `linear-gradient(135deg, ${primaryColor}12 0%, #ffffff 50%, ${secondaryColor}10 100%)`,
-          }}
-        >
-          <div className="max-w-4xl mx-auto">
-            {logoUrl ? (
-              <div className="flex justify-center mb-6">
+        heroPhotoUrl ? (
+          /* Split hero: photo + text side-by-side */
+          <section
+            className="py-12 md:py-20 px-4 relative overflow-hidden"
+            style={{
+              background: `linear-gradient(135deg, ${primaryColor}10 0%, #ffffff 60%, ${secondaryColor}08 100%)`,
+            }}
+          >
+            {/* Decorative blobs */}
+            <div className="absolute top-0 right-0 w-[500px] h-[500px] rounded-full pointer-events-none blur-3xl opacity-[0.07] -translate-y-1/3 translate-x-1/3" style={{ backgroundColor: primaryColor }} />
+            <div className="absolute bottom-0 left-0 w-72 h-72 rounded-full pointer-events-none blur-3xl opacity-[0.05] translate-y-1/3 -translate-x-1/3" style={{ backgroundColor: secondaryColor }} />
+            <div className="max-w-6xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-8 md:gap-12 items-center relative">
+              {/* Photo column */}
+              <div className={`order-1 ${photoLeft ? "md:order-1" : "md:order-2"} flex justify-center`}>
                 <img
-                  src={getImageUrl(logoUrl) || ""}
+                  src={getImageUrl(heroPhotoUrl) || ""}
                   alt={academyName}
-                  className="h-28 sm:h-36 object-contain"
+                  className="w-full max-w-sm md:max-w-none h-auto object-contain drop-shadow-xl"
+                  style={{ borderRadius: `${cardRadius}px` }}
                 />
               </div>
-            ) : (
-              <div className="flex justify-center mb-6">
-                <div
-                  className="w-28 h-28 rounded-full flex items-center justify-center text-white text-4xl font-bold shadow-xl"
-                  style={{ backgroundColor: primaryColor }}
-                >
-                  {academyName.substring(0, 3).toUpperCase()}
+
+              {/* Text column */}
+              <div className={`order-2 ${photoLeft ? "md:order-2" : "md:order-1"} flex flex-col items-start`}>
+                {logoUrl && (
+                  <img
+                    src={getImageUrl(logoUrl) || ""}
+                    alt={academyName}
+                    className="h-16 sm:h-20 object-contain mb-5"
+                  />
+                )}
+                <h1 className="text-4xl sm:text-5xl md:text-6xl font-extrabold text-gray-900 mb-4 leading-tight">
+                  {academyName}
+                </h1>
+                <p className="text-gray-500 text-lg md:text-xl mb-8 leading-relaxed">
+                  Transform your cricket skills with professional coaching,
+                  world-class facilities, and a winning environment.
+                </p>
+                <div className="flex flex-col sm:flex-row gap-3 mb-8 w-full sm:w-auto">
+                  {showSlotBooking && (
+                    <button
+                      onClick={() => navigate("/book-slot")}
+                      style={{ backgroundColor: primaryColor, ...getButtonStyle() }}
+                      className="w-full sm:w-auto px-8 py-4 text-white text-base font-semibold hover:opacity-90 transition shadow-lg flex items-center justify-center gap-2"
+                    >
+                      Book a Slot <ArrowRight size={18} />
+                    </button>
+                  )}
+                  <button
+                    onClick={() =>
+                      document
+                        .getElementById("contact")
+                        ?.scrollIntoView({ behavior: "smooth" })
+                    }
+                    className="w-full sm:w-auto px-8 py-4 border-2 text-base font-semibold hover:bg-gray-50 transition flex items-center justify-center gap-2"
+                    style={{
+                      borderColor: primaryColor,
+                      color: primaryColor,
+                      ...getButtonStyle(),
+                    }}
+                  >
+                    Contact Us
+                  </button>
                 </div>
+                {testimonials[0] && (
+                  <blockquote
+                    className="border-l-4 pl-4 italic text-gray-600 text-sm md:text-base"
+                    style={{ borderColor: primaryColor }}
+                  >
+                    <p className="mb-1">"{testimonials[0].text.length > 120 ? testimonials[0].text.substring(0, 120) + "…" : testimonials[0].text}"</p>
+                    <footer className="text-xs font-semibold not-italic" style={{ color: primaryColor }}>
+                      — {testimonials[0].name}{testimonials[0].role ? `, ${testimonials[0].role}` : ""}
+                    </footer>
+                  </blockquote>
+                )}
               </div>
-            )}
-            <h1 className="text-4xl sm:text-5xl md:text-6xl font-extrabold text-gray-900 mb-5 leading-tight">
-              {academyName}
-            </h1>
-            <p className="text-gray-500 text-lg md:text-xl max-w-2xl mx-auto mb-10">
-              Transform your cricket skills with professional coaching,
-              world-class facilities, and a winning environment.
-            </p>
-            <div className="flex flex-col sm:flex-row gap-3 justify-center">
-              <button
-                onClick={() => navigate("/book-slot")}
-                style={{ backgroundColor: primaryColor, ...getButtonStyle() }}
-                className="w-full sm:w-auto px-8 py-4 text-white text-base font-semibold hover:opacity-90 transition shadow-lg flex items-center justify-center gap-2"
-              >
-                Book a Slot <ArrowRight size={18} />
-              </button>
-              <button
-                onClick={() =>
-                  document
-                    .getElementById("contact")
-                    ?.scrollIntoView({ behavior: "smooth" })
-                }
-                className="w-full sm:w-auto px-8 py-4 border-2 text-base font-semibold hover:bg-gray-50 transition flex items-center justify-center gap-2"
-                style={{
-                  borderColor: primaryColor,
-                  color: primaryColor,
-                  ...getButtonStyle(),
-                }}
-              >
-                Contact Us
-              </button>
             </div>
-          </div>
-        </section>
+          </section>
+        ) : (
+          /* Centered hero (no photo) */
+          <section
+            className="py-16 md:py-24 px-4 text-center relative overflow-hidden"
+            style={{
+              background: `linear-gradient(135deg, ${primaryColor}12 0%, #ffffff 50%, ${secondaryColor}10 100%)`,
+            }}
+          >
+            {/* Decorative blobs */}
+            <div className="absolute top-0 right-0 w-[480px] h-[480px] rounded-full pointer-events-none blur-3xl opacity-[0.07] -translate-y-1/3 translate-x-1/3" style={{ backgroundColor: primaryColor }} />
+            <div className="absolute bottom-0 left-0 w-64 h-64 rounded-full pointer-events-none blur-3xl opacity-[0.05] translate-y-1/3 -translate-x-1/3" style={{ backgroundColor: secondaryColor }} />
+            <div className="max-w-4xl mx-auto relative">
+              {logoUrl ? (
+                <div className="flex justify-center mb-6">
+                  <img
+                    src={getImageUrl(logoUrl) || ""}
+                    alt={academyName}
+                    className="h-28 sm:h-36 object-contain"
+                  />
+                </div>
+              ) : (
+                <div className="flex justify-center mb-6">
+                  <div
+                    className="w-28 h-28 rounded-full flex items-center justify-center text-white text-4xl font-bold shadow-xl"
+                    style={{ backgroundColor: primaryColor }}
+                  >
+                    {academyName.substring(0, 3).toUpperCase()}
+                  </div>
+                </div>
+              )}
+              <h1 className="text-4xl sm:text-5xl md:text-6xl font-extrabold text-gray-900 mb-5 leading-tight">
+                {academyName}
+              </h1>
+              <p className="text-gray-500 text-lg md:text-xl max-w-2xl mx-auto mb-10">
+                Transform your cricket skills with professional coaching,
+                world-class facilities, and a winning environment.
+              </p>
+              <div className="flex flex-col sm:flex-row gap-3 justify-center">
+                {showSlotBooking && (
+                  <button
+                    onClick={() => navigate("/book-slot")}
+                    style={{ backgroundColor: primaryColor, ...getButtonStyle() }}
+                    className="w-full sm:w-auto px-8 py-4 text-white text-base font-semibold hover:opacity-90 transition shadow-lg flex items-center justify-center gap-2"
+                  >
+                    Book a Slot <ArrowRight size={18} />
+                  </button>
+                )}
+                <button
+                  onClick={() =>
+                    document
+                      .getElementById("contact")
+                      ?.scrollIntoView({ behavior: "smooth" })
+                  }
+                  className="w-full sm:w-auto px-8 py-4 border-2 text-base font-semibold hover:bg-gray-50 transition flex items-center justify-center gap-2"
+                  style={{
+                    borderColor: primaryColor,
+                    color: primaryColor,
+                    ...getButtonStyle(),
+                  }}
+                >
+                  Contact Us
+                </button>
+              </div>
+            </div>
+          </section>
+        )
       )}
 
       {/* ── STAR PERFORMER ── */}
       {starPerformerEnabled && (
         <section
           className="py-10 md:py-14 px-4"
-          style={{ backgroundColor: `${primaryColor}06` }}
+          style={{ backgroundColor: `${primaryColor}07` }}
         >
           <div className="max-w-4xl mx-auto">
             <SectionHeading
               title={starPerformerHeading}
               subtitle={starPerformerSubheading}
               primaryColor={primaryColor}
+              eyebrow="RECOGNITION"
             />
             {starPerformerName ? (
               <div
-                className={`bg-white overflow-hidden border-2 ${getShadowClass()}`}
-                style={{ borderColor: `${primaryColor}40`, ...getCardStyle() }}
+                className={`bg-white overflow-hidden ${getCardShadow()}`}
+                style={{ ...getCardStyle() }}
               >
                 <div
                   className="h-1.5"
@@ -1374,7 +1520,7 @@ function Home() {
               </div>
             ) : (
               <div
-                className={`bg-white p-10 text-center ${getShadowClass()}`}
+                className={`bg-white p-10 text-center ${getCardShadow()}`}
                 style={getCardStyle()}
               >
                 <Star size={40} className="mx-auto mb-3 text-gray-300" />
@@ -1388,29 +1534,34 @@ function Home() {
       )}
 
       {/* ── CMS SECTIONS — ordered and visibility-controlled via HomepageSection API ── */}
-      {homepageSections.map((section) => {
+      {homepageSections.map((section, idx) => {
+        const sectionOnLight = idx % 2 === 0;
+        const sectionBgClass = sectionOnLight ? "bg-white" : "";
+        const sectionBgStyle = sectionOnLight ? {} : { backgroundColor: `${primaryColor}07` };
+
         switch (section.sectionType) {
           case "FACILITIES":
             return facilities.length > 0 ? (
-              <section key="facilities" id="facilities" className="py-8 md:py-14 px-4 bg-white">
+              <section key="facilities" id="facilities" className={`py-10 md:py-16 px-4 ${sectionBgClass}`} style={sectionBgStyle}>
                 <div className="max-w-6xl mx-auto">
                   <SectionHeading
                     title="World-Class Facilities"
                     subtitle="State-of-the-art infrastructure designed to bring out the best in every player"
                     primaryColor={primaryColor}
+                    eyebrow="OUR FACILITIES"
                   />
                   <div className="flex md:grid md:grid-cols-3 gap-4 overflow-x-auto pb-2 md:overflow-visible md:pb-0 -mx-4 px-4 md:mx-0 md:px-0 snap-x snap-mandatory scroll-smooth">
                     {facilities.map((facility) => (
                       <div
                         key={facility.id}
-                        className={`bg-white p-5 md:p-7 border-t-4 ${getShadowClass()} flex-shrink-0 w-[72vw] md:w-auto snap-start`}
+                        className={`bg-white p-5 md:p-6 border-t-4 hover:shadow-xl transition-shadow ${getCardShadow()} flex-shrink-0 w-[72vw] md:w-auto snap-start`}
                         style={{ borderColor: primaryColor, ...getCardStyle() }}
                       >
                         <div
-                          className="w-11 h-11 md:w-14 md:h-14 rounded-xl mb-4 flex items-center justify-center"
+                          className="w-11 h-11 md:w-12 md:h-12 rounded-xl mb-4 flex items-center justify-center"
                           style={{ backgroundColor: `${primaryColor}12` }}
                         >
-                          <Award size={24} style={{ color: primaryColor }} />
+                          <Award size={22} style={{ color: primaryColor }} />
                         </div>
                         <h3 className="text-base md:text-lg font-bold mb-1.5 text-gray-800">
                           {facility.title}
@@ -1430,20 +1581,21 @@ function Home() {
               <section
                 key="team"
                 id="team"
-                className="py-8 md:py-14 px-4"
-                style={{ backgroundColor: `${primaryColor}06` }}
+                className={`py-10 md:py-16 px-4 ${sectionBgClass}`}
+                style={sectionBgStyle}
               >
                 <div className="max-w-6xl mx-auto">
                   <SectionHeading
                     title="Meet Our Team"
                     subtitle={`The coaches and management team${academyName ? ` behind ${academyName}` : ""}`}
                     primaryColor={primaryColor}
+                    eyebrow="MEET THE TEAM"
                   />
                   <div className="flex md:grid md:grid-cols-3 gap-4 overflow-x-auto pb-2 md:overflow-visible md:pb-0 -mx-4 px-4 md:mx-0 md:px-0 snap-x snap-mandatory scroll-smooth">
                     {team.map((member) => (
                       <div
                         key={member.id}
-                        className={`bg-white text-center p-5 hover:shadow-xl transition-shadow relative group ${getShadowClass()} flex-shrink-0 w-[56vw] md:w-auto snap-start`}
+                        className={`bg-white text-center p-5 hover:shadow-xl transition-shadow relative group ${getCardShadow()} flex-shrink-0 w-[56vw] md:w-auto snap-start`}
                         style={getCardStyle()}
                         onClick={() =>
                           setExpandedMemberId(
@@ -1520,25 +1672,30 @@ function Home() {
 
           case "TESTIMONIALS":
             return testimonials.length > 0 ? (
-              <section key="testimonials" id="testimonials" className="py-10 md:py-14 px-4 bg-white">
+              <section key="testimonials" id="testimonials" className={`py-10 md:py-16 px-4 ${sectionBgClass}`} style={sectionBgStyle}>
                 <div className="max-w-6xl mx-auto">
                   <SectionHeading
                     title={testimonialsHeading}
                     subtitle={testimonialsSubheading}
                     primaryColor={primaryColor}
+                    eyebrow="TESTIMONIALS"
                   />
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                     {testimonials.slice(0, 3).map((t) => (
                       <div
                         key={t.id}
-                        className={`bg-white p-7 hover:shadow-xl transition-shadow flex flex-col ${getShadowClass()}`}
+                        className={`bg-white p-6 md:p-7 hover:shadow-xl transition-shadow flex flex-col relative overflow-hidden ${getCardShadow()}`}
                         style={getCardStyle()}
                       >
-                        <div className="flex gap-1 mb-4">
+                        {/* Top accent bar */}
+                        <div className="absolute top-0 left-0 right-0 h-1" style={{ background: `linear-gradient(90deg, ${primaryColor}, ${secondaryColor})` }} />
+                        {/* Decorative large quote mark */}
+                        <div className="absolute top-1 right-3 text-9xl font-serif leading-none pointer-events-none select-none" style={{ color: primaryColor, opacity: 0.055 }}>"</div>
+                        <div className="flex gap-1 mb-4 pt-2">
                           {[...Array(t.rating || 5)].map((_, i) => (
                             <Star
                               key={i}
-                              size={15}
+                              size={14}
                               fill={primaryColor}
                               style={{ color: primaryColor }}
                             />
@@ -1547,16 +1704,16 @@ function Home() {
                         <p className="text-gray-600 text-sm leading-relaxed italic flex-1 mb-5 line-clamp-4">
                           "{t.text}"
                         </p>
-                        <div className="flex items-center gap-3">
+                        <div className="flex items-center gap-3 pt-4 border-t border-gray-100">
                           {"photoUrl" in t && t.photoUrl ? (
                             <img
                               src={getImageUrl(t.photoUrl as string) || ""}
                               alt={t.name}
-                              className="w-10 h-10 rounded-full object-cover"
+                              className="w-9 h-9 rounded-full object-cover flex-shrink-0"
                             />
                           ) : (
                             <div
-                              className="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold text-sm shrink-0"
+                              className="w-9 h-9 rounded-full flex items-center justify-center text-white font-bold text-sm shrink-0"
                               style={{ backgroundColor: primaryColor }}
                             >
                               {t.name.charAt(0)}
@@ -1581,28 +1738,38 @@ function Home() {
               <section
                 key="news"
                 id="news"
-                className="py-10 md:py-14 px-4"
-                style={{ backgroundColor: `${primaryColor}06` }}
+                className={`py-10 md:py-16 px-4 ${sectionBgClass}`}
+                style={sectionBgStyle}
               >
                 <div className="max-w-6xl mx-auto">
                   <SectionHeading
                     title={newsHeading}
                     subtitle={newsSubheading}
                     primaryColor={primaryColor}
+                    eyebrow="LATEST NEWS"
                   />
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                     {news.map((article) => (
                       <div
                         key={article.id}
-                        className={`bg-white overflow-hidden hover:shadow-xl transition-shadow ${getShadowClass()}`}
+                        className={`bg-white overflow-hidden hover:shadow-xl transition-shadow ${getCardShadow()}`}
                         style={getCardStyle()}
                       >
                         {"featuredImageUrl" in article && article.featuredImageUrl ? (
-                          <div className="h-44 overflow-hidden">
+                          <div
+                            className="overflow-hidden cursor-pointer"
+                            style={{ aspectRatio: "16/9" }}
+                            onClick={() =>
+                              setSelectedNewsImage({
+                                url: article.featuredImageUrl as string,
+                                alt: article.title,
+                              })
+                            }
+                          >
                             <img
                               src={getImageUrl(article.featuredImageUrl as string) || ""}
                               alt={article.title}
-                              className="w-full h-full object-cover hover:scale-105 transition-transform duration-500"
+                              className="w-full h-full object-cover object-top hover:scale-105 transition-transform duration-500"
                             />
                           </div>
                         ) : (
@@ -1641,12 +1808,13 @@ function Home() {
 
           case "GALLERY":
             return (
-              <section key="gallery" id="gallery" className="py-10 md:py-14 px-4 bg-white">
+              <section key="gallery" id="gallery" className={`py-10 md:py-16 px-4 ${sectionBgClass}`} style={sectionBgStyle}>
                 <div className="max-w-6xl mx-auto">
                   <SectionHeading
                     title={galleryHeading}
                     subtitle={gallerySubheading}
                     primaryColor={primaryColor}
+                    eyebrow="PHOTO GALLERY"
                   />
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                     {gallery.length > 0
@@ -1715,65 +1883,83 @@ function Home() {
               <section
                 key="clubs"
                 id="clubs"
-                className="py-10 md:py-14 px-4"
-                style={{ backgroundColor: `${primaryColor}06` }}
+                className={`py-10 md:py-16 px-4 ${sectionBgClass}`}
+                style={sectionBgStyle}
               >
                 <div className="max-w-6xl mx-auto">
                   <SectionHeading
                     title="Our Clubs"
                     subtitle="Meet the clubs representing our academy"
                     primaryColor={primaryColor}
+                    eyebrow="OUR CLUBS"
                   />
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    {clubs.map((club) => (
-                      <div
-                        key={club.publicId}
-                        className={`bg-white p-6 flex flex-col ${getShadowClass()}`}
-                        style={getCardStyle()}
-                      >
-                        <h3 className="text-xl font-bold text-gray-800 mb-1">
-                          {club.name}
-                        </h3>
-                        {club.ownerName && (
-                          <p
-                            className="text-sm font-medium mb-3"
-                            style={{ color: primaryColor }}
-                          >
-                            {club.ownerName}
-                          </p>
-                        )}
-                        {club.history && (
-                          <p className="text-gray-500 text-sm leading-relaxed line-clamp-3 whitespace-pre-line mb-4 flex-1">
-                            {club.history}
-                          </p>
-                        )}
-                        {club.currentStanding && (
-                          <div className="mb-3">
-                            <PublicClubStandingBadge standing={club.currentStanding} />
-                          </div>
-                        )}
-                        <div className="flex items-center gap-4 mb-4">
-                          <div className="flex items-center gap-1.5 text-sm text-gray-600">
-                            <Users size={14} style={{ color: primaryColor }} />
-                            <span>
-                              <strong>{club.totalMembers}</strong> current
-                            </span>
-                          </div>
-                          {club.alumniCount > 0 && (
-                            <div className="text-sm text-gray-500">
-                              {club.alumniCount} alumni
-                            </div>
-                          )}
-                        </div>
-                        <Link
-                          to={`/clubs/${club.publicId}`}
-                          className="inline-flex items-center gap-1 text-sm font-semibold self-start"
-                          style={{ color: primaryColor }}
+                    {clubs.map((club) => {
+                      const standing = club.currentStanding;
+                      const isChampion = standing?.position === 1;
+                      return (
+                        <div
+                          key={club.publicId}
+                          className={`bg-white flex flex-col overflow-hidden hover:shadow-xl transition-shadow ${getCardShadow()}`}
+                          style={getCardStyle()}
                         >
-                          View Club <ArrowRight size={14} />
-                        </Link>
-                      </div>
-                    ))}
+                          {/* Accent band */}
+                          <div
+                            className="h-1.5 w-full flex-shrink-0"
+                            style={{
+                              background: isChampion
+                                ? "linear-gradient(to right, #f59e0b, #fcd34d)"
+                                : primaryColor,
+                            }}
+                          />
+                          <div className="p-6 flex flex-col flex-1">
+                            <div className="flex items-start justify-between gap-3 mb-2">
+                              <h3 className="text-xl font-bold text-gray-800 leading-tight">
+                                {club.name}
+                              </h3>
+                              {standing && (
+                                <div className="flex-shrink-0">
+                                  <PublicClubStandingBadge standing={standing} />
+                                </div>
+                              )}
+                            </div>
+                            {club.ownerName && (
+                              <p
+                                className="text-sm font-medium mb-3"
+                                style={{ color: primaryColor }}
+                              >
+                                {club.ownerName}
+                              </p>
+                            )}
+                            {club.history && (
+                              <p className="text-gray-500 text-sm leading-relaxed line-clamp-3 whitespace-pre-line mb-4 flex-1">
+                                {club.history}
+                              </p>
+                            )}
+                            <div className="flex items-center gap-4 mb-4">
+                              <div className="flex items-center gap-1.5 text-sm text-gray-600">
+                                <Users size={14} style={{ color: primaryColor }} />
+                                <span>
+                                  <strong>{club.totalMembers}</strong> current
+                                </span>
+                              </div>
+                              {club.alumniCount > 0 && (
+                                <div className="text-sm text-gray-500">
+                                  {club.alumniCount} alumni
+                                </div>
+                              )}
+                            </div>
+                            <Link
+                              to={`/clubs/${club.publicId}`}
+                              className="inline-flex items-center gap-1 text-sm font-semibold self-start"
+                              style={{ color: primaryColor }}
+                            >
+                              View Club <ArrowRight size={14} />
+                            </Link>
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
               </section>
@@ -1786,12 +1972,13 @@ function Home() {
 
       {/* ── YOUTUBE (not CMS-managed, fixed position after CMS sections) ── */}
       {youtubeEnabled && youtubeVideos.length > 0 && (
-        <section id="videos" className="py-10 md:py-14 px-4 bg-white">
+        <section id="videos" className="py-10 md:py-16 px-4 bg-white">
           <div className="max-w-6xl mx-auto">
             <SectionHeading
               title={youtubeHeading}
               subtitle={youtubeSubheading}
               primaryColor={primaryColor}
+              eyebrow="WATCH US"
             />
             <YoutubeGrid
               videos={youtubeVideos}
@@ -1809,14 +1996,15 @@ function Home() {
       {instagramEnabled && instagramPosts.length > 0 && (
         <section
           id="instagram"
-          className="py-10 md:py-14 px-4"
-          style={{ backgroundColor: `${primaryColor}06` }}
+          className="py-10 md:py-16 px-4"
+          style={{ backgroundColor: `${primaryColor}07` }}
         >
           <div className="max-w-6xl mx-auto">
             <SectionHeading
               title={instagramHeading}
               subtitle={instagramSubheading}
               primaryColor={primaryColor}
+              eyebrow="FOLLOW US"
             />
             <InstagramGrid
               posts={instagramPosts}
@@ -1837,7 +2025,8 @@ function Home() {
         settings={settings}
       />
 
-      <footer className="py-8 px-4 text-center border-t bg-white">
+      <footer className="py-8 px-4 text-center bg-white relative">
+        <div className="absolute top-0 left-0 right-0 h-px" style={{ background: `linear-gradient(90deg, transparent, ${primaryColor}40, transparent)` }} />
         {(socialLinks.facebook ||
           socialLinks.instagram ||
           socialLinks.twitter ||
@@ -1917,6 +2106,33 @@ function Home() {
         onCancel={() => setShowLoginPrompt(false)}
       />
 
+      {selectedNewsImage && (
+        <div
+          className="fixed inset-0 z-50 bg-black/85 flex items-center justify-center p-4"
+          onClick={() => setSelectedNewsImage(null)}
+        >
+          <div
+            className="relative max-w-3xl w-full"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <img
+              src={getImageUrl(selectedNewsImage.url) || ""}
+              alt={selectedNewsImage.alt}
+              className="w-full h-auto max-h-[85vh] object-contain block rounded-lg shadow-2xl"
+            />
+            <button
+              className="absolute top-2 right-2 bg-black/60 text-white rounded-full p-1.5 hover:bg-black/80 transition"
+              onClick={() => setSelectedNewsImage(null)}
+            >
+              <X size={16} />
+            </button>
+            <p className="text-center text-white text-sm mt-2 font-medium">
+              {selectedNewsImage.alt}
+            </p>
+          </div>
+        </div>
+      )}
+
       {selectedGalleryImage && (
         <div
           className="fixed inset-0 z-50 bg-black/85 flex items-center justify-center p-4"
@@ -1949,6 +2165,7 @@ function Home() {
         </div>
       )}
     </div>
+    </>
   );
 }
 

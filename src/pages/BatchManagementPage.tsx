@@ -26,12 +26,44 @@ import {
 } from "../api/batchService";
 import type { Batch, BatchCreateRequest } from "../types/batch.types";
 
+const DAY_LABELS = [
+  { bit: 1, short: "Mo" },
+  { bit: 2, short: "Tu" },
+  { bit: 4, short: "We" },
+  { bit: 8, short: "Th" },
+  { bit: 16, short: "Fr" },
+  { bit: 32, short: "Sa" },
+  { bit: 64, short: "Su" },
+];
+
+function formatDays(mask?: number): string {
+  if (!mask || mask === 127) return "All days";
+  if (mask === 31) return "Mon–Fri";
+  if (mask === 62) return "Tue–Sat";
+  if (mask === 112) return "Fri–Sun";
+  const labels = DAY_LABELS.filter((d) => (mask & d.bit) > 0).map((d) => d.short);
+  return labels.join(", ");
+}
+
+const ALL_DAYS_MASK = 127;
+
+const DAYS = [
+  { bit: 1,  label: "Mon" },
+  { bit: 2,  label: "Tue" },
+  { bit: 4,  label: "Wed" },
+  { bit: 8,  label: "Thu" },
+  { bit: 16, label: "Fri" },
+  { bit: 32, label: "Sat" },
+  { bit: 64, label: "Sun" },
+];
+
 type BatchFormData = {
   name: string;
   startTime: string;
   endTime: string;
   description: string;
   color: string;
+  daysOfWeek: number;
 };
 
 function BatchManagementPage() {
@@ -57,6 +89,7 @@ function BatchManagementPage() {
     endTime: "",
     description: "",
     color: "",
+    daysOfWeek: ALL_DAYS_MASK,
   });
 
   useEffect(() => {
@@ -123,6 +156,7 @@ function BatchManagementPage() {
       endTime: "",
       description: "",
       color: getDefaultBatchColor(batches.length),
+      daysOfWeek: ALL_DAYS_MASK,
     });
     setEditingId(null);
     setShowCreateForm(false);
@@ -150,6 +184,7 @@ function BatchManagementPage() {
         moduleType: selectedModule,
         branchId:
           isSuperAdmin && selectedBranchId ? selectedBranchId : undefined,
+        daysOfWeek: formData.daysOfWeek,
       };
       await createBatch(request);
       toast.success("Batch created successfully");
@@ -185,6 +220,7 @@ function BatchManagementPage() {
         moduleType: selectedModule,
         branchId:
           isSuperAdmin && selectedBranchId ? selectedBranchId : undefined,
+        daysOfWeek: formData.daysOfWeek,
       });
       toast.success("Batch updated successfully");
       resetForm();
@@ -224,6 +260,7 @@ function BatchManagementPage() {
       endTime: batch.endTime,
       description: batch.description || "",
       color: batch.color || getDefaultBatchColor(0),
+      daysOfWeek: batch.daysOfWeek ?? ALL_DAYS_MASK,
     });
     setSelectedModule(batch.moduleType);
     setEditingId(batch.id);
@@ -238,6 +275,7 @@ function BatchManagementPage() {
       endTime: "",
       description: "",
       color: getDefaultBatchColor(batches.length),
+      daysOfWeek: ALL_DAYS_MASK,
     });
     setEditingId(null);
     setShowCreateForm(true);
@@ -420,6 +458,42 @@ function BatchManagementPage() {
                   />
                 </div>
 
+                {/* Days of week picker */}
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-2">
+                    Schedule Days
+                  </label>
+                  <div className="flex flex-wrap gap-2">
+                    {DAYS.map(({ bit, label }) => {
+                      const selected = (formData.daysOfWeek & bit) > 0;
+                      return (
+                        <button
+                          key={bit}
+                          type="button"
+                          onClick={() => {
+                            const next = selected
+                              ? formData.daysOfWeek & ~bit
+                              : formData.daysOfWeek | bit;
+                            setFormData({ ...formData, daysOfWeek: next });
+                          }}
+                          className={`min-w-[44px] px-3 py-2 rounded-lg text-xs font-semibold border transition-all select-none ${
+                            selected
+                              ? "bg-blue-600 text-white border-blue-600"
+                              : "bg-white text-slate-600 border-slate-300 hover:border-blue-400"
+                          }`}
+                        >
+                          {label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <p className="text-[11px] text-slate-400 mt-1">
+                    {formData.daysOfWeek === ALL_DAYS_MASK
+                      ? "All 7 days"
+                      : `${DAYS.filter(d => (formData.daysOfWeek & d.bit) > 0).map(d => d.label).join(", ")} selected`}
+                  </p>
+                </div>
+
                 {/* Branch dropdown — super admin only */}
                 {isSuperAdmin && branches.length > 0 && (
                   <div>
@@ -552,10 +626,15 @@ function BatchManagementPage() {
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-2 text-sm text-slate-600 mb-3">
+                    <div className="flex items-center gap-2 text-sm text-slate-600 mb-1.5">
                       <Clock size={16} />
                       <span className="font-medium">
                         {formatBatchTimeRange(batch)}
+                      </span>
+                    </div>
+                    <div className="mb-2">
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 text-[11px] font-medium">
+                        {formatDays(batch.daysOfWeek)}
                       </span>
                     </div>
 

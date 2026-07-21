@@ -150,6 +150,7 @@ function Navbar() {
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
   const [academyName, setAcademyName] = useState("NCA");
   const [starPerformerEnabled, setStarPerformerEnabled] = useState(false);
+  const [showSlotBooking, setShowSlotBooking] = useState(false);
   const [enabledSections, setEnabledSections] = useState<
     { id: string; label: string }[]
   >([]);
@@ -165,6 +166,7 @@ function Navbar() {
         setLogoUrl(d.LOGO_URL || null);
         setAcademyName(d.ACADEMY_NAME || "NCA");
         setStarPerformerEnabled(d.SECTION_STAR_PERFORMER_ENABLED === "true");
+        setShowSlotBooking(d.MODULE_SLOT_BOOKING_ENABLED === "true");
 
         const sections: { id: string; label: string }[] = [];
         if (d.SECTION_FACILITIES_ENABLED !== "false")
@@ -345,7 +347,7 @@ function Navbar() {
                 </NavLink>
               )}
 
-              {!isAdmin && (
+              {!isAdmin && showSlotBooking && (
                 <>
                   <NavLink to="/book-slot" className={linkClass}>
                     Book Slot
@@ -570,7 +572,7 @@ function Navbar() {
             iconBg="#eff6ff"
             iconColor="#2563eb"
           />
-          {!isAdmin && (
+          {!isAdmin && showSlotBooking && (
             <DrawerItem
               icon={CalendarDays}
               label="Book a Slot"
@@ -583,7 +585,7 @@ function Navbar() {
               iconColor="#16a34a"
             />
           )}
-          {!isAdmin && (
+          {!isAdmin && showSlotBooking && (
             <DrawerItem
               icon={BookOpen}
               label="My Bookings"

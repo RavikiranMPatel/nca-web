@@ -199,6 +199,10 @@ function AcademySettings() {
   const [buttonRadius, setButtonRadius] = useState("8");
   const [cardRadius, setCardRadius] = useState("8");
   const [shadowIntensity, setShadowIntensity] = useState("md");
+  const [cornerStyle, setCornerStyle] = useState("rounded");
+  const [fontPairing, setFontPairing] = useState("modern");
+  const [heroPhotoUrl, setHeroPhotoUrl] = useState("");
+  const [heroPhotoPlacement, setHeroPhotoPlacement] = useState("right");
 
   // Slider settings
   const [sliderHeight, setSliderHeight] = useState("standard");
@@ -250,6 +254,10 @@ function AcademySettings() {
       setButtonRadius(response.data.BUTTON_RADIUS || "8");
       setCardRadius(response.data.CARD_RADIUS || "8");
       setShadowIntensity(response.data.SHADOW_INTENSITY || "md");
+      setCornerStyle(response.data.CORNER_STYLE || "rounded");
+      setFontPairing(response.data.FONT_PAIRING || "modern");
+      setHeroPhotoUrl(response.data.HERO_PHOTO_URL || "");
+      setHeroPhotoPlacement(response.data.HERO_PHOTO_PLACEMENT || "right");
       setSliderHeight(response.data.SLIDER_HEIGHT || "standard");
       setKenBurnsEnabled(response.data.KEN_BURNS_ENABLED !== "false");
       setSlideDuration(response.data.SLIDE_DURATION || "5000");
@@ -322,6 +330,10 @@ function AcademySettings() {
         BUTTON_RADIUS: buttonRadius,
         CARD_RADIUS: cardRadius,
         SHADOW_INTENSITY: shadowIntensity,
+        CORNER_STYLE: cornerStyle,
+        FONT_PAIRING: fontPairing,
+        HERO_PHOTO_URL: heroPhotoUrl,
+        HERO_PHOTO_PLACEMENT: heroPhotoPlacement,
         SLIDER_HEIGHT: sliderHeight,
         KEN_BURNS_ENABLED: String(kenBurnsEnabled),
         SLIDE_DURATION: slideDuration,
@@ -352,6 +364,8 @@ function AcademySettings() {
   }
 
   const showSaveButton = activeTab === "general" || activeTab === "branding";
+  const previewBtnR = cornerStyle === "sharp" ? "0" : cornerStyle === "rounded" ? "12" : buttonRadius;
+  const previewCardR = cornerStyle === "sharp" ? "0" : cornerStyle === "rounded" ? "16" : cardRadius;
 
   const handleNavItem = (item: NavItemDef) => {
     if (item.external && item.path) {
@@ -802,103 +816,145 @@ function AcademySettings() {
                   </div>
                 </div>
 
-                {/* Button Style */}
+                {/* Corner Style */}
                 <div className="border-t pt-6">
-                  <h3 className="text-base font-semibold mb-4">
-                    🔘 Button Style
+                  <h3 className="text-base font-semibold mb-1">
+                    Corner Style
                   </h3>
-                  <div className="space-y-3">
+                  <p className="text-xs text-gray-500 mb-4">
+                    Controls the roundness of buttons, cards, and UI elements across the homepage.
+                  </p>
+                  <div className="grid grid-cols-2 gap-3">
                     {[
                       {
-                        value: "0",
-                        label: "Sharp Corners",
-                        desc: "Modern, flat design (0px radius)",
+                        value: "sharp",
+                        label: "Sharp",
+                        desc: "Clean, modern edges",
+                        previewRadius: "0px",
                       },
                       {
-                        value: "8",
+                        value: "rounded",
                         label: "Rounded",
-                        desc: "Balanced, professional (8px radius) - Recommended",
+                        desc: "Soft, friendly corners",
+                        previewRadius: "12px",
                       },
-                      {
-                        value: "16",
-                        label: "Extra Rounded",
-                        desc: "Soft, friendly (16px radius)",
-                      },
-                      {
-                        value: "24",
-                        label: "Pill Shape",
-                        desc: "Very friendly, playful (24px radius)",
-                      },
-                    ].map(({ value, label, desc }) => (
-                      <label
+                    ].map(({ value, label, desc, previewRadius }) => (
+                      <button
                         key={value}
-                        className="flex items-center gap-3 p-4 border rounded-lg hover:bg-gray-50 cursor-pointer"
+                        type="button"
+                        onClick={() => setCornerStyle(value)}
+                        className={`p-4 border-2 rounded-xl text-left transition ${
+                          cornerStyle === value
+                            ? "border-blue-600 bg-blue-50"
+                            : "border-gray-200 hover:border-gray-300"
+                        }`}
                       >
-                        <input
-                          type="radio"
-                          name="buttonRadius"
-                          value={value}
-                          checked={buttonRadius === value}
-                          onChange={(e) => setButtonRadius(e.target.value)}
-                          className="w-4 h-4"
+                        <div
+                          className="w-full h-10 bg-blue-600 mb-3"
+                          style={{ borderRadius: previewRadius }}
                         />
-                        <div className="flex-1 min-w-0">
-                          <span className="font-medium text-sm">{label}</span>
-                          <p className="text-xs text-gray-500">{desc}</p>
-                        </div>
-                        <button
-                          className="px-3 py-1.5 bg-blue-600 text-white text-xs flex-shrink-0"
-                          style={{ borderRadius: `${value}px` }}
-                        >
-                          Sample
-                        </button>
-                      </label>
+                        <p className="font-semibold text-sm">{label}</p>
+                        <p className="text-xs text-gray-500">{desc}</p>
+                      </button>
                     ))}
                   </div>
                 </div>
 
-                {/* Card Corners */}
+                {/* Font Pairing */}
                 <div className="border-t pt-6">
-                  <h3 className="text-base font-semibold mb-4">
-                    📐 Card Corners
+                  <h3 className="text-base font-semibold mb-1">
+                    Font Pairing
                   </h3>
-                  <div className="space-y-3">
+                  <p className="text-xs text-gray-500 mb-4">
+                    Sets the heading and body fonts for the homepage.
+                  </p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     {[
                       {
-                        value: "0",
-                        label: "Sharp Corners",
-                        desc: "Clean, modern (0px)",
+                        value: "modern",
+                        label: "Modern",
+                        headingSample: "Inter",
+                        desc: "Clean, versatile — great all-rounder",
                       },
                       {
-                        value: "8",
-                        label: "Rounded",
-                        desc: "Standard (8px) - Recommended",
+                        value: "sporty",
+                        label: "Sporty",
+                        headingSample: "Oswald",
+                        desc: "Bold headings with readable body text",
                       },
                       {
-                        value: "16",
-                        label: "Extra Rounded",
-                        desc: "Soft, premium (16px)",
+                        value: "premium",
+                        label: "Premium",
+                        headingSample: "Playfair",
+                        desc: "Elegant serif headings for a premium feel",
                       },
-                    ].map(({ value, label, desc }) => (
-                      <label
+                      {
+                        value: "warm",
+                        label: "Warm",
+                        headingSample: "Poppins",
+                        desc: "Friendly and approachable all-round",
+                      },
+                    ].map(({ value, label, headingSample, desc }) => (
+                      <button
                         key={value}
-                        className="flex items-center gap-3 p-4 border rounded-lg hover:bg-gray-50 cursor-pointer"
+                        type="button"
+                        onClick={() => setFontPairing(value)}
+                        className={`p-4 border-2 rounded-xl text-left transition ${
+                          fontPairing === value
+                            ? "border-blue-600 bg-blue-50"
+                            : "border-gray-200 hover:border-gray-300"
+                        }`}
                       >
-                        <input
-                          type="radio"
-                          name="cardRadius"
-                          value={value}
-                          checked={cardRadius === value}
-                          onChange={(e) => setCardRadius(e.target.value)}
-                          className="w-4 h-4"
-                        />
-                        <div>
-                          <span className="font-medium text-sm">{label}</span>
-                          <p className="text-xs text-gray-500">{desc}</p>
-                        </div>
-                      </label>
+                        <p className="font-bold text-base mb-0.5">{label}</p>
+                        <p className="text-xs font-mono text-gray-400 mb-1">{headingSample}</p>
+                        <p className="text-xs text-gray-500">{desc}</p>
+                      </button>
                     ))}
                   </div>
+                </div>
+
+                {/* Hero Section Photo */}
+                <div className="border-t pt-6">
+                  <h3 className="text-base font-semibold mb-1">
+                    Hero Section Photo
+                  </h3>
+                  <p className="text-xs text-gray-500 mb-4">
+                    Upload a player or coach photo to enable a split hero layout. Leave empty for the classic centered hero.
+                  </p>
+                  <ImageUpload
+                    currentUrl={heroPhotoUrl}
+                    uploadType="hero-photo"
+                    onUploadSuccess={(url) => {
+                      setHeroPhotoUrl(url);
+                      api.put("/admin/settings/HERO_PHOTO_URL", { value: url });
+                    }}
+                    label="Hero Photo (portrait/action shot)"
+                    helpText="Natural aspect ratio preserved, max 900px. Best results: portrait orientation."
+                  />
+                  {heroPhotoUrl && (
+                    <div className="mt-4">
+                      <p className="text-sm font-medium text-gray-700 mb-2">Photo Placement</p>
+                      <div className="flex gap-3">
+                        {[
+                          { value: "left", label: "Photo Left" },
+                          { value: "right", label: "Photo Right" },
+                        ].map(({ value, label }) => (
+                          <button
+                            key={value}
+                            type="button"
+                            onClick={() => setHeroPhotoPlacement(value)}
+                            className={`flex-1 py-2.5 text-sm font-medium rounded-lg border-2 transition ${
+                              heroPhotoPlacement === value
+                                ? "border-blue-600 bg-blue-50 text-blue-700"
+                                : "border-gray-200 text-gray-600 hover:border-gray-300"
+                            }`}
+                          >
+                            {label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 {/* Shadow */}
@@ -1124,7 +1180,7 @@ function AcademySettings() {
                       <button
                         style={{
                           backgroundColor: primaryColor,
-                          borderRadius: `${buttonRadius}px`,
+                          borderRadius: `${previewBtnR}px`,
                         }}
                         className="px-5 py-2 text-white text-sm"
                       >
@@ -1133,7 +1189,7 @@ function AcademySettings() {
                       <button
                         style={{
                           backgroundColor: secondaryColor,
-                          borderRadius: `${buttonRadius}px`,
+                          borderRadius: `${previewBtnR}px`,
                         }}
                         className="px-5 py-2 text-white text-sm"
                       >
@@ -1142,7 +1198,7 @@ function AcademySettings() {
                     </div>
                     <div
                       className={`p-4 bg-white ${shadowIntensity === "none" ? "border border-gray-200" : `shadow-${shadowIntensity}`}`}
-                      style={{ borderRadius: `${cardRadius}px` }}
+                      style={{ borderRadius: `${previewCardR}px` }}
                     >
                       <h4 className="font-semibold text-sm mb-1">Sample Card</h4>
                       <p className="text-xs text-gray-600">

@@ -991,7 +991,7 @@ function PlayerFeesTab() {
       </div>
 
       {/* ── INSTALLMENT PLANS ── */}
-      <InstallmentSection playerPublicId={playerPublicId!} />
+      <InstallmentSection playerPublicId={playerPublicId!} feePlans={plans} />
 
       {/* ── MARK AS PAID MODAL ── */}
       {showPayModal && account && (
@@ -1671,7 +1671,13 @@ type Installment = {
   notes: string | null;
 };
 
-function InstallmentSection({ playerPublicId }: { playerPublicId: string }) {
+function InstallmentSection({
+  playerPublicId,
+  feePlans,
+}: {
+  playerPublicId: string;
+  feePlans: FeePlan[];
+}) {
   const [plans, setPlans] = useState<InstallmentPlan[]>([]);
   const [loading, setLoading] = useState(true);
   const [expandedPlan, setExpandedPlan] = useState<string | null>(null);
@@ -1679,17 +1685,21 @@ function InstallmentSection({ playerPublicId }: { playerPublicId: string }) {
   const [planForm, setPlanForm] = useState({
     totalAmount: "",
     description: "",
+    selectedFeePlanId: "",
   });
   const [savingPlan, setSavingPlan] = useState(false);
-  const [showAddInstallment, setShowAddInstallment] = useState<string | null>(
-    null,
-  );
-  const [instForm, setInstForm] = useState({
-    dueDate: "",
-    dueAmount: "",
-    notes: "",
+
+  // Ledger-style direct payment state (replaces add-installment flow)
+  const [showDirectPay, setShowDirectPay] = useState<InstallmentPlan | null>(null);
+  const [directPayForm, setDirectPayForm] = useState({
+    amount: "",
+    paidOn: new Date().toISOString().split("T")[0],
+    paymentMode: "CASH",
+    referenceNumber: "",
   });
-  const [savingInst, setSavingInst] = useState(false);
+  const [savingDirectPay, setSavingDirectPay] = useState(false);
+
+  // Keep for backward-compat: paying existing PENDING/PARTIAL installments
   const [showPayInstallment, setShowPayInstallment] =
     useState<Installment | null>(null);
   const [editAmountPlan, setEditAmountPlan] = useState<InstallmentPlan | null>(
@@ -1726,14 +1736,15 @@ function InstallmentSection({ playerPublicId }: { playerPublicId: string }) {
     if (!planForm.totalAmount) return;
     setSavingPlan(true);
     try {
+      const selectedFp = feePlans.find(fp => fp.publicId === planForm.selectedFeePlanId);
       await api.post("/admin/fee-installments/plans", {
         playerPublicId,
         totalAmount: parseFloat(planForm.totalAmount),
-        description: planForm.description || null,
+        description: planForm.description || (selectedFp ? selectedFp.name : null),
       });
       toast.success("Installment plan created!");
       setShowCreatePlan(false);
-      setPlanForm({ totalAmount: "", description: "" });
+      setPlanForm({ totalAmount: "", description: "", selectedFeePlanId: "" });
       loadPlans();
     } catch (err: any) {
       toast.error(err.response?.data?.message || "Failed to create plan");
@@ -1742,24 +1753,33 @@ function InstallmentSection({ playerPublicId }: { playerPublicId: string }) {
     }
   };
 
-  const handleAddInstallment = async (planPublicId: string) => {
-    if (!instForm.dueDate || !instForm.dueAmount) return;
-    setSavingInst(true);
+  const handleDirectPlanPayment = async () => {
+    if (!showDirectPay || !directPayForm.amount) return;
+    setSavingDirectPay(true);
     try {
-      await api.post(`/admin/fee-installments/installments`, {
-        planPublicId,
-        dueDate: instForm.dueDate,
-        dueAmount: parseFloat(instForm.dueAmount),
-        notes: instForm.notes || null,
+      await api.post(
+        `/admin/fee-installments/plans/${showDirectPay.publicId}/payments`,
+        {
+          amount: parseFloat(directPayForm.amount),
+          paidOn: directPayForm.paidOn,
+          paymentMode: directPayForm.paymentMode,
+          referenceNumber: directPayForm.referenceNumber || null,
+          notes: null,
+        },
+      );
+      toast.success("Payment recorded!");
+      setShowDirectPay(null);
+      setDirectPayForm({
+        amount: "",
+        paidOn: new Date().toISOString().split("T")[0],
+        paymentMode: "CASH",
+        referenceNumber: "",
       });
-      toast.success("Installment added!");
-      setShowAddInstallment(null);
-      setInstForm({ dueDate: "", dueAmount: "", notes: "" });
       loadPlans();
     } catch (err: any) {
-      toast.error(err.response?.data?.message || "Failed to add installment");
+      toast.error(err.response?.data?.message || "Failed to record payment");
     } finally {
-      setSavingInst(false);
+      setSavingDirectPay(false);
     }
   };
 
@@ -2006,16 +2026,18 @@ function InstallmentSection({ playerPublicId }: { playerPublicId: string }) {
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
-                          setInstForm({
-                            dueDate: "",
-                            dueAmount: "",
-                            notes: "",
+                          const balance = plan.totalAmount - plan.paidAmount;
+                          setDirectPayForm({
+                            amount: String(balance),
+                            paidOn: new Date().toISOString().split("T")[0],
+                            paymentMode: "CASH",
+                            referenceNumber: "",
                           });
-                          setShowAddInstallment(plan.publicId);
+                          setShowDirectPay(plan);
                         }}
-                        className="w-full py-2 border-2 border-dashed border-slate-300 text-slate-500 text-xs font-medium rounded-lg hover:border-blue-400 hover:text-blue-600 transition"
+                        className="w-full py-2 border-2 border-dashed border-emerald-300 text-emerald-600 text-xs font-medium rounded-lg hover:border-emerald-400 hover:bg-emerald-50 transition"
                       >
-                        + Add Installment
+                        + Record Payment
                       </button>
                     )}
                   </div>
@@ -2036,6 +2058,34 @@ function InstallmentSection({ playerPublicId }: { playerPublicId: string }) {
               </button>
             </div>
             <div className="p-5 space-y-4">
+              {feePlans.length > 0 && (
+                <div>
+                  <label className="text-xs font-semibold text-slate-600 block mb-1.5">
+                    Fee Plan (auto-fills amount)
+                  </label>
+                  <select
+                    value={planForm.selectedFeePlanId}
+                    onChange={(e) => {
+                      const fp = feePlans.find(p => p.publicId === e.target.value);
+                      setPlanForm((f) => ({
+                        ...f,
+                        selectedFeePlanId: e.target.value,
+                        totalAmount: fp
+                          ? String(fp.amount - (fp.discountAmount || 0))
+                          : f.totalAmount,
+                      }));
+                    }}
+                    className="w-full px-4 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="">— Select a plan —</option>
+                    {feePlans.map((fp) => (
+                      <option key={fp.publicId} value={fp.publicId}>
+                        {fp.name} · ₹{(fp.amount - (fp.discountAmount || 0)).toLocaleString("en-IN")}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
               <div>
                 <label className="text-xs font-semibold text-slate-600 block mb-1.5">
                   Total Amount (₹) *
@@ -2061,7 +2111,7 @@ function InstallmentSection({ playerPublicId }: { playerPublicId: string }) {
                   onChange={(e) =>
                     setPlanForm((f) => ({ ...f, description: e.target.value }))
                   }
-                  placeholder="e.g. Annual fee split 3 installments"
+                  placeholder="e.g. Annual fee 2024-25 — 3 installments"
                   className="w-full px-4 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
               </div>
@@ -2085,28 +2135,27 @@ function InstallmentSection({ playerPublicId }: { playerPublicId: string }) {
         </div>
       )}
 
-      {showAddInstallment && (
+      {showDirectPay && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center">
           <div className="bg-white rounded-t-2xl sm:rounded-xl shadow-xl w-full sm:max-w-sm">
             <div className="flex items-center justify-between px-5 py-4 border-b bg-slate-50 rounded-t-2xl sm:rounded-t-xl">
-              <h3 className="font-bold text-slate-800">Add Installment</h3>
-              <button onClick={() => setShowAddInstallment(null)}>
+              <div>
+                <h3 className="font-bold text-slate-800">Record Payment</h3>
+                <p className="text-xs text-slate-500">
+                  {showDirectPay.description || "Installment Plan"} ·{" "}
+                  ₹{(showDirectPay.totalAmount - showDirectPay.paidAmount).toLocaleString("en-IN")} remaining
+                </p>
+              </div>
+              <button onClick={() => setShowDirectPay(null)}>
                 <X size={18} className="text-slate-400" />
               </button>
             </div>
             <div className="p-5 space-y-4">
-              <div>
-                <label className="text-xs font-semibold text-slate-600 block mb-1.5">
-                  Due Date *
-                </label>
-                <input
-                  type="date"
-                  value={instForm.dueDate}
-                  onChange={(e) =>
-                    setInstForm((f) => ({ ...f, dueDate: e.target.value }))
-                  }
-                  className="w-full px-4 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
+              <div className="bg-emerald-50 rounded-xl p-3 flex justify-between text-sm">
+                <span className="text-slate-500">Remaining balance</span>
+                <span className="font-bold text-emerald-700">
+                  ₹{(showDirectPay.totalAmount - showDirectPay.paidAmount).toLocaleString("en-IN")}
+                </span>
               </div>
               <div>
                 <label className="text-xs font-semibold text-slate-600 block mb-1.5">
@@ -2115,43 +2164,73 @@ function InstallmentSection({ playerPublicId }: { playerPublicId: string }) {
                 <input
                   type="number"
                   inputMode="numeric"
-                  value={instForm.dueAmount}
+                  value={directPayForm.amount}
                   onChange={(e) =>
-                    setInstForm((f) => ({ ...f, dueAmount: e.target.value }))
+                    setDirectPayForm((f) => ({ ...f, amount: e.target.value }))
                   }
-                  placeholder="e.g. 6500"
-                  className="w-full px-4 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="e.g. 5000"
+                  className="w-full px-4 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
                 />
               </div>
               <div>
                 <label className="text-xs font-semibold text-slate-600 block mb-1.5">
-                  Notes (optional)
+                  Payment Date
+                </label>
+                <input
+                  type="date"
+                  value={directPayForm.paidOn}
+                  max={new Date().toISOString().split("T")[0]}
+                  onChange={(e) =>
+                    setDirectPayForm((f) => ({ ...f, paidOn: e.target.value }))
+                  }
+                  className="w-full px-4 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-slate-600 block mb-1.5">
+                  Payment Mode
+                </label>
+                <select
+                  value={directPayForm.paymentMode}
+                  onChange={(e) =>
+                    setDirectPayForm((f) => ({ ...f, paymentMode: e.target.value }))
+                  }
+                  className="w-full px-4 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                >
+                  {PAYMENT_MODES.map((m) => (
+                    <option key={m.value} value={m.value}>
+                      {m.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-slate-600 block mb-1.5">
+                  Reference Number (optional)
                 </label>
                 <input
                   type="text"
-                  value={instForm.notes}
+                  value={directPayForm.referenceNumber}
                   onChange={(e) =>
-                    setInstForm((f) => ({ ...f, notes: e.target.value }))
+                    setDirectPayForm((f) => ({ ...f, referenceNumber: e.target.value }))
                   }
-                  placeholder="e.g. First installment"
-                  className="w-full px-4 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="UTR / Transaction ID"
+                  className="w-full px-4 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
                 />
               </div>
-              <div className="flex gap-2 pt-1">
+              <div className="flex gap-2 pt-1 pb-4">
                 <button
-                  onClick={() => setShowAddInstallment(null)}
+                  onClick={() => setShowDirectPay(null)}
                   className="flex-1 py-2.5 text-sm font-medium text-slate-600 bg-slate-100 rounded-lg hover:bg-slate-200"
                 >
                   Cancel
                 </button>
                 <button
-                  onClick={() => handleAddInstallment(showAddInstallment)}
-                  disabled={
-                    savingInst || !instForm.dueDate || !instForm.dueAmount
-                  }
-                  className="flex-1 py-2.5 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-50"
+                  onClick={handleDirectPlanPayment}
+                  disabled={savingDirectPay || !directPayForm.amount}
+                  className="flex-1 py-2.5 text-sm font-medium text-white bg-emerald-600 rounded-lg hover:bg-emerald-700 disabled:opacity-50"
                 >
-                  {savingInst ? "Adding…" : "Add Installment"}
+                  {savingDirectPay ? "Processing…" : "Confirm Payment"}
                 </button>
               </div>
             </div>

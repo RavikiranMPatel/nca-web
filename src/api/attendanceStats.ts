@@ -2,11 +2,12 @@ import api from "./axios";
 
 export type PlayerAttendancePercentage = {
   playerId: string; // internal UUID
-  playerPublicId: string; // ✅ ADD THIS
+  playerPublicId: string;
   playerName: string;
   totalSessions: number;
   presentSessions: number;
   percentage: number;
+  photoUrl?: string | null;
 };
 
 export type StatsRange = "LAST_7" | "LAST_30" | "YEAR";

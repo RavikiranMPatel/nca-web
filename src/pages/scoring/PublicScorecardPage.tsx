@@ -287,11 +287,13 @@ const WagonWheelModal = ({
   matchId,
   inningsNumber,
   onClose,
+  primaryColor,
 }: {
   batter: BattingLine;
   matchId: string;
   inningsNumber: number;
   onClose: () => void;
+  primaryColor: string;
 }) => {
   const [shots, setShots] = useState<Shot[]>([]);
   const [loading, setLoading] = useState(true);
@@ -352,13 +354,15 @@ const WagonWheelModal = ({
             <div className="flex bg-gray-800 rounded-lg p-0.5 gap-0.5">
               <button
                 onClick={() => setIsLHBView(false)}
-                className={`px-2.5 py-1 text-xs font-semibold rounded-md transition-all ${!isLHBView ? "bg-blue-600 text-white" : "text-gray-400"}`}
+                className="px-2.5 py-1 text-xs font-semibold rounded-md transition-all"
+                style={!isLHBView ? { backgroundColor: primaryColor, color: "#fff" } : { color: "#9ca3af" }}
               >
                 RHB
               </button>
               <button
                 onClick={() => setIsLHBView(true)}
-                className={`px-2.5 py-1 text-xs font-semibold rounded-md transition-all ${isLHBView ? "bg-blue-600 text-white" : "text-gray-400"}`}
+                className="px-2.5 py-1 text-xs font-semibold rounded-md transition-all"
+                style={isLHBView ? { backgroundColor: primaryColor, color: "#fff" } : { color: "#9ca3af" }}
               >
                 LHB
               </button>
@@ -368,7 +372,7 @@ const WagonWheelModal = ({
         <div className="px-4 py-3 bg-gray-900">
           {loading ? (
             <div className="flex items-center justify-center h-48">
-              <div className="w-6 h-6 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+              <div className="w-6 h-6 border-2 border-t-transparent rounded-full animate-spin" style={{ borderColor: `${primaryColor}60`, borderTopColor: "transparent" }} />
             </div>
           ) : shots.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-48 text-gray-500">
@@ -597,14 +601,16 @@ const InningsCard = ({
   totalOvers,
   matchId,
   onBatterClick,
+  primaryColor,
 }: {
   inn: InningsScorecard;
   totalOvers: number;
   matchId: string;
   onBatterClick: (batter: BattingLine) => void;
+  primaryColor: string;
 }) => (
   <div className="space-y-0">
-    <div className="px-4 py-3 bg-blue-50 dark:bg-blue-950/30 border-b border-blue-100 dark:border-blue-900/30">
+    <div className="px-4 py-3 border-b" style={{ backgroundColor: `${primaryColor}0a`, borderColor: `${primaryColor}20` }}>
       <div className="flex items-baseline justify-between">
         <h3 className="font-semibold text-gray-900 dark:text-white text-sm">
           {inn.battingTeamName}
@@ -650,7 +656,7 @@ const InningsCard = ({
             <tr
               key={b.playerPublicId}
               onClick={() => onBatterClick(b)}
-              className="border-b border-gray-50 dark:border-gray-800/50 hover:bg-blue-50 dark:hover:bg-blue-950/20 cursor-pointer active:bg-blue-100 transition-colors"
+              className="border-b border-gray-50 dark:border-gray-800/50 hover:bg-gray-50 dark:hover:bg-gray-800/50 cursor-pointer active:bg-gray-100 transition-colors"
             >
               <td className="py-2.5 px-4">
                 <div className="flex items-center gap-1.5">
@@ -726,8 +732,8 @@ const InningsCard = ({
       </table>
     </div>
 
-    <div className="px-4 py-2 bg-blue-50/50 dark:bg-blue-950/10 border-t border-blue-100 dark:border-blue-900/20">
-      <p className="text-xs text-blue-500 dark:text-blue-400">
+    <div className="px-4 py-2 border-t" style={{ backgroundColor: `${primaryColor}08`, borderColor: `${primaryColor}18` }}>
+      <p className="text-xs" style={{ color: primaryColor }}>
         🎯 Tap any batter to view wagon wheel
       </p>
     </div>
@@ -842,6 +848,14 @@ export default function PublicScorecardPage() {
     null,
   );
   const [selectedBatterInnings, setSelectedBatterInnings] = useState<number>(1);
+  const [primaryColor, setPrimaryColor] = useState("#1d4ed8");
+
+  useEffect(() => {
+    publicApi
+      .get("/settings/public")
+      .then((r) => setPrimaryColor(r.data.PRIMARY_COLOR || "#1d4ed8"))
+      .catch(() => {});
+  }, []);
 
   const load = useCallback(async () => {
     if (!matchId) return;
@@ -902,7 +916,10 @@ export default function PublicScorecardPage() {
     return (
       <div className="min-h-screen bg-white dark:bg-gray-950 flex items-center justify-center">
         <div className="text-center">
-          <div className="w-8 h-8 border-2 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-3" />
+          <div
+            className="w-8 h-8 border-2 border-t-transparent rounded-full animate-spin mx-auto mb-3"
+            style={{ borderColor: `${primaryColor}60`, borderTopColor: "transparent" }}
+          />
           <p className="text-sm text-gray-400">Loading scorecard...</p>
         </div>
       </div>
@@ -925,8 +942,8 @@ export default function PublicScorecardPage() {
 
   return (
     <div className="min-h-screen bg-white dark:bg-gray-950">
-      {/* NCA header */}
-      <div className="bg-blue-700 dark:bg-blue-900 px-4 py-3">
+      {/* Header */}
+      <div className="px-4 py-3" style={{ backgroundColor: primaryColor }}>
         <div className="max-w-4xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-2">
             <button
@@ -937,7 +954,7 @@ export default function PublicScorecardPage() {
             </button>
             <div>
               <div className="text-white font-bold text-sm">CricMaidan</div>
-              <div className="text-blue-200 text-xs">
+              <div className="text-white/70 text-xs">
                 Powered by RKMP Tech
               </div>
             </div>
@@ -982,7 +999,7 @@ export default function PublicScorecardPage() {
             <span className="text-xs text-gray-400">📍 {scorecard.venue}</span>
           )}
           {scorecard.tournamentName && (
-            <span className="text-xs text-blue-600 dark:text-blue-400">
+            <span className="text-xs font-medium" style={{ color: primaryColor }}>
               {scorecard.tournamentName}
             </span>
           )}
@@ -1014,7 +1031,7 @@ export default function PublicScorecardPage() {
         </div>
 
         {scorecard.resultDescription && (
-          <div className="mt-2 text-sm font-semibold text-blue-600 dark:text-blue-400">
+          <div className="mt-2 text-sm font-semibold" style={{ color: primaryColor }}>
             {scorecard.resultDescription}
           </div>
         )}
@@ -1041,11 +1058,10 @@ export default function PublicScorecardPage() {
             <button
               key={i}
               onClick={() => setActiveTab(i)}
-              className={`flex-shrink-0 px-4 py-3 text-sm font-medium border-b-2 transition-colors ${
-                activeTab === i
-                  ? "border-blue-600 text-blue-600 dark:text-blue-400"
-                  : "border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700"
-              }`}
+              className="flex-shrink-0 px-4 py-3 text-sm font-medium border-b-2 transition-colors"
+              style={activeTab === i
+                ? { borderColor: primaryColor, color: primaryColor }
+                : { borderColor: "transparent", color: "#6b7280" }}
             >
               {inn.battingTeamName} Innings
             </button>
@@ -1053,31 +1069,28 @@ export default function PublicScorecardPage() {
           {/* Playing XI tab */}
           <button
             onClick={() => setActiveTab("xi")}
-            className={`flex-shrink-0 px-4 py-3 text-sm font-medium border-b-2 transition-colors ${
-              activeTab === "xi"
-                ? "border-blue-600 text-blue-600 dark:text-blue-400"
-                : "border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700"
-            }`}
+            className="flex-shrink-0 px-4 py-3 text-sm font-medium border-b-2 transition-colors"
+            style={activeTab === "xi"
+              ? { borderColor: primaryColor, color: primaryColor }
+              : { borderColor: "transparent", color: "#6b7280" }}
           >
             Playing XI
           </button>
           <button
             onClick={() => setActiveTab("flow")}
-            className={`flex-shrink-0 px-4 py-3 text-sm font-medium border-b-2 transition-colors ${
-              activeTab === "flow"
-                ? "border-blue-600 text-blue-600 dark:text-blue-400"
-                : "border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700"
-            }`}
+            className="flex-shrink-0 px-4 py-3 text-sm font-medium border-b-2 transition-colors"
+            style={activeTab === "flow"
+              ? { borderColor: primaryColor, color: primaryColor }
+              : { borderColor: "transparent", color: "#6b7280" }}
           >
             Match Flow
           </button>
           <button
             onClick={() => setActiveTab("info")}
-            className={`flex-shrink-0 px-4 py-3 text-sm font-medium border-b-2 transition-colors ${
-              activeTab === "info"
-                ? "border-blue-600 text-blue-600 dark:text-blue-400"
-                : "border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700"
-            }`}
+            className="flex-shrink-0 px-4 py-3 text-sm font-medium border-b-2 transition-colors"
+            style={activeTab === "info"
+              ? { borderColor: primaryColor, color: primaryColor }
+              : { borderColor: "transparent", color: "#6b7280" }}
           >
             Info
           </button>
@@ -1095,6 +1108,7 @@ export default function PublicScorecardPage() {
               onBatterClick={(b) =>
                 handleBatterClick(b, scorecard.innings[activeTab].inningsNumber)
               }
+              primaryColor={primaryColor}
             />
           </div>
         )}
@@ -1214,6 +1228,7 @@ export default function PublicScorecardPage() {
           matchId={matchId}
           inningsNumber={selectedBatterInnings}
           onClose={() => setSelectedBatter(null)}
+          primaryColor={primaryColor}
         />
       )}
     </div>

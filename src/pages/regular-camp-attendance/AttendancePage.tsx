@@ -9,9 +9,8 @@ import {
   TrendingUp,
   Settings,
   ArrowLeft,
-  ChevronLeft,
-  ChevronRight,
   Calendar,
+  X,
 } from "lucide-react";
 import AttendanceRow from "../../components/attendance-component/AttendanceRow";
 import Button from "../../components/Button";
@@ -29,6 +28,38 @@ import {
   type Player,
 } from "../../api/playerService/playerService";
 
+/* ── day-of-week helpers ─────────────────────────────────────────── */
+// MON=1, TUE=2, WED=4, THU=8, FRI=16, SAT=32, SUN=64
+function getTodayBit(): number {
+  const bits = [64, 1, 2, 4, 8, 16, 32]; // JS getDay(): 0=Sun…6=Sat
+  return bits[new Date().getDay()];
+}
+
+function batchScheduledToday(batch: Batch): boolean {
+  const mask = batch.daysOfWeek;
+  if (mask === undefined || mask === null || mask === 0) return true; // default all
+  return (mask & getTodayBit()) > 0;
+}
+
+function toMinutes(time: string): number {
+  const [h, m] = time.split(":").map(Number);
+  return h * 60 + m;
+}
+
+function isTimeInWindow(batch: Batch): boolean {
+  const cur = new Date().getHours() * 60 + new Date().getMinutes();
+  return cur >= toMinutes(batch.startTime) && cur <= toMinutes(batch.endTime);
+}
+
+function nextUpcomingBatch(batches: Batch[]): Batch | null {
+  const curMins = new Date().getHours() * 60 + new Date().getMinutes();
+  const upcoming = batches
+    .filter((b) => toMinutes(b.startTime) > curMins)
+    .sort((a, b) => toMinutes(a.startTime) - toMinutes(b.startTime));
+  return upcoming[0] ?? null;
+}
+
+/* ── types ───────────────────────────────────────────────────────── */
 type AttendanceStatus = "PRESENT" | "ABSENT";
 
 type SessionStatus = {
@@ -44,6 +75,7 @@ type AttendanceRecord = {
   overridden: boolean;
 };
 
+/* ── component ───────────────────────────────────────────────────── */
 function AttendancePage() {
   const navigate = useNavigate();
   const todayStr = new Date().toISOString().slice(0, 10);
@@ -53,9 +85,8 @@ function AttendancePage() {
   const [isLoadingPlayers, setIsLoadingPlayers] = useState(true);
   const [batches, setBatches] = useState<Batch[]>([]);
   const [selectedBatchId, setSelectedBatchId] = useState<string>("");
-  const [attendance, setAttendance] = useState<
-    Record<string, AttendanceStatus>
-  >({});
+  const [nextBatch, setNextBatch] = useState<Batch | null>(null);
+  const [attendance, setAttendance] = useState<Record<string, AttendanceStatus>>({});
   const [records, setRecords] = useState<Record<string, AttendanceRecord>>({});
   const [search, setSearch] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -70,10 +101,11 @@ function AttendancePage() {
     playerName: string;
   } | null>(null);
   const [showSuccessDialog, setShowSuccessDialog] = useState(false);
+  const [attendanceFilter, setAttendanceFilter] = useState<"ALL" | "PRESENT" | "ABSENT">("ALL");
+  const [lightbox, setLightbox] = useState<{ url: string; name: string } | null>(null);
 
   const userRole = localStorage.getItem("userRole");
   const isSuperAdmin = userRole === "ROLE_SUPER_ADMIN";
-
   const canEdit = isSuperAdmin || session.editable;
 
   const formatDate = (iso: string) =>
@@ -93,9 +125,7 @@ function AttendancePage() {
         .filter((player) => {
           if (!player.dob) return false;
           if (!player.batches || !Array.isArray(player.batches)) return false;
-          const isInBatch = player.batches.some(
-            (b) => b.id === selectedBatchId,
-          );
+          const isInBatch = player.batches.some((b) => b.id === selectedBatchId);
           if (!isInBatch) return false;
           return player.dob.substring(5) === todayMMDD;
         })
@@ -109,10 +139,38 @@ function AttendancePage() {
     }
   }, [players, selectedBatchId]);
 
+  /* ── load batches & auto-select ──────────────────────────────── */
   useEffect(() => {
     fetchActiveBatches("REGULAR").then((data) => {
-      setBatches(data);
-      if (data.length > 0 && !selectedBatchId) setSelectedBatchId(data[0].id);
+      // Filter strictly to batches scheduled for today's day of week.
+      // No fallback — if none are scheduled today, show zero batches.
+      const todayBatches = data.filter(batchScheduledToday);
+      setBatches(todayBatches);
+
+      if (todayBatches.length === 0) return; // "No batches today" UI shown below
+
+      // 1. Is there a batch whose time window contains right now?
+      const activeNow = todayBatches.find(isTimeInWindow);
+      if (activeNow) {
+        setSelectedBatchId(activeNow.id);
+        setNextBatch(null);
+        return;
+      }
+
+      // 2. Is there a batch starting later today?
+      const next = nextUpcomingBatch(todayBatches);
+      if (next) {
+        setSelectedBatchId(next.id); // pre-select so coach can prepare
+        setNextBatch(next);          // show "Next batch" banner
+        return;
+      }
+
+      // 3. All of today's batches have ended — select the last one
+      const sorted = [...todayBatches].sort(
+        (a, b) => toMinutes(b.startTime) - toMinutes(a.startTime),
+      );
+      setSelectedBatchId(sorted[0].id);
+      setNextBatch(null);
     });
   }, []);
 
@@ -121,7 +179,7 @@ function AttendancePage() {
       try {
         setIsLoadingPlayers(true);
         const p = await playerService.getAllPlayers(true);
-        setPlayers(p);
+        setPlayers(p.filter((pl) => !pl.excludeFromAttendance));
       } catch {
         toast.error("Failed to load players");
       } finally {
@@ -142,12 +200,7 @@ function AttendancePage() {
         if (!res.data.attendanceMarked) setRecords({});
       })
       .catch(() =>
-        setSession({
-          locked: false,
-          editable: true,
-          sessionExists: false,
-          attendanceMarked: false,
-        }),
+        setSession({ locked: false, editable: true, sessionExists: false, attendanceMarked: false }),
       );
   }, [selectedDate, selectedBatchId]);
 
@@ -196,14 +249,20 @@ function AttendancePage() {
   const filteredPlayers = useMemo(() => {
     if (!selectedBatchId) return [];
     return players.filter((p) => {
-      const matchesSearch = p.displayName
-        .toLowerCase()
-        .includes(search.toLowerCase());
-      const matchesBatch =
-        p.batches?.some((b) => b.id === selectedBatchId) ?? false;
-      return matchesSearch && matchesBatch;
+      const matchesSearch = p.displayName.toLowerCase().includes(search.toLowerCase());
+      const matchesBatch = p.batches?.some((b) => b.id === selectedBatchId) ?? false;
+      if (!matchesSearch || !matchesBatch) return false;
+      if (attendanceFilter === "ALL") return true;
+      const status = session.attendanceMarked
+        ? isSuperAdmin
+          ? attendance[p.id]
+          : records[p.id.toLowerCase()]?.status
+        : attendance[p.id];
+      if (attendanceFilter === "PRESENT") return status === "PRESENT";
+      if (attendanceFilter === "ABSENT") return status === "ABSENT";
+      return true;
     });
-  }, [players, search, selectedBatchId]);
+  }, [players, search, selectedBatchId, attendanceFilter, attendance, records, session.attendanceMarked, isSuperAdmin]);
 
   const handleChange = (playerId: string, status: AttendanceStatus) => {
     if (!canEdit) return;
@@ -211,63 +270,35 @@ function AttendancePage() {
   };
 
   const { presentCount, absentCount, unmarkedCount } = useMemo(() => {
-    let present = 0,
-      absent = 0,
-      unmarked = 0;
+    let present = 0, absent = 0, unmarked = 0;
     filteredPlayers.forEach((p) => {
       const value = session.attendanceMarked
-        ? isSuperAdmin
-          ? attendance[p.id]
-          : records[p.id.toLowerCase()]?.status
+        ? isSuperAdmin ? attendance[p.id] : records[p.id.toLowerCase()]?.status
         : attendance[p.id];
       if (value === "PRESENT") present++;
       else if (value === "ABSENT") absent++;
       else unmarked++;
     });
-    return {
-      presentCount: present,
-      absentCount: absent,
-      unmarkedCount: unmarked,
-    };
-  }, [
-    filteredPlayers,
-    attendance,
-    records,
-    session.attendanceMarked,
-    isSuperAdmin,
-  ]);
+    return { presentCount: present, absentCount: absent, unmarkedCount: unmarked };
+  }, [filteredPlayers, attendance, records, session.attendanceMarked, isSuperAdmin]);
 
   const markAll = (status: AttendanceStatus) => {
     if (!canEdit) return;
-    const confirmed = window.confirm(
-      `Mark ALL ${filteredPlayers.length} filtered players as ${status}?`,
-    );
+    const confirmed = window.confirm(`Mark ALL ${filteredPlayers.length} filtered players as ${status}?`);
     if (!confirmed) return;
     const updates: Record<string, AttendanceStatus> = {};
-    filteredPlayers.forEach((p) => {
-      updates[p.id] = status;
-    });
+    filteredPlayers.forEach((p) => { updates[p.id] = status; });
     setAttendance((prev) => ({ ...prev, ...updates }));
     toast.success(`Marked ${filteredPlayers.length} players as ${status}`);
   };
 
   const handleSubmit = async () => {
     if (!canEdit || isSubmitting || !selectedBatchId) return;
-    const payload = Object.entries(attendance).map(([playerId, status]) => ({
-      playerId,
-      status,
-    }));
-    if (!payload.length) {
-      toast.error("No attendance marked");
-      return;
-    }
+    const payload = Object.entries(attendance).map(([playerId, status]) => ({ playerId, status }));
+    if (!payload.length) { toast.error("No attendance marked"); return; }
     setIsSubmitting(true);
     try {
-      await submitBulkAttendance({
-        date: selectedDate,
-        batchId: selectedBatchId,
-        records: payload,
-      });
+      await submitBulkAttendance({ date: selectedDate, batchId: selectedBatchId, records: payload });
       setShowSuccessDialog(true);
       if (!isSuperAdmin) setAttendance({});
       await loadSessionStatus();
@@ -282,10 +313,7 @@ function AttendancePage() {
     if (!overrideTarget) return;
     const key = overrideTarget.playerId.toLowerCase();
     const record = records[key];
-    if (!record) {
-      toast.error("Attendance record not found");
-      return;
-    }
+    if (!record) { toast.error("Attendance record not found"); return; }
     try {
       await overrideAttendance({
         attendanceRecordId: record.attendanceRecordId,
@@ -296,22 +324,18 @@ function AttendancePage() {
       setOverrideTarget(null);
       await loadSessionStatus();
     } catch (e: any) {
-      toast.error(
-        e?.response?.data?.message || "Failed to override attendance",
-      );
+      toast.error(e?.response?.data?.message || "Failed to override attendance");
     }
   };
 
   const selectedBatch = batches.find((b) => b.id === selectedBatchId);
 
   /* ─────────────────── RENDER ─────────────────── */
-
   return (
     <div className="min-h-screen bg-gray-50 pb-28">
       {/* ── STICKY HEADER ── */}
       <div className="sticky top-0 z-30 bg-white border-b border-gray-200 shadow-sm">
         <div className="max-w-3xl mx-auto px-4 py-3">
-          {/* Row 1: back + title + action buttons */}
           <div className="flex items-center gap-2 mb-2">
             <button
               onClick={() => navigate("/admin")}
@@ -319,20 +343,12 @@ function AttendancePage() {
             >
               <ArrowLeft size={17} />
             </button>
-
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-1.5">
-                <CheckCircle2
-                  size={18}
-                  className="text-emerald-600 flex-shrink-0"
-                />
-                <h1 className="text-base font-bold text-gray-900 truncate">
-                  Attendance
-                </h1>
+                <CheckCircle2 size={18} className="text-emerald-600 flex-shrink-0" />
+                <h1 className="text-base font-bold text-gray-900 truncate">Attendance</h1>
               </div>
             </div>
-
-            {/* Action buttons — icon-only on mobile, labeled on desktop */}
             <div className="flex gap-1.5 flex-shrink-0">
               <button
                 onClick={() => navigate("/admin/batches")}
@@ -346,7 +362,7 @@ function AttendancePage() {
                 className="flex items-center gap-1.5 px-2.5 py-1.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition text-xs font-medium"
               >
                 <TrendingUp size={15} />
-                <span className="hidden sm:inline">Analytics</span>
+                <span className="hidden sm:inline">History</span>
               </button>
             </div>
           </div>
@@ -354,21 +370,14 @@ function AttendancePage() {
           <div className="flex items-center gap-2 mt-1 ml-6">
             <button
               onClick={() => {
-                const input = document.getElementById(
-                  "attendance-date-picker",
-                ) as HTMLInputElement;
-                if (input.showPicker) {
-                  input.showPicker();
-                } else {
-                  input.click(); // fallback for older mobile browsers
-                }
+                const input = document.getElementById("attendance-date-picker") as HTMLInputElement;
+                if (input.showPicker) input.showPicker();
+                else input.click();
               }}
               className="inline-flex items-center gap-2 px-3 py-1.5 bg-gray-100 hover:bg-gray-200 rounded-full transition cursor-pointer"
             >
               <Calendar size={13} className="text-gray-500 flex-shrink-0" />
-              <span className="text-xs font-semibold text-gray-700">
-                {formatDate(selectedDate)}
-              </span>
+              <span className="text-xs font-semibold text-gray-700">{formatDate(selectedDate)}</span>
             </button>
             <input
               id="attendance-date-picker"
@@ -379,6 +388,16 @@ function AttendancePage() {
               className="w-0 h-0 opacity-0 absolute pointer-events-none"
             />
           </div>
+
+          {/* Next-batch banner */}
+          {nextBatch && selectedDate === todayStr && (
+            <div className="mt-2 bg-blue-50 border border-blue-200 rounded-lg px-3 py-2 flex items-center gap-2">
+              <Clock size={13} className="text-blue-600 flex-shrink-0" />
+              <p className="text-xs text-blue-800 font-medium">
+                No batch active now — Next: <strong>{nextBatch.name}</strong> at {formatBatchTimeRange(nextBatch)}
+              </p>
+            </div>
+          )}
 
           {/* Birthday banner */}
           {birthdayPlayers.length > 0 && (
@@ -409,17 +428,13 @@ function AttendancePage() {
           {session.attendanceMarked && !isSuperAdmin && (
             <div className="bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 flex items-center gap-2">
               <Clock size={14} className="text-amber-600 flex-shrink-0" />
-              <p className="text-xs text-amber-800 font-medium">
-                Attendance taken — view only
-              </p>
+              <p className="text-xs text-amber-800 font-medium">Attendance taken — view only</p>
             </div>
           )}
           {session.attendanceMarked && isSuperAdmin && (
             <div className="bg-purple-50 border border-purple-200 rounded-lg px-3 py-2 flex items-center gap-2">
               <Sparkles size={14} className="text-purple-600 flex-shrink-0" />
-              <p className="text-xs text-purple-800 font-medium">
-                Super Admin — editing allowed
-              </p>
+              <p className="text-xs text-purple-800 font-medium">Super Admin — editing allowed</p>
             </div>
           )}
         </div>
@@ -427,15 +442,11 @@ function AttendancePage() {
 
       {/* ── MAIN CONTENT ── */}
       <div className="max-w-3xl mx-auto px-4 py-4 space-y-4">
-        {/* Stats strip — compact 4-col on mobile */}
+        {/* Stats strip */}
         <div className="grid grid-cols-4 gap-2">
           <div className="bg-white rounded-xl border border-gray-200 p-3 text-center shadow-sm">
-            <p className="text-[10px] text-gray-500 uppercase tracking-wide leading-none mb-1">
-              Total
-            </p>
-            <p className="text-xl font-bold text-gray-900">
-              {filteredPlayers.length}
-            </p>
+            <p className="text-[10px] text-gray-500 uppercase tracking-wide leading-none mb-1">Total</p>
+            <p className="text-xl font-bold text-gray-900">{filteredPlayers.length}</p>
           </div>
           <div className="bg-emerald-50 rounded-xl border border-emerald-200 p-3 text-center shadow-sm">
             <p className="text-[10px] text-emerald-700 uppercase tracking-wide leading-none mb-1 flex items-center justify-center gap-0.5">
@@ -450,19 +461,14 @@ function AttendancePage() {
             <p className="text-xl font-bold text-red-700">{absentCount}</p>
           </div>
           <div className="bg-gray-50 rounded-xl border border-gray-200 p-3 text-center shadow-sm">
-            <p className="text-[10px] text-gray-500 uppercase tracking-wide leading-none mb-1">
-              Unmarked
-            </p>
+            <p className="text-[10px] text-gray-500 uppercase tracking-wide leading-none mb-1">Unmarked</p>
             <p className="text-xl font-bold text-gray-600">{unmarkedCount}</p>
           </div>
         </div>
 
         {/* Search */}
         <div className="relative">
-          <Search
-            className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
-            size={16}
-          />
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
           <input
             type="text"
             placeholder="Search players…"
@@ -472,62 +478,78 @@ function AttendancePage() {
           />
         </div>
 
-        {/* Batch selector */}
-        <div>
-          <p className="text-xs font-medium text-gray-500 mb-1.5">
-            Select Batch
-          </p>
-          <div className="flex flex-wrap gap-2">
-            {batches.map((batch) => (
-              <button
-                key={batch.id}
-                onClick={() => setSelectedBatchId(batch.id)}
-                className={`flex items-center gap-1.5 px-3 py-2 rounded-full text-xs font-medium transition-all ${
-                  selectedBatchId === batch.id
-                    ? "text-white shadow-md"
-                    : "bg-white text-gray-700 border border-gray-200 hover:border-blue-300"
-                }`}
-                style={
-                  selectedBatchId === batch.id
-                    ? {
-                        background: `linear-gradient(135deg, ${batch.color}dd, ${batch.color})`,
-                      }
-                    : {}
-                }
-              >
-                <span
-                  className={`w-1.5 h-1.5 rounded-full ${selectedBatchId === batch.id ? "bg-white" : ""}`}
-                  style={
-                    selectedBatchId !== batch.id
-                      ? { backgroundColor: batch.color }
-                      : {}
-                  }
-                />
-                {batch.name}
-                <span className="opacity-70">
-                  ({formatBatchTimeRange(batch)})
-                </span>
-              </button>
-            ))}
-          </div>
+        {/* Present/Absent filter */}
+        <div className="flex gap-1.5 bg-gray-100 p-1 rounded-xl">
+          {(["ALL", "PRESENT", "ABSENT"] as const).map((f) => (
+            <button
+              key={f}
+              onClick={() => setAttendanceFilter(f)}
+              className={`flex-1 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                attendanceFilter === f
+                  ? f === "PRESENT"
+                    ? "bg-emerald-600 text-white shadow-sm"
+                    : f === "ABSENT"
+                      ? "bg-red-500 text-white shadow-sm"
+                      : "bg-white text-gray-900 shadow-sm"
+                  : "text-gray-500 hover:text-gray-700"
+              }`}
+            >
+              {f === "ALL" ? "All" : f === "PRESENT" ? "Present" : "Absent"}
+            </button>
+          ))}
         </div>
 
-        {/* Quick mark all — compact on mobile */}
+        {/* Batch selector or "no batches today" message */}
+        {batches.length === 0 ? (
+          <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-6 text-center">
+            <p className="text-sm font-semibold text-amber-800">
+              No batches scheduled today ({new Date().toLocaleDateString("en-GB", { weekday: "long" })})
+            </p>
+            <p className="text-xs text-amber-600 mt-1">
+              Attendance can only be marked on scheduled batch days.
+            </p>
+          </div>
+        ) : (
+          <div>
+            <p className="text-xs font-medium text-gray-500 mb-1.5">Select Batch</p>
+            <div className="flex flex-wrap gap-2">
+              {batches.map((batch) => (
+                <button
+                  key={batch.id}
+                  onClick={() => { setSelectedBatchId(batch.id); setNextBatch(null); }}
+                  className={`flex items-center gap-1.5 px-3 py-2 rounded-full text-xs font-medium transition-all ${
+                    selectedBatchId === batch.id
+                      ? "text-white shadow-md"
+                      : "bg-white text-gray-700 border border-gray-200 hover:border-blue-300"
+                  }`}
+                  style={selectedBatchId === batch.id ? { background: `linear-gradient(135deg, ${batch.color}dd, ${batch.color})` } : {}}
+                >
+                  <span
+                    className={`w-1.5 h-1.5 rounded-full ${selectedBatchId === batch.id ? "bg-white" : ""}`}
+                    style={selectedBatchId !== batch.id ? { backgroundColor: batch.color } : {}}
+                  />
+                  {batch.name}
+                  <span className="opacity-70">({formatBatchTimeRange(batch)})</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Quick mark all */}
         {canEdit && (
           <div className="flex gap-2">
             <button
               onClick={() => markAll("PRESENT")}
               className="flex-1 flex items-center justify-center gap-1.5 py-2 bg-white border border-gray-200 rounded-lg text-xs font-medium text-gray-700 hover:bg-gray-50 active:bg-gray-100 transition"
             >
-              <CheckCircle2 size={14} className="text-emerald-600" />
-              Present All
+              <CheckCircle2 size={14} className="text-emerald-600" /> Present All
             </button>
             <button
               onClick={() => markAll("ABSENT")}
               className="flex-1 flex items-center justify-center gap-1.5 py-2 bg-white border border-gray-200 rounded-lg text-xs font-medium text-gray-700 hover:bg-gray-50 active:bg-gray-100 transition"
             >
-              <XCircle size={14} className="text-red-500" />
-              Absent All
+              <XCircle size={14} className="text-red-500" /> Absent All
             </button>
           </div>
         )}
@@ -542,9 +564,7 @@ function AttendancePage() {
           ) : filteredPlayers.length === 0 ? (
             <div className="text-center py-10">
               <p className="text-sm text-gray-500">
-                {selectedBatchId
-                  ? "No players found in this batch"
-                  : "Please select a batch"}
+                {selectedBatchId ? "No players found in this batch" : "Please select a batch"}
               </p>
             </div>
           ) : (
@@ -564,11 +584,12 @@ function AttendancePage() {
                 canOverride={isSuperAdmin && !canEdit}
                 onOverride={
                   isSuperAdmin && !canEdit
-                    ? () =>
-                        setOverrideTarget({
-                          playerId: player.id,
-                          playerName: player.displayName,
-                        })
+                    ? () => setOverrideTarget({ playerId: player.id, playerName: player.displayName })
+                    : undefined
+                }
+                onPhotoClick={
+                  player.photoUrl
+                    ? (url, name) => setLightbox({ url, name })
                     : undefined
                 }
               />
@@ -607,19 +628,35 @@ function AttendancePage() {
               <div className="mx-auto w-14 h-14 bg-emerald-100 rounded-full flex items-center justify-center">
                 <CheckCircle2 className="text-emerald-600" size={28} />
               </div>
-              <h2 className="text-lg font-bold text-gray-900">
-                Attendance Saved!
-              </h2>
+              <h2 className="text-lg font-bold text-gray-900">Attendance Saved!</h2>
               <p className="text-sm text-gray-600">
                 <strong>{selectedBatch.name}</strong> saved successfully.
               </p>
-              <Button
-                variant="primary"
-                onClick={() => setShowSuccessDialog(false)}
-              >
-                Done
-              </Button>
+              <Button variant="primary" onClick={() => setShowSuccessDialog(false)}>Done</Button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── PHOTO LIGHTBOX ── */}
+      {lightbox && (
+        <div
+          className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4"
+          onClick={() => setLightbox(null)}
+        >
+          <div className="relative max-w-sm w-full" onClick={(e) => e.stopPropagation()}>
+            <button
+              onClick={() => setLightbox(null)}
+              className="absolute -top-10 right-0 text-white hover:text-gray-300 transition"
+            >
+              <X size={24} />
+            </button>
+            <img
+              src={lightbox.url}
+              alt={lightbox.name}
+              className="w-full rounded-2xl shadow-2xl object-cover max-h-[70vh]"
+            />
+            <p className="text-white text-center mt-3 font-semibold text-base">{lightbox.name}</p>
           </div>
         </div>
       )}

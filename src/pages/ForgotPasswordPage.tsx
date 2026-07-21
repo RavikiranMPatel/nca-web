@@ -1,12 +1,20 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import publicApi from "../api/publicApi";
 
 export default function ForgotPasswordPage() {
-  const [email, setEmail]       = useState("");
+  const [email, setEmail]         = useState("");
   const [submitted, setSubmitted] = useState(false);
-  const [loading, setLoading]   = useState(false);
-  const [error, setError]       = useState("");
+  const [loading, setLoading]     = useState(false);
+  const [error, setError]         = useState("");
+  const [primaryColor, setPrimaryColor] = useState("#2563eb");
+
+  useEffect(() => {
+    publicApi
+      .get("/settings/public")
+      .then((r) => setPrimaryColor(r.data?.PRIMARY_COLOR || "#2563eb"))
+      .catch(() => {});
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -34,7 +42,7 @@ export default function ForgotPasswordPage() {
           <div className="bg-green-50 border border-green-300 text-green-700 rounded px-4 py-3 text-sm">
             Check your inbox — if that email is registered, a reset link has been sent.
             <div className="mt-4">
-              <Link to="/login" className="text-blue-600 font-medium hover:underline text-sm">
+              <Link to="/login" className="font-medium hover:underline text-sm" style={{ color: primaryColor }}>
                 Back to login
               </Link>
             </div>
@@ -59,13 +67,14 @@ export default function ForgotPasswordPage() {
               <button
                 type="submit"
                 disabled={loading}
-                className="w-full bg-blue-600 text-white py-2 rounded hover:bg-blue-700 disabled:opacity-60"
+                className="w-full text-white py-2 rounded disabled:opacity-60 transition-opacity hover:opacity-90"
+                style={{ backgroundColor: primaryColor }}
               >
                 {loading ? "Sending…" : "Send reset link"}
               </button>
             </form>
             <p className="text-sm mt-4 text-center">
-              <Link to="/login" className="text-gray-500 hover:text-blue-600 hover:underline">
+              <Link to="/login" className="text-gray-500 hover:underline">
                 Back to login
               </Link>
             </p>

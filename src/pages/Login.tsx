@@ -22,8 +22,8 @@ function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
-  const [academyNameDisplay, setAcademyNameDisplay] =
-    useState("Cricket Academy");
+  const [academyNameDisplay, setAcademyNameDisplay] = useState("Cricket Academy");
+  const [primaryColor, setPrimaryColor] = useState("#2563eb");
 
   const { login } = useAuth();
   const navigate = useNavigate();
@@ -34,6 +34,7 @@ function Login() {
       .then((res) => {
         setLogoUrl(res.data?.LOGO_URL || null);
         setAcademyNameDisplay(res.data?.ACADEMY_NAME || "Cricket Academy");
+        setPrimaryColor(res.data?.PRIMARY_COLOR || "#2563eb");
       })
       .catch(() => {});
   }, []);
@@ -124,7 +125,8 @@ function Login() {
 
           <button
             type="submit"
-            className="w-full bg-blue-600 text-white py-2 rounded hover:bg-blue-700"
+            className="w-full text-white py-2 rounded transition-opacity hover:opacity-90"
+            style={{ backgroundColor: primaryColor }}
           >
             Login
           </button>
@@ -133,7 +135,7 @@ function Login() {
         <div className="text-sm mt-3 text-center">
           <Link
             to="/forgot-password"
-            className="text-gray-500 hover:text-blue-600 hover:underline"
+            className="text-gray-500 hover:underline"
           >
             Forgot password?
           </Link>
@@ -143,7 +145,8 @@ function Login() {
           Don't have an account?{" "}
           <Link
             to="/signup"
-            className="text-blue-600 font-medium hover:underline"
+            className="font-medium hover:underline"
+            style={{ color: primaryColor }}
           >
             Sign up
           </Link>

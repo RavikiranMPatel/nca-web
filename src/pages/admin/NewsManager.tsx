@@ -221,7 +221,7 @@ const NewsManager = () => {
               />
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium mb-2">
                   Slug (URL)
@@ -286,12 +286,12 @@ const NewsManager = () => {
               <label className="block text-sm font-medium mb-2">
                 Featured Image
               </label>
-              <div className="flex items-center gap-4">
+              <div className="flex items-start gap-4">
                 {formData.featuredImageUrl && (
                   <img
                     src={getImageUrl(formData.featuredImageUrl)}
                     alt="Preview"
-                    className="w-32 h-20 object-cover rounded"
+                    className="max-h-40 max-w-xs object-contain rounded bg-gray-50 border"
                   />
                 )}
                 <label className="px-4 py-2 bg-gray-100 rounded-lg cursor-pointer hover:bg-gray-200 flex items-center gap-2">
@@ -308,7 +308,7 @@ const NewsManager = () => {
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium mb-2">Status</label>
                 <select
@@ -361,11 +361,13 @@ const NewsManager = () => {
           <div key={item.id} className="bg-white rounded-lg shadow-md p-6">
             <div className="flex gap-4">
               {item.featuredImageUrl && (
-                <img
-                  src={getImageUrl(item.featuredImageUrl)}
-                  alt={item.title}
-                  className="w-32 h-24 object-cover rounded"
-                />
+                <div className="w-32 flex-shrink-0 rounded overflow-hidden" style={{ aspectRatio: "16/9" }}>
+                  <img
+                    src={getImageUrl(item.featuredImageUrl)}
+                    alt={item.title}
+                    className="w-full h-full object-cover"
+                  />
+                </div>
               )}
               <div className="flex-1">
                 <div className="flex justify-between items-start">

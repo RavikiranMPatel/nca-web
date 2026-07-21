@@ -33,6 +33,7 @@ import type {
 // ─── CONSTANTS ───────────────────────────────────────────
 
 const PAGE_SIZE = 20;
+const MAX_PHOTOS_PER_PLAYER = 10;
 
 const TAGS: { value: MediaTag; label: string; icon: string }[] = [
   { value: "BATTING", label: "Batting", icon: "🏏" },
@@ -111,6 +112,7 @@ function PlayerMediaTab({ playerPublicId }: Props) {
   // Data
   const [media, setMedia] = useState<PlayerMediaResponse[]>([]);
   const [totalCount, setTotalCount] = useState(0);
+  const [photoCount, setPhotoCount] = useState(0);
   const [hasMore, setHasMore] = useState(false);
   const [currentPage, setCurrentPage] = useState(0);
 
@@ -170,6 +172,7 @@ function PlayerMediaTab({ playerPublicId }: Props) {
         }
 
         setTotalCount(data.totalElements);
+        setPhotoCount(data.photoCount ?? 0);
         setHasMore(data.hasNext);
         setCurrentPage(data.currentPage);
       } catch (error) {
@@ -348,9 +351,20 @@ function PlayerMediaTab({ playerPublicId }: Props) {
           <h3 className="text-base font-bold text-slate-900">
             📸 Player Media
           </h3>
-          <p className="text-xs text-slate-500">
-            {totalCount} item{totalCount !== 1 ? "s" : ""}
-          </p>
+          <div className="flex items-center gap-3 mt-0.5">
+            <p className="text-xs text-slate-500">
+              {totalCount} item{totalCount !== 1 ? "s" : ""}
+            </p>
+            <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
+              photoCount >= MAX_PHOTOS_PER_PLAYER
+                ? "bg-red-50 text-red-600"
+                : photoCount >= MAX_PHOTOS_PER_PLAYER - 2
+                ? "bg-amber-50 text-amber-600"
+                : "bg-slate-100 text-slate-500"
+            }`}>
+              {photoCount}/{MAX_PHOTOS_PER_PLAYER} photos
+            </span>
+          </div>
         </div>
         <button
           type="button"
@@ -429,42 +443,35 @@ function PlayerMediaTab({ playerPublicId }: Props) {
               <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 px-1">
                 {month}
               </p>
-              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2 sm:gap-3">
+              <div className="columns-2 md:columns-3 lg:columns-4 gap-2 sm:gap-3">
                 {items.map((item) => {
                   const globalIndex = media.indexOf(item);
                   const isVideo = item.mediaType === "VIDEO";
                   const isInstagram = item.videoPlatform === "INSTAGRAM";
+                  const thumbSrc = isVideo && item.videoId
+                    ? getYouTubeThumbnail(item.videoId)
+                    : (item.thumbnailUrl || item.mediaUrl);
 
                   return (
                     <div
                       key={item.publicId}
-                      className="group relative bg-white rounded-lg shadow-sm overflow-hidden border border-slate-100 cursor-pointer hover:shadow-md transition-all"
+                      className="group break-inside-avoid mb-2 bg-white rounded-lg shadow-sm overflow-hidden border border-slate-100 cursor-pointer hover:shadow-md transition-all"
                       onClick={() => setLightboxIndex(globalIndex)}
                     >
-                      {/* Thumbnail */}
-                      <div className="aspect-[4/3] bg-slate-100 relative overflow-hidden">
+                      {/* Thumbnail — natural aspect ratio, no crop */}
+                      <div className="relative bg-slate-100">
                         {isVideo && isInstagram ? (
-                          <div className="w-full h-full flex flex-col items-center justify-center bg-gradient-to-br from-purple-500 via-pink-500 to-orange-400">
-                            <svg
-                              viewBox="0 0 24 24"
-                              className="w-8 h-8 text-white mb-1"
-                              fill="currentColor"
-                            >
+                          <div className="aspect-[4/3] flex flex-col items-center justify-center bg-gradient-to-br from-purple-500 via-pink-500 to-orange-400">
+                            <svg viewBox="0 0 24 24" className="w-8 h-8 text-white mb-1" fill="currentColor">
                               <path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zM12 0C8.741 0 8.333.014 7.053.072 2.695.272.273 2.69.073 7.052.014 8.333 0 8.741 0 12c0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98C8.333 23.986 8.741 24 12 24c3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98C15.668.014 15.259 0 12 0zm0 5.838a6.162 6.162 0 100 12.324 6.162 6.162 0 000-12.324zM12 16a4 4 0 110-8 4 4 0 010 8zm6.406-11.845a1.44 1.44 0 100 2.881 1.44 1.44 0 000-2.881z" />
                             </svg>
-                            <span className="text-white text-[10px] font-semibold">
-                              Instagram Reel
-                            </span>
+                            <span className="text-white text-[10px] font-semibold">Instagram Reel</span>
                           </div>
                         ) : (
                           <img
-                            src={
-                              isVideo && item.videoId
-                                ? getYouTubeThumbnail(item.videoId)
-                                : item.mediaUrl
-                            }
+                            src={thumbSrc}
                             alt=""
-                            className="w-full h-full object-cover"
+                            className="w-full h-auto block"
                             loading="lazy"
                           />
                         )}
@@ -473,11 +480,7 @@ function PlayerMediaTab({ playerPublicId }: Props) {
                         {isVideo && (
                           <div className="absolute inset-0 flex items-center justify-center bg-black/20">
                             <div className="w-10 h-10 rounded-full bg-white/90 flex items-center justify-center shadow-lg">
-                              <Play
-                                size={18}
-                                className="text-slate-800 ml-0.5"
-                                fill="currentColor"
-                              />
+                              <Play size={18} className="text-slate-800 ml-0.5" fill="currentColor" />
                             </div>
                           </div>
                         )}
@@ -486,9 +489,7 @@ function PlayerMediaTab({ playerPublicId }: Props) {
                         {isVideo && item.videoPlatform && (
                           <div className="absolute top-1.5 left-1.5">
                             <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-black/60 text-white">
-                              {item.videoPlatform === "YOUTUBE"
-                                ? "▶ YouTube"
-                                : "📷 Instagram"}
+                              {item.videoPlatform === "YOUTUBE" ? "▶ YouTube" : "📷 Instagram"}
                             </span>
                           </div>
                         )}
@@ -496,10 +497,7 @@ function PlayerMediaTab({ playerPublicId }: Props) {
                         {/* Delete button (hover) */}
                         <button
                           type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setDeleteTarget(item.publicId);
-                          }}
+                          onClick={(e) => { e.stopPropagation(); setDeleteTarget(item.publicId); }}
                           className="absolute top-1.5 right-1.5 p-1.5 rounded-full bg-black/50 text-white opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-600"
                         >
                           <Trash2 size={12} />
@@ -509,22 +507,15 @@ function PlayerMediaTab({ playerPublicId }: Props) {
                       {/* Info bar */}
                       <div className="p-2">
                         <div className="flex items-center justify-between">
-                          <span
-                            className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${TAG_COLORS[item.tag] || TAG_COLORS.OTHER}`}
-                          >
+                          <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${TAG_COLORS[item.tag] || TAG_COLORS.OTHER}`}>
                             {item.tag}
                           </span>
-                          <span
-                            className="text-[10px] text-slate-400"
-                            title={formatFullDate(item.createdAt)}
-                          >
+                          <span className="text-[10px] text-slate-400" title={formatFullDate(item.createdAt)}>
                             {timeAgo(item.createdAt)}
                           </span>
                         </div>
                         {item.note && (
-                          <p className="text-[11px] text-slate-600 mt-1 line-clamp-1">
-                            {item.note}
-                          </p>
+                          <p className="text-[11px] text-slate-600 mt-1 line-clamp-1">{item.note}</p>
                         )}
                       </div>
                     </div>
@@ -591,6 +582,9 @@ function PlayerMediaTab({ playerPublicId }: Props) {
                 }`}
               >
                 <Image size={14} /> Photo
+                {photoCount >= MAX_PHOTOS_PER_PLAYER && (
+                  <span className="ml-1 text-[9px] font-bold text-red-500">FULL</span>
+                )}
               </button>
               <button
                 type="button"
@@ -601,14 +595,19 @@ function PlayerMediaTab({ playerPublicId }: Props) {
                     : "text-slate-500"
                 }`}
               >
-                <Video size={14} /> Video
+                <Video size={14} /> Video link
               </button>
             </div>
 
             {/* Photo Upload */}
             {uploadMode === "PHOTO" && (
               <div className="space-y-3">
-                {uploadPreview ? (
+                {photoCount >= MAX_PHOTOS_PER_PLAYER ? (
+                  <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-5 text-center">
+                    <p className="text-sm font-semibold text-red-700">Photo limit reached ({photoCount}/{MAX_PHOTOS_PER_PLAYER})</p>
+                    <p className="text-xs text-red-500 mt-1">Delete an existing photo to upload a new one. Video links are unlimited.</p>
+                  </div>
+                ) : uploadPreview ? (
                   <div className="relative">
                     <img
                       src={uploadPreview}
@@ -656,15 +655,18 @@ function PlayerMediaTab({ playerPublicId }: Props) {
               <div className="space-y-3">
                 <div>
                   <label className="text-xs font-medium text-slate-600 block mb-1">
-                    Paste Video URL
+                    Paste YouTube or Instagram URL
                   </label>
                   <input
                     type="url"
                     value={videoUrl}
                     onChange={(e) => handleVideoUrlChange(e.target.value)}
-                    placeholder="https://youtube.com/watch?v=... or https://instagram.com/reel/..."
+                    placeholder="https://youtube.com/watch?v=..."
                     className="w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
+                  <p className="text-[10px] text-slate-400 mt-1">
+                    Supported: youtube.com/watch?v=… · youtu.be/… · youtube.com/shorts/… · instagram.com/reel/…
+                  </p>
                 </div>
 
                 {videoUrl && (
@@ -673,17 +675,14 @@ function PlayerMediaTab({ playerPublicId }: Props) {
                       <div className="flex items-center gap-2 text-xs bg-green-50 border border-green-200 rounded-lg px-3 py-2">
                         <span className="text-green-600 font-semibold">✓</span>
                         <span className="text-green-700">
-                          {detectedPlatform === "YOUTUBE"
-                            ? "YouTube video"
-                            : "Instagram Reel"}{" "}
-                          detected
+                          {detectedPlatform === "YOUTUBE" ? "YouTube video" : "Instagram Reel"} detected
                         </span>
                       </div>
                     ) : (
                       <div className="flex items-center gap-2 text-xs bg-red-50 border border-red-200 rounded-lg px-3 py-2">
                         <span className="text-red-600 font-semibold">✕</span>
                         <span className="text-red-700">
-                          Could not detect video. Check URL format.
+                          Not a recognised YouTube or Instagram URL. Check the format above.
                         </span>
                       </div>
                     )}
@@ -753,9 +752,8 @@ function PlayerMediaTab({ playerPublicId }: Props) {
                 onClick={handleUpload}
                 disabled={
                   uploading ||
-                  (uploadMode === "PHOTO" && !uploadFile) ||
-                  (uploadMode === "VIDEO" &&
-                    (!detectedPlatform || !detectedVideoId))
+                  (uploadMode === "PHOTO" && (photoCount >= MAX_PHOTOS_PER_PLAYER || !uploadFile)) ||
+                  (uploadMode === "VIDEO" && (!detectedPlatform || !detectedVideoId))
                 }
                 className="flex-1 flex items-center justify-center gap-2 bg-blue-600 text-white py-2.5 rounded-lg font-semibold hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all text-sm"
               >
@@ -801,7 +799,11 @@ function PlayerMediaTab({ playerPublicId }: Props) {
           </button>
 
           <div
-            className="relative w-full max-w-3xl mx-4"
+            className={`relative mx-4 ${
+              lightboxMedia.videoPlatform === "INSTAGRAM"
+                ? "w-full max-w-[560px]"
+                : "w-full max-w-3xl"
+            }`}
             onClick={(e) => e.stopPropagation()}
           >
             {/* Media */}
@@ -826,10 +828,11 @@ function PlayerMediaTab({ playerPublicId }: Props) {
                 </div>
               ) : lightboxMedia.videoPlatform === "INSTAGRAM" &&
                 lightboxMedia.videoId ? (
-                <div className="aspect-[9/16] max-h-[65vh] mx-auto">
+                <div className="w-full" style={{ height: "min(750px, 80vh)" }}>
                   <iframe
                     src={getInstagramEmbedUrl(lightboxMedia.videoId)}
-                    className="w-full h-full"
+                    className="w-full h-full border-0"
+                    allow="autoplay"
                     allowFullScreen
                     title="Instagram Reel"
                   />
