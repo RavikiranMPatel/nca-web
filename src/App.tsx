@@ -133,6 +133,10 @@ function App() {
 
   // ── Check onboarding status once on app load ─────────────────────────────
   useEffect(() => {
+    if (window.location.pathname.startsWith("/platform")) {
+      setOnboarded(true);
+      return;
+    }
     checkOnboardingStatus()
       .then((status) => {
         setOnboarded(status);
