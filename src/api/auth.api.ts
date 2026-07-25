@@ -17,16 +17,6 @@ export type AuthResponse = {
   branchPhone: string;
 };
 
-export type OnboardingRequest = {
-  academyName: string;
-  academyCode: string;
-  city?: string;
-  branches: { name: string; address: string; phone: string }[];
-  adminName: string;
-  adminEmail: string;
-  adminPassword: string;
-};
-
 // ── Auth APIs ─────────────────────────────────────────────────────────────────
 
 export async function signupApi(data: {
@@ -46,14 +36,3 @@ export async function loginApi(data: {
   return res.data as AuthResponse;
 }
 
-export async function onboardingSetupApi(
-  data: OnboardingRequest,
-): Promise<AuthResponse> {
-  const res = await publicApi.post("/onboarding/setup", data);
-  return res.data as AuthResponse;
-}
-
-export async function checkOnboardingStatus(): Promise<boolean> {
-  const res = await publicApi.get("/onboarding/status");
-  return res.data.onboarded as boolean;
-}

@@ -1,5 +1,5 @@
-import { Routes, Route, Navigate, useNavigate } from "react-router-dom";
-import { useEffect, useState } from "react";
+import { Routes, Route, Navigate } from "react-router-dom";
+import { useEffect } from "react";
 import Login from "./pages/Login";
 import Signup from "./pages/Signup";
 import Home from "./pages/Home";
@@ -52,8 +52,6 @@ import PlayerAnalysisPage from "./pages/player/PlayerAnalysisPage";
 import PlayerAssessmentDashboardPage from "./pages/player/PlayerAssessmentDashboardPage";
 import PlayerFeesTab from "./pages/player/PlayerFeesTab";
 import PlayerMediaPage from "./pages/player/PlayerMediaPage";
-import OnboardingPage from "./pages/OnboardingPage";
-import { checkOnboardingStatus } from "./api/auth.api";
 import { useTenant } from "./context/TenantContext";
 import TeamMembersAdmin from "./pages/admin/TeamMembersAdmin";
 import GenerateSlots from "./pages/slot-templates/GenerateSlots";
@@ -99,8 +97,6 @@ import PrivacyPolicyPage from "./pages/PrivacyPolicyPage";
 
 function App() {
   const { loading: tenantLoading, error: tenantError, tenant } = useTenant();
-  const [onboarded, setOnboarded] = useState<boolean | null>(null);
-  const navigate = useNavigate();
 
   useEffect(() => {
     if (!tenant) return;
@@ -131,39 +127,7 @@ function App() {
     if (twitterTitle) twitterTitle.setAttribute("content", `${name}${city}`);
   }, [tenant]);
 
-  // ── Check onboarding status once on app load ─────────────────────────────
-  useEffect(() => {
-    if (window.location.pathname.startsWith("/platform")) {
-      setOnboarded(true);
-      return;
-    }
-    checkOnboardingStatus()
-      .then((status) => {
-        setOnboarded(status);
-        if (!status) {
-          navigate("/onboarding", { replace: true });
-        }
-      })
-      .catch(() => {
-        // If check fails (network error etc), allow normal flow
-        setOnboarded(true);
-      });
-  }, []);
-
-  // Show nothing while checking — avoids flash of login page
-  // Show spinner while tenant resolves or onboarding check runs
-  useEffect(() => {
-    if (
-      tenantError &&
-      !window.location.pathname.startsWith("/onboarding") &&
-      !window.location.pathname.startsWith("/platform")
-    ) {
-      window.location.href = "/onboarding";
-    }
-  }, [tenantError]);
-
-  // Show spinner while tenant resolves or onboarding check runs
-  if (tenantLoading || onboarded === null) {
+  if (tenantLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
@@ -171,14 +135,22 @@ function App() {
     );
   }
 
-  if (
-    tenantError &&
-    !window.location.pathname.startsWith("/onboarding") &&
-    !window.location.pathname.startsWith("/platform")
-  ) {
+  if (tenantError && !window.location.pathname.startsWith("/platform")) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
+      <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
+        <div className="text-center max-w-md">
+          <div className="w-16 h-16 bg-gray-100 rounded-2xl flex items-center justify-center mx-auto mb-6">
+            <svg className="w-8 h-8 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
+                d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-2 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+            </svg>
+          </div>
+          <h1 className="text-xl font-semibold text-gray-900 mb-2">Academy not found</h1>
+          <p className="text-sm text-gray-500">
+            This address doesn't match any academy on our platform.
+            If you're an academy owner, contact your platform administrator.
+          </p>
+        </div>
       </div>
     );
   }
@@ -187,9 +159,6 @@ function App() {
     <Routes>
       {/* DEFAULT */}
       <Route path="/" element={<Navigate to="/home" replace />} />
-
-      {/* ONBOARDING — public, redirected to if not onboarded */}
-      <Route path="/onboarding" element={<OnboardingPage />} />
 
       {/* PUBLIC */}
       <Route path="/login" element={<Login />} />

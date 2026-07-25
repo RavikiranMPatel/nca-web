@@ -37,10 +37,7 @@ export function TenantProvider({ children }: { children: ReactNode }) {
   const [error, setError] = useState<string | null>(null);
 
   const fetchTenant = useCallback(() => {
-    if (
-      window.location.pathname === "/onboarding" ||
-      window.location.pathname.startsWith("/platform")
-    ) {
+    if (window.location.pathname.startsWith("/platform")) {
       setLoading(false);
       return;
     }
