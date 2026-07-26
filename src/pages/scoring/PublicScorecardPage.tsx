@@ -1209,7 +1209,7 @@ export default function PublicScorecardPage() {
             </div>
             <div className="mt-6 text-center">
               <p className="text-xs text-gray-300 dark:text-gray-700">
-                Powered by CricMaidan · cricmaidan.com
+                Powered by RKMPCrease · rkmpcrease.com
               </p>
             </div>
           </div>
