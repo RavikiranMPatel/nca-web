@@ -837,7 +837,7 @@ function AdminMembersPage() {
       {/* ── DEDUCT / RESTORE SESSION MODAL ──────────────────────────── */}
       {deductModal && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6 max-h-[90vh] overflow-y-auto">
             <h3 className="font-bold text-lg mb-1">
               {deductModal.action === "deduct"
                 ? "− Deduct Session"
@@ -885,7 +885,7 @@ function AdminMembersPage() {
       {/* ── ACTIVATE MODAL — in AdminMembersPage scope ────────────────── */}
       {activateModal && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6 space-y-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6 space-y-4 max-h-[90vh] overflow-y-auto">
             <h3 className="font-bold text-lg">Activate Subscription</h3>
             <p className="text-sm text-slate-500">
               Player: <strong>{activateModal.userName}</strong>

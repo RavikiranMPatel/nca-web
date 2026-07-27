@@ -616,7 +616,7 @@ export default function PlatformAdminPage() {
       {/* Deactivate */}
       {deactivateModal.open && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 px-4">
-          <div className="bg-white rounded-2xl shadow-xl p-6 w-full max-w-sm">
+          <div className="bg-white rounded-2xl shadow-xl p-6 w-full max-w-sm max-h-[90vh] overflow-y-auto">
             <h3 className="font-semibold text-gray-900 mb-1">Deactivate academy?</h3>
             <p className="text-sm text-gray-500 mb-4">
               <span className="font-medium text-gray-700">{deactivateModal.academy?.name}</span> will
@@ -649,7 +649,7 @@ export default function PlatformAdminPage() {
       {/* Mark as Paid */}
       {markPaidModal.open && markPaidModal.billing && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 px-4">
-          <div className="bg-white rounded-2xl shadow-xl p-6 w-full max-w-sm">
+          <div className="bg-white rounded-2xl shadow-xl p-6 w-full max-w-sm max-h-[90vh] overflow-y-auto">
             <h3 className="font-semibold text-gray-900 mb-1">Mark as paid</h3>
             <p className="text-sm text-gray-500 mb-1">
               <span className="font-medium text-gray-700">{markPaidModal.billing.academyName}</span>
@@ -692,7 +692,7 @@ export default function PlatformAdminPage() {
       {/* Edit Pricing */}
       {pricingModal.open && pricingModal.billing && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 px-4">
-          <div className="bg-white rounded-2xl shadow-xl p-6 w-full max-w-md">
+          <div className="bg-white rounded-2xl shadow-xl p-6 w-full max-w-md max-h-[90vh] overflow-y-auto">
             <h3 className="font-semibold text-gray-900 mb-1">Edit Pricing</h3>
             <p className="text-sm text-gray-500 mb-1">{pricingModal.billing.academyName}</p>
             <p className="text-xs text-gray-400 mb-4">

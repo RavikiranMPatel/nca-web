@@ -1272,7 +1272,7 @@ export default function AdminRevenueDashboard() {
       {/* ── NEW: Registration Fee Modal ── */}
       {showRegFeeModal && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center">
-          <div className="bg-white rounded-t-2xl sm:rounded-xl shadow-xl w-full sm:max-w-sm">
+          <div className="bg-white rounded-t-2xl sm:rounded-xl shadow-xl w-full sm:max-w-sm max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between px-5 py-4 border-b bg-slate-50 rounded-t-2xl sm:rounded-t-xl">
               <div>
                 <h3 className="font-bold text-slate-800">
@@ -1349,7 +1349,7 @@ export default function AdminRevenueDashboard() {
       {/* ── Edit Due Date Modal ── */}
       {editDueDateRow && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center">
-          <div className="bg-white rounded-t-2xl sm:rounded-xl shadow-xl w-full sm:max-w-sm">
+          <div className="bg-white rounded-t-2xl sm:rounded-xl shadow-xl w-full sm:max-w-sm max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between px-5 py-4 border-b bg-slate-50 rounded-t-2xl sm:rounded-t-xl">
               <div>
                 <h3 className="font-bold text-slate-800">Edit Due Date</h3>
@@ -1596,7 +1596,7 @@ export default function AdminRevenueDashboard() {
       {/* ── Delete Confirm ── */}
       {deleteConfirm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 space-y-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 space-y-4 max-h-[90vh] overflow-y-auto">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center flex-shrink-0">
                 <Trash2 size={18} className="text-red-600" />
@@ -1797,7 +1797,7 @@ export default function AdminRevenueDashboard() {
       {/* ── Mobile Filter Bottom Sheet ── */}
       {showFilterSheet && (
         <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 sm:hidden">
-          <div className="bg-white w-full rounded-t-2xl shadow-2xl px-5 pt-5 pb-8 space-y-4">
+          <div className="bg-white w-full rounded-t-2xl shadow-2xl px-5 pt-5 pb-8 space-y-4 max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between mb-1">
               <p className="font-bold text-slate-800">Filter by Date</p>
               <button

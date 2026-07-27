@@ -363,7 +363,7 @@ function SendFollowUpModal({
 
   return (
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-lg p-6 w-full max-w-md shadow-xl animate-modal-in">
+      <div className="bg-white rounded-lg p-6 w-full max-w-md shadow-xl animate-modal-in max-h-[90vh] overflow-y-auto">
         <h2 className="text-xl font-bold mb-4">
           Send Follow-up {followUpNumber}
         </h2>
@@ -449,7 +449,7 @@ function UpdateStatusModal({
 
   return (
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-lg p-6 w-full max-w-md shadow-xl animate-modal-in">
+      <div className="bg-white rounded-lg p-6 w-full max-w-md shadow-xl animate-modal-in max-h-[90vh] overflow-y-auto">
         <h2 className="text-xl font-bold mb-4">Update Status</h2>
 
         <div className="space-y-4">
@@ -548,7 +548,7 @@ function ConvertToPlayerModal({
 
   return (
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-lg p-6 w-full max-w-md shadow-xl animate-modal-in">
+      <div className="bg-white rounded-lg p-6 w-full max-w-md shadow-xl animate-modal-in max-h-[90vh] overflow-y-auto">
         <h2 className="text-xl font-bold mb-4">Convert to Player</h2>
 
         <div className="space-y-4">

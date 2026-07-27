@@ -2943,7 +2943,7 @@ export default function TournamentDetailPage() {
       {/* ── MANUAL FIXTURE MODAL ── */}
       {showManualFixture && (
         <div className="fixed inset-0 z-50 bg-black/60 flex items-end">
-          <div className="w-full bg-white dark:bg-gray-900 rounded-t-2xl p-5">
+          <div className="w-full bg-white dark:bg-gray-900 rounded-t-2xl p-5 max-h-[90vh] overflow-y-auto">
             <div className="w-10 h-1 bg-gray-300 rounded-full mx-auto mb-4" />
             <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-4">
               Add Fixture
@@ -3090,7 +3090,7 @@ export default function TournamentDetailPage() {
       {/* ── DECLARE WINNER MODAL ── */}
       {showDeclareWinner && (
         <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-6">
-          <div className="w-full max-w-sm bg-white dark:bg-gray-900 rounded-2xl p-5">
+          <div className="w-full max-w-sm bg-white dark:bg-gray-900 rounded-2xl p-5 max-h-[90vh] overflow-y-auto">
             <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-4">
               🏆 Declare Winner
             </h3>
@@ -3341,7 +3341,7 @@ export default function TournamentDetailPage() {
       {/* ── ADVANCE TO PLAYOFFS MODAL ── */}
       {showAdvancePlayoffs && (
         <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-6">
-          <div className="w-full max-w-sm bg-white dark:bg-gray-900 rounded-2xl p-5">
+          <div className="w-full max-w-sm bg-white dark:bg-gray-900 rounded-2xl p-5 max-h-[90vh] overflow-y-auto">
             <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-1">
               🏆 Advance to Playoffs
             </h3>
@@ -3431,7 +3431,7 @@ export default function TournamentDetailPage() {
 
       {showAddVenue && (
         <div className="fixed inset-0 z-50 bg-black/60 flex items-end">
-          <div className="w-full bg-white dark:bg-gray-900 rounded-t-2xl p-5">
+          <div className="w-full bg-white dark:bg-gray-900 rounded-t-2xl p-5 max-h-[90vh] overflow-y-auto">
             <div className="w-10 h-1 bg-gray-300 rounded-full mx-auto mb-4" />
             <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-4">
               🏟 Add Venue
@@ -3491,7 +3491,7 @@ export default function TournamentDetailPage() {
 
       {showAddOfficial && (
         <div className="fixed inset-0 z-50 bg-black/60 flex items-end">
-          <div className="w-full bg-white dark:bg-gray-900 rounded-t-2xl p-5">
+          <div className="w-full bg-white dark:bg-gray-900 rounded-t-2xl p-5 max-h-[90vh] overflow-y-auto">
             <div className="w-10 h-1 bg-gray-300 rounded-full mx-auto mb-4" />
             <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-4">
               🦺 Add Match Official

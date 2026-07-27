@@ -34,10 +34,10 @@ function LoginPromptModal({ open, message, onConfirm, onCancel }: Props) {
       <div
         onClick={(e) => e.stopPropagation()} // ⛔ prevent close when clicking inside
         className="
-          bg-white rounded-lg w-[360px] p-6 shadow-lg
+          bg-white rounded-lg w-full max-w-sm p-6 shadow-lg
           transform transition-all duration-200
           scale-95 opacity-0
-          animate-modal-in
+          animate-modal-in max-h-[90vh] overflow-y-auto
         "
       >
         <h2 className="text-lg font-semibold text-center mb-2">

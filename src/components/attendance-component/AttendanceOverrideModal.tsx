@@ -40,7 +40,7 @@ function AttendanceOverrideModal({
 
   return (
     <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-2xl p-6 w-full max-w-md shadow-2xl animate-scale-in">
+      <div className="bg-white rounded-2xl p-6 w-full max-w-md shadow-2xl animate-scale-in max-h-[90vh] overflow-y-auto">
         <div className="space-y-4">
           {/* Header */}
           <div className="text-center">

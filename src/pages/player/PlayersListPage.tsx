@@ -169,7 +169,7 @@ function ShareModal({
 
   return (
     <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-xl shadow-xl w-full max-w-md">
+      <div className="bg-white rounded-xl shadow-xl w-full max-w-md max-h-[90vh] overflow-y-auto">
         <div
           className={`flex items-center justify-between px-5 py-4 rounded-t-xl ${
             isWhatsApp
@@ -1216,7 +1216,7 @@ function PlayersListPage() {
       {/* ── DELETE CONFIRM MODAL ── */}
       {deleteConfirm.open && deleteConfirm.player && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-sm">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-sm max-h-[90vh] overflow-y-auto">
             {/* Header */}
             <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
               <div className="flex items-center gap-2">

@@ -549,7 +549,7 @@ function AdminUsers() {
         {/* ── DELETE MODAL ────────────────────────────────────────────────── */}
         {deleteTarget && (
           <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md animate-modal-in">
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md animate-modal-in max-h-[90vh] overflow-y-auto">
               <div className="border-b border-red-100 px-6 py-4 bg-red-50 rounded-t-2xl">
                 <div className="flex items-center gap-3">
                   <div className="p-2 bg-red-100 rounded-full">
