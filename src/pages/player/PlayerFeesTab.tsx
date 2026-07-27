@@ -1363,7 +1363,7 @@ function PlayerFeesTab() {
       {/* ── EDIT DATE MODAL ── */}
       {editDatePayment && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center">
-          <div className="bg-white rounded-t-2xl sm:rounded-xl shadow-xl w-full sm:max-w-sm">
+          <div className="bg-white rounded-t-2xl sm:rounded-xl shadow-xl w-full sm:max-w-sm max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between px-5 py-4 border-b bg-slate-50 rounded-t-2xl sm:rounded-t-xl">
               <div>
                 <h3 className="font-bold text-slate-800">Edit Payment Date</h3>
@@ -1411,7 +1411,7 @@ function PlayerFeesTab() {
       {/* ── EDIT DUE DATE MODAL ── */}
       {showEditDueDate && account && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center">
-          <div className="bg-white rounded-t-2xl sm:rounded-xl shadow-xl w-full sm:max-w-sm">
+          <div className="bg-white rounded-t-2xl sm:rounded-xl shadow-xl w-full sm:max-w-sm max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between px-5 py-4 border-b bg-slate-50 rounded-t-2xl sm:rounded-t-xl">
               <div>
                 <h3 className="font-bold text-slate-800">Edit Due Date</h3>
@@ -2050,7 +2050,7 @@ function InstallmentSection({
 
       {showCreatePlan && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center">
-          <div className="bg-white rounded-t-2xl sm:rounded-xl shadow-xl w-full sm:max-w-sm">
+          <div className="bg-white rounded-t-2xl sm:rounded-xl shadow-xl w-full sm:max-w-sm max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between px-5 py-4 border-b bg-slate-50 rounded-t-2xl sm:rounded-t-xl">
               <h3 className="font-bold text-slate-800">New Installment Plan</h3>
               <button onClick={() => setShowCreatePlan(false)}>
@@ -2137,7 +2137,7 @@ function InstallmentSection({
 
       {showDirectPay && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center">
-          <div className="bg-white rounded-t-2xl sm:rounded-xl shadow-xl w-full sm:max-w-sm">
+          <div className="bg-white rounded-t-2xl sm:rounded-xl shadow-xl w-full sm:max-w-sm max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between px-5 py-4 border-b bg-slate-50 rounded-t-2xl sm:rounded-t-xl">
               <div>
                 <h3 className="font-bold text-slate-800">Record Payment</h3>
@@ -2240,7 +2240,7 @@ function InstallmentSection({
 
       {showPayInstallment && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center">
-          <div className="bg-white rounded-t-2xl sm:rounded-xl shadow-xl w-full sm:max-w-sm">
+          <div className="bg-white rounded-t-2xl sm:rounded-xl shadow-xl w-full sm:max-w-sm max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between px-5 py-4 border-b bg-slate-50 rounded-t-2xl sm:rounded-t-xl">
               <div>
                 <h3 className="font-bold text-slate-800">Record Payment</h3>
@@ -2337,7 +2337,7 @@ function InstallmentSection({
 
       {editAmountPlan && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center">
-          <div className="bg-white rounded-t-2xl sm:rounded-xl shadow-xl w-full sm:max-w-sm">
+          <div className="bg-white rounded-t-2xl sm:rounded-xl shadow-xl w-full sm:max-w-sm max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between px-5 py-4 border-b bg-slate-50 rounded-t-2xl sm:rounded-t-xl">
               <div>
                 <h3 className="font-bold text-slate-800">Edit Plan Amount</h3>
