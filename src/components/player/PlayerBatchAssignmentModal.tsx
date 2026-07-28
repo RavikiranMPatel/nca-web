@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
+import ModalOverlay from "../ModalOverlay";
 import { Check, X, Save } from "lucide-react";
 import { toast } from "react-hot-toast";
 import {
@@ -92,7 +93,7 @@ function PlayerBatchAssignmentModal({
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+    <ModalOverlay className="bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
       <motion.div
         initial={{ opacity: 0, scale: 0.95 }}
         animate={{ opacity: 1, scale: 1 }}
@@ -223,7 +224,7 @@ function PlayerBatchAssignmentModal({
           </div>
         </div>
       </motion.div>
-    </div>
+    </ModalOverlay>
   );
 }
 

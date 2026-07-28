@@ -995,7 +995,7 @@ function PlayerFeesTab() {
 
       {/* ── MARK AS PAID MODAL ── */}
       {showPayModal && account && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center">
+        <div className="fixed inset-0 bg-black/50 z-[60] flex items-end sm:items-center justify-center">
           <div className="bg-white rounded-t-2xl sm:rounded-xl shadow-xl w-full sm:max-w-md max-h-[92vh] overflow-y-auto">
             <div className="px-5 py-4 border-b bg-gradient-to-r from-blue-600 to-blue-700 rounded-t-2xl sm:rounded-t-xl sticky top-0">
               <div className="flex items-center justify-between">
@@ -1185,7 +1185,7 @@ function PlayerFeesTab() {
       {/* ── RECEIPT VIEWER ── */}
       {showReceiptViewer && (
         <div
-          className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4"
+          className="fixed inset-0 bg-black/80 z-[60] flex items-center justify-center p-4"
           onClick={() => setShowReceiptViewer(null)}
         >
           <div
@@ -1246,7 +1246,7 @@ function PlayerFeesTab() {
 
       {/* ── SEND WHATSAPP RECEIPT MODAL ── */}
       {showSendReceiptModal && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center">
+        <div className="fixed inset-0 bg-black/50 z-[60] flex items-end sm:items-center justify-center">
           <div className="bg-white rounded-t-2xl sm:rounded-xl shadow-2xl w-full sm:max-w-sm">
             <div className="px-5 py-4 bg-gradient-to-br from-blue-700 to-blue-900 rounded-t-2xl sm:rounded-t-xl text-white text-center relative">
               <button
@@ -1362,7 +1362,7 @@ function PlayerFeesTab() {
 
       {/* ── EDIT DATE MODAL ── */}
       {editDatePayment && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center">
+        <div className="fixed inset-0 bg-black/50 z-[60] flex items-end sm:items-center justify-center">
           <div className="bg-white rounded-t-2xl sm:rounded-xl shadow-xl w-full sm:max-w-sm max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between px-5 py-4 border-b bg-slate-50 rounded-t-2xl sm:rounded-t-xl">
               <div>
@@ -1410,7 +1410,7 @@ function PlayerFeesTab() {
 
       {/* ── EDIT DUE DATE MODAL ── */}
       {showEditDueDate && account && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center">
+        <div className="fixed inset-0 bg-black/50 z-[60] flex items-end sm:items-center justify-center">
           <div className="bg-white rounded-t-2xl sm:rounded-xl shadow-xl w-full sm:max-w-sm max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between px-5 py-4 border-b bg-slate-50 rounded-t-2xl sm:rounded-t-xl">
               <div>
@@ -1574,7 +1574,7 @@ function RegFeeModal({
   onClose: () => void;
 }) {
   return (
-    <div className="fixed inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center">
+    <div className="fixed inset-0 bg-black/50 z-[60] flex items-end sm:items-center justify-center">
       <div className="bg-white rounded-t-2xl sm:rounded-xl shadow-xl w-full sm:max-w-sm">
         <div className="flex items-center justify-between px-5 py-4 border-b bg-slate-50 rounded-t-2xl sm:rounded-t-xl">
           <div>
@@ -2049,7 +2049,7 @@ function InstallmentSection({
       )}
 
       {showCreatePlan && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center">
+        <div className="fixed inset-0 bg-black/50 z-[60] flex items-end sm:items-center justify-center">
           <div className="bg-white rounded-t-2xl sm:rounded-xl shadow-xl w-full sm:max-w-sm max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between px-5 py-4 border-b bg-slate-50 rounded-t-2xl sm:rounded-t-xl">
               <h3 className="font-bold text-slate-800">New Installment Plan</h3>
@@ -2136,7 +2136,7 @@ function InstallmentSection({
       )}
 
       {showDirectPay && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center">
+        <div className="fixed inset-0 bg-black/50 z-[60] flex items-end sm:items-center justify-center">
           <div className="bg-white rounded-t-2xl sm:rounded-xl shadow-xl w-full sm:max-w-sm max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between px-5 py-4 border-b bg-slate-50 rounded-t-2xl sm:rounded-t-xl">
               <div>
@@ -2239,7 +2239,7 @@ function InstallmentSection({
       )}
 
       {showPayInstallment && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center">
+        <div className="fixed inset-0 bg-black/50 z-[60] flex items-end sm:items-center justify-center">
           <div className="bg-white rounded-t-2xl sm:rounded-xl shadow-xl w-full sm:max-w-sm max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between px-5 py-4 border-b bg-slate-50 rounded-t-2xl sm:rounded-t-xl">
               <div>
@@ -2336,7 +2336,7 @@ function InstallmentSection({
       )}
 
       {editAmountPlan && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center">
+        <div className="fixed inset-0 bg-black/50 z-[60] flex items-end sm:items-center justify-center">
           <div className="bg-white rounded-t-2xl sm:rounded-xl shadow-xl w-full sm:max-w-sm max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between px-5 py-4 border-b bg-slate-50 rounded-t-2xl sm:rounded-t-xl">
               <div>
@@ -2413,7 +2413,7 @@ function PlanSelectorModal({
   note?: string;
 }) {
   return (
-    <div className="fixed inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center">
+    <div className="fixed inset-0 bg-black/50 z-[60] flex items-end sm:items-center justify-center">
       <div className="bg-white rounded-t-2xl sm:rounded-xl shadow-xl w-full sm:max-w-lg max-h-[85vh] overflow-y-auto">
         <div className="px-5 py-4 border-b bg-slate-50 rounded-t-2xl sm:rounded-t-xl sticky top-0">
           <h3 className="font-bold text-base">{title}</h3>

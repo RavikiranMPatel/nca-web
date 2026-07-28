@@ -557,7 +557,7 @@ function PlayerMediaTab({ playerPublicId }: Props) {
 
       {/* ─── UPLOAD MODAL ─────────────────────────────── */}
       {showUpload && (
-        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-[60] p-4">
           <div className="bg-white rounded-2xl p-6 w-full max-w-md shadow-2xl max-h-[85vh] overflow-y-auto">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-bold text-slate-900">Add Media</h3>
@@ -786,7 +786,7 @@ function PlayerMediaTab({ playerPublicId }: Props) {
 
       {lightboxMedia && lightboxIndex !== null && (
         <div
-          className="fixed inset-0 bg-black/90 flex flex-col items-center justify-center z-50"
+          className="fixed inset-0 bg-black/90 flex flex-col items-center justify-center z-[60]"
           onClick={() => setLightboxIndex(null)}
         >
           {/* Close — always visible, top-right of screen */}
@@ -908,7 +908,7 @@ function PlayerMediaTab({ playerPublicId }: Props) {
 
       {/* ─── DELETE CONFIRMATION ───────────────────────── */}
       {deleteTarget && (
-        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-[60] p-4">
           <div className="bg-white rounded-xl p-6 w-full max-w-sm shadow-2xl max-h-[90vh] overflow-y-auto">
             <div className="text-center">
               <div className="text-3xl mb-2">🗑️</div>

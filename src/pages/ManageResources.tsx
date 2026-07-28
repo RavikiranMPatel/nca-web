@@ -233,7 +233,7 @@ function ManageResources() {
 
       {/* ── ADD RESOURCE MODAL ── */}
       {showModal && (
-        <div className="fixed inset-0 bg-black/40 flex items-end sm:items-center justify-center z-50">
+        <div className="fixed inset-0 bg-black/40 flex items-end sm:items-center justify-center z-[60]">
           <div className="bg-white rounded-t-2xl sm:rounded-xl shadow-xl w-full sm:max-w-md max-h-[92vh] overflow-y-auto">
             <div className="flex items-center justify-between px-5 py-4 border-b sticky top-0 bg-white rounded-t-2xl sm:rounded-t-xl">
               <h2 className="text-base font-bold">Add New Resource</h2>
@@ -343,7 +343,7 @@ function ManageResources() {
 
       {/* ── EDIT RESOURCE MODAL ── */}
       {editingResource && (
-        <div className="fixed inset-0 bg-black/40 flex items-end sm:items-center justify-center z-50">
+        <div className="fixed inset-0 bg-black/40 flex items-end sm:items-center justify-center z-[60]">
           <div className="bg-white rounded-t-2xl sm:rounded-xl shadow-xl w-full sm:max-w-md max-h-[92vh] overflow-y-auto">
             <div className="flex items-center justify-between px-5 py-4 border-b sticky top-0 bg-white rounded-t-2xl sm:rounded-t-xl">
               <h2 className="text-base font-bold">

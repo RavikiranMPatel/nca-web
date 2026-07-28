@@ -417,7 +417,7 @@ function RegisterPlayer() {
 
       {/* SUCCESS DIALOG */}
       {showSuccessDialog && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-[60] p-4">
           <div className="bg-white rounded-lg p-6 w-full max-w-md shadow-xl max-h-[90vh] overflow-y-auto">
             <div className="text-center">
               <div className="text-6xl mb-4">✅</div>
@@ -452,7 +452,7 @@ function RegisterPlayer() {
 
       {/* ERROR DIALOG */}
       {showErrorDialog && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-[60] p-4">
           <div className="bg-white rounded-lg p-6 w-full max-w-md shadow-xl max-h-[90vh] overflow-y-auto">
             <div className="text-center">
               <div className="text-6xl mb-4">❌</div>
@@ -480,7 +480,7 @@ function RegisterPlayer() {
 
       {/* CROPPER MODAL */}
       {showCropper && (
-        <div className="fixed inset-0 bg-black/90 flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 bg-black/90 flex items-center justify-center z-[60] p-4">
           <div className="bg-white rounded-lg w-full max-w-3xl max-h-[90vh] overflow-hidden shadow-xl flex flex-col">
             <div className="p-4 md:p-6 border-b flex-shrink-0">
               <h3 className="text-lg md:text-xl font-semibold">Adjust Photo</h3>

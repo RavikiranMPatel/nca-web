@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { X, Save, DollarSign, CreditCard } from "lucide-react";
+import ModalOverlay from "../ModalOverlay";
 import { toast } from "react-hot-toast";
 import { summerCampService } from "../../api/summerCampService";
 import type {
@@ -81,9 +82,9 @@ function PaymentRecordModal({
   };
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm"
-      onClick={onClose}
+    <ModalOverlay
+      className="flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm"
+      onClose={onClose}
     >
       <div
         className="bg-white rounded-xl shadow-2xl max-w-md w-full max-h-[90vh] overflow-y-auto"
@@ -241,7 +242,7 @@ function PaymentRecordModal({
           </div>
         </form>
       </div>
-    </div>
+    </ModalOverlay>
   );
 }
 

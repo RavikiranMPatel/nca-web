@@ -1540,7 +1540,7 @@ export default function LiveScorerPage() {
 
       {/* Wide picker */}
       {pendingExtra === "WIDE" && (
-        <div className="fixed inset-0 z-50 bg-black/70 flex items-end">
+        <div className="fixed inset-0 z-[60] bg-black/70 flex items-end">
           <div className="w-full bg-gray-900 rounded-t-2xl p-5 max-h-[90vh] overflow-y-auto">
             <div className="w-10 h-1 bg-gray-600 rounded-full mx-auto mb-3" />
             <h3 className="text-base font-semibold text-white text-center mb-1">
@@ -1574,7 +1574,7 @@ export default function LiveScorerPage() {
 
       {/* NB picker step 1 */}
       {pendingExtra === "NO_BALL_RUNS" && nbPickerRuns === null && (
-        <div className="fixed inset-0 z-50 bg-black/70 flex items-end">
+        <div className="fixed inset-0 z-[60] bg-black/70 flex items-end">
           <div className="w-full bg-gray-900 rounded-t-2xl p-5 max-h-[90vh] overflow-y-auto">
             <div className="w-10 h-1 bg-gray-600 rounded-full mx-auto mb-3" />
             <h3 className="text-base font-semibold text-white text-center mb-1">
@@ -1617,7 +1617,7 @@ export default function LiveScorerPage() {
 
       {/* NB picker step 2 */}
       {showNbSubPicker && nbPickerRuns !== null && (
-        <div className="fixed inset-0 z-50 bg-black/70 flex items-end">
+        <div className="fixed inset-0 z-[60] bg-black/70 flex items-end">
           <div className="w-full bg-gray-900 rounded-t-2xl p-5 max-h-[90vh] overflow-y-auto">
             <div className="w-10 h-1 bg-gray-600 rounded-full mx-auto mb-3" />
             <h3 className="text-base font-semibold text-white text-center mb-1">
@@ -1677,7 +1677,7 @@ export default function LiveScorerPage() {
 
       {/* Bye picker */}
       {pendingExtra === "BYE" && (
-        <div className="fixed inset-0 z-50 bg-black/70 flex items-end">
+        <div className="fixed inset-0 z-[60] bg-black/70 flex items-end">
           <div className="w-full bg-gray-900 rounded-t-2xl p-5 max-h-[90vh] overflow-y-auto">
             <div className="w-10 h-1 bg-gray-600 rounded-full mx-auto mb-3" />
             <h3 className="text-base font-semibold text-white text-center mb-4">
@@ -1710,7 +1710,7 @@ export default function LiveScorerPage() {
 
       {/* Leg bye picker */}
       {pendingExtra === "LEG_BYE" && (
-        <div className="fixed inset-0 z-50 bg-black/70 flex items-end">
+        <div className="fixed inset-0 z-[60] bg-black/70 flex items-end">
           <div className="w-full bg-gray-900 rounded-t-2xl p-5 max-h-[90vh] overflow-y-auto">
             <div className="w-10 h-1 bg-gray-600 rounded-full mx-auto mb-3" />
             <h3 className="text-base font-semibold text-white text-center mb-4">
@@ -1743,7 +1743,7 @@ export default function LiveScorerPage() {
 
       {/* 5/7 picker */}
       {showFiveSevenPicker && (
-        <div className="fixed inset-0 z-50 bg-black/70 flex items-end">
+        <div className="fixed inset-0 z-[60] bg-black/70 flex items-end">
           <div className="w-full bg-gray-900 rounded-t-2xl p-5 max-h-[90vh] overflow-y-auto">
             <div className="w-10 h-1 bg-gray-600 rounded-full mx-auto mb-3" />
             <h3 className="text-base font-semibold text-white text-center mb-4">
@@ -1776,7 +1776,7 @@ export default function LiveScorerPage() {
 
       {/* Penalty modal */}
       {showPenalty && (
-        <div className="fixed inset-0 z-50 bg-black/70 flex items-end">
+        <div className="fixed inset-0 z-[60] bg-black/70 flex items-end">
           <div className="w-full bg-gray-900 rounded-t-2xl p-5 max-h-[90vh] overflow-y-auto">
             <div className="w-10 h-1 bg-gray-600 rounded-full mx-auto mb-4" />
             <h3 className="text-sm font-semibold text-white text-center mb-1">
@@ -1908,7 +1908,7 @@ export default function LiveScorerPage() {
           });
 
           return (
-            <div className="fixed inset-0 z-50 bg-black/70 flex items-end">
+            <div className="fixed inset-0 z-[60] bg-black/70 flex items-end">
               <div className="w-full bg-gray-900 rounded-t-2xl max-h-[80vh] overflow-hidden flex flex-col">
                 <div className="p-4 border-b border-gray-800">
                   <div className="w-10 h-1 bg-gray-600 rounded-full mx-auto mb-3" />
@@ -2028,7 +2028,7 @@ export default function LiveScorerPage() {
 
       {/* Wicket modal */}
       {showWicket && (
-        <div className="fixed inset-0 z-50 bg-black/80 flex items-end">
+        <div className="fixed inset-0 z-[60] bg-black/80 flex items-end">
           <div className="w-full bg-gray-900 rounded-t-2xl max-h-[90vh] overflow-y-auto">
             <div className="p-4 border-b border-gray-800">
               <div className="w-10 h-1 bg-gray-700 rounded-full mx-auto mb-3" />
@@ -2197,7 +2197,7 @@ export default function LiveScorerPage() {
 
       {/* Over summary */}
       {showOverSummary && (
-        <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-6">
+        <div className="fixed inset-0 z-[60] bg-black/80 flex items-center justify-center p-6">
           <div className="w-full max-w-sm bg-gray-900 rounded-2xl border border-gray-700 p-5 max-h-[90vh] overflow-y-auto">
             <div className="text-center mb-4">
               <div className="text-3xl mb-1">🏏</div>
@@ -2228,7 +2228,7 @@ export default function LiveScorerPage() {
 
       {/* Close innings */}
       {showCloseInnings && (
-        <div className="fixed inset-0 z-50 bg-black/80 flex items-end">
+        <div className="fixed inset-0 z-[60] bg-black/80 flex items-end">
           <div className="w-full bg-gray-900 rounded-t-2xl p-5 border-t border-gray-800">
             <div className="w-10 h-1 bg-gray-700 rounded-full mx-auto mb-4" />
             <h3 className="text-sm font-semibold text-white text-center mb-1">
@@ -2277,7 +2277,7 @@ export default function LiveScorerPage() {
 
       {/* Record result */}
       {showResult && (
-        <div className="fixed inset-0 z-50 bg-black/80 flex items-end">
+        <div className="fixed inset-0 z-[60] bg-black/80 flex items-end">
           <div className="w-full bg-gray-900 rounded-t-2xl p-5 max-h-[80vh] overflow-y-auto border-t border-gray-800">
             <div className="w-10 h-1 bg-gray-700 rounded-full mx-auto mb-4" />
             <h3 className="text-sm font-semibold text-white text-center mb-3">

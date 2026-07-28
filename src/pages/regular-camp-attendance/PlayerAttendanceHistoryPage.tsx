@@ -452,7 +452,7 @@ function PlayerAttendanceHistoryPage() {
       {/* ── PHOTO LIGHTBOX ── */}
       {lightboxUrl && (
         <div
-          className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4"
+          className="fixed inset-0 bg-black/80 flex items-center justify-center z-[60] p-4"
           onClick={() => setLightboxUrl(null)}
         >
           <div className="relative max-w-sm w-full" onClick={(e) => e.stopPropagation()}>

@@ -323,7 +323,7 @@ const WagonWheelModal = ({
 
   return (
     <div
-      className="fixed inset-0 z-50 bg-black/80 flex items-end md:items-center justify-center"
+      className="fixed inset-0 z-[60] bg-black/80 flex items-end md:items-center justify-center"
       onClick={onClose}
     >
       <div

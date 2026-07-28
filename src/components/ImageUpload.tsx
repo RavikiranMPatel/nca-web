@@ -287,7 +287,7 @@ function ImageUpload({
 
       {/* 🆕 CHOICE MODAL: Crop or Upload Full */}
       {showCropChoice && pendingFile && (
-        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-[60] p-4">
           <div className="bg-white rounded-xl max-w-md w-full p-6 max-h-[90vh] overflow-y-auto">
             <h3 className="text-lg font-bold mb-4">
               How do you want to upload this image?
@@ -353,7 +353,7 @@ function ImageUpload({
 
       {/* 🔥 CROP MODAL (when user chooses to crop) */}
       {selectedImage && uploadType === "slider" && (
-        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-[60] p-4">
           <div className="bg-white p-6 rounded-xl w-[90%] max-w-3xl max-h-[90vh] overflow-y-auto">
             <h3 className="text-lg font-bold mb-4">Crop Your Image</h3>
 

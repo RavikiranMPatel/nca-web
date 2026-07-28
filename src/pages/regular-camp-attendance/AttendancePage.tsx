@@ -622,7 +622,7 @@ function AttendancePage() {
       />
 
       {showSuccessDialog && selectedBatch && (
-        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-[60] p-4">
           <div className="bg-white rounded-2xl p-7 w-full max-w-xs shadow-2xl max-h-[90vh] overflow-y-auto">
             <div className="text-center space-y-3">
               <div className="mx-auto w-14 h-14 bg-emerald-100 rounded-full flex items-center justify-center">
@@ -641,7 +641,7 @@ function AttendancePage() {
       {/* ── PHOTO LIGHTBOX ── */}
       {lightbox && (
         <div
-          className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4"
+          className="fixed inset-0 bg-black/80 flex items-center justify-center z-[60] p-4"
           onClick={() => setLightbox(null)}
         >
           <div className="relative max-w-sm w-full" onClick={(e) => e.stopPropagation()}>

@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import Button from "./Button";
+import ModalOverlay from "./ModalOverlay";
 
 type Props = {
   open: boolean;
@@ -26,9 +27,9 @@ function LoginPromptModal({ open, message, onConfirm, onCancel }: Props) {
   if (!open) return null;
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
-      onClick={onCancel} // 👈 click outside closes modal
+    <ModalOverlay
+      className="flex items-center justify-center bg-black/40"
+      onClose={onCancel}
     >
       {/* MODAL */}
       <div
@@ -58,7 +59,7 @@ function LoginPromptModal({ open, message, onConfirm, onCancel }: Props) {
           </Button>
         </div>
       </div>
-    </div>
+    </ModalOverlay>
   );
 }
 

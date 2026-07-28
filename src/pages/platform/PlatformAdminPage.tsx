@@ -615,7 +615,7 @@ export default function PlatformAdminPage() {
 
       {/* Deactivate */}
       {deactivateModal.open && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 px-4">
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-[60] px-4">
           <div className="bg-white rounded-2xl shadow-xl p-6 w-full max-w-sm max-h-[90vh] overflow-y-auto">
             <h3 className="font-semibold text-gray-900 mb-1">Deactivate academy?</h3>
             <p className="text-sm text-gray-500 mb-4">
@@ -648,7 +648,7 @@ export default function PlatformAdminPage() {
 
       {/* Mark as Paid */}
       {markPaidModal.open && markPaidModal.billing && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 px-4">
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-[60] px-4">
           <div className="bg-white rounded-2xl shadow-xl p-6 w-full max-w-sm max-h-[90vh] overflow-y-auto">
             <h3 className="font-semibold text-gray-900 mb-1">Mark as paid</h3>
             <p className="text-sm text-gray-500 mb-1">
@@ -691,7 +691,7 @@ export default function PlatformAdminPage() {
 
       {/* Edit Pricing */}
       {pricingModal.open && pricingModal.billing && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 px-4">
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-[60] px-4">
           <div className="bg-white rounded-2xl shadow-xl p-6 w-full max-w-md max-h-[90vh] overflow-y-auto">
             <h3 className="font-semibold text-gray-900 mb-1">Edit Pricing</h3>
             <p className="text-sm text-gray-500 mb-1">{pricingModal.billing.academyName}</p>
@@ -756,7 +756,7 @@ export default function PlatformAdminPage() {
 
       {/* Payment History */}
       {historyModal.open && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 px-4">
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-[60] px-4">
           <div className="bg-white rounded-2xl shadow-xl p-6 w-full max-w-lg max-h-[80vh] flex flex-col">
             <div className="flex items-center justify-between mb-4">
               <div>

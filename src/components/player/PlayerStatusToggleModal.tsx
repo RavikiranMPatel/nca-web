@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { AlertTriangle, Power } from "lucide-react";
 import Button from ".././Button";
+import ModalOverlay from "../ModalOverlay";
 type Props = {
   open: boolean;
   playerName: string;
@@ -26,7 +27,7 @@ function PlayerStatusToggleModal({
   const actionColor = currentStatus ? "red" : "green";
 
   return (
-    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+    <ModalOverlay className="bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
       <div className="bg-white rounded-xl p-6 w-full max-w-md shadow-2xl animate-modal-in max-h-[90vh] overflow-y-auto">
         <div className="space-y-4">
           {/* Icon & Title */}
@@ -123,7 +124,7 @@ function PlayerStatusToggleModal({
           </div>
         </div>
       </div>
-    </div>
+    </ModalOverlay>
   );
 }
 
