@@ -991,7 +991,7 @@ function PlayerFeesTab() {
       </div>
 
       {/* ── INSTALLMENT PLANS ── */}
-      <InstallmentSection playerPublicId={playerPublicId!} feePlans={plans} />
+      <InstallmentSection playerPublicId={playerPublicId!} feePlans={plans} onPaymentComplete={loadAll} />
 
       {/* ── MARK AS PAID MODAL ── */}
       {showPayModal && account && (
@@ -1674,9 +1674,11 @@ type Installment = {
 function InstallmentSection({
   playerPublicId,
   feePlans,
+  onPaymentComplete,
 }: {
   playerPublicId: string;
   feePlans: FeePlan[];
+  onPaymentComplete?: () => void;
 }) {
   const [plans, setPlans] = useState<InstallmentPlan[]>([]);
   const [loading, setLoading] = useState(true);
@@ -1776,6 +1778,7 @@ function InstallmentSection({
         referenceNumber: "",
       });
       loadPlans();
+      onPaymentComplete?.();
     } catch (err: any) {
       toast.error(err.response?.data?.message || "Failed to record payment");
     } finally {
@@ -1798,6 +1801,7 @@ function InstallmentSection({
       setShowPayInstallment(null);
       setPayInstForm({ amount: "", paymentMode: "CASH", referenceNumber: "" });
       loadPlans();
+      onPaymentComplete?.();
     } catch (err: any) {
       toast.error(err.response?.data?.message || "Failed to record payment");
     } finally {
