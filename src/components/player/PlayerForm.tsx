@@ -1,5 +1,7 @@
 import { Camera, Upload, X } from "lucide-react";
 import { useEffect, useState } from "react";
+import { useTenant } from "../../context/TenantContext";
+import { formatCurrency } from "../../utils/formatCurrency";
 import Button from "./../Button";
 import {
   fetchActiveBatches,
@@ -119,6 +121,9 @@ function PlayerForm({
   playerRole = "ALL_ROUNDER",
   onPlayerRoleChange,
 }: Props) {
+  const { tenant } = useTenant();
+  const currencyCode = tenant?.currencyCode ?? "INR";
+  const fmt = (n: number) => formatCurrency(n, currencyCode);
   const [availableBatches, setAvailableBatches] = useState<Batch[]>([]);
   const [loadingBatches, setLoadingBatches] = useState(true);
 
@@ -425,9 +430,9 @@ function PlayerForm({
                   const finalAmount = plan.amount - (plan.discountAmount || 0);
                   return (
                     <option key={plan.publicId} value={plan.publicId}>
-                      {plan.name} — ₹{finalAmount.toLocaleString("en-IN")}
+                      {plan.name} — {fmt(finalAmount)}
                       {plan.discountAmount > 0
-                        ? ` (₹${plan.discountAmount.toLocaleString("en-IN")} off)`
+                        ? ` (${fmt(plan.discountAmount)} off)`
                         : ""}
                     </option>
                   );

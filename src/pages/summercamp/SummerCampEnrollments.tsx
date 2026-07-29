@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
+import { useTenant } from "../../context/TenantContext";
+import { formatCurrency } from "../../utils/formatCurrency";
 import { motion } from "framer-motion";
 import { AlertTriangle } from "lucide-react";
 import {
@@ -26,6 +28,9 @@ import PaymentRecordModal from "../../components/summercamp/PaymentRecordModal";
 function SummerCampEnrollments() {
   const navigate = useNavigate();
   const { campId } = useParams<{ campId: string }>();
+  const { tenant } = useTenant();
+  const currencyCode = tenant?.currencyCode ?? "INR";
+  const fmt = (n: number) => formatCurrency(n, currencyCode);
 
   const [camp, setCamp] = useState<SummerCamp | null>(null);
   const [enrollments, setEnrollments] = useState<SummerCampEnrollment[]>([]);
@@ -229,7 +234,7 @@ function SummerCampEnrollments() {
               Revenue
             </p>
             <p className="text-3xl font-bold text-purple-700">
-              ₹{totalRevenue.toLocaleString()}
+              {fmt(totalRevenue)}
             </p>
           </motion.div>
         </div>
@@ -392,13 +397,13 @@ function SummerCampEnrollments() {
                       <div className="flex items-center justify-between pt-2 border-t">
                         <span className="text-slate-600">Paid:</span>
                         <span className="font-bold text-emerald-700">
-                          ₹{enrollment.paidAmount}
+                          {fmt(enrollment.paidAmount)}
                         </span>
                       </div>
                       <div className="flex items-center justify-between">
                         <span className="text-slate-600">Balance:</span>
                         <span className="font-bold text-orange-700">
-                          ₹{enrollment.balanceAmount}
+                          {fmt(enrollment.balanceAmount)}
                         </span>
                       </div>
                     </div>
@@ -510,10 +515,10 @@ function SummerCampEnrollments() {
                           <td className="px-4 py-3 text-right">
                             <div className="text-sm">
                               <p className="font-semibold text-emerald-700">
-                                ₹{enrollment.paidAmount}
+                                {fmt(enrollment.paidAmount)}
                               </p>
                               <p className="text-xs text-slate-500">
-                                / ₹{enrollment.totalFee}
+                                / {fmt(enrollment.totalFee)}
                               </p>
                             </div>
                           </td>

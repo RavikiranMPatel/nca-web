@@ -3,6 +3,8 @@ import { useNavigate } from "react-router-dom";
 import { ArrowLeft, Save, Plus, Trash2, Clock, GitBranch } from "lucide-react";
 import { toast } from "react-hot-toast";
 import api from "../../api/axios";
+import { useTenant } from "../../context/TenantContext";
+import { formatCurrency, getCurrencySymbol } from "../../utils/formatCurrency";
 import { summerCampService } from "../../api/summerCampService";
 import { createCampBatch } from "../../api/summerCampBatchService";
 import { getAdminBranches } from "../../api/branch.api";
@@ -28,6 +30,10 @@ type CampBatchForm = {
 
 function SummerCampCreate() {
   const navigate = useNavigate();
+  const { tenant } = useTenant();
+  const currencyCode = tenant?.currencyCode ?? "INR";
+  const sym = getCurrencySymbol(currencyCode);
+  const fmt = (n: number) => formatCurrency(n, currencyCode);
   const [loading, setLoading] = useState(false);
   const [campTypes, setCampTypes] = useState<string[]>([]);
   const [loadingTypes, setLoadingTypes] = useState(true);
@@ -592,7 +598,7 @@ function SummerCampCreate() {
             <div className="text-center py-8 bg-slate-50 rounded-xl border-2 border-dashed border-slate-200">
               <p className="text-slate-500 text-sm">No fee rules configured.</p>
               <p className="text-xs text-slate-400 mt-1">
-                Example: 1 session = ₹5,000 | 2 sessions = ₹7,500
+                Example: 1 session = {fmt(5000)} | 2 sessions = {fmt(7500)}
               </p>
             </div>
           ) : (
@@ -621,7 +627,7 @@ function SummerCampCreate() {
                     </div>
                     <div>
                       <label className="block text-xs font-medium text-slate-600 mb-1">
-                        Fee Amount (₹)
+                        Fee Amount ({sym})
                       </label>
                       <input
                         type="number"
@@ -649,7 +655,7 @@ function SummerCampCreate() {
                     <p className="text-xs text-slate-500 mt-2">
                       {`${rule.batchCount} ${
                         parseInt(rule.batchCount) === 1 ? "session" : "sessions"
-                      } per day → ₹${parseFloat(rule.feeAmount).toLocaleString()}`}
+                      } per day → ${fmt(parseFloat(rule.feeAmount))}`}
                     </p>
                   )}
                 </div>

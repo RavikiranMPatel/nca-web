@@ -21,6 +21,7 @@ import publicApi from "../api/publicApi";
 import { getImageUrl } from "../utils/imageUrl";
 import ContactForm from "../components/ContactForm";
 import type { PublicClub, ClubSeasonStandingData } from "../types/club";
+import type { PublicRepresentativeHonor } from "../api/representativeHonorService";
 import { Swiper, SwiperSlide } from "swiper/react";
 import { Autoplay, Pagination, Navigation } from "swiper/modules";
 import "swiper/css";
@@ -432,6 +433,99 @@ function SectionHeading({
   );
 }
 
+const LEVEL_DISPLAY: Record<string, string> = {
+  NATIONAL: "National",
+  STATE: "State",
+  ZONE: "Zone",
+  DISTRICT: "District",
+  OTHER: "Other",
+};
+
+const LEVEL_BADGE: Record<string, string> = {
+  NATIONAL: "bg-yellow-100 text-yellow-800 border border-yellow-300",
+  STATE: "bg-blue-100 text-blue-800 border border-blue-300",
+  ZONE: "bg-purple-100 text-purple-800 border border-purple-300",
+  DISTRICT: "bg-green-100 text-green-800 border border-green-300",
+  OTHER: "bg-gray-100 text-gray-700 border border-gray-300",
+};
+
+function RepresentativeHonorsSection({
+  honors,
+  primaryColor,
+  getCardShadow,
+  getCardStyle,
+}: {
+  honors: PublicRepresentativeHonor[];
+  primaryColor: string;
+  getCardShadow: () => string;
+  getCardStyle: () => object;
+}) {
+  return (
+    <section id="representative-honors" className="py-10 md:py-16 px-4 bg-white">
+      <div className="max-w-6xl mx-auto">
+        <SectionHeading
+          title="Our Representative Players"
+          subtitle="Academy players selected for external representative teams"
+          primaryColor={primaryColor}
+          eyebrow="REPRESENTATIVE HONORS"
+        />
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-5">
+          {honors.map((h) => (
+            <div
+              key={h.publicId}
+              className={`bg-white flex flex-col overflow-hidden ${getCardShadow()}`}
+              style={getCardStyle()}
+            >
+              <div
+                className="h-1.5 w-full flex-shrink-0"
+                style={{ backgroundColor: primaryColor }}
+              />
+              <div className="p-5 flex flex-col items-center text-center flex-1">
+                <div className="w-20 h-20 rounded-full overflow-hidden bg-gray-100 mb-3 flex-shrink-0">
+                  {h.playerPhotoUrl ? (
+                    <img
+                      src={getImageUrl(h.playerPhotoUrl)}
+                      alt={h.playerDisplayName ?? "Player"}
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    <div
+                      className="w-full h-full flex items-center justify-center text-2xl font-bold text-white"
+                      style={{ backgroundColor: primaryColor }}
+                    >
+                      {h.playerDisplayName?.charAt(0) ?? "?"}
+                    </div>
+                  )}
+                </div>
+                <h3 className="font-bold text-gray-900 text-sm leading-tight mb-1">
+                  {h.playerDisplayName}
+                </h3>
+                <span
+                  className={`text-xs px-2 py-0.5 rounded-full font-semibold mb-2 ${
+                    LEVEL_BADGE[h.level] ?? LEVEL_BADGE.OTHER
+                  }`}
+                >
+                  {LEVEL_DISPLAY[h.level] ?? h.level}
+                </span>
+                <p className="text-sm font-medium text-gray-700 mb-1">{h.teamName}</p>
+                <div className="flex items-center gap-2 text-xs text-gray-400 flex-wrap justify-center">
+                  {h.ageGroup && <span>{h.ageGroup}</span>}
+                  {h.seasonYear && <span>{h.seasonYear}</span>}
+                </div>
+                {h.description && (
+                  <p className="text-xs text-gray-500 mt-2 leading-relaxed line-clamp-2">
+                    {h.description}
+                  </p>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
 const FONT_PAIRINGS: Record<string, { heading: string; body: string; googleUrl: string }> = {
   modern:  { heading: "'Inter', sans-serif",           body: "'Inter', sans-serif",     googleUrl: "Inter:wght@400;600;700;900" },
   sporty:  { heading: "'Oswald', sans-serif",          body: "'Open+Sans', sans-serif", googleUrl: "Oswald:wght@600;700&family=Open+Sans:wght@400;600" },
@@ -463,6 +557,7 @@ function Home() {
     Array<{ sectionType: string; displayOrder: number }>
   >([]);
   const [clubs, setClubs] = useState<PublicClub[]>([]);
+  const [representativeHonors, setRepresentativeHonors] = useState<PublicRepresentativeHonor[]>([]);
   const [publicStats, setPublicStats] = useState<{
     totalPlayers: number;
     activePlayers: number;
@@ -630,6 +725,7 @@ function Home() {
         topPerformersRes,
         homepageSectionsRes,
         clubsRes,
+        representativeHonorsRes,
       ] = await Promise.allSettled([
         publicApi.get("/settings/public"),
         publicApi.get("/cms/gallery"),
@@ -642,6 +738,7 @@ function Home() {
         publicApi.get("/public/cricket-stats/top-performers?period=alltime"),
         publicApi.get("/public/homepage-sections"),
         publicApi.get("/public/clubs"),
+        publicApi.get("/public/representative-honors"),
       ]);
 
       if (settingsRes.status === "fulfilled")
@@ -668,6 +765,8 @@ function Home() {
         setHomepageSections(homepageSectionsRes.value.data);
       if (clubsRes.status === "fulfilled")
         setClubs(clubsRes.value.data);
+      if (representativeHonorsRes.status === "fulfilled")
+        setRepresentativeHonors(representativeHonorsRes.value.data);
       setLoading(false);
     };
     loadAllData();
@@ -1942,6 +2041,16 @@ function Home() {
             return null;
         }
       })}
+
+      {/* ── REPRESENTATIVE HONORS ── */}
+      {representativeHonors.length > 0 && (
+        <RepresentativeHonorsSection
+          honors={representativeHonors}
+          primaryColor={primaryColor}
+          getCardShadow={getCardShadow}
+          getCardStyle={getCardStyle}
+        />
+      )}
 
       {/* ── YOUTUBE (not CMS-managed, fixed position after CMS sections) ── */}
       {youtubeEnabled && youtubeVideos.length > 0 && (

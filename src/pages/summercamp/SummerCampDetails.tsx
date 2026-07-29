@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
+import { useTenant } from "../../context/TenantContext";
+import { formatCurrency } from "../../utils/formatCurrency";
 import { motion } from "framer-motion";
 import {
   ArrowLeft,
@@ -29,6 +31,9 @@ import type {
 function SummerCampDetails() {
   const navigate = useNavigate();
   const { campId } = useParams<{ campId: string }>();
+  const { tenant } = useTenant();
+  const currencyCode = tenant?.currencyCode ?? "INR";
+  const fmt = (n: number) => formatCurrency(n, currencyCode);
   const [camp, setCamp] = useState<SummerCamp | null>(null);
   const [feeRules, setFeeRules] = useState<SummerCampFeeRule[]>([]);
   const [stats, setStats] = useState<SummerCampStats | null>(null);
@@ -466,7 +471,7 @@ function SummerCampDetails() {
                     </p>
                   </div>
                   <p className="text-lg font-bold text-blue-600">
-                    ₹{rule.feeAmount.toLocaleString()}
+                    {fmt(rule.feeAmount)}
                   </p>
                 </div>
               ))}
@@ -485,7 +490,7 @@ function SummerCampDetails() {
                   Total Revenue
                 </p>
                 <p className="text-2xl font-bold text-emerald-700">
-                  ₹{stats.totalRevenue.toFixed(2)}
+                  {fmt(stats.totalRevenue)}
                 </p>
               </div>
 
@@ -494,7 +499,7 @@ function SummerCampDetails() {
                   Pending Revenue
                 </p>
                 <p className="text-2xl font-bold text-orange-700">
-                  ₹{stats.pendingRevenue.toFixed(2)}
+                  {fmt(stats.pendingRevenue)}
                 </p>
               </div>
             </div>

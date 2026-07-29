@@ -1,5 +1,7 @@
 import { useState } from "react";
 import { X, Save, DollarSign, CreditCard } from "lucide-react";
+import { useTenant } from "../../context/TenantContext";
+import { formatCurrency, getCurrencySymbol } from "../../utils/formatCurrency";
 import ModalOverlay from "../ModalOverlay";
 import { toast } from "react-hot-toast";
 import { summerCampService } from "../../api/summerCampService";
@@ -21,6 +23,10 @@ function PaymentRecordModal({
   onClose,
   onSuccess,
 }: PaymentRecordModalProps) {
+  const { tenant } = useTenant();
+  const currencyCode = tenant?.currencyCode ?? "INR";
+  const sym = getCurrencySymbol(currencyCode);
+  const fmt = (n: number) => formatCurrency(n, currencyCode, { decimals: 2 });
   const [loading, setLoading] = useState(false);
 
   const safeTotal = enrollment.totalFee ?? 0;
@@ -116,20 +122,20 @@ function PaymentRecordModal({
           <div className="space-y-2">
             <div className="flex justify-between text-sm">
               <span>Total Fee:</span>
-              <span className="font-semibold">₹{safeTotal.toFixed(2)}</span>
+              <span className="font-semibold">{fmt(safeTotal)}</span>
             </div>
 
             <div className="flex justify-between text-sm">
               <span>Already Paid:</span>
               <span className="font-semibold text-emerald-700">
-                ₹{safePaid.toFixed(2)}
+                {fmt(safePaid)}
               </span>
             </div>
 
             <div className="flex justify-between text-base pt-2 border-t">
               <span className="font-semibold">Balance Due:</span>
               <span className="font-bold text-orange-700 text-lg">
-                ₹{safeBalance.toFixed(2)}
+                {fmt(safeBalance)}
               </span>
             </div>
           </div>
@@ -140,7 +146,7 @@ function PaymentRecordModal({
           {/* Amount */}
           <div>
             <label className="block text-sm font-medium mb-2">
-              Payment Amount (₹)
+              Payment Amount ({sym})
             </label>
 
             <div className="relative">
@@ -171,7 +177,7 @@ function PaymentRecordModal({
               }
               className="mt-2 text-sm text-blue-600 font-medium"
             >
-              Pay full balance ₹{safeBalance.toFixed(2)}
+              Pay full balance {fmt(safeBalance)}
             </button>
           </div>
 

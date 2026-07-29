@@ -70,7 +70,7 @@ type TabType =
   | "instagram"
 
 type NavItemDef = {
-  key: TabType | "homepage-sections" | "clubs";
+  key: TabType | "homepage-sections" | "clubs" | "representative-honors";
   label: string;
   icon: React.ElementType;
   external?: boolean;
@@ -126,6 +126,13 @@ const NAV_GROUPS: NavGroupDef[] = [
         external: true,
         path: "/admin/clubs",
       },
+      {
+        key: "representative-honors",
+        label: "Representative Honors",
+        icon: Award,
+        external: true,
+        path: "/admin/representative-honors",
+      },
     ],
   },
 ];
@@ -175,6 +182,7 @@ function AcademySettings() {
   const [previewId, setPreviewId] = useState("");
 
   // Form state (controlled inputs)
+  const [currencyCode, setCurrencyCode] = useState("INR");
   const [academyName, setAcademyName] = useState("");
   const [academyCode, setAcademyCode] = useState("");
   const [adminPhone, setAdminPhone] = useState("");
@@ -233,6 +241,7 @@ function AcademySettings() {
   const loadSettings = async () => {
     try {
       const response = await api.get<SettingsMap>("/admin/settings");
+      setCurrencyCode(response.data.CURRENCY_CODE || "INR");
       setAcademyName(response.data.ACADEMY_NAME || "");
       setAcademyCode(response.data.ACADEMY_CODE || "");
       setAdminPhone(response.data.ADMIN_PHONE || "");
@@ -310,6 +319,7 @@ function AcademySettings() {
     setSaving(true);
     try {
       const updates: SettingsMap = {
+        CURRENCY_CODE: currencyCode,
         ACADEMY_NAME: academyName,
         ACADEMY_CODE: academyCode,
         ADMIN_PHONE: adminPhone,
@@ -562,6 +572,28 @@ function AcademySettings() {
                     💳 Payment Settings
                   </h3>
                   <div className="space-y-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Currency
+                      </label>
+                      <select
+                        value={currencyCode}
+                        onChange={(e) => setCurrencyCode(e.target.value)}
+                        className="w-full px-4 py-2.5 border rounded-lg focus:ring-2 focus:ring-blue-500 text-sm"
+                      >
+                        <option value="INR">INR — Indian Rupee (₹)</option>
+                        <option value="USD">USD — US Dollar ($)</option>
+                        <option value="GBP">GBP — British Pound (£)</option>
+                        <option value="EUR">EUR — Euro (€)</option>
+                        <option value="AUD">AUD — Australian Dollar (A$)</option>
+                        <option value="SGD">SGD — Singapore Dollar (S$)</option>
+                        <option value="AED">AED — UAE Dirham</option>
+                        <option value="CAD">CAD — Canadian Dollar (CA$)</option>
+                      </select>
+                      <p className="text-xs text-gray-500 mt-1">
+                        Used for all fee amounts, receipts, and emails
+                      </p>
+                    </div>
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-2">
                         UPI ID

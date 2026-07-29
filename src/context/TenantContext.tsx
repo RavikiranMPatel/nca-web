@@ -20,6 +20,7 @@ export type TenantInfo = {
   contactEmail: string | null;
   contactPhone: string | null;
   city: string | null;
+  currencyCode: string;
 };
 
 type TenantContextType = {

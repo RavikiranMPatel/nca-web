@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
+import { useTenant } from "../../context/TenantContext";
+import { formatCurrency, getCurrencySymbol } from "../../utils/formatCurrency";
 import {
   IndianRupee,
   CheckCircle2,
@@ -79,6 +81,10 @@ const PAYMENT_MODES = [
 
 function PlayerFeesTab() {
   const { playerPublicId } = useParams();
+  const { tenant } = useTenant();
+  const currencyCode = tenant?.currencyCode ?? "INR";
+  const sym = getCurrencySymbol(currencyCode);
+  const fmt = (n: number) => formatCurrency(n, currencyCode);
   const role = localStorage.getItem("userRole");
   const isSuperAdmin = role === "ROLE_SUPER_ADMIN";
   const [editDatePayment, setEditDatePayment] = useState<FeePayment | null>(
@@ -541,18 +547,18 @@ function PlayerFeesTab() {
           {plan.discountAmount > 0 ? (
             <>
               <span className="text-sm text-slate-400 line-through">
-                ₹{plan.amount.toLocaleString("en-IN")}
+                {fmt(plan.amount)}
               </span>
               <span className="text-2xl font-bold text-slate-900">
-                ₹{getFinalAmount(plan).toLocaleString("en-IN")}
+                {fmt(getFinalAmount(plan))}
               </span>
               <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-semibold">
-                ₹{plan.discountAmount.toLocaleString("en-IN")} off
+                {fmt(plan.discountAmount)} off
               </span>
             </>
           ) : (
             <span className="text-2xl font-bold text-slate-900">
-              ₹{plan.amount.toLocaleString("en-IN")}
+              {fmt(plan.amount)}
             </span>
           )}
         </div>
@@ -697,7 +703,7 @@ function PlayerFeesTab() {
                             <td
                               className={`px-5 py-3 text-sm font-semibold ${reversal ? "text-slate-400 line-through" : "text-slate-800"}`}
                             >
-                              ₹{p.amount?.toLocaleString("en-IN")}
+                              {p.amount != null ? fmt(p.amount) : ""}
                             </td>
                             <td className="px-5 py-3 text-sm text-slate-600">
                               {formatPaymentMode(p.paymentMode)}
@@ -875,7 +881,7 @@ function PlayerFeesTab() {
                           <span
                             className={`text-lg font-bold ${reversal ? "text-slate-400 line-through" : "text-slate-900"}`}
                           >
-                            ₹{p.amount?.toLocaleString("en-IN")}
+                            {p.amount != null ? fmt(p.amount) : ""}
                           </span>
                           <span className="text-xs text-slate-500">
                             {formatPaymentMode(p.paymentMode)}
@@ -1017,11 +1023,11 @@ function PlayerFeesTab() {
               <div className="bg-blue-50 rounded-xl p-4 text-center">
                 {plan.discountAmount > 0 && (
                   <p className="text-sm text-slate-400 line-through mb-0.5">
-                    ₹{plan.amount.toLocaleString("en-IN")}
+                    {fmt(plan.amount)}
                   </p>
                 )}
                 <p className="text-3xl font-bold text-blue-700">
-                  ₹{getFinalAmount(plan).toLocaleString("en-IN")}
+                  {fmt(getFinalAmount(plan))}
                 </p>
                 <p className="text-xs text-slate-500 mt-1">
                   {plan.name} •{" "}
@@ -1029,7 +1035,7 @@ function PlayerFeesTab() {
                 </p>
                 {plan.discountAmount > 0 && (
                   <span className="inline-block mt-2 text-xs bg-green-100 text-green-700 px-2.5 py-0.5 rounded-full font-medium">
-                    ₹{plan.discountAmount.toLocaleString("en-IN")} discount
+                    {fmt(plan.discountAmount)} discount
                     applied
                   </span>
                 )}
@@ -1277,7 +1283,7 @@ function PlayerFeesTab() {
                 <div className="flex justify-between text-xs">
                   <span className="text-slate-500">Amount</span>
                   <span className="font-semibold text-emerald-700">
-                    ₹{showSendReceiptModal.amount?.toLocaleString("en-IN")}
+                    {fmt(showSendReceiptModal.amount ?? 0)}
                   </span>
                 </div>
                 <div className="flex justify-between text-xs">
@@ -1368,7 +1374,7 @@ function PlayerFeesTab() {
               <div>
                 <h3 className="font-bold text-slate-800">Edit Payment Date</h3>
                 <p className="text-xs text-slate-500">
-                  ₹{editDatePayment.amount?.toLocaleString("en-IN")} ·{" "}
+                  {fmt(editDatePayment.amount ?? 0)} ·{" "}
                   {editDatePayment.feePlan?.name}
                 </p>
               </div>
@@ -1515,7 +1521,7 @@ function RegistrationFeeCard({
               </span>
             </div>
             <p className="text-xs text-slate-500 mt-0.5">
-              ₹{regFee.regFeeAmount.toLocaleString("en-IN")} · One-time
+              {fmt(regFee.regFeeAmount)} · One-time
               {regFee.regFeePaid && regFee.regFeePaidOn && (
                 <span className="ml-1">
                   · {formatDate(regFee.regFeePaidOn)}
@@ -1581,7 +1587,7 @@ function RegFeeModal({
             <h3 className="font-bold text-slate-800">
               Mark Registration Fee Paid
             </h3>
-            <p className="text-xs text-slate-500">One-time · ₹1,500</p>
+            <p className="text-xs text-slate-500">One-time · {fmt(1500)}</p>
           </div>
           <button onClick={onClose}>
             <X size={18} className="text-slate-400" />
@@ -1590,7 +1596,7 @@ function RegFeeModal({
         <div className="p-5 space-y-4">
           <div className="bg-emerald-50 rounded-xl p-3 text-center">
             <p className="text-xs text-slate-500">Amount</p>
-            <p className="text-2xl font-bold text-emerald-700">₹1,500</p>
+            <p className="text-2xl font-bold text-emerald-700">{fmt(1500)}</p>
             <p className="text-xs text-slate-400 mt-0.5">
               One-time registration fee
             </p>
@@ -1923,20 +1929,20 @@ function InstallmentSection({
                       </div>
                       <div className="flex items-center justify-between mt-1">
                         <span className="text-[10px] text-emerald-600 font-semibold">
-                          ₹{plan.paidAmount.toLocaleString("en-IN")} paid
+                          {fmt(plan.paidAmount)} paid
                         </span>
                         <span className="text-[10px] text-slate-400">
                           {progress.toFixed(0)}%
                         </span>
                         <span className="text-[10px] text-red-500 font-semibold">
-                          ₹{balance.toLocaleString("en-IN")} left
+                          {fmt(balance)} left
                         </span>
                       </div>
                     </div>
                     <div className="text-right flex-shrink-0">
                       <div className="flex items-center gap-2 justify-end">
                         <p className="text-sm font-bold text-slate-800">
-                          ₹{plan.totalAmount.toLocaleString("en-IN")}
+                          {fmt(plan.totalAmount)}
                         </p>
                         {plan.status === "ACTIVE" && (
                           <button
@@ -1985,10 +1991,10 @@ function InstallmentSection({
                                   {formatDate(inst.dueDate)}
                                 </p>
                                 <p className="text-[10px] text-slate-400">
-                                  ₹{inst.paidAmount.toLocaleString("en-IN")}{" "}
+                                  {fmt(inst.paidAmount)}{" "}
                                   paid
                                   {inst.balanceAmount > 0 &&
-                                    ` · ₹${inst.balanceAmount.toLocaleString("en-IN")} left`}
+                                    ` · ${fmt(inst.balanceAmount)} left`}
                                 </p>
                               </div>
                             </div>
@@ -1999,7 +2005,7 @@ function InstallmentSection({
                                 {inst.status}
                               </span>
                               <p className="text-xs font-bold text-slate-800">
-                                ₹{inst.dueAmount.toLocaleString("en-IN")}
+                                {fmt(inst.dueAmount)}
                               </p>
                               {inst.status !== "PAID" && (
                                 <button
@@ -2084,7 +2090,7 @@ function InstallmentSection({
                     <option value="">— Select a plan —</option>
                     {feePlans.map((fp) => (
                       <option key={fp.publicId} value={fp.publicId}>
-                        {fp.name} · ₹{(fp.amount - (fp.discountAmount || 0)).toLocaleString("en-IN")}
+                        {fp.name} · {fmt(fp.amount - (fp.discountAmount || 0))}
                       </option>
                     ))}
                   </select>
@@ -2092,7 +2098,7 @@ function InstallmentSection({
               )}
               <div>
                 <label className="text-xs font-semibold text-slate-600 block mb-1.5">
-                  Total Amount (₹) *
+                  Total Amount ({sym}) *
                 </label>
                 <input
                   type="number"
@@ -2147,7 +2153,7 @@ function InstallmentSection({
                 <h3 className="font-bold text-slate-800">Record Payment</h3>
                 <p className="text-xs text-slate-500">
                   {showDirectPay.description || "Installment Plan"} ·{" "}
-                  ₹{(showDirectPay.totalAmount - showDirectPay.paidAmount).toLocaleString("en-IN")} remaining
+                  {fmt(showDirectPay.totalAmount - showDirectPay.paidAmount)} remaining
                 </p>
               </div>
               <button onClick={() => setShowDirectPay(null)}>
@@ -2158,12 +2164,12 @@ function InstallmentSection({
               <div className="bg-emerald-50 rounded-xl p-3 flex justify-between text-sm">
                 <span className="text-slate-500">Remaining balance</span>
                 <span className="font-bold text-emerald-700">
-                  ₹{(showDirectPay.totalAmount - showDirectPay.paidAmount).toLocaleString("en-IN")}
+                  {fmt(showDirectPay.totalAmount - showDirectPay.paidAmount)}
                 </span>
               </div>
               <div>
                 <label className="text-xs font-semibold text-slate-600 block mb-1.5">
-                  Amount (₹) *
+                  Amount ({sym}) *
                 </label>
                 <input
                   type="number"
@@ -2261,15 +2267,12 @@ function InstallmentSection({
               <div className="bg-blue-50 rounded-xl p-3 text-center">
                 <p className="text-xs text-slate-500">Balance Due</p>
                 <p className="text-2xl font-bold text-blue-700">
-                  ₹
-                  {(showPayInstallment.balanceAmount ?? 0).toLocaleString(
-                    "en-IN",
-                  )}
+                  {fmt(showPayInstallment.balanceAmount ?? 0)}
                 </p>
               </div>
               <div>
                 <label className="text-xs font-semibold text-slate-600 block mb-1.5">
-                  Amount (₹) *
+                  Amount ({sym}) *
                 </label>
                 <input
                   type="number"
@@ -2356,7 +2359,7 @@ function InstallmentSection({
             <div className="p-5 space-y-4">
               <div>
                 <label className="text-xs font-semibold text-slate-600 block mb-1.5">
-                  Total Amount (₹) *
+                  Total Amount ({sym}) *
                 </label>
                 <input
                   type="number"
@@ -2440,15 +2443,15 @@ function PlanSelectorModal({
                 <div className="text-right flex-shrink-0 ml-3">
                   {plan.discountAmount > 0 && (
                     <p className="text-xs text-slate-400 line-through">
-                      ₹{plan.amount.toLocaleString("en-IN")}
+                      {fmt(plan.amount)}
                     </p>
                   )}
                   <p className="text-base font-bold text-blue-700">
-                    ₹{getFinalAmount(plan).toLocaleString("en-IN")}
+                    {fmt(getFinalAmount(plan))}
                   </p>
                   {plan.discountAmount > 0 && (
                     <p className="text-[10px] text-green-600 font-semibold">
-                      ₹{plan.discountAmount.toLocaleString("en-IN")} off
+                      {fmt(plan.discountAmount)} off
                     </p>
                   )}
                 </div>

@@ -1,5 +1,7 @@
 import { useEffect, useState, useMemo, useRef } from "react";
 import { useNavigate } from "react-router-dom";
+import { useTenant } from "../../context/TenantContext";
+import { formatCurrency, getCurrencySymbol } from "../../utils/formatCurrency";
 import {
   ArrowLeft,
   IndianRupee,
@@ -189,8 +191,6 @@ const REG_FEE_PAYMENT_MODES = [
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-const fmt = (n: number) =>
-  "₹" + n.toLocaleString("en-IN", { maximumFractionDigits: 0 });
 const fmtDate = (d: string | null) => {
   if (!d) return "—";
   return new Date(d).toLocaleDateString("en-IN", {
@@ -314,6 +314,10 @@ function AutocompleteInput({
 
 export default function AdminRevenueDashboard() {
   const navigate = useNavigate();
+  const { tenant } = useTenant();
+  const currencyCode = tenant?.currencyCode ?? "INR";
+  const sym = getCurrencySymbol(currencyCode);
+  const fmt = (n: number) => formatCurrency(n, currencyCode);
 
   const isSuperAdmin = useMemo(() => {
     try {
@@ -1156,7 +1160,7 @@ export default function AdminRevenueDashboard() {
                   Mark Registration Fee Paid
                 </h3>
                 <p className="text-xs text-slate-500">
-                  {showRegFeeModal.playerName} · ₹1,500
+                  {showRegFeeModal.playerName} · {fmt(1500)}
                 </p>
               </div>
               <button onClick={() => setShowRegFeeModal(null)}>
@@ -1165,7 +1169,7 @@ export default function AdminRevenueDashboard() {
             </div>
             <div className="p-5 space-y-4">
               <div className="bg-purple-50 rounded-xl p-3 text-center">
-                <p className="text-2xl font-bold text-purple-700">₹1,500</p>
+                <p className="text-2xl font-bold text-purple-700">{fmt(1500)}</p>
                 <p className="text-xs text-slate-400 mt-0.5">
                   One-time registration fee
                 </p>
@@ -1329,7 +1333,7 @@ export default function AdminRevenueDashboard() {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-semibold text-slate-600 mb-1.5 uppercase tracking-wide">
-                    Amount (₹) *
+                    Amount ({sym}) *
                   </label>
                   <input
                     type="number"
@@ -1523,7 +1527,7 @@ export default function AdminRevenueDashboard() {
             <div className="px-4 py-4 space-y-3 overflow-y-auto flex-1">
               <div>
                 <label className="block text-xs font-semibold text-slate-600 mb-1.5 uppercase tracking-wide">
-                  Amount (₹) *
+                  Amount ({sym}) *
                 </label>
                 <input
                   type="number"
@@ -1618,7 +1622,7 @@ export default function AdminRevenueDashboard() {
               </div>
               <div>
                 <label className="block text-xs font-semibold text-slate-600 mb-1.5 uppercase tracking-wide">
-                  Default Amount (₹)
+                  Default Amount ({sym})
                 </label>
                 <input
                   type="number"
@@ -2381,7 +2385,7 @@ export default function AdminRevenueDashboard() {
               /\D/g,
               "",
             );
-            const msg = `Hi, this is a reminder that cricket academy fees are pending for ${row.playerName}. ${row.hasInstallmentPlan && row.installmentBalance ? `Balance due: ₹${row.installmentBalance}.` : `Due date: ${row.nextDueOn ? new Date(row.nextDueOn).toLocaleDateString("en-IN") : ""}.`} Please pay at your earliest convenience. Thank you!`;
+            const msg = `Hi, this is a reminder that cricket academy fees are pending for ${row.playerName}. ${row.hasInstallmentPlan && row.installmentBalance ? `Balance due: ${fmt(row.installmentBalance)}.` : `Due date: ${row.nextDueOn ? new Date(row.nextDueOn).toLocaleDateString("en-IN") : ""}.`} Please pay at your earliest convenience. Thank you!`;
             return `https://wa.me/91${phone}?text=${encodeURIComponent(msg)}`;
           };
           const openEditDueDate = (row: FeeCollectionSummaryRow) => {
@@ -2608,14 +2612,10 @@ export default function AdminRevenueDashboard() {
                           {row.hasInstallmentPlan &&
                             row.installmentBalance !== null && (
                               <p className="text-xs text-slate-500 mt-1">
-                                Installment: ₹
-                                {row.installmentPaid?.toLocaleString("en-IN")}{" "}
+                                Installment: {fmt(row.installmentPaid ?? 0)}{" "}
                                 paid ·{" "}
                                 <span className="text-red-600 font-semibold">
-                                  ₹
-                                  {row.installmentBalance.toLocaleString(
-                                    "en-IN",
-                                  )}{" "}
+                                  {fmt(row.installmentBalance)}{" "}
                                   balance
                                 </span>
                               </p>
@@ -2690,16 +2690,13 @@ export default function AdminRevenueDashboard() {
                                       }
                                     >
                                       {row.installmentBalance > 0
-                                        ? `₹${row.installmentBalance.toLocaleString("en-IN")} due`
+                                        ? `${fmt(row.installmentBalance)} due`
                                         : "✓ Fully paid"}
                                     </span>
                                     {row.installmentPaid !== null &&
                                       row.installmentPaid > 0 && (
                                         <p className="text-[10px] text-slate-400 mt-0.5">
-                                          ₹
-                                          {row.installmentPaid.toLocaleString(
-                                            "en-IN",
-                                          )}{" "}
+                                          {fmt(row.installmentPaid)}{" "}
                                           paid
                                         </p>
                                       )}
@@ -2772,7 +2769,7 @@ export default function AdminRevenueDashboard() {
               </h2>
               <p className="text-xs text-slate-400">
                 {regFeesPaidCount} paid · {regFees.length - regFeesPaidCount}{" "}
-                pending · ₹1,500 each
+                pending · {fmt(1500)} each
               </p>
             </div>
             <span className="text-sm font-semibold text-purple-600">
@@ -3022,7 +3019,7 @@ export default function AdminRevenueDashboard() {
                             </span>
                           </div>
                           <span className="text-sm font-bold text-red-600">
-                            ₹{partner.total.toLocaleString("en-IN")}
+                            {fmt(partner.total)}
                           </span>
                         </div>
                       ))}

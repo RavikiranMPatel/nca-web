@@ -1,5 +1,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { useNavigate, useParams, useLocation } from "react-router-dom";
+import { useTenant } from "../../context/TenantContext";
+import { formatCurrency } from "../../utils/formatCurrency";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   ArrowLeft,
@@ -291,6 +293,9 @@ function AttendanceTab({
 // ─────────────────────────────────────────────────────────────────────────────
 
 function InfoTab({ enrollment }: { enrollment: SummerCampEnrollment }) {
+  const { tenant } = useTenant();
+  const currencyCode = tenant?.currencyCode ?? "INR";
+  const fmt = (n: number) => formatCurrency(n, currencyCode);
   const rows = [
     { icon: User, label: "Student Name", value: enrollment.playerName },
     {
@@ -423,17 +428,17 @@ function PaymentTab({
           {[
             {
               label: "Total Fee",
-              val: `₹${enrollment.totalFee?.toLocaleString() ?? 0}`,
+              val: fmt(enrollment.totalFee ?? 0),
               color: "text-slate-300",
             },
             {
               label: "Paid",
-              val: `₹${enrollment.paidAmount?.toLocaleString() ?? 0}`,
+              val: fmt(enrollment.paidAmount ?? 0),
               color: "text-emerald-400",
             },
             {
               label: "Balance",
-              val: `₹${enrollment.balanceAmount?.toLocaleString() ?? 0}`,
+              val: fmt(enrollment.balanceAmount ?? 0),
               color:
                 enrollment.balanceAmount > 0
                   ? "text-red-400"

@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
 import PresenceBanner from "../../components/PresenceBanner";
+import { useTenant } from "../../context/TenantContext";
+import { formatCurrency, getCurrencySymbol } from "../../utils/formatCurrency";
 import { useAuth } from "../../auth/useAuth";
 import {
   Plus,
@@ -52,6 +54,10 @@ const EMPTY_FORM: PlanFormData = {
 
 function FeeSettingsManager() {
   const { academyId } = useAuth();
+  const { tenant } = useTenant();
+  const currencyCode = tenant?.currencyCode ?? "INR";
+  const sym = getCurrencySymbol(currencyCode);
+  const fmt = (n: number) => formatCurrency(n, currencyCode);
   const [plans, setPlans] = useState<FeePlan[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -248,7 +254,7 @@ function FeeSettingsManager() {
                   <div className="flex items-center justify-between text-sm">
                     <span className="text-slate-500">Base Price:</span>
                     <span className="text-slate-500 line-through">
-                      ₹{plan.amount.toLocaleString("en-IN")}
+                      {fmt(plan.amount)}
                     </span>
                   </div>
                   <div className="flex items-center justify-between text-sm">
@@ -257,7 +263,7 @@ function FeeSettingsManager() {
                       Discount:
                     </span>
                     <span className="text-green-600 font-medium">
-                      - ₹{plan.discountAmount.toLocaleString("en-IN")}
+                      - {fmt(plan.discountAmount)}
                     </span>
                   </div>
                   <div className="border-t border-slate-200 pt-1 flex items-center justify-between">
@@ -265,7 +271,7 @@ function FeeSettingsManager() {
                       Final Price:
                     </span>
                     <span className="text-xl font-bold text-blue-700">
-                      ₹{getFinalAmount(plan).toLocaleString("en-IN")}
+                      {fmt(getFinalAmount(plan))}
                     </span>
                   </div>
                 </>
@@ -273,7 +279,7 @@ function FeeSettingsManager() {
                 <div className="flex items-center justify-between">
                   <span className="font-semibold text-slate-700">Price:</span>
                   <span className="text-xl font-bold text-blue-700">
-                    ₹{plan.amount.toLocaleString("en-IN")}
+                    {fmt(plan.amount)}
                   </span>
                 </div>
               )}
@@ -380,7 +386,7 @@ function FeeSettingsManager() {
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="text-xs font-semibold text-slate-600 mb-1.5 block">
-                    Base Amount (₹) *
+                    Base Amount ({sym}) *
                   </label>
                   <input
                     type="number"
@@ -394,7 +400,7 @@ function FeeSettingsManager() {
                 </div>
                 <div>
                   <label className="text-xs font-semibold text-slate-600 mb-1.5 block">
-                    Discount (₹)
+                    Discount ({sym})
                   </label>
                   <input
                     type="number"
@@ -417,22 +423,15 @@ function FeeSettingsManager() {
                   <div className="flex items-center gap-3">
                     {parseFloat(form.discountAmount || "0") > 0 && (
                       <span className="text-sm text-slate-400 line-through">
-                        ₹{parseFloat(form.amount).toLocaleString("en-IN")}
+                        {fmt(parseFloat(form.amount))}
                       </span>
                     )}
                     <span className="text-lg font-bold text-blue-700">
-                      ₹
-                      {(
-                        parseFloat(form.amount || "0") -
-                        parseFloat(form.discountAmount || "0")
-                      ).toLocaleString("en-IN")}
+                      {fmt(parseFloat(form.amount || "0") - parseFloat(form.discountAmount || "0"))}
                     </span>
                     {parseFloat(form.discountAmount || "0") > 0 && (
                       <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-medium">
-                        ₹
-                        {parseFloat(form.discountAmount).toLocaleString(
-                          "en-IN",
-                        )}{" "}
+                        {fmt(parseFloat(form.discountAmount))}{" "}
                         off
                       </span>
                     )}

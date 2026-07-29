@@ -28,6 +28,8 @@ import {
 } from "lucide-react";
 import StatCard from "../components/StatCard";
 import api from "../api/axios";
+import { useTenant } from "../context/TenantContext";
+import { formatCurrency } from "../utils/formatCurrency";
 
 type DashboardSummary = {
   totalPlayers: number;
@@ -148,6 +150,9 @@ function SectionHeader({
 
 function AdminDashboard() {
   const navigate = useNavigate();
+  const { tenant } = useTenant();
+  const currencyCode = tenant?.currencyCode ?? "INR";
+  const fmt = (n: number) => formatCurrency(n, currencyCode);
 
   const [summary, setSummary] = useState<DashboardSummary | null>(null);
   const [loading, setLoading] = useState(true);
@@ -357,7 +362,7 @@ function AdminDashboard() {
                   })
                 : "—";
               const waText = encodeURIComponent(
-                `Hi, the fees of ₹${row.planAmount.toLocaleString("en-IN")} for ${row.playerName}'s ${row.feePlanName} are ${row.feeStatus === "OVERDUE" ? "overdue" : "due"} (${dueLabel}). Please pay at the earliest. Thank you.`,
+                `Hi, the fees of ${fmt(row.planAmount)} for ${row.playerName}'s ${row.feePlanName} are ${row.feeStatus === "OVERDUE" ? "overdue" : "due"} (${dueLabel}). Please pay at the earliest. Thank you.`,
               );
               const waHref = `https://wa.me/91${cleanPhone}?text=${waText}`;
               return (
@@ -387,7 +392,7 @@ function AdminDashboard() {
                             : "text-amber-700"
                         }`}
                       >
-                        ₹{row.planAmount.toLocaleString("en-IN")}
+                        {fmt(row.planAmount)}
                       </span>{" "}
                       · {dueLabel}
                     </p>

@@ -3,6 +3,8 @@ import { useNavigate, useParams } from "react-router-dom";
 import { ArrowLeft, Save, Plus, Trash2, GitBranch } from "lucide-react";
 import { toast } from "react-hot-toast";
 import api from "../../api/axios";
+import { useTenant } from "../../context/TenantContext";
+import { formatCurrency, getCurrencySymbol } from "../../utils/formatCurrency";
 import { summerCampService } from "../../api/summerCampService";
 import { getAdminBranches } from "../../api/branch.api";
 import type { Branch } from "../../api/branch.api";
@@ -24,6 +26,10 @@ type FeeRuleForm = {
 function SummerCampEdit() {
   const navigate = useNavigate();
   const { campId } = useParams<{ campId: string }>();
+  const { tenant } = useTenant();
+  const currencyCode = tenant?.currencyCode ?? "INR";
+  const sym = getCurrencySymbol(currencyCode);
+  const fmt = (n: number) => formatCurrency(n, currencyCode);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
@@ -439,7 +445,7 @@ function SummerCampEdit() {
 
                     <div>
                       <label className="block text-xs font-medium text-slate-600 mb-1">
-                        Fee Amount (₹)
+                        Fee Amount ({sym})
                       </label>
                       <input
                         type="number"
@@ -472,7 +478,7 @@ function SummerCampEdit() {
                           parseInt(rule.batchCount) === 1
                             ? "session"
                             : "sessions"
-                        } per day will pay ₹${parseFloat(rule.feeAmount).toLocaleString()}`
+                        } per day will pay ${fmt(parseFloat(rule.feeAmount))}`
                       : "Set the fee for students attending this many sessions per day"}
                   </p>
                 </div>
