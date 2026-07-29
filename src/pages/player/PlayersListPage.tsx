@@ -536,6 +536,16 @@ function PlayersListPage() {
 
           {/* Action buttons — icon-only on mobile, labeled on desktop */}
           <div className="flex items-center gap-1.5 flex-shrink-0">
+            {/* Bulk Import */}
+            <button
+              onClick={() => navigate("/admin/players/bulk-import")}
+              className="flex items-center gap-1.5 px-2.5 py-2 text-xs font-medium text-slate-700 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 transition shadow-sm"
+              title="Bulk Import from Excel"
+            >
+              <FileSpreadsheet size={15} />
+              <span className="hidden sm:inline">Import</span>
+            </button>
+
             {/* Register — prominent */}
             <button
               onClick={() => navigate("/admin/players/register")}

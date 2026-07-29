@@ -434,6 +434,7 @@ function SectionHeading({
 }
 
 const LEVEL_DISPLAY: Record<string, string> = {
+  LEAGUE: "League",
   NATIONAL: "National",
   STATE: "State",
   ZONE: "Zone",
@@ -442,6 +443,7 @@ const LEVEL_DISPLAY: Record<string, string> = {
 };
 
 const LEVEL_BADGE: Record<string, string> = {
+  LEAGUE: "bg-orange-100 text-orange-800 border border-orange-300",
   NATIONAL: "bg-yellow-100 text-yellow-800 border border-yellow-300",
   STATE: "bg-blue-100 text-blue-800 border border-blue-300",
   ZONE: "bg-purple-100 text-purple-800 border border-purple-300",

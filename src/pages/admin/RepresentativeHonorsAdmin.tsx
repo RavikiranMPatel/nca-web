@@ -22,6 +22,7 @@ import ModalOverlay from "../../components/ModalOverlay";
 import { getImageUrl } from "../../utils/imageUrl";
 
 const LEVELS = [
+  { value: "LEAGUE", label: "League" },
   { value: "NATIONAL", label: "National" },
   { value: "STATE", label: "State" },
   { value: "ZONE", label: "Zone" },
@@ -32,6 +33,7 @@ const LEVELS = [
 const AGE_GROUPS = ["U-10", "U-12", "U-14", "U-16", "U-19", "SENIOR"];
 
 const LEVEL_COLORS: Record<string, string> = {
+  LEAGUE: "bg-orange-100 text-orange-800 border border-orange-300",
   NATIONAL: "bg-yellow-100 text-yellow-800 border border-yellow-300",
   STATE: "bg-blue-100 text-blue-800 border border-blue-300",
   ZONE: "bg-purple-100 text-purple-800 border border-purple-300",
@@ -193,10 +195,11 @@ export default function RepresentativeHonorsAdmin() {
           </button>
         </div>
 
-        {/* Enable module hint */}
+        {/* Enable section hint */}
         <div className="mb-5 p-3 bg-blue-50 border border-blue-200 rounded-lg text-sm text-blue-700">
           To show this section on the public homepage, enable{" "}
-          <strong>MODULE_REPRESENTATIVE_HONORS_ENABLED</strong> in Academy Settings.
+          <strong>Representative Honors</strong> in{" "}
+          <strong>Settings › Homepage Sections</strong>.
         </div>
 
         {/* List */}
@@ -473,7 +476,7 @@ export default function RepresentativeHonorsAdmin() {
                   className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
                 />
                 <p className="text-xs text-gray-400 mt-1">
-                  Lower numbers appear first. Within the same order, National ranks highest.
+                  Lower numbers appear first. Within the same order, League and National rank highest.
                 </p>
               </div>
             </div>

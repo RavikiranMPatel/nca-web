@@ -68,6 +68,7 @@ import ResetPasswordPage from "./pages/ResetPasswordPage";
 import TermsOfServicePage from "./pages/TermsOfServicePage";
 import PrivacyPolicyPage from "./pages/PrivacyPolicyPage";
 import RepresentativeHonorsAdmin from "./pages/admin/RepresentativeHonorsAdmin";
+import BulkImportPlayerPage from "./pages/player/BulkImportPlayerPage";
 
 
 
@@ -306,6 +307,16 @@ function App() {
           <ProtectedRoute roles={["ROLE_ADMIN", "ROLE_SUPER_ADMIN"]}>
             <AppLayout>
               <RegisterPlayer />
+            </AppLayout>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/players/bulk-import"
+        element={
+          <ProtectedRoute roles={["ROLE_ADMIN", "ROLE_SUPER_ADMIN"]}>
+            <AppLayout>
+              <BulkImportPlayerPage />
             </AppLayout>
           </ProtectedRoute>
         }
