@@ -2037,20 +2037,21 @@ function Home() {
               </section>
             ) : null;
 
+          case "REPRESENTATIVE_HONORS":
+            return representativeHonors.length > 0 ? (
+              <RepresentativeHonorsSection
+                key="representative-honors"
+                honors={representativeHonors}
+                primaryColor={primaryColor}
+                getCardShadow={getCardShadow}
+                getCardStyle={getCardStyle}
+              />
+            ) : null;
+
           default:
             return null;
         }
       })}
-
-      {/* ── REPRESENTATIVE HONORS ── */}
-      {representativeHonors.length > 0 && (
-        <RepresentativeHonorsSection
-          honors={representativeHonors}
-          primaryColor={primaryColor}
-          getCardShadow={getCardShadow}
-          getCardStyle={getCardStyle}
-        />
-      )}
 
       {/* ── YOUTUBE (not CMS-managed, fixed position after CMS sections) ── */}
       {youtubeEnabled && youtubeVideos.length > 0 && (
