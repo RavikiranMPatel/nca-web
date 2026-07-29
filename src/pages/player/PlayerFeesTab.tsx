@@ -79,12 +79,18 @@ const PAYMENT_MODES = [
   { value: "OTHER", label: "Other", refLabel: "Reference Number" },
 ];
 
-function PlayerFeesTab() {
-  const { playerPublicId } = useParams();
+function useCurrencyFormatter() {
   const { tenant } = useTenant();
   const currencyCode = tenant?.currencyCode ?? "INR";
-  const sym = getCurrencySymbol(currencyCode);
-  const fmt = (n: number) => formatCurrency(n, currencyCode);
+  return {
+    fmt: (n: number) => formatCurrency(n, currencyCode),
+    sym: getCurrencySymbol(currencyCode),
+  };
+}
+
+function PlayerFeesTab() {
+  const { playerPublicId } = useParams();
+  const { fmt } = useCurrencyFormatter();
   const role = localStorage.getItem("userRole");
   const isSuperAdmin = role === "ROLE_SUPER_ADMIN";
   const [editDatePayment, setEditDatePayment] = useState<FeePayment | null>(
@@ -1493,6 +1499,7 @@ function RegistrationFeeCard({
   onMarkPaid: () => void;
   onUnmark: () => void;
 }) {
+  const { fmt } = useCurrencyFormatter();
   return (
     <div
       className={`rounded-xl border-2 p-4 ${regFee.regFeePaid ? "bg-emerald-50 border-emerald-200" : "bg-amber-50 border-amber-200"}`}
@@ -1579,6 +1586,7 @@ function RegFeeModal({
   onConfirm: () => void;
   onClose: () => void;
 }) {
+  const { fmt } = useCurrencyFormatter();
   return (
     <div className="fixed inset-0 bg-black/50 z-[60] flex items-end sm:items-center justify-center">
       <div className="bg-white rounded-t-2xl sm:rounded-xl shadow-xl w-full sm:max-w-sm">
@@ -1686,6 +1694,7 @@ function InstallmentSection({
   feePlans: FeePlan[];
   onPaymentComplete?: () => void;
 }) {
+  const { fmt, sym } = useCurrencyFormatter();
   const [plans, setPlans] = useState<InstallmentPlan[]>([]);
   const [loading, setLoading] = useState(true);
   const [expandedPlan, setExpandedPlan] = useState<string | null>(null);
@@ -2419,6 +2428,7 @@ function PlanSelectorModal({
   getFinalAmount: (plan: FeePlan) => number;
   note?: string;
 }) {
+  const { fmt } = useCurrencyFormatter();
   return (
     <div className="fixed inset-0 bg-black/50 z-[60] flex items-end sm:items-center justify-center">
       <div className="bg-white rounded-t-2xl sm:rounded-xl shadow-xl w-full sm:max-w-lg max-h-[85vh] overflow-y-auto">
