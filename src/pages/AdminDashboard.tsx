@@ -158,7 +158,6 @@ function AdminDashboard() {
   const isSuperAdmin = role === "ROLE_SUPER_ADMIN";
 
   const showTournaments = flags["MODULE_TOURNAMENTS_ENABLED"] === "true";
-  const showSlotBooking = flags["MODULE_SLOT_BOOKING_ENABLED"] === "true";
 
   useEffect(() => {
     api.get("/admin/settings/feature-flags")
@@ -523,58 +522,7 @@ function AdminDashboard() {
         </div>
       </section>
 
-      {/* ═══════════════ SLOT & BOOKING ═══════════════ */}
-      {showSlotBooking && (
-        <section>
-          <SectionHeader
-            icon={Calendar}
-            title="Slot & Booking Management"
-            iconColor="text-purple-600"
-          />
-          <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-4 gap-3">
-            <ActionCard
-              icon={Clock}
-              title="Slot Templates"
-              description="Configure slot timings and pricing for different schedules"
-              onClick={() => navigate("/admin/slot-templates")}
-              gradient="bg-gradient-to-br from-purple-500 to-purple-600"
-              textLight="text-purple-100"
-            />
-            <ActionCard
-              icon={List}
-              title="All Bookings"
-              description="See all user bookings and payments"
-              onClick={() => navigate("/admin/bookings")}
-              gradient="bg-gradient-to-br from-green-500 to-green-600"
-              textLight="text-green-100"
-            />
-            <ActionCard
-              icon={UserCheck}
-              title="BM Members"
-              description="Manage bowling machine subscribers, logged-in users and guests"
-              onClick={() => navigate("/admin/members")}
-              gradient="bg-gradient-to-br from-teal-500 to-teal-600"
-              textLight="text-teal-100"
-            />
-            <ActionCard
-              icon={Calendar}
-              title="Calendar View"
-              description="Override specific dates for holidays and events"
-              onClick={() => navigate("/admin/date-overrides")}
-              gradient="bg-gradient-to-br from-orange-500 to-orange-600"
-              textLight="text-orange-100"
-            />
-            <ActionCard
-              icon={Power}
-              title="Resources"
-              description="Enable/disable wickets and courts"
-              onClick={() => navigate("/admin/resources")}
-              gradient="bg-gradient-to-br from-blue-500 to-blue-600"
-              textLight="text-blue-100"
-            />
-          </div>
-        </section>
-      )}
+
 
       {/* ═══════════════ OTHER MANAGEMENT ═══════════════ */}
       <section>
@@ -630,7 +578,7 @@ function AdminDashboard() {
             <ActionCard
               icon={TrendingUp}
               title="Revenue"
-              description="View combined fees & booking payments"
+              description="View fees, camp fees, and registration revenue"
               onClick={() => navigate("/admin/revenue")}
               gradient="bg-gradient-to-br from-emerald-500 to-teal-600"
               textLight="text-emerald-100"

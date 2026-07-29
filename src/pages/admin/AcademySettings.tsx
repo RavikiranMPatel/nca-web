@@ -44,7 +44,6 @@ import CampTypeSettings from "./CampTypeSettings";
 import MediaSettingsManager from "./MediaSettingsManager";
 import TeamMembersAdmin from "./TeamMembersAdmin";
 import BranchesTab from "./BranchesTab";
-import SubscriptionPricingManager from "./SubscriptionPricingManager";
 import YouTubeSettings from "./YouTubeSettings";
 import InstagramSettings from "./InstagramSettings";
 import PresenceBanner from "../../components/PresenceBanner";
@@ -69,7 +68,6 @@ type TabType =
   | "branches"
   | "youtube"
   | "instagram"
-  | "subscription";
 
 type NavItemDef = {
   key: TabType | "homepage-sections" | "clubs";
@@ -93,7 +91,6 @@ const NAV_GROUPS: NavGroupDef[] = [
       { key: "branding", label: "Branding & Theme", icon: Palette },
       { key: "batch", label: "Camp Settings", icon: CalendarDays },
       { key: "fees", label: "Fees", icon: CreditCard },
-      { key: "subscription", label: "Subscriptions", icon: Star },
       { key: "contact", label: "Contact Info", icon: Phone },
     ],
   },
@@ -1375,7 +1372,6 @@ function AcademySettings() {
 
             {activeTab === "starperformer" && <StarPerformerSettings />}
             {activeTab === "fees" && <FeeSettingsManager />}
-            {activeTab === "subscription" && <SubscriptionPricingManager />}
             {activeTab === "media" && <MediaSettingsManager />}
 
           </div>

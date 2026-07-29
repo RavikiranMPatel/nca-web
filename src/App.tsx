@@ -5,13 +5,7 @@ import Signup from "./pages/Signup";
 import Home from "./pages/Home";
 import StarPerformer from "./pages/admin/StarPerformer";
 import ProtectedRoute from "./auth/ProtectedRoute";
-import RequireActiveBooking from "./auth/RequireActiveBooking";
 import AppLayout from "./layout/AppLayout";
-import BookSlot from "./pages/book-slot/BookSlot";
-import MyBookings from "./pages/book-slot/MyBookings";
-import ConfirmBooking from "./pages/book-slot/ConfirmBooking";
-import Payment from "./pages/book-slot/Payment";
-import BookingSuccess from "./pages/book-slot/BookingSuccess";
 import AdminSliderManager from "./pages/AdminSliderManager";
 import AdminDashboard from "./pages/AdminDashboard";
 import AdminUsers from "./pages/AdminUsers";
@@ -26,11 +20,6 @@ import PlayerStatsPage from "./pages/player/PlayerStatsPage";
 import UpdatePlayer from "./pages/player/UpdatePlayer";
 import AddCricketStats from "./pages/player/AddCricketStats";
 import BatchManagementPage from "./pages/BatchManagementPage";
-import SlotTemplateManagement from "./pages/slot-templates/SlotTemplateManagement";
-import CreateEditTemplate from "./pages/slot-templates/CreateEditTemplate";
-import ManageResources from "./pages/ManageResources";
-import CalendarView from "./pages/CalendarView";
-import ViewAllBookings from "./pages/book-slot/ViewAllBookings";
 import AcademySettings from "./pages/admin/AcademySettings";
 import EnquiryListPage from "./pages/enquiry/EnquiryListPage";
 import AddEnquiryPage from "./pages/enquiry/AddEnquiryPage";
@@ -54,12 +43,8 @@ import PlayerFeesTab from "./pages/player/PlayerFeesTab";
 import PlayerMediaPage from "./pages/player/PlayerMediaPage";
 import { useTenant } from "./context/TenantContext";
 import TeamMembersAdmin from "./pages/admin/TeamMembersAdmin";
-import GenerateSlots from "./pages/slot-templates/GenerateSlots";
 import ManageUsersPage from "./pages/ManageUsersPage";
 import ManageBranchesPage from "./pages/ManageBranchesPage";
-import AdminManualBooking from "./pages/book-slot/AdminManualBooking";
-import AdminMembersPage from "./pages/admin/AdminMembersPage";
-import MySubscription from "./pages/book-slot/MySubscription";
 import UserProfilePage from "./pages/UserProfilePage";
 import AdminRevenueDashboard from "./pages/admin/AdminRevenueDashboard";
 import PlayerCoachingPage from "./pages/player/PlayerCoachingPage";
@@ -83,17 +68,7 @@ import ResetPasswordPage from "./pages/ResetPasswordPage";
 import TermsOfServicePage from "./pages/TermsOfServicePage";
 import PrivacyPolicyPage from "./pages/PrivacyPolicyPage";
 
-// Add route after /my-bookings route:
-<Route
-  path="/my-subscription"
-  element={
-    <ProtectedRoute>
-      <AppLayout>
-        <MySubscription />
-      </AppLayout>
-    </ProtectedRoute>
-  }
-/>;
+
 
 function App() {
   const { loading: tenantLoading, error: tenantError, tenant } = useTenant();
@@ -205,54 +180,12 @@ function App() {
       />
 
       {/* PROTECTED */}
-      <Route
-        path="/book-slot"
-        element={
-          <AppLayout>
-            <BookSlot />
-          </AppLayout>
-        }
-      />
-      <Route path="/confirm-booking" element={<ConfirmBooking />} />
-      <Route
-        path="/payment"
-        element={
-          <RequireActiveBooking>
-            <AppLayout>
-              <Payment />
-            </AppLayout>
-          </RequireActiveBooking>
-        }
-      />
-      <Route
-        path="/booking-success"
-        element={
-          <AppLayout>
-            <BookingSuccess />
-          </AppLayout>
-        }
-      />
-      <Route
-        path="/my-bookings"
-        element={
-          <ProtectedRoute>
-            <AppLayout>
-              <MyBookings />
-            </AppLayout>
-          </ProtectedRoute>
-        }
-      />
 
-      <Route
-        path="/my-subscription"
-        element={
-          <ProtectedRoute>
-            <AppLayout>
-              <MySubscription />
-            </AppLayout>
-          </ProtectedRoute>
-        }
-      />
+
+
+
+
+
 
       <Route
         path="/profile"
@@ -511,37 +444,10 @@ function App() {
           </ProtectedRoute>
         }
       />
-      <Route
-        path="/admin/bookings"
-        element={
-          <ProtectedRoute roles={["ROLE_ADMIN", "ROLE_SUPER_ADMIN"]}>
-            <AppLayout>
-              <ViewAllBookings />
-            </AppLayout>
-          </ProtectedRoute>
-        }
-      />
 
-      <Route
-        path="/admin/bookings/manual"
-        element={
-          <ProtectedRoute roles={["ROLE_ADMIN", "ROLE_SUPER_ADMIN"]}>
-            <AppLayout>
-              <AdminManualBooking />
-            </AppLayout>
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/admin/members"
-        element={
-          <ProtectedRoute roles={["ROLE_ADMIN", "ROLE_SUPER_ADMIN"]}>
-            <AppLayout>
-              <AdminMembersPage />
-            </AppLayout>
-          </ProtectedRoute>
-        }
-      />
+
+
+
       <Route
         path="/admin/revenue"
         element={
@@ -552,16 +458,7 @@ function App() {
           </ProtectedRoute>
         }
       />
-      <Route
-        path="/admin/date-overrides"
-        element={
-          <ProtectedRoute roles={["ROLE_ADMIN", "ROLE_SUPER_ADMIN"]}>
-            <AppLayout>
-              <CalendarView />
-            </AppLayout>
-          </ProtectedRoute>
-        }
-      />
+
 
       {/* PLAYER OVERVIEW WITH NESTED TABS */}
       <Route
@@ -626,16 +523,7 @@ function App() {
           </ProtectedRoute>
         }
       />
-      <Route
-        path="/admin/slot-templates"
-        element={
-          <ProtectedRoute roles={["ROLE_ADMIN", "ROLE_SUPER_ADMIN"]}>
-            <AppLayout>
-              <SlotTemplateManagement />
-            </AppLayout>
-          </ProtectedRoute>
-        }
-      />
+
       <Route
         path="/my-coaching"
         element={
@@ -648,46 +536,10 @@ function App() {
           </ProtectedRoute>
         }
       />
-      <Route
-        path="/admin/resources"
-        element={
-          <ProtectedRoute roles={["ROLE_ADMIN", "ROLE_SUPER_ADMIN"]}>
-            <AppLayout>
-              <ManageResources />
-            </AppLayout>
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/admin/slot-templates/create"
-        element={
-          <ProtectedRoute roles={["ROLE_ADMIN", "ROLE_SUPER_ADMIN"]}>
-            <AppLayout>
-              <CreateEditTemplate />
-            </AppLayout>
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/admin/slot-templates/generate"
-        element={
-          <ProtectedRoute roles={["ROLE_ADMIN", "ROLE_SUPER_ADMIN"]}>
-            <AppLayout>
-              <GenerateSlots />
-            </AppLayout>
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/admin/slot-templates/:id/edit"
-        element={
-          <ProtectedRoute roles={["ROLE_ADMIN", "ROLE_SUPER_ADMIN"]}>
-            <AppLayout>
-              <CreateEditTemplate />
-            </AppLayout>
-          </ProtectedRoute>
-        }
-      />
+
+
+
+
 
       <Route
         path="/admin/branches"

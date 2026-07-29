@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import api from "../../api/axios";
+import { useTenant } from "../../context/TenantContext";
 import toast from "react-hot-toast";
 import {
   Mail,
@@ -65,6 +66,7 @@ function timeAgo(dateStr: string) {
 // ── Main Component ────────────────────────────────────────────────────────────
 
 export default function ContactInbox() {
+  const { tenant } = useTenant();
   const [submissions, setSubmissions] = useState<Submission[]>([]);
   const [counts, setCounts] = useState<Counts>({ NEW: 0, READ: 0, REPLIED: 0 });
   const [loading, setLoading] = useState(true);
@@ -344,7 +346,7 @@ export default function ContactInbox() {
               <div className="flex gap-2 p-4 border-t bg-white">
                 {/* Open email client */}
                 <a
-                  href={`mailto:${selected.email}?subject=Re: Your inquiry to NCA Cricket Academy`}
+                  href={`mailto:${selected.email}?subject=Re: Your inquiry to ${tenant?.name || "our cricket academy"}`}
                   className="flex-1 py-2.5 text-sm font-medium text-center rounded-xl text-white bg-blue-600 hover:bg-blue-700 transition"
                 >
                   Reply via Email

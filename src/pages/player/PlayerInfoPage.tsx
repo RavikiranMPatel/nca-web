@@ -350,7 +350,6 @@ function PlayerInfoPage() {
               <p className="font-semibold text-red-800">Player Inactive</p>
               <p className="text-sm text-red-600">
                 This player is currently disabled and won't appear in attendance
-                or bookings.
               </p>
             </div>
           </div>

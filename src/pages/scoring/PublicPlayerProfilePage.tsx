@@ -420,7 +420,7 @@ export default function PublicPlayerProfilePage() {
           {/* Footer */}
           <div className="text-center pt-2 pb-4">
             <p className="text-xs text-gray-300 dark:text-gray-700">
-              Powered by NCA Mysuru · ncamysuru.com
+              Powered by RKMPCrease
             </p>
           </div>
         </div>

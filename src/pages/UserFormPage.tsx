@@ -61,7 +61,7 @@ const ROLES: RoleOption[] = [
   {
     value: "ROLE_ADMIN",
     label: "Admin",
-    description: "Manage players, batches & bookings",
+    description: "Manage players, batches & attendance",
     textColor: "text-violet-700",
     bgColor: "bg-violet-50",
     borderColor: "border-violet-300",

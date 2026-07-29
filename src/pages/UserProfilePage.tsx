@@ -257,9 +257,7 @@ function UserProfilePage() {
               className="flex-1 px-3 py-3 text-sm focus:outline-none"
             />
           </div>
-          <p className="text-xs text-slate-400 mt-1">
-            Used for booking confirmations via WhatsApp
-          </p>
+
         </div>
 
         {/* Email — read only */}
@@ -457,33 +455,7 @@ function UserProfilePage() {
       </div>
 
       {/* ── QUICK LINKS ───────────────────────────────────────────────── */}
-      {!isAdmin && (
-        <div className="bg-white rounded-2xl border border-slate-200 p-4 space-y-2">
-          <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3">
-            Quick Links
-          </p>
-          <button
-            onClick={() => navigate("/my-bookings")}
-            className="w-full flex items-center justify-between px-4 py-3
-                       rounded-xl hover:bg-slate-50 transition border border-slate-100"
-          >
-            <span className="text-sm font-medium text-slate-700">
-              📅 My Bookings
-            </span>
-            <ArrowLeft size={14} className="text-slate-400 rotate-180" />
-          </button>
-          <button
-            onClick={() => navigate("/my-subscription")}
-            className="w-full flex items-center justify-between px-4 py-3
-                       rounded-xl hover:bg-slate-50 transition border border-slate-100"
-          >
-            <span className="text-sm font-medium text-slate-700">
-              🏏 My Subscription
-            </span>
-            <ArrowLeft size={14} className="text-slate-400 rotate-180" />
-          </button>
-        </div>
-      )}
+
     </div>
   );
 }

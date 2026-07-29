@@ -7,7 +7,6 @@ import {
   TrendingDown,
   Calendar,
   CreditCard,
-  BookOpen,
   Download,
   RefreshCw,
   ChevronDown,
@@ -40,19 +39,7 @@ type FeePayment = {
   nextDueOn: string | null;
   feeStatus: string | null;
 };
-type Booking = {
-  bookingPublicId: string;
-  playerName: string;
-  bookedByEmail: string;
-  slotDate: string;
-  startTime: string;
-  endTime: string;
-  resourceType: string;
-  amount: number;
-  status: string;
-  paymentStatus: string | null;
-  paymentMode: string | null;
-};
+
 type FeeCollectionSummaryRow = {
   playerPublicId: string;
   feeAccountPublicId: string;
@@ -139,17 +126,7 @@ type RegFeeRow = {
   regFeeAmount: number;
 };
 
-type SubRevenueRow = {
-  publicId: string;
-  userName: string;
-  userPhone: string;
-  pricePaid: number;
-  paymentMode: string;
-  activatedAt: string | null;
-  status: string;
-  sessionsPerMonth: number;
-  planMonths: number;
-};
+
 type InstallmentPaymentRow = {
   publicId: string;
   amount: number;
@@ -165,11 +142,9 @@ type InstallmentPaymentRow = {
 type Tab =
   | "overview"
   | "fees"
-  | "bookings"
   | "campfees"
   | "feesummary"
   | "regfees"
-  | "subscriptions"
   | "expenses"
   | "income";
 type ExpenseSubTab = "summary" | "monthly" | "all";
@@ -363,7 +338,6 @@ export default function AdminRevenueDashboard() {
   const [recurringSaving, setRecurringSaving] = useState(false);
 
   const [feePayments, setFeePayments] = useState<FeePayment[]>([]);
-  const [bookings, setBookings] = useState<Booking[]>([]);
   const [expenses, setExpenses] = useState<OtherExpense[]>([]);
   const [partnerSpending, setPartnerSpending] = useState<PartnerSpending[]>([]);
   const [monthlyPayments, setMonthlyPayments] = useState<MonthlyPayment[]>([]);
@@ -397,8 +371,6 @@ export default function AdminRevenueDashboard() {
   );
   const [savingRegFee, setSavingRegFee] = useState(false);
 
-  const [subRevenue, setSubRevenue] = useState<SubRevenueRow[]>([]);
-  const [subRevenueSearch, setSubRevenueSearch] = useState("");
   const [installmentPayments, setInstallmentPayments] = useState<InstallmentPaymentRow[]>([]);
 
   const [flags, setFlags] = useState<Record<string, string>>({});
@@ -505,22 +477,18 @@ export default function AdminRevenueDashboard() {
     try {
       const [
         feesRes,
-        bookingsRes,
         campPaymentsRes,
         feeSummaryRes,
         regFeesRes,
-        subRevenueRes,
         settingsRes,
         installmentPaymentsRes,
       ] = await Promise.all([
         api.get("/admin/fees/payments"),
-        api.get("/admin/bookings"),
         api
           .get("/admin/camp-revenue/payments", { skipAuthError: true } as any)
           .catch(() => ({ data: [] })),
         api.get("/admin/fees/collection-summary").catch(() => ({ data: [] })),
         api.get("/admin/fees/registration-fees").catch(() => ({ data: [] })),
-        api.get("/admin/subscriptions/revenue").catch(() => ({ data: [] })),
         api.get("/admin/settings").catch(() => ({ data: {} })),
         api.get("/admin/fee-installments/all-payments").catch(() => ({ data: [] })),
       ]);
@@ -550,11 +518,9 @@ export default function AdminRevenueDashboard() {
       }
 
       setFeePayments(feesRes.data || []);
-      setBookings(bookingsRes.data || []);
       setCampPayments(campPaymentsRes.data || []);
       setFeeSummary(feeSummaryRes.data || []);
       setRegFees(regFeesRes.data || []);
-      setSubRevenue(subRevenueRes.data || []);
       setInstallmentPayments(installmentPaymentsRes.data || []);
       setExpenses(newExpenses);
       setPartnerSpending(newPartnerSpending);
@@ -616,8 +582,6 @@ export default function AdminRevenueDashboard() {
   }, [monthYear, isSuperAdmin]);
 
   const showCampFees    = flags["SUMMER_CAMP_ENABLED"]       !== "false";
-  const showBookings    = flags["MODULE_BOOKINGS_ENABLED"]   !== "false";
-  const showMemberships = flags["MODULE_BM_MEMBERS_ENABLED"] !== "false";
 
   const { from, to } = getDateBounds(dateRange, customFrom, customTo);
   const inRange = (d: string) => {
@@ -636,11 +600,7 @@ export default function AdminRevenueDashboard() {
     () => installmentPayments.filter((p) => inRange(p.paidOn)),
     [installmentPayments, from, to],
   );
-  const filteredBookings = useMemo(
-    () =>
-      bookings.filter((b) => b.paymentStatus === "PAID" && inRange(b.slotDate)),
-    [bookings, from, to],
-  );
+
   const filteredExpenses = useMemo(
     () =>
       expenses.filter(
@@ -660,34 +620,7 @@ export default function AdminRevenueDashboard() {
     [campPayments, from, to],
   );
 
-  const groupedBookings = useMemo(() => {
-    const groups = new Map<
-      string,
-      {
-        key: string;
-        name: string;
-        contact: string;
-        bookings: Booking[];
-        total: number;
-      }
-    >();
-    filteredBookings.forEach((b) => {
-      const contact = b.bookedByEmail || "unknown";
-      if (groups.has(contact)) {
-        const g = groups.get(contact)!;
-        g.bookings.push(b);
-        g.total += b.amount || 0;
-      } else
-        groups.set(contact, {
-          key: contact,
-          name: b.playerName || contact,
-          contact,
-          bookings: [b],
-          total: b.amount || 0,
-        });
-    });
-    return Array.from(groups.values()).sort((a, b) => b.total - a.total);
-  }, [filteredBookings]);
+
 
   const searchedExpenses = useMemo(
     () =>
@@ -731,10 +664,7 @@ export default function AdminRevenueDashboard() {
   const feesTotal =
     filteredFees.reduce((s, p) => s + (p.amount || 0), 0) +
     filteredInstallmentPayments.reduce((s, p) => s + (p.amount || 0), 0);
-  const bookingsTotal = filteredBookings.reduce(
-    (s, b) => s + (b.amount || 0),
-    0,
-  );
+
   const campFeesTotal = filteredCampFees.reduce(
     (s, p) => s + (p.amount || 0),
     0,
@@ -750,9 +680,7 @@ export default function AdminRevenueDashboard() {
   const monthlyPaidTotal = monthlyPayments
     .filter((p) => p.status === "PAID")
     .reduce((s, p) => s + (p.amount || 0), 0);
-  const pendingBookings = bookings.filter(
-    (b) => b.status === "PENDING_PAYMENT",
-  ).length;
+
 
   // ── NEW: Registration Fee totals ──
   const regFeesTotal = regFees
@@ -769,27 +697,13 @@ export default function AdminRevenueDashboard() {
     [regFees, regFeeSearch],
   );
 
-  const subRevenueTotal = subRevenue
-    .filter((r) => inRange(r.activatedAt || ""))
-    .reduce((s, r) => s + (r.pricePaid || 0), 0);
 
-  const filteredSubRevenue = useMemo(
-    () =>
-      subRevenue.filter(
-        (r) =>
-          !subRevenueSearch ||
-          r.userName.toLowerCase().includes(subRevenueSearch.toLowerCase()),
-      ),
-    [subRevenue, subRevenueSearch],
-  );
 
   const grossRevenue =
     feesTotal +
-    (showBookings    ? bookingsTotal  : 0) +
-    (showCampFees    ? campFeesTotal  : 0) +
+    (showCampFees ? campFeesTotal : 0) +
     otherIncomeTotal +
-    regFeesTotal +
-    (showMemberships ? subRevenueTotal : 0);
+    regFeesTotal;
   const netRevenue = grossRevenue - expensesTotal;
 
   const rangeLabels: Record<DateRange, string> = {
@@ -976,23 +890,7 @@ export default function AdminRevenueDashboard() {
         fmtMode(p.paymentMode),
       ]),
     );
-    if (showBookings) {
-      filteredBookings.forEach((b) =>
-        rows.push([
-          "Booking",
-          fmtDate(b.slotDate),
-          `${b.resourceType} ${b.startTime}-${b.endTime}`,
-          "",
-          "",
-          "",
-          "",
-          "",
-          "",
-          String(b.amount),
-          fmtMode(b.paymentMode),
-        ]),
-      );
-    }
+
     // ── NEW: include reg fees in CSV ──
     regFees
       .filter((r) => r.regFeePaid && inRange(r.regFeePaidOn || ""))
@@ -1162,15 +1060,6 @@ export default function AdminRevenueDashboard() {
       amount: p.amount,
       mode: fmtMode(p.paymentMode),
     }));
-    const bks: TxRow[] = filteredBookings.map((b) => ({
-      key: "b-" + b.bookingPublicId,
-      date: b.slotDate,
-      type: "booking",
-      name: b.playerName || b.bookedByEmail || "User",
-      description: `${b.resourceType} · ${b.startTime}–${b.endTime}`,
-      amount: b.amount,
-      mode: fmtMode(b.paymentMode),
-    }));
     // ── NEW: reg fees in overview ──
     const regs: TxRow[] = regFees
       .filter((r) => r.regFeePaid && inRange(r.regFeePaidOn || ""))
@@ -1183,17 +1072,7 @@ export default function AdminRevenueDashboard() {
         amount: r.regFeeAmount,
         mode: fmtMode(r.regFeePaymentMode),
       }));
-    const subs: TxRow[] = subRevenue
-      .filter((r) => r.activatedAt && inRange(r.activatedAt))
-      .map((r) => ({
-        key: "sub-" + r.publicId,
-        date: r.activatedAt || "",
-        type: "fee" as const,
-        name: r.userName,
-        description: `Membership · ${r.sessionsPerMonth} sessions × ${r.planMonths}mo`,
-        amount: r.pricePaid,
-        mode: fmtMode(r.paymentMode),
-      }));
+
     const instPays: TxRow[] = filteredInstallmentPayments.map((p) => ({
       key: "inst-" + p.publicId,
       date: p.paidOn,
@@ -1225,20 +1104,18 @@ export default function AdminRevenueDashboard() {
           mode: "—",
         }))
       : [];
-    return [...fees, ...camps, ...bks, ...regs, ...subs, ...instPays, ...exps, ...incs]
+    return [...fees, ...camps, ...regs, ...instPays, ...exps, ...incs]
       .sort((a, b) => (b.date > a.date ? 1 : -1))
       .slice(0, 20);
   }, [
     filteredFees,
     filteredCampFees,
-    filteredBookings,
     regFees,
     filteredExpenses,
     filteredIncomes,
     filteredInstallmentPayments,
     isSuperAdmin,
     from,
-    subRevenue,
     to,
   ]);
 
@@ -1879,7 +1756,7 @@ export default function AdminRevenueDashboard() {
               Revenue
             </h1>
             <p className="text-xs text-slate-500 hidden sm:block">
-              Fees{showCampFees ? " + Camp Fees" : ""}{showBookings ? " + Bookings" : ""} + Reg Fees{showMemberships ? " + Memberships" : ""}{isSuperAdmin ? " + Expenses" : ""}
+              Fees{showCampFees ? " + Camp Fees" : ""} + Reg Fees{isSuperAdmin ? " + Expenses" : ""}
             </p>
           </div>
         </div>
@@ -2044,18 +1921,7 @@ export default function AdminRevenueDashboard() {
             onClick={() => setActiveTab("campfees")}
           />
         )}
-        {showBookings && (
-          <SummaryCard
-            label="Bookings"
-            value={fmt(bookingsTotal)}
-            sub={`${filteredBookings.length} paid`}
-            icon={<BookOpen size={15} className="text-orange-500" />}
-            bg="bg-gradient-to-br from-orange-50 to-amber-50"
-            border="border-orange-200"
-            valueClass="text-orange-600"
-            onClick={() => setActiveTab("bookings")}
-          />
-        )}
+
         <SummaryCard
           label="Reg Fees"
           value={fmt(regFeesTotal)}
@@ -2066,18 +1932,7 @@ export default function AdminRevenueDashboard() {
           valueClass="text-purple-700"
           onClick={() => setActiveTab("regfees")}
         />
-        {showMemberships && (
-          <SummaryCard
-            label="Memberships"
-            value={fmt(subRevenueTotal)}
-            sub={`${subRevenue.filter((r) => inRange(r.activatedAt || "")).length} activated`}
-            icon={<CreditCard size={15} className="text-cyan-600" />}
-            bg="bg-gradient-to-br from-cyan-50 to-sky-50"
-            border="border-cyan-200"
-            valueClass="text-cyan-700"
-            onClick={() => setActiveTab("subscriptions")}
-          />
-        )}
+
         {isSuperAdmin && (
           <SummaryCard
             label="Other Income"
@@ -2102,18 +1957,7 @@ export default function AdminRevenueDashboard() {
             onClick={() => setActiveTab("expenses")}
           />
         )}
-        {showBookings && (
-          <SummaryCard
-            label="Pending"
-            value={String(pendingBookings)}
-            sub="awaiting payment"
-            icon={<Clock size={15} className="text-rose-500" />}
-            bg="bg-gradient-to-br from-rose-50 to-pink-50"
-            border="border-rose-200"
-            valueClass="text-rose-600"
-            onClick={() => setActiveTab("bookings")}
-          />
-        )}
+
       </div>
 
       {/* ── Main Tabs ── */}
@@ -2125,11 +1969,9 @@ export default function AdminRevenueDashboard() {
           [
             ["overview", "Overview"],
             ["fees", `Fees (${filteredFees.length})`],
-            ...(showBookings ? [["bookings", `Bookings (${filteredBookings.length})`]] : []),
             ...(showCampFees ? [["campfees", `Camp Fees (${filteredCampFees.length})`]] : []),
             ["feesummary", `Fee Summary (${feeSummary.length})`],
             ["regfees", `Reg Fees (${regFees.length})`],
-            ...(showMemberships ? [["subscriptions", `Memberships (${subRevenue.length})`]] : []),
             ...(isSuperAdmin
               ? [
                   ["expenses", `Expenses (${filteredExpenses.length})`],
@@ -2168,12 +2010,10 @@ export default function AdminRevenueDashboard() {
                 >
                   <div className="flex items-center gap-2.5 min-w-0">
                     <div
-                      className={`w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 ${tx.type === "fee" ? "bg-blue-100" : tx.type === "booking" ? "bg-orange-100" : tx.type === "income" ? "bg-violet-100" : tx.type === "regfee" ? "bg-purple-100" : "bg-red-100"}`}
+                      className={`w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 ${tx.type === "fee" ? "bg-blue-100" : tx.type === "income" ? "bg-violet-100" : tx.type === "regfee" ? "bg-purple-100" : "bg-red-100"}`}
                     >
                       {tx.type === "fee" ? (
                         <CreditCard size={12} className="text-blue-600" />
-                      ) : tx.type === "booking" ? (
-                        <BookOpen size={12} className="text-orange-500" />
                       ) : tx.type === "income" ? (
                         <TrendingUp size={12} className="text-violet-500" />
                       ) : tx.type === "regfee" ? (
@@ -2382,151 +2222,6 @@ export default function AdminRevenueDashboard() {
       )}
 
       {/* ── BOOKINGS ── */}
-      {activeTab === "bookings" && (
-        <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-          <div className="px-4 py-3 border-b border-slate-100 bg-slate-50 flex items-center justify-between">
-            <h2 className="font-bold text-slate-800 text-sm sm:text-base">
-              Booking Payments
-            </h2>
-            <span className="text-sm font-semibold text-orange-600">
-              {fmt(bookingsTotal)}
-            </span>
-          </div>
-          {groupedBookings.length === 0 ? (
-            <EmptyState message="No booking payments in this period" />
-          ) : (
-            <div className="divide-y divide-slate-100">
-              {groupedBookings.map((group) => (
-                <div key={group.key}>
-                  <div
-                    onClick={() =>
-                      setExpandedUser(
-                        expandedUser === group.key ? null : group.key,
-                      )
-                    }
-                    className="flex items-center justify-between px-3 sm:px-5 py-3.5 hover:bg-slate-50 cursor-pointer active:bg-slate-100"
-                  >
-                    <div className="flex items-center gap-2.5 min-w-0">
-                      <div className="w-8 h-8 rounded-full bg-orange-100 flex items-center justify-center flex-shrink-0">
-                        <span className="text-sm font-bold text-orange-600">
-                          {group.name.charAt(0).toUpperCase()}
-                        </span>
-                      </div>
-                      <div className="min-w-0">
-                        <p className="text-sm font-semibold text-slate-800 truncate">
-                          {group.name}
-                        </p>
-                        <p className="text-xs text-slate-400">
-                          {group.bookings.length} booking
-                          {group.bookings.length !== 1 ? "s" : ""}
-                        </p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2 flex-shrink-0 ml-2">
-                      <p className="text-sm font-bold text-slate-900">
-                        {fmt(group.total)}
-                      </p>
-                      <ChevronDown
-                        size={15}
-                        className={`text-slate-400 transition-transform ${expandedUser === group.key ? "rotate-180" : ""}`}
-                      />
-                    </div>
-                  </div>
-                  {expandedUser === group.key && (
-                    <div className="bg-slate-50 border-t border-slate-100">
-                      <div className="sm:hidden divide-y divide-slate-100">
-                        {group.bookings
-                          .sort((a, b) => (b.slotDate > a.slotDate ? 1 : -1))
-                          .map((b) => (
-                            <div
-                              key={b.bookingPublicId}
-                              className="flex items-center justify-between px-4 py-3"
-                            >
-                              <div>
-                                <p className="text-sm font-medium text-slate-800">
-                                  {fmtDateShort(b.slotDate)} · {b.startTime}–
-                                  {b.endTime}
-                                </p>
-                                <p className="text-xs text-slate-500">
-                                  {b.resourceType} · {fmtMode(b.paymentMode)}
-                                </p>
-                              </div>
-                              <p className="text-sm font-bold text-slate-900">
-                                {fmt(b.amount)}
-                              </p>
-                            </div>
-                          ))}
-                      </div>
-                      <div className="hidden sm:block overflow-x-auto">
-                        <table className="w-full">
-                          <thead>
-                            <tr className="text-xs text-slate-400 uppercase tracking-wide border-b border-slate-200">
-                              {[
-                                "Date",
-                                "Slot",
-                                "Resource",
-                                "Amount",
-                                "Mode",
-                                "Status",
-                              ].map((h) => (
-                                <th key={h} className="text-left px-5 py-2">
-                                  {h}
-                                </th>
-                              ))}
-                            </tr>
-                          </thead>
-                          <tbody className="divide-y divide-slate-100">
-                            {group.bookings
-                              .sort((a, b) =>
-                                b.slotDate > a.slotDate ? 1 : -1,
-                              )
-                              .map((b) => (
-                                <tr
-                                  key={b.bookingPublicId}
-                                  className="hover:bg-white"
-                                >
-                                  <td className="px-5 py-2.5 text-sm text-slate-600">
-                                    {fmtDate(b.slotDate)}
-                                  </td>
-                                  <td className="px-5 py-2.5 text-sm text-slate-600">
-                                    {b.startTime}–{b.endTime}
-                                  </td>
-                                  <td className="px-5 py-2.5 text-sm text-slate-600">
-                                    {b.resourceType}
-                                  </td>
-                                  <td className="px-5 py-2.5 text-sm font-bold text-slate-900">
-                                    {fmt(b.amount)}
-                                  </td>
-                                  <td className="px-5 py-2.5 text-sm text-slate-600">
-                                    {fmtMode(b.paymentMode)}
-                                  </td>
-                                  <td className="px-5 py-2.5">
-                                    <span className="inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-700">
-                                      <CheckCircle2 size={11} />
-                                      Paid
-                                    </span>
-                                  </td>
-                                </tr>
-                              ))}
-                          </tbody>
-                        </table>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              ))}
-              <div className="flex items-center justify-between px-4 sm:px-5 py-3.5 bg-slate-50 border-t-2 border-slate-200">
-                <span className="text-sm font-semibold text-slate-700">
-                  Total · {groupedBookings.length} users
-                </span>
-                <span className="text-sm font-bold text-orange-600">
-                  {fmt(bookingsTotal)}
-                </span>
-              </div>
-            </div>
-          )}
-        </div>
-      )}
 
       {/* ── CAMP FEES ── */}
       {activeTab === "campfees" && (
@@ -3259,148 +2954,6 @@ export default function AdminRevenueDashboard() {
       )}
 
       {/* ── MEMBERSHIPS / SUBSCRIPTION REVENUE ── */}
-      {activeTab === "subscriptions" && (
-        <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-          <div className="px-4 py-3 border-b border-slate-100 bg-slate-50 flex items-center justify-between flex-wrap gap-2">
-            <div>
-              <h2 className="font-bold text-slate-800 text-sm sm:text-base">
-                Membership Revenue
-              </h2>
-              <p className="text-xs text-slate-400">
-                Bowling machine subscriptions
-              </p>
-            </div>
-            <span className="text-sm font-semibold text-cyan-600">
-              {fmt(subRevenueTotal)}
-            </span>
-          </div>
-
-          <div className="px-4 py-2.5 border-b border-slate-100">
-            <input
-              type="text"
-              value={subRevenueSearch}
-              onChange={(e) => setSubRevenueSearch(e.target.value)}
-              placeholder="Search member…"
-              className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-cyan-400 focus:outline-none"
-            />
-          </div>
-
-          {filteredSubRevenue.length === 0 ? (
-            <EmptyState message="No membership revenue in this period" />
-          ) : (
-            <>
-              {/* Mobile */}
-              <div className="sm:hidden divide-y divide-slate-100">
-                {filteredSubRevenue.map((r) => (
-                  <div key={r.publicId} className="px-4 py-3.5">
-                    <div className="flex items-center justify-between gap-2">
-                      <div>
-                        <p className="text-sm font-semibold text-slate-800">
-                          {r.userName}
-                        </p>
-                        <p className="text-xs text-slate-500 mt-0.5">
-                          {r.sessionsPerMonth} sessions × {r.planMonths}mo
-                          {r.activatedAt && ` · ${fmtDate(r.activatedAt)}`}
-                          {r.paymentMode && ` · ${fmtMode(r.paymentMode)}`}
-                        </p>
-                      </div>
-                      <p className="text-sm font-bold text-cyan-700 flex-shrink-0">
-                        {fmt(r.pricePaid)}
-                      </p>
-                    </div>
-                  </div>
-                ))}
-                <div className="flex items-center justify-between px-4 py-3 bg-slate-50 border-t-2 border-slate-200">
-                  <span className="text-sm font-semibold text-slate-700">
-                    Total · {filteredSubRevenue.length}
-                  </span>
-                  <span className="text-sm font-bold text-cyan-700">
-                    {fmt(subRevenueTotal)}
-                  </span>
-                </div>
-              </div>
-
-              {/* Desktop */}
-              <div className="hidden sm:block overflow-x-auto">
-                <table className="w-full">
-                  <thead>
-                    <tr className="text-xs text-slate-500 uppercase tracking-wide border-b bg-slate-50/50">
-                      {[
-                        "Member",
-                        "Plan",
-                        "Activated On",
-                        "Mode",
-                        "Status",
-                        "Amount",
-                      ].map((h) => (
-                        <th
-                          key={h}
-                          className="text-left px-4 py-3 whitespace-nowrap"
-                        >
-                          {h}
-                        </th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100">
-                    {filteredSubRevenue.map((r) => (
-                      <tr key={r.publicId} className="hover:bg-slate-50">
-                        <td className="px-4 py-3">
-                          <p className="text-sm font-semibold text-slate-800">
-                            {r.userName}
-                          </p>
-                          <p className="text-xs text-slate-400">
-                            {r.userPhone}
-                          </p>
-                        </td>
-                        <td className="px-4 py-3 text-sm text-slate-600">
-                          {r.sessionsPerMonth} sessions × {r.planMonths} month
-                          {r.planMonths > 1 ? "s" : ""}
-                        </td>
-                        <td className="px-4 py-3 text-sm text-slate-600">
-                          {fmtDate(r.activatedAt)}
-                        </td>
-                        <td className="px-4 py-3 text-sm text-slate-600">
-                          {fmtMode(r.paymentMode)}
-                        </td>
-                        <td className="px-4 py-3">
-                          <span
-                            className={`text-xs font-bold px-2.5 py-1 rounded-full ${
-                              r.status === "ACTIVE"
-                                ? "bg-emerald-100 text-emerald-700"
-                                : r.status === "EXPIRED"
-                                  ? "bg-slate-100 text-slate-600"
-                                  : "bg-red-100 text-red-600"
-                            }`}
-                          >
-                            {r.status}
-                          </span>
-                        </td>
-                        <td className="px-4 py-3 text-sm font-bold text-cyan-700">
-                          {fmt(r.pricePaid)}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                  <tfoot>
-                    <tr className="border-t-2 border-slate-200 bg-slate-50">
-                      <td
-                        colSpan={5}
-                        className="px-4 py-3 text-sm font-semibold text-slate-700"
-                      >
-                        Total · {filteredSubRevenue.length} memberships
-                      </td>
-                      <td className="px-4 py-3 text-sm font-bold text-cyan-700">
-                        {fmt(subRevenueTotal)}
-                      </td>
-                    </tr>
-                  </tfoot>
-                </table>
-              </div>
-            </>
-          )}
-        </div>
-      )}
 
       {/* ── EXPENSES (SUPER ADMIN) ── */}
       {activeTab === "expenses" && isSuperAdmin && (

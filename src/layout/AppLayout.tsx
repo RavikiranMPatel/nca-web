@@ -3,8 +3,6 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/useAuth";
 import {
   Home,
-  CalendarDays,
-  BookOpen,
   LayoutDashboard,
   User,
 } from "lucide-react";
@@ -31,8 +29,6 @@ function BottomNav() {
       ]
     : [
         { icon: Home, label: "Home", to: "/home" },
-        { icon: CalendarDays, label: "Book Slot", to: "/book-slot" },
-        { icon: BookOpen, label: "My Bookings", to: "/my-bookings" },
         {
           icon: User,
           label: "Profile",

@@ -148,9 +148,8 @@ function Navbar() {
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [moreMenuOpen, setMoreMenuOpen] = useState(false);
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
-  const [academyName, setAcademyName] = useState("NCA");
+  const [academyName, setAcademyName] = useState("Cricket Academy");
   const [starPerformerEnabled, setStarPerformerEnabled] = useState(false);
-  const [showSlotBooking, setShowSlotBooking] = useState(false);
   const [enabledSections, setEnabledSections] = useState<
     { id: string; label: string }[]
   >([]);
@@ -164,9 +163,8 @@ function Navbar() {
       .then((res) => {
         const d = res.data;
         setLogoUrl(d.LOGO_URL || null);
-        setAcademyName(d.ACADEMY_NAME || "NCA");
+        setAcademyName(d.ACADEMY_NAME || "Cricket Academy");
         setStarPerformerEnabled(d.SECTION_STAR_PERFORMER_ENABLED === "true");
-        setShowSlotBooking(d.MODULE_SLOT_BOOKING_ENABLED === "true");
 
         const sections: { id: string; label: string }[] = [];
         if (d.SECTION_FACILITIES_ENABLED !== "false")
@@ -347,30 +345,7 @@ function Navbar() {
                 </NavLink>
               )}
 
-              {!isAdmin && showSlotBooking && (
-                <>
-                  <NavLink to="/book-slot" className={linkClass}>
-                    Book Slot
-                  </NavLink>
-                  {isAuthenticated ? (
-                    <NavLink to="/my-bookings" className={linkClass}>
-                      My Bookings
-                    </NavLink>
-                  ) : (
-                    <button
-                      onClick={() =>
-                        guardedNavigate(
-                          "/my-bookings",
-                          "Please login to view your bookings.",
-                        )
-                      }
-                      className="px-3 py-2 text-sm text-gray-700 hover:text-blue-600 hover:bg-gray-50 rounded transition"
-                    >
-                      My Bookings
-                    </button>
-                  )}
-                </>
-              )}
+
 
               {isAdmin && (
                 <NavLink
@@ -428,18 +403,7 @@ function Navbar() {
                           <User size={15} />
                           My Profile
                         </button>
-                        {!isAdmin && (
-                          <button
-                            onClick={() => {
-                              navigate("/my-subscription");
-                              setUserMenuOpen(false);
-                            }}
-                            className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition"
-                          >
-                            <span className="text-base leading-none">🏏</span>My
-                            Subscription
-                          </button>
-                        )}
+
                         {userRole === "ROLE_PLAYER" && isAuthenticated && (
                           <button
                             onClick={() => {
@@ -572,34 +536,7 @@ function Navbar() {
             iconBg="#eff6ff"
             iconColor="#2563eb"
           />
-          {!isAdmin && showSlotBooking && (
-            <DrawerItem
-              icon={CalendarDays}
-              label="Book a Slot"
-              active={location.pathname === "/book-slot"}
-              onClick={() => {
-                navigate("/book-slot");
-                setMobileOpen(false);
-              }}
-              iconBg="#f0fdf4"
-              iconColor="#16a34a"
-            />
-          )}
-          {!isAdmin && showSlotBooking && (
-            <DrawerItem
-              icon={BookOpen}
-              label="My Bookings"
-              active={location.pathname === "/my-bookings"}
-              onClick={() =>
-                guardedNavigate(
-                  "/my-bookings",
-                  "Please login to view your bookings.",
-                )
-              }
-              iconBg="#fef3c7"
-              iconColor="#d97706"
-            />
-          )}
+
           {!isAdmin && starPerformerEnabled && (
             <DrawerItem
               icon={User}
@@ -698,19 +635,7 @@ function Navbar() {
                 iconBg="#f3f4f6"
                 iconColor="#374151"
               />
-              {!isAdmin && (
-                <DrawerItem
-                  icon={User}
-                  label="My Subscription"
-                  active={location.pathname === "/my-subscription"}
-                  onClick={() => {
-                    navigate("/my-subscription");
-                    setMobileOpen(false);
-                  }}
-                  iconBg="#f3f4f6"
-                  iconColor="#374151"
-                />
-              )}
+
               {userRole === "ROLE_PLAYER" && (
                 <DrawerItem
                   icon={User}

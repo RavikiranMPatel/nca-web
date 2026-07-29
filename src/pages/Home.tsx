@@ -96,7 +96,6 @@ type AcademySettings = {
   INSTAGRAM_POST_4?: string;
   INSTAGRAM_POST_5?: string;
   SECTION_CRICKET_STATS_ENABLED?: string;
-  MODULE_SLOT_BOOKING_ENABLED?: string;
   CORNER_STYLE?: string;
   FONT_PAIRING?: string;
   HERO_PHOTO_URL?: string;
@@ -505,7 +504,6 @@ function Home() {
   const youtubeEnabled = settings.SECTION_YOUTUBE_ENABLED !== "false";
   const cricketStatsEnabled =
     settings.SECTION_CRICKET_STATS_ENABLED !== "false";
-  const showSlotBooking = settings.MODULE_SLOT_BOOKING_ENABLED === "true";
   const youtubeHeading = settings.YOUTUBE_HEADING || "Watch Us in Action";
   const youtubeSubheading =
     settings.YOUTUBE_SUBHEADING ||
@@ -1003,16 +1001,7 @@ function Home() {
           }}
         >
           <div className="flex gap-3 max-w-lg mx-auto">
-            {showSlotBooking && (
-              <button
-                onClick={() => navigate("/book-slot")}
-                style={{ backgroundColor: primaryColor, ...getButtonStyle() }}
-                className="flex-1 py-3 text-white font-bold text-sm hover:opacity-90 transition shadow-md flex items-center justify-center gap-1.5"
-              >
-                🏏 Book a Training Slot
-                <ArrowRight size={15} />
-              </button>
-            )}
+
             <button
               onClick={() =>
                 document
@@ -1317,15 +1306,7 @@ function Home() {
                   world-class facilities, and a winning environment.
                 </p>
                 <div className="flex flex-col sm:flex-row gap-3 mb-8 w-full sm:w-auto">
-                  {showSlotBooking && (
-                    <button
-                      onClick={() => navigate("/book-slot")}
-                      style={{ backgroundColor: primaryColor, ...getButtonStyle() }}
-                      className="w-full sm:w-auto px-8 py-4 text-white text-base font-semibold hover:opacity-90 transition shadow-lg flex items-center justify-center gap-2"
-                    >
-                      Book a Slot <ArrowRight size={18} />
-                    </button>
-                  )}
+
                   <button
                     onClick={() =>
                       document
@@ -1394,15 +1375,7 @@ function Home() {
                 world-class facilities, and a winning environment.
               </p>
               <div className="flex flex-col sm:flex-row gap-3 justify-center">
-                {showSlotBooking && (
-                  <button
-                    onClick={() => navigate("/book-slot")}
-                    style={{ backgroundColor: primaryColor, ...getButtonStyle() }}
-                    className="w-full sm:w-auto px-8 py-4 text-white text-base font-semibold hover:opacity-90 transition shadow-lg flex items-center justify-center gap-2"
-                  >
-                    Book a Slot <ArrowRight size={18} />
-                  </button>
-                )}
+
                 <button
                   onClick={() =>
                     document
