@@ -1,8 +1,9 @@
 import { useNavigate, useParams, useLocation, Outlet } from "react-router-dom";
-import { ArrowLeft, ChevronRight, Lock } from "lucide-react";
+import { ArrowLeft, ChevronRight, Lock, FileText } from "lucide-react";
 import { useEffect, useState } from "react";
 import Button from "../../components/Button";
 import api from "../../api/axios";
+import { toast } from "react-hot-toast";
 
 function PlayerOverviewPage() {
   const navigate = useNavigate();
@@ -15,6 +16,7 @@ function PlayerOverviewPage() {
 
   const [playerName, setPlayerName] = useState<string>("");
   const [showTooltip, setShowTooltip] = useState(false);
+  const [downloadingPdf, setDownloadingPdf] = useState(false);
 
   const isExternalPlayer = playerPublicId?.startsWith("EXT-") ?? false;
 
@@ -53,6 +55,27 @@ function PlayerOverviewPage() {
     }
   };
 
+  const handleDownloadProfile = async () => {
+    setDownloadingPdf(true);
+    try {
+      const res = await api.get(
+        `/admin/players/${playerPublicId}/profile.pdf`,
+        { responseType: "blob" }
+      );
+      const url = window.URL.createObjectURL(res.data as Blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `profile-${playerPublicId}.pdf`;
+      link.click();
+      window.URL.revokeObjectURL(url);
+      toast.success("Profile PDF downloaded");
+    } catch {
+      toast.error("Failed to download profile PDF");
+    } finally {
+      setDownloadingPdf(false);
+    }
+  };
+
   return (
     <div className="max-w-5xl mx-auto space-y-4 px-4 md:px-0">
       {/* ================= HEADER ================= */}
@@ -70,38 +93,50 @@ function PlayerOverviewPage() {
           </h1>
         </div>
 
-        {/* UPDATE BUTTON - VISIBLE FOR ALL ADMINS */}
         {isAdmin && (
-          <div className="relative self-start md:self-auto">
-            <div
-              onMouseEnter={() => !isSuperAdmin && setShowTooltip(true)}
-              onMouseLeave={() => setShowTooltip(false)}
-              onClick={() => !isSuperAdmin && setShowTooltip(true)}
+          <div className="flex items-center gap-2 self-start md:self-auto">
+            {/* Profile PDF download */}
+            <button
+              onClick={handleDownloadProfile}
+              disabled={downloadingPdf}
+              className="flex items-center gap-1.5 px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+              title="Download Profile PDF"
             >
-              <Button
-                variant="primary"
-                onClick={handleUpdateClick}
-                disabled={!isSuperAdmin}
-              >
-                <div className="flex items-center gap-2">
-                  {!isSuperAdmin && <Lock size={16} />}
-                  Update Player
-                </div>
-              </Button>
-            </div>
+              <FileText size={15} />
+              {downloadingPdf ? "Downloading…" : "Profile PDF"}
+            </button>
 
-            {/* TOOLTIP */}
-            {showTooltip && !isSuperAdmin && (
-              <div className="absolute top-full mt-2 right-0 md:left-1/2 md:-translate-x-1/2 z-50 w-64 md:w-auto">
-                <div className="bg-gray-900 text-white text-xs rounded-lg px-3 py-2 shadow-lg">
+            {/* Update button */}
+            <div className="relative">
+              <div
+                onMouseEnter={() => !isSuperAdmin && setShowTooltip(true)}
+                onMouseLeave={() => setShowTooltip(false)}
+                onClick={() => !isSuperAdmin && setShowTooltip(true)}
+              >
+                <Button
+                  variant="primary"
+                  onClick={handleUpdateClick}
+                  disabled={!isSuperAdmin}
+                >
                   <div className="flex items-center gap-2">
-                    <Lock size={14} />
-                    <span>Update option only for Super Admin</span>
+                    {!isSuperAdmin && <Lock size={16} />}
+                    Update Player
                   </div>
-                  <div className="absolute -top-1 right-4 md:left-1/2 md:-translate-x-1/2 w-2 h-2 bg-gray-900 transform rotate-45"></div>
-                </div>
+                </Button>
               </div>
-            )}
+
+              {showTooltip && !isSuperAdmin && (
+                <div className="absolute top-full mt-2 right-0 md:left-1/2 md:-translate-x-1/2 z-50 w-64 md:w-auto">
+                  <div className="bg-gray-900 text-white text-xs rounded-lg px-3 py-2 shadow-lg">
+                    <div className="flex items-center gap-2">
+                      <Lock size={14} />
+                      <span>Update option only for Super Admin</span>
+                    </div>
+                    <div className="absolute -top-1 right-4 md:left-1/2 md:-translate-x-1/2 w-2 h-2 bg-gray-900 transform rotate-45"></div>
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         )}
       </div>
