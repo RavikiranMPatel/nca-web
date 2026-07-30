@@ -97,8 +97,18 @@ export default function BulkImportPlayerPage() {
       a.download = "player_import_template.xlsx";
       a.click();
       URL.revokeObjectURL(url);
-    } catch {
-      toast.error("Failed to download template");
+    } catch (err: any) {
+      // The server returns a JSON error body even for blob requests — parse it
+      // to surface the specific validation message (e.g. missing branches/batches).
+      let message = "Failed to download template";
+      try {
+        const text = await err?.response?.data?.text?.();
+        const parsed = text ? JSON.parse(text) : null;
+        if (parsed?.message) message = parsed.message;
+      } catch {
+        // ignore parse errors — fall back to generic message
+      }
+      toast.error(message, { duration: 6000 });
     }
   };
 

@@ -45,17 +45,18 @@ export interface CricketTeam {
 
 export interface MatchTeamPlayer {
   id: string;
-  player: {
-    publicId: string;
-    displayName: string;
-    battingStyle?: string;
-    bowlingStyle?: string;
-    photoUrl?: string;
-  };
+  mtpPublicId: string;       // scoring identifier for both academy and guest players
+  playerPublicId?: string;   // Player.publicId — for profile links; null for guests
+  displayName: string;
+  externalName?: string;     // set for guest players only
+  battingStyle?: string;
+  bowlingStyle?: string;
+  photoUrl?: string;
   battingOrder?: number;
   isCaptain: boolean;
   isWicketkeeper: boolean;
   isImpactPlayer: boolean;
+  isForeign: boolean;
 }
 
 export interface PlayerOption {
@@ -86,11 +87,13 @@ export interface SetTeamsRequest {
 }
 
 export interface PlayerSelection {
-  playerPublicId: string;
+  playerPublicId: string;  // empty string for guest players
+  externalName?: string;   // set for guest players; backend uses this when playerPublicId is blank
   battingOrder: number;
   isCaptain: boolean;
   isWicketkeeper: boolean;
   isImpactPlayer: boolean;
+  isForeign: boolean;
 }
 
 export interface TossRequest {

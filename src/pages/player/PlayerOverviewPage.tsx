@@ -43,7 +43,9 @@ function PlayerOverviewPage() {
           ? "Media"
           : location.pathname.includes("/coaching")
             ? "Coaching"
-            : "Info";
+            : location.pathname.includes("/kit")
+              ? "Kit"
+              : "Info";
 
   const handleUpdateClick = () => {
     if (isSuperAdmin) {
@@ -163,6 +165,13 @@ function PlayerOverviewPage() {
               onClick={() => navigate(`/admin/players/${playerPublicId}/media`)}
             >
               📸 Media
+            </TabButton>
+
+            <TabButton
+              active={activeTab === "Kit"}
+              onClick={() => navigate(`/admin/players/${playerPublicId}/kit`)}
+            >
+              🏏 Kit
             </TabButton>
           </>
         )}

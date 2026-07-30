@@ -69,8 +69,12 @@ import TermsOfServicePage from "./pages/TermsOfServicePage";
 import PrivacyPolicyPage from "./pages/PrivacyPolicyPage";
 import RepresentativeHonorsAdmin from "./pages/admin/RepresentativeHonorsAdmin";
 import BulkImportPlayerPage from "./pages/player/BulkImportPlayerPage";
-
-
+import PlayerKitPage from "./pages/player/PlayerKitPage";
+import KitBulkPage from "./pages/kit/KitBulkPage";
+import KitPurchaseOrderPage from "./pages/kit/KitPurchaseOrderPage";
+import InventoryListPage from "./pages/inventory/InventoryListPage";
+import InventoryCheckoutsPage from "./pages/inventory/InventoryCheckoutsPage";
+import AuditLogPage from "./pages/AuditLogPage";
 
 function App() {
   const { loading: tenantLoading, error: tenantError, tenant } = useTenant();
@@ -500,7 +504,63 @@ function App() {
         <Route path="fees" element={<PlayerFeesTab />} />
         <Route path="media" element={<PlayerMediaPage />} />
         <Route path="coaching" element={<PlayerCoachingPage />} />
+        <Route path="kit" element={<PlayerKitPage />} />
       </Route>
+
+      <Route
+        path="/admin/kit"
+        element={
+          <ProtectedRoute roles={["ROLE_ADMIN", "ROLE_SUPER_ADMIN"]}>
+            <AppLayout>
+              <KitBulkPage />
+            </AppLayout>
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/admin/kit/purchase-order"
+        element={
+          <ProtectedRoute roles={["ROLE_ADMIN", "ROLE_SUPER_ADMIN"]}>
+            <AppLayout>
+              <KitPurchaseOrderPage />
+            </AppLayout>
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/admin/inventory"
+        element={
+          <ProtectedRoute roles={["ROLE_ADMIN", "ROLE_SUPER_ADMIN"]}>
+            <AppLayout>
+              <InventoryListPage />
+            </AppLayout>
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/admin/inventory/checkouts"
+        element={
+          <ProtectedRoute roles={["ROLE_ADMIN", "ROLE_SUPER_ADMIN"]}>
+            <AppLayout>
+              <InventoryCheckoutsPage />
+            </AppLayout>
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/admin/audit-log"
+        element={
+          <ProtectedRoute roles={["ROLE_SUPER_ADMIN"]}>
+            <AppLayout>
+              <AuditLogPage />
+            </AppLayout>
+          </ProtectedRoute>
+        }
+      />
 
       <Route
         path="/admin/coaching"

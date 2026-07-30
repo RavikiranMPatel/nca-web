@@ -5,8 +5,10 @@ import {
   Calendar,
   ClipboardList,
   Globe,
+  Package,
   Power,
   Settings,
+  Shield,
   TrendingUp,
 } from "lucide-react";
 import {
@@ -529,6 +531,28 @@ function AdminDashboard() {
 
 
 
+      {/* ═══════════════ INVENTORY ═══════════════ */}
+      <section>
+        <SectionHeader title="Inventory Management" />
+        <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-4 gap-3">
+          <ActionCard
+            icon={Package}
+            title="Inventory"
+            description="Track bats, balls, stumps and all academy equipment"
+            onClick={() => navigate("/admin/inventory")}
+            gradient="bg-gradient-to-br from-teal-500 to-cyan-600"
+            textLight="text-teal-100"
+          />
+          <PlainCard
+            icon={Package}
+            title="Checkouts & Returns"
+            description="View active checkouts and record equipment returns"
+            onClick={() => navigate("/admin/inventory/checkouts")}
+            iconColor="text-teal-600"
+          />
+        </div>
+      </section>
+
       {/* ═══════════════ OTHER MANAGEMENT ═══════════════ */}
       <section>
         <SectionHeader title="Other Management" />
@@ -587,6 +611,15 @@ function AdminDashboard() {
               onClick={() => navigate("/admin/revenue")}
               gradient="bg-gradient-to-br from-emerald-500 to-teal-600"
               textLight="text-emerald-100"
+            />
+          )}
+          {isSuperAdmin && (
+            <PlainCard
+              icon={Shield}
+              title="Audit Log"
+              description="Review all significant actions across your academy"
+              onClick={() => navigate("/admin/audit-log")}
+              iconColor="text-red-600"
             />
           )}
         </div>

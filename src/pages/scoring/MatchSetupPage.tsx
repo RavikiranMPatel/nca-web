@@ -515,88 +515,71 @@ export default function MatchSetupPage() {
     setError("");
   };
 
-  const addExternalPlayerToTeamA = async () => {
+  const addExternalPlayerToTeamA = () => {
     const name = teamAExternalName.trim();
     if (!name) return;
     if (teamAPlayers.length >= 11) {
       setError("Team A already has 11 players");
       return;
     }
-    setAddingExternalA(true);
-    try {
-      const res = await api.post("/admin/players/external/tournament-guest", {
-        displayName: name,
-        gender: "MALE",
-        battingStyle: teamAExternalBattingStyle,
-      });
-      const newPlayer: PlayerOption = {
-        publicId: res.data.publicId,
-        displayName: res.data.displayName,
-        battingStyle:
-          teamAExternalBattingStyle === "RIGHT_HAND_BAT"
-            ? "Right Hand Bat"
-            : "Left Hand Bat",
-      };
-      setAllPlayers((prev) => [...prev, newPlayer]);
-      setTeamAPlayers((prev) => [
-        ...prev,
-        {
-          playerPublicId: newPlayer.publicId,
-          battingOrder: prev.length + 1,
-          isCaptain: false,
-          isWicketkeeper: false,
-          isImpactPlayer: false,
-          isForeign: false,
-        },
-      ]);
-      setTeamAExternalName("");
-    } catch (e: any) {
-      setError(e.response?.data?.message || "Failed to add player");
-    } finally {
-      setAddingExternalA(false);
-    }
+    // Use a local synthetic ID for UI tracking; the server uses externalName, not this ID
+    const syntheticId = `guest-${Date.now()}-a`;
+    const newPlayer: PlayerOption = {
+      publicId: syntheticId,
+      displayName: name,
+      battingStyle:
+        teamAExternalBattingStyle === "RIGHT_HAND_BAT"
+          ? "Right Hand Bat"
+          : "Left Hand Bat",
+    };
+    setAllPlayers((prev) => [...prev, newPlayer]);
+    setTeamAPlayers((prev) => [
+      ...prev,
+      {
+        playerPublicId: "",    // blank → server uses externalName
+        externalName: name,
+        battingOrder: prev.length + 1,
+        isCaptain: false,
+        isWicketkeeper: false,
+        isImpactPlayer: false,
+        isForeign: false,
+      },
+    ]);
+    setTeamAExternalName("");
+    setError("");
   };
 
-  const addExternalPlayerToTeamB = async () => {
+  const addExternalPlayerToTeamB = () => {
     const name = teamBExternalName.trim();
     if (!name) return;
     if (teamBPlayers.length >= 11) {
       setError("Team B already has 11 players");
       return;
     }
-    setAddingExternal(true);
-    try {
-      const res = await api.post("/admin/players/external/tournament-guest", {
-        displayName: name,
-        gender: "MALE",
-        battingStyle: teamBExternalBattingStyle,
-      });
-      const newPlayer: PlayerOption = {
-        publicId: res.data.publicId,
-        displayName: res.data.displayName,
-        battingStyle:
-          teamBExternalBattingStyle === "RIGHT_HAND_BAT"
-            ? "Right Hand Bat"
-            : "Left Hand Bat",
-      };
-      setAllPlayers((prev) => [...prev, newPlayer]);
-      setTeamBPlayers((prev) => [
-        ...prev,
-        {
-          playerPublicId: newPlayer.publicId,
-          battingOrder: prev.length + 1,
-          isCaptain: false,
-          isWicketkeeper: false,
-          isImpactPlayer: false,
-          isForeign: false,
-        },
-      ]);
-      setTeamBExternalName("");
-    } catch (e: any) {
-      setError(e.response?.data?.message || "Failed to add player");
-    } finally {
-      setAddingExternal(false);
-    }
+    const syntheticId = `guest-${Date.now()}-b`;
+    const newPlayer: PlayerOption = {
+      publicId: syntheticId,
+      displayName: name,
+      battingStyle:
+        teamBExternalBattingStyle === "RIGHT_HAND_BAT"
+          ? "Right Hand Bat"
+          : "Left Hand Bat",
+    };
+    setAllPlayers((prev) => [...prev, newPlayer]);
+    setTeamBPlayers((prev) => [
+      ...prev,
+      {
+        playerPublicId: "",    // blank → server uses externalName
+        externalName: name,
+        battingOrder: prev.length + 1,
+        isCaptain: false,
+        isWicketkeeper: false,
+        isImpactPlayer: false,
+        isForeign: false,
+      },
+    ]);
+    setTeamBExternalName("");
+    setError("");
   };
 
   const toggleRole = (
@@ -1161,27 +1144,30 @@ export default function MatchSetupPage() {
                   Selected ({currentPlayers.length})
                 </div>
                 <div className="flex flex-wrap gap-1.5">
-                  {currentPlayers.map((sel) => {
-                    const p = allPlayers.find(
-                      (pl) => pl.publicId === sel.playerPublicId,
-                    );
+                  {currentPlayers.map((sel, idx) => {
+                    const p = sel.playerPublicId
+                      ? allPlayers.find((pl) => pl.publicId === sel.playerPublicId)
+                      : undefined;
+                    const displayName = p?.displayName ?? sel.externalName ?? "Guest";
                     return (
                       <span
-                        key={sel.playerPublicId}
+                        key={sel.playerPublicId || `guest-${idx}`}
                         className="inline-flex items-center gap-1 text-xs bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 pl-2 pr-1 py-0.5 rounded-full"
                       >
-                        {sel.battingOrder}. {p?.displayName}
+                        {sel.battingOrder}. {displayName}
                         {sel.isCaptain ? " (C)" : ""}
                         {sel.isWicketkeeper ? " (WK)" : ""}
                         {sel.isForeign ? " ✈" : ""}
+                        {sel.externalName && !sel.playerPublicId ? " 👤" : ""}
                         <button
-                          onClick={() =>
-                            removePlayer(
-                              sel.playerPublicId,
-                              currentPlayers,
-                              setCurrentPlayers,
-                            )
-                          }
+                          onClick={() => {
+                            setCurrentPlayers(
+                              currentPlayers
+                                .filter((_, i) => i !== idx)
+                                .map((s, i) => ({ ...s, battingOrder: i + 1 })),
+                            );
+                            setError("");
+                          }}
                           className="ml-0.5 w-4 h-4 rounded-full bg-blue-200 dark:bg-blue-800 hover:bg-red-200 hover:text-red-600 flex items-center justify-center transition-colors flex-shrink-0"
                         >
                           <X />

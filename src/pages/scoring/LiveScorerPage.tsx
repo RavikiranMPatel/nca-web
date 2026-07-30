@@ -376,10 +376,11 @@ export default function LiveScorerPage() {
             `/admin/cricket/matches/${matchId}/teams/${team.publicId}/players`,
           )
           .then((r) => r.data as Record<string, unknown>[]);
+        // Use mtpPublicId as the scoring identifier (works for both academy and guest players)
         teamPlayers[team.publicId] = xi
-          .filter((mtp) => mtp.playerPublicId && mtp.displayName)
+          .filter((mtp) => (mtp.mtpPublicId || mtp.playerPublicId) && mtp.displayName)
           .map((mtp) => ({
-            publicId: mtp.playerPublicId as string,
+            publicId: (mtp.mtpPublicId ?? mtp.playerPublicId) as string,
             displayName: mtp.displayName as string,
             battingStyle: mtp.battingStyle as string | undefined,
             bowlingStyle: mtp.bowlingStyle as string | undefined,
