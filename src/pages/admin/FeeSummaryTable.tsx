@@ -43,6 +43,7 @@ type Props = {
   initialStatusFilter?: string | null;
   onRefresh: () => Promise<void>;
   upiId?: string;
+  upiQrUrl?: string;
   academyName?: string;
   bookingPhone?: string;
 };
@@ -52,6 +53,7 @@ export function FeeSummaryTable({
   initialStatusFilter,
   onRefresh,
   upiId,
+  upiQrUrl,
   academyName,
   bookingPhone,
 }: Props) {
@@ -112,6 +114,7 @@ export function FeeSummaryTable({
     const MONY   = "\u{1F4B0}"; // 💰
     const PRAY   = "\u{1F64F}"; // 🙏
     const CAMERA = "\u{1F4F8}"; // 📸
+    const MOBILE = "\u{1F4F2}"; // 📲
 
     // Real pending balance: installmentBalance covers partial-payment cases;
     // planAmount is the fallback for non-installment accounts.
@@ -139,6 +142,12 @@ export function FeeSummaryTable({
       ? `Just a friendly reminder. Questions? Call *${bookingPhone.trim()}*.`
       : "Just a friendly reminder.";
 
+    const absQrUrl = upiQrUrl?.trim()
+      ? upiQrUrl.startsWith("http")
+        ? upiQrUrl.trim()
+        : `${window.location.origin}${upiQrUrl.trim()}`
+      : "";
+
     const msg = [
       `Hi ${row.playerName} ${WAVE}`,
       ``,
@@ -147,6 +156,7 @@ export function FeeSummaryTable({
       dueLine,
       amountLine,
       ...(upiDeepLink ? [upiDeepLink] : []),
+      ...(absQrUrl ? [`${MOBILE} Pay via UPI QR: ${absQrUrl}`] : []),
       `${CAMERA} Please share a screenshot/UPI ref after paying — helps us confirm faster!`,
       ``,
       closingLine,
@@ -702,7 +712,7 @@ export function FeeSummaryTable({
       {/* ── Edit Due Date modal — slides up from bottom on mobile ── */}
       {editDueDateRow && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center">
-          <div className="bg-white rounded-t-2xl sm:rounded-xl shadow-xl w-full sm:max-w-sm">
+          <div className="bg-white rounded-t-2xl sm:rounded-xl shadow-xl w-full sm:max-w-sm max-h-[85dvh] overflow-y-auto">
             <div className="flex items-center justify-between px-5 py-4 border-b bg-slate-50 rounded-t-2xl sm:rounded-t-xl">
               <div>
                 <h3 className="font-bold text-slate-800">Edit Due Date</h3>

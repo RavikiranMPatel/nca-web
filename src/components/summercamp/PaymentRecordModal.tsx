@@ -86,7 +86,7 @@ function PaymentRecordModal({
       onClick={onClose}
     >
       <div
-        className="bg-white rounded-xl shadow-2xl max-w-md w-full"
+        className="bg-white rounded-xl shadow-2xl max-w-md w-full max-h-[85dvh] overflow-y-auto"
         onClick={(e) => e.stopPropagation()}
       >
         {/* HEADER */}

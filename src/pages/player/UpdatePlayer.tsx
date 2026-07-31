@@ -367,7 +367,7 @@ function UpdatePlayer() {
 
       {showCropper && (
         <div className="fixed inset-0 bg-black/90 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg w-full max-w-3xl max-h-[90vh] overflow-hidden shadow-xl flex flex-col">
+          <div className="bg-white rounded-lg w-full max-w-3xl max-h-[85dvh] overflow-hidden shadow-xl flex flex-col">
             <div className="p-4 border-b flex-shrink-0">
               <h3 className="text-lg font-semibold">Adjust Photo</h3>
               <p className="text-xs text-gray-500 mt-1">

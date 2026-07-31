@@ -190,7 +190,7 @@ export default function WagonWheelModal({
     <div className="fixed inset-0 z-[80] bg-black/70 flex flex-col justify-end">
       <div
         className="w-full bg-[#0d1117] rounded-t-3xl flex flex-col"
-        style={{ maxHeight: "92vh" }}
+        style={{ maxHeight: "85dvh" }}
       >
         {/* Header */}
         <div className="flex items-center justify-between px-5 pt-5 pb-3 flex-shrink-0">

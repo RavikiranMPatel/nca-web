@@ -14,6 +14,7 @@ export default function FeesDuePage() {
   const [error, setError] = useState("");
   const [resynced, setResynced] = useState<number | null>(null);
   const [upiId, setUpiId] = useState("");
+  const [upiQrUrl, setUpiQrUrl] = useState("");
   const [academyName, setAcademyName] = useState("");
   const [bookingPhone, setBookingPhone] = useState("");
 
@@ -34,6 +35,7 @@ export default function FeesDuePage() {
       if (syncCount > 0) setResynced(syncCount);
       const s = settingsRes?.data ?? {};
       setUpiId(s.UPI_ID?.trim() ?? "");
+      setUpiQrUrl(s.UPI_QR_URL?.trim() ?? "");
       setAcademyName(s.ACADEMY_NAME?.trim() ?? "");
       setBookingPhone(s.BOOKING_PHONE?.trim() ?? "");
       setRows(summaryRes.data || []);
@@ -115,6 +117,7 @@ export default function FeesDuePage() {
             initialStatusFilter={searchParams.get("status")}
             onRefresh={load}
             upiId={upiId}
+            upiQrUrl={upiQrUrl}
             academyName={academyName}
             bookingPhone={bookingPhone}
           />

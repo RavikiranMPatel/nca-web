@@ -390,7 +390,7 @@ export default function BroadcastModal({ onClose }: Props) {
         onClick={(e) => e.target === e.currentTarget && onClose()}
       >
         {/* Modal panel — flex column, max-h enforced on both axes */}
-        <div className="bg-white rounded-t-2xl sm:rounded-2xl shadow-2xl w-full sm:max-w-lg flex flex-col max-h-[92vh] sm:max-h-[85vh]">
+        <div className="bg-white rounded-t-2xl sm:rounded-2xl shadow-2xl w-full sm:max-w-lg flex flex-col max-h-[85dvh]">
 
           {/* ── HEADER — flex-shrink-0, never scrolls ──────────────── */}
           <div className="flex-shrink-0">

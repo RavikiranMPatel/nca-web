@@ -88,6 +88,13 @@ type SubscriptionPlan = {
 
 type Tab = "ACTIVE" | "QUEUED" | "NON_SUBSCRIBERS" | "GUESTS" | "HISTORY" | "USAGE_REPORT";
 
+type ImportModalConfig = {
+  defaultMemberType?: "registered" | "guest";
+  prefillGuestName?: string;
+  prefillGuestPhone?: string;
+  defaultStatus?: string;
+};
+
 type UsageReportRow = {
   memberName: string;
   memberPhone: string;
@@ -186,7 +193,7 @@ function AdminMembersPage() {
   );
   const [loadingUsage, setLoadingUsage] = useState(false);
 
-  const [showImportModal, setShowImportModal] = useState(false);
+  const [showImportModal, setShowImportModal] = useState<ImportModalConfig | null>(null);
 
   useEffect(() => {
     fetchActive();
@@ -386,21 +393,21 @@ function AdminMembersPage() {
   }[] = [
     {
       key: "ACTIVE",
-      label: "Active Subscribers",
+      label: "Active",
       count: activeSubscribers.length,
       icon: UserCheck,
       color: "green",
     },
     {
       key: "QUEUED",
-      label: "Pending Activation",
+      label: "Queued",
       count: queuedSubscriptions.length,
       icon: Clock,
       color: "amber",
     },
     {
       key: "NON_SUBSCRIBERS",
-      label: "Logged-in (No Plan)",
+      label: "No Plan",
       count: nonSubscribers.length,
       icon: Users,
       color: "amber",
@@ -442,7 +449,7 @@ function AdminMembersPage() {
             </p>
           </div>
           <button
-            onClick={() => setShowImportModal(true)}
+            onClick={() => setShowImportModal({})}
             className="flex items-center gap-1.5 text-xs bg-slate-700 text-white px-3 py-2 rounded-lg hover:bg-slate-800 transition font-medium shrink-0"
           >
             <Clock size={13} />
@@ -933,9 +940,19 @@ function AdminMembersPage() {
                       </p>
                       <p className="text-xs text-slate-500">spent</p>
                     </div>
-                    <span className="text-xs bg-slate-100 text-slate-400 px-2 py-1 rounded-lg">
-                      Guest — ask them to register first
-                    </span>
+                    <button
+                      onClick={() =>
+                        setShowImportModal({
+                          defaultMemberType: "guest",
+                          prefillGuestName: guest.name || "",
+                          prefillGuestPhone: guest.phone || "",
+                          defaultStatus: "ACTIVE",
+                        })
+                      }
+                      className="text-xs bg-green-600 text-white px-3 py-1.5 rounded-lg hover:bg-green-700 transition font-medium"
+                    >
+                      Activate
+                    </button>
                   </div>
                 </div>
               ))}
@@ -1186,7 +1203,7 @@ function AdminMembersPage() {
       {/* ── DEDUCT / RESTORE SESSION MODAL ──────────────────────────── */}
       {deductModal && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
-          <div className="bg-white w-full sm:max-w-sm sm:rounded-2xl rounded-t-2xl shadow-xl flex flex-col max-h-[85vh]">
+          <div className="bg-white w-full sm:max-w-sm sm:rounded-2xl rounded-t-2xl shadow-xl flex flex-col max-h-[85dvh]">
             {/* Header */}
             <div className="shrink-0 flex items-center justify-between px-5 py-4 border-b bg-slate-50">
               <h3 className="font-bold text-lg">
@@ -1270,7 +1287,7 @@ function AdminMembersPage() {
       {/* ── ACTIVATE MODAL — in AdminMembersPage scope ────────────────── */}
       {activateModal && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
-          <div className="bg-white w-full sm:max-w-sm sm:rounded-2xl rounded-t-2xl shadow-xl flex flex-col max-h-[85vh]">
+          <div className="bg-white w-full sm:max-w-sm sm:rounded-2xl rounded-t-2xl shadow-xl flex flex-col max-h-[85dvh]">
             {/* Header */}
             <div className="shrink-0 flex items-center justify-between px-5 py-4 border-b bg-slate-50">
               <h3 className="font-bold text-lg">Activate Subscription</h3>
@@ -1347,14 +1364,18 @@ function AdminMembersPage() {
       )}
 
       {/* ── IMPORT HISTORICAL MODAL ───────────────────────────── */}
-      {showImportModal && (
+      {showImportModal !== null && (
         <ImportHistoricalModal
           plans={plans}
-          onClose={() => setShowImportModal(false)}
+          onClose={() => setShowImportModal(null)}
           onSuccess={() => {
             fetchActive();
-            fetchQueued();
+            fetchGuests();
           }}
+          defaultMemberType={showImportModal.defaultMemberType}
+          prefillGuestName={showImportModal.prefillGuestName}
+          prefillGuestPhone={showImportModal.prefillGuestPhone}
+          defaultStatus={showImportModal.defaultStatus}
         />
       )}
     </div>
@@ -1367,13 +1388,21 @@ function ImportHistoricalModal({
   plans,
   onClose,
   onSuccess,
+  defaultMemberType = "registered",
+  prefillGuestName = "",
+  prefillGuestPhone = "",
+  defaultStatus = "EXPIRED",
 }: {
   plans: SubscriptionPlan[];
   onClose: () => void;
   onSuccess: () => void;
+  defaultMemberType?: "registered" | "guest";
+  prefillGuestName?: string;
+  prefillGuestPhone?: string;
+  defaultStatus?: string;
 }) {
   const [memberType, setMemberType] = useState<"registered" | "guest">(
-    "registered",
+    defaultMemberType,
   );
 
   const [userSearch, setUserSearch] = useState("");
@@ -1385,8 +1414,8 @@ function ImportHistoricalModal({
     null,
   );
 
-  const [guestName, setGuestName] = useState("");
-  const [guestPhone, setGuestPhone] = useState("");
+  const [guestName, setGuestName] = useState(prefillGuestName);
+  const [guestPhone, setGuestPhone] = useState(prefillGuestPhone);
 
   const [planType, setPlanType] = useState<"existing" | "manual">("existing");
   const [selectedPlanId, setSelectedPlanId] = useState("");
@@ -1402,7 +1431,7 @@ function ImportHistoricalModal({
   const [paymentMode, setPaymentMode] = useState("CASH");
   const [startsOn, setStartsOn] = useState("");
   const [expiresOn, setExpiresOn] = useState("");
-  const [status, setStatus] = useState("EXPIRED");
+  const [status, setStatus] = useState(defaultStatus);
   const [notes, setNotes] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
@@ -1524,7 +1553,7 @@ function ImportHistoricalModal({
 
   return (
     <div className="fixed inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
-      <div className="bg-white w-full sm:max-w-lg sm:rounded-2xl rounded-t-2xl shadow-xl overflow-hidden flex flex-col max-h-[85vh]">
+      <div className="bg-white w-full sm:max-w-lg sm:rounded-2xl rounded-t-2xl shadow-xl overflow-hidden flex flex-col max-h-[85dvh]">
         {/* Header */}
         <div className="shrink-0 flex items-center justify-between px-5 py-4 border-b bg-slate-50">
           <div>
@@ -2004,7 +2033,7 @@ function AssignPlanModal({
 
   return (
     <div className="fixed inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
-      <div className="bg-white w-full sm:max-w-md sm:rounded-2xl rounded-t-2xl shadow-xl overflow-hidden flex flex-col max-h-[85vh]">
+      <div className="bg-white w-full sm:max-w-md sm:rounded-2xl rounded-t-2xl shadow-xl overflow-hidden flex flex-col max-h-[85dvh]">
         {/* Header */}
         <div className="shrink-0 flex items-center justify-between px-5 py-4 border-b bg-slate-50">
           <div>

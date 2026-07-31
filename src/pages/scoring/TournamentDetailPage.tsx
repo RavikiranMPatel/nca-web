@@ -2377,7 +2377,7 @@ export default function TournamentDetailPage() {
       {/* ── ADD TEAM MODAL ── */}
       {showAddTeam && (
         <div className="fixed inset-0 z-50 bg-black/60 flex items-end">
-          <div className="w-full bg-white dark:bg-gray-900 rounded-t-2xl p-5 max-h-[80vh] overflow-y-auto">
+          <div className="w-full bg-white dark:bg-gray-900 rounded-t-2xl p-5 max-h-[85dvh] overflow-y-auto">
             <div className="w-10 h-1 bg-gray-300 rounded-full mx-auto mb-4" />
             <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-4">
               Add Team
@@ -2473,7 +2473,7 @@ export default function TournamentDetailPage() {
       {/* ── ADD PLAYER MODAL ── */}
       {showAddPlayer && (
         <div className="fixed inset-0 z-50 bg-black/70 flex items-end">
-          <div className="w-full bg-white dark:bg-gray-900 rounded-t-2xl max-h-[90vh] overflow-hidden flex flex-col">
+          <div className="w-full bg-white dark:bg-gray-900 rounded-t-2xl max-h-[85dvh] overflow-hidden flex flex-col">
             <div className="p-4 border-b border-gray-100 dark:border-gray-800">
               <div className="w-10 h-1 bg-gray-300 rounded-full mx-auto mb-3" />
               <h3 className="text-sm font-semibold text-gray-900 dark:text-white text-center">
@@ -2686,7 +2686,7 @@ export default function TournamentDetailPage() {
       {/* ── GENERATE FIXTURES MODAL ── */}
       {showGenerate && (
         <div className="fixed inset-0 z-50 bg-black/60 flex items-end">
-          <div className="w-full bg-white dark:bg-gray-900 rounded-t-2xl max-h-[90vh] overflow-y-auto">
+          <div className="w-full bg-white dark:bg-gray-900 rounded-t-2xl max-h-[85dvh] overflow-y-auto">
             <div className="p-5">
               <div className="w-10 h-1 bg-gray-300 rounded-full mx-auto mb-4" />
               <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-1">
@@ -3138,7 +3138,7 @@ export default function TournamentDetailPage() {
       {/* ── EDIT FIXTURE MODAL ── */}
       {showEditFixture && editingFixture && (
         <div className="fixed inset-0 z-50 bg-black/70 flex items-end">
-          <div className="w-full bg-white dark:bg-gray-900 rounded-t-2xl p-5 max-h-[85vh] overflow-y-auto">
+          <div className="w-full bg-white dark:bg-gray-900 rounded-t-2xl p-5 max-h-[85dvh] overflow-y-auto">
             <div className="w-10 h-1 bg-gray-300 rounded-full mx-auto mb-4" />
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-sm font-semibold text-gray-900 dark:text-white">

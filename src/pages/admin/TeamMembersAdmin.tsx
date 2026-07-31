@@ -374,7 +374,7 @@ export default function TeamMembersAdmin() {
       {/* ── Add/Edit Form Modal ── */}
       {showForm && (
         <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center px-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[85dvh] overflow-y-auto">
             <div className="flex items-center justify-between p-6 border-b">
               <h3 className="text-lg font-semibold text-gray-800">
                 {editingPublicId ? "Edit Member" : "Add Team Member"}
@@ -540,7 +540,7 @@ export default function TeamMembersAdmin() {
       {/* ── Delete Confirm Modal ── */}
       {deleteConfirm && (
         <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center px-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 max-h-[85dvh] overflow-y-auto">
             <h3 className="text-lg font-semibold text-gray-800 mb-2">
               Delete Member?
             </h3>
@@ -569,7 +569,7 @@ export default function TeamMembersAdmin() {
       {/* ── Cropper Modal ── */}
       {showCropper && (
         <div className="fixed inset-0 bg-black/80 z-[60] flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl w-full max-w-md overflow-hidden">
+          <div className="bg-white rounded-2xl w-full max-w-md overflow-hidden max-h-[85dvh]">
             <div className="p-4 border-b">
               <h3 className="font-semibold text-gray-800">Crop Photo</h3>
               <p className="text-xs text-gray-400 mt-0.5">

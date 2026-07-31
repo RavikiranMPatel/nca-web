@@ -97,7 +97,7 @@ function PlayerBatchAssignmentModal({
         initial={{ opacity: 0, scale: 0.95 }}
         animate={{ opacity: 1, scale: 1 }}
         exit={{ opacity: 0, scale: 0.95 }}
-        className="bg-white rounded-2xl p-6 w-full max-w-md shadow-2xl max-h-[80vh] overflow-y-auto"
+        className="bg-white rounded-2xl p-6 w-full max-w-md shadow-2xl max-h-[85dvh] overflow-y-auto"
       >
         <div className="space-y-4">
           {/* Header */}

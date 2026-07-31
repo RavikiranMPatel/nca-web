@@ -407,7 +407,7 @@ function MyBookings() {
       {/* ── SUBSCRIPTION PLANS MODAL ── */}
       {showPlansModal && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center">
-          <div className="bg-white rounded-t-2xl sm:rounded-2xl shadow-xl w-full sm:max-w-lg max-h-[92vh] overflow-y-auto">
+          <div className="bg-white rounded-t-2xl sm:rounded-2xl shadow-xl w-full sm:max-w-lg max-h-[85dvh] overflow-y-auto">
             <div className="flex items-center justify-between px-5 py-4 border-b bg-slate-50 rounded-t-2xl sticky top-0">
               <div>
                 <h3 className="font-bold text-base">🏏 Membership Plans</h3>

@@ -34,9 +34,8 @@ function PlayerOverviewPage() {
   /* ================= ACTIVE TAB ================= */
   const activeTab = location.pathname.includes("/stats")
     ? "Stats"
-    : location.pathname.includes("/analysis")
-      ? "Analysis"
-      : location.pathname.includes("/fees")
+    // : location.pathname.includes("/analysis") ? "Analysis" // disabled 2026-07-30
+    : location.pathname.includes("/fees")
         ? "Fees"
         : location.pathname.includes("/media")
           ? "Media"
@@ -113,6 +112,7 @@ function PlayerOverviewPage() {
               Stats
             </TabButton>
 
+            {/* Analysis tab disabled 2026-07-30 — hidden pending redesign
             <TabButton
               active={activeTab === "Analysis"}
               onClick={() =>
@@ -121,6 +121,7 @@ function PlayerOverviewPage() {
             >
               Analysis
             </TabButton>
+            */}
 
             {isSuperAdmin && (
               <TabButton

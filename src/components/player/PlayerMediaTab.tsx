@@ -567,7 +567,7 @@ function PlayerMediaTab({ playerPublicId }: Props) {
       {/* ─── UPLOAD MODAL ─────────────────────────────── */}
       {showUpload && (
         <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl p-6 w-full max-w-md shadow-2xl max-h-[85vh] overflow-y-auto">
+          <div className="bg-white rounded-2xl p-6 w-full max-w-md shadow-2xl max-h-[85dvh] overflow-y-auto">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-bold text-slate-900">Add Media</h3>
               <button

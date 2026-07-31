@@ -317,7 +317,7 @@ export default function TournamentListPage() {
       {/* ── CONFIRM DELETE MODAL ── */}
       {confirmDelete && (
         <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-6">
-          <div className="w-full max-w-sm bg-white dark:bg-gray-900 rounded-2xl p-5 shadow-xl">
+          <div className="w-full max-w-sm bg-white dark:bg-gray-900 rounded-2xl p-5 shadow-xl max-h-[85dvh] overflow-y-auto">
             <div className="text-2xl mb-3 text-center">⚠️</div>
             <h3 className="text-base font-semibold text-gray-900 dark:text-white mb-1 text-center">
               Delete Tournament?

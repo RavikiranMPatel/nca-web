@@ -48,7 +48,7 @@ import SummerCampConversion from "./pages/summercamp/SummerCampConversion";
 import SummerCampAttendance from "./pages/summercamp/SummerCampAttendance";
 import SummerCampEnrollmentDetail from "./pages/summercamp/SummerCampEnrollmentDetail";
 import PlayerAttendanceHistoryPage from "./pages/regular-camp-attendance/PlayerAttendanceHistoryPage";
-import PlayerAnalysisPage from "./pages/player/PlayerAnalysisPage";
+// import PlayerAnalysisPage from "./pages/player/PlayerAnalysisPage"; // disabled 2026-07-30 — Analysis tab hidden pending redesign
 import PlayerAssessmentDashboardPage from "./pages/player/PlayerAssessmentDashboardPage";
 import PlayerFeesTab from "./pages/player/PlayerFeesTab";
 import PlayerMediaPage from "./pages/player/PlayerMediaPage";
@@ -529,7 +529,7 @@ function App() {
         <Route index element={<Navigate to="info" replace />} />
         <Route path="info" element={<PlayerInfoPage />} />
         <Route path="stats" element={<PlayerStatsPage />} />
-        <Route path="analysis" element={<PlayerAnalysisPage />} />
+        {/* <Route path="analysis" element={<PlayerAnalysisPage />} /> */}{/* disabled 2026-07-30 */}
         <Route
           path="fees"
           element={

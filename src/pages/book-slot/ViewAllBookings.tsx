@@ -20,6 +20,7 @@ type Booking = {
   isGuest: boolean;
   ballCount: number | null;
   sessionsRemaining: number | null;
+  excludedFromRevenue: boolean;
 };
 
 const formatSlotDate = (dateStr: string): string => {
@@ -38,9 +39,10 @@ function ViewAllBookings() {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("ALL");
-  const [dateFilter, setDateFilter] = useState<string>("");
+  const [monthFilter, setMonthFilter] = useState<string>("");
   const [marking, setMarking] = useState<string | null>(null);
   const [cancelling, setCancelling] = useState<string | null>(null);
+  const [toggling, setToggling] = useState<string | null>(null);
 
   type EditState = {
     booking: Booking;
@@ -69,6 +71,25 @@ function ViewAllBookings() {
       alert(e?.response?.data?.message || "Failed to delete booking");
     } finally {
       setCancelling(null);
+    }
+  };
+
+  const toggleExcludeRevenue = async (booking: Booking) => {
+    const next = !booking.excludedFromRevenue;
+    const label = next ? "exclude" : "include";
+    if (!window.confirm(`${next ? "Exclude" : "Re-include"} this booking from revenue? The row will remain visible.`)) return;
+    setToggling(booking.bookingPublicId);
+    try {
+      const res = await api.patch(`/admin/bookings/${booking.bookingPublicId}/exclude-revenue`, { excluded: next });
+      setBookings((prev) =>
+        prev.map((b) =>
+          b.bookingPublicId === booking.bookingPublicId ? { ...b, excludedFromRevenue: res.data.excludedFromRevenue } : b
+        )
+      );
+    } catch (e: any) {
+      alert(e?.response?.data?.message || `Failed to ${label} booking from revenue`);
+    } finally {
+      setToggling(null);
     }
   };
 
@@ -302,9 +323,17 @@ function ViewAllBookings() {
       resourceType.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesStatus =
       statusFilter === "ALL" || booking.status === statusFilter;
-    const matchesDate = !dateFilter || booking.slotDate === dateFilter;
-    return matchesSearch && matchesStatus && matchesDate;
+    const matchesMonth = !monthFilter || (booking.slotDate || "").startsWith(monthFilter);
+    return matchesSearch && matchesStatus && matchesMonth;
   });
+
+  const paidRevenue = filteredBookings
+    .filter((b) => b.paymentStatus === "PAID" && !b.excludedFromRevenue)
+    .reduce((sum, b) => sum + (b.amount || 0), 0);
+
+  const totalBmSessions = filteredBookings
+    .filter((b) => b.resourceType === "BOWLING_MACHINE" && b.ballCount != null)
+    .reduce((sum, b) => sum + Math.floor((b.ballCount ?? 0) / 60), 0);
 
   const exportToCSV = () => {
     const headers = [
@@ -314,9 +343,12 @@ function ViewAllBookings() {
       "Date",
       "Time",
       "Resource",
+      "Balls",
+      "Sessions",
       "Amount",
       "Status",
       "Payment Status",
+      "Excluded from Revenue",
     ];
     const rows = filteredBookings.map((b) => [
       b.bookingPublicId,
@@ -325,9 +357,14 @@ function ViewAllBookings() {
       b.slotDate,
       `${b.startTime} - ${b.endTime}`,
       b.resourceType,
+      b.ballCount != null ? String(b.ballCount) : "",
+      b.resourceType === "BOWLING_MACHINE" && b.ballCount != null
+        ? String(Math.floor(b.ballCount / 60))
+        : "",
       b.amount,
       b.status,
       b.paymentStatus || "-",
+      b.excludedFromRevenue ? "Yes" : "No",
     ]);
     const csvContent = [
       headers.join(","),
@@ -414,20 +451,21 @@ function ViewAllBookings() {
         </div>
       </div>
 
-      {/* ── STATS — 2-col on mobile, 4-col on desktop ── */}
+      {/* ── STATS — 2-col on mobile, up to 5-col on desktop ── */}
       <div
-        className={`grid gap-3 ${isSuperAdmin ? "grid-cols-2 md:grid-cols-4" : "grid-cols-3"}`}
+        className={`grid gap-3 ${isSuperAdmin ? "grid-cols-2 md:grid-cols-5" : "grid-cols-3"}`}
       >
         <div className="bg-white rounded-xl border border-gray-200 p-3 md:p-4">
-          <p className="text-xs text-gray-500">Total Bookings</p>
+          <p className="text-xs text-gray-500">Showing</p>
           <p className="text-xl md:text-2xl font-bold text-gray-900">
-            {bookings.length}
+            {filteredBookings.length}
           </p>
+          <p className="text-[10px] text-gray-400">of {bookings.length} total</p>
         </div>
         <div className="bg-white rounded-xl border border-gray-200 p-3 md:p-4">
           <p className="text-xs text-gray-500">Confirmed</p>
           <p className="text-xl md:text-2xl font-bold text-green-600">
-            {bookings.filter((b) => b.status === "CONFIRMED").length}
+            {filteredBookings.filter((b) => b.status === "CONFIRMED").length}
           </p>
         </div>
         <div className="bg-white rounded-xl border border-gray-200 p-3 md:p-4">
@@ -437,16 +475,22 @@ function ViewAllBookings() {
           </p>
         </div>
         {isSuperAdmin && (
-          <div className="bg-white rounded-xl border border-gray-200 p-3 md:p-4">
-            <p className="text-xs text-gray-500">Total Revenue</p>
-            <p className="text-xl md:text-2xl font-bold text-blue-600">
-              ₹
-              {bookings
-                .filter((b) => b.paymentStatus === "PAID")
-                .reduce((sum, b) => sum + (b.amount || 0), 0)
-                .toLocaleString()}
-            </p>
-          </div>
+          <>
+            <div className="bg-white rounded-xl border border-gray-200 p-3 md:p-4">
+              <p className="text-xs text-gray-500">BM Sessions</p>
+              <p className="text-xl md:text-2xl font-bold text-purple-600">
+                {totalBmSessions}
+              </p>
+              <p className="text-[10px] text-gray-400">bowling machine</p>
+            </div>
+            <div className="bg-white rounded-xl border border-gray-200 p-3 md:p-4">
+              <p className="text-xs text-gray-500">Revenue</p>
+              <p className="text-xl md:text-2xl font-bold text-blue-600">
+                ₹{paidRevenue.toLocaleString()}
+              </p>
+              <p className="text-[10px] text-gray-400">excl. excluded rows</p>
+            </div>
+          </>
         )}
       </div>
 
@@ -483,18 +527,19 @@ function ViewAllBookings() {
           </select>
 
           <input
-            type="date"
-            value={dateFilter}
-            onChange={(e) => setDateFilter(e.target.value)}
+            type="month"
+            value={monthFilter}
+            onChange={(e) => setMonthFilter(e.target.value)}
             className="px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
+            placeholder="Filter by month"
           />
 
-          {(searchTerm || statusFilter !== "ALL" || dateFilter) && (
+          {(searchTerm || statusFilter !== "ALL" || monthFilter) && (
             <button
               onClick={() => {
                 setSearchTerm("");
                 setStatusFilter("ALL");
-                setDateFilter("");
+                setMonthFilter("");
               }}
               className="col-span-2 md:col-span-1 px-3 py-2 text-xs text-gray-600 hover:bg-gray-100 rounded-lg transition"
             >
@@ -584,15 +629,36 @@ function ViewAllBookings() {
                         <p className="font-medium text-gray-900 text-sm">
                           {booking.resourceType || "N/A"}
                         </p>
+                        {booking.resourceType === "BOWLING_MACHINE" && booking.ballCount != null && (
+                          <p className="text-xs text-gray-500 mt-0.5">
+                            {Math.floor(booking.ballCount / 60)} sess.
+                            {booking.ballCount % 60 !== 0 && (
+                              <span title={`${booking.ballCount} balls — not a clean multiple of 60`} className="ml-1 text-amber-500 cursor-help">⚠</span>
+                            )}
+                          </p>
+                        )}
                       </td>
                       {isSuperAdmin && (
                         <td className="p-4">
-                          <p className="font-semibold text-gray-900 text-sm">
-                            ₹{booking.amount?.toLocaleString() || 0}
-                          </p>
+                          {booking.excludedFromRevenue ? (
+                            <span className="text-xs text-gray-400 line-through">₹{booking.amount?.toLocaleString() || 0}</span>
+                          ) : (
+                            <p className="font-semibold text-gray-900 text-sm">
+                              ₹{booking.amount?.toLocaleString() || 0}
+                            </p>
+                          )}
                         </td>
                       )}
-                      <td className="p-4">{getStatusBadge(booking.status)}</td>
+                      <td className="p-4">
+                        <div className="flex flex-col gap-1">
+                          {getStatusBadge(booking.status)}
+                          {booking.excludedFromRevenue && (
+                            <span className="px-2 py-0.5 bg-gray-100 text-gray-500 text-[10px] rounded-full font-medium w-fit">
+                              Excluded
+                            </span>
+                          )}
+                        </div>
+                      </td>
                       <td className="p-4">
                         {getPaymentBadge(booking.paymentStatus)}
                       </td>
@@ -666,6 +732,15 @@ function ViewAllBookings() {
                                   : "Delete"}
                               </button>
                             )}
+                          {isSuperAdmin && (
+                            <button
+                              onClick={() => toggleExcludeRevenue(booking)}
+                              disabled={toggling === booking.bookingPublicId}
+                              className={`flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-semibold transition disabled:opacity-50 ${booking.excludedFromRevenue ? "border border-green-300 text-green-700 hover:bg-green-50" : "border border-gray-300 text-gray-500 hover:bg-gray-50"}`}
+                            >
+                              {toggling === booking.bookingPublicId ? "…" : booking.excludedFromRevenue ? "↩ Re-include" : "⊘ Exclude"}
+                            </button>
+                          )}
                         </div>
                       </td>
                     </tr>
@@ -682,7 +757,12 @@ function ViewAllBookings() {
                     <p className="font-semibold text-gray-900 text-sm">
                       {booking.playerName || "N/A"}
                     </p>
-                    {getStatusBadge(booking.status)}
+                    <div className="flex items-center gap-1">
+                      {booking.excludedFromRevenue && (
+                        <span className="px-1.5 py-0.5 bg-gray-100 text-gray-400 text-[10px] rounded-full font-medium">Excluded</span>
+                      )}
+                      {getStatusBadge(booking.status)}
+                    </div>
                   </div>
                   <div className="flex items-center gap-3 text-xs text-gray-500">
                     <span>📅 {formatSlotDate(booking.slotDate)}</span>
@@ -693,9 +773,15 @@ function ViewAllBookings() {
                   <div className="flex items-center justify-between">
                     <span className="text-xs text-gray-500">
                       {booking.resourceType}
+                      {booking.resourceType === "BOWLING_MACHINE" && booking.ballCount != null && (
+                        <span className="ml-1 text-gray-400">
+                          · {Math.floor(booking.ballCount / 60)} sess.
+                          {booking.ballCount % 60 !== 0 && <span className="text-amber-500 ml-0.5">⚠</span>}
+                        </span>
+                      )}
                     </span>
                     {isSuperAdmin && (
-                      <span className="font-bold text-gray-900">
+                      <span className={`font-bold ${booking.excludedFromRevenue ? "text-gray-400 line-through" : "text-gray-900"}`}>
                         ₹{booking.amount?.toLocaleString()}
                       </span>
                     )}
@@ -762,6 +848,23 @@ function ViewAllBookings() {
                               : "Delete"}
                           </button>
                         )}
+                      {isSuperAdmin && (
+                        <button
+                          onClick={() => toggleExcludeRevenue(booking)}
+                          disabled={toggling === booking.bookingPublicId}
+                          className={`border px-3 py-1.5 rounded-lg text-xs font-semibold transition flex items-center gap-1 disabled:opacity-50 ${
+                            booking.excludedFromRevenue
+                              ? "border-green-300 text-green-700 hover:bg-green-50"
+                              : "border-gray-300 text-gray-500 hover:bg-gray-50"
+                          }`}
+                        >
+                          {toggling === booking.bookingPublicId
+                            ? "..."
+                            : booking.excludedFromRevenue
+                            ? "↩ Re-include"
+                            : "⊘ Exclude"}
+                        </button>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -774,7 +877,7 @@ function ViewAllBookings() {
       {/* ── EDIT MODAL ── */}
       {editModal && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center px-4">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6 space-y-5">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md max-h-[85dvh] overflow-y-auto p-6 space-y-5">
             <div className="flex items-center justify-between">
               <h3 className="font-bold text-gray-900 text-lg">Edit Booking</h3>
               <button
@@ -930,7 +1033,7 @@ function ViewAllBookings() {
 
       {playedModal && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center px-4">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6 space-y-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm max-h-[85dvh] overflow-y-auto p-6 space-y-4">
             <h3 className="font-bold text-gray-900 text-lg">Mark as Played</h3>
 
             <div className="bg-gray-50 rounded-xl p-3 text-sm space-y-1">

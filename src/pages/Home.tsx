@@ -1898,7 +1898,7 @@ function Home() {
           onClick={() => setSelectedGalleryImage(null)}
         >
           <div
-            className="relative bg-white max-w-5xl w-full max-h-[90vh] overflow-hidden"
+            className="relative bg-white max-w-5xl w-full max-h-[85dvh] overflow-hidden"
             style={getCardStyle()}
             onClick={(e) => e.stopPropagation()}
           >

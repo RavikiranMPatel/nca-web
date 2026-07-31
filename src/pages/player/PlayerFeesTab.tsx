@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import api from "../../api/axios";
 import { toast } from "react-hot-toast";
+import { BottomSheet } from "../../components/BottomSheet";
 
 type FeePlan = {
   id: string;
@@ -1098,7 +1099,7 @@ function PlayerFeesTab() {
       {/* ── MARK AS PAID MODAL ── */}
       {showPayModal && account && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center">
-          <div className="bg-white rounded-t-2xl sm:rounded-xl shadow-xl w-full sm:max-w-md max-h-[92vh] overflow-y-auto">
+          <div className="bg-white rounded-t-2xl sm:rounded-xl shadow-xl w-full sm:max-w-md max-h-[85dvh] overflow-y-auto">
             <div className="px-5 py-4 border-b bg-gradient-to-r from-blue-600 to-blue-700 rounded-t-2xl sm:rounded-t-xl sticky top-0">
               <div className="flex items-center justify-between">
                 <h3 className="text-white font-bold text-base">
@@ -1291,7 +1292,7 @@ function PlayerFeesTab() {
           onClick={() => setShowReceiptViewer(null)}
         >
           <div
-            className="relative bg-white rounded-xl shadow-xl max-w-lg w-full max-h-[85vh] overflow-hidden"
+            className="relative bg-white rounded-xl shadow-xl max-w-lg w-full max-h-[85dvh] overflow-hidden"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between px-4 py-3 border-b bg-slate-50">
@@ -1349,7 +1350,7 @@ function PlayerFeesTab() {
       {/* ── SEND WHATSAPP RECEIPT MODAL ── */}
       {showSendReceiptModal && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center">
-          <div className="bg-white rounded-t-2xl sm:rounded-xl shadow-2xl w-full sm:max-w-sm">
+          <div className="bg-white rounded-t-2xl sm:rounded-xl shadow-2xl w-full sm:max-w-sm max-h-[85dvh] overflow-y-auto">
             <div className="px-5 py-4 bg-gradient-to-br from-blue-700 to-blue-900 rounded-t-2xl sm:rounded-t-xl text-white text-center relative">
               <button
                 onClick={() => setShowSendReceiptModal(null)}
@@ -1465,7 +1466,7 @@ function PlayerFeesTab() {
       {/* ── EDIT DATE MODAL ── */}
       {editDatePayment && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center">
-          <div className="bg-white rounded-t-2xl sm:rounded-xl shadow-xl w-full sm:max-w-sm">
+          <div className="bg-white rounded-t-2xl sm:rounded-xl shadow-xl w-full sm:max-w-sm max-h-[85dvh] overflow-y-auto">
             <div className="flex items-center justify-between px-5 py-4 border-b bg-slate-50 rounded-t-2xl sm:rounded-t-xl">
               <div>
                 <h3 className="font-bold text-slate-800">Edit Payment Date</h3>
@@ -1513,7 +1514,7 @@ function PlayerFeesTab() {
       {/* ── EDIT DUE DATE MODAL ── */}
       {showEditDueDate && account && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center">
-          <div className="bg-white rounded-t-2xl sm:rounded-xl shadow-xl w-full sm:max-w-sm">
+          <div className="bg-white rounded-t-2xl sm:rounded-xl shadow-xl w-full sm:max-w-sm max-h-[85dvh] overflow-y-auto">
             <div className="flex items-center justify-between px-5 py-4 border-b bg-slate-50 rounded-t-2xl sm:rounded-t-xl">
               <div>
                 <h3 className="font-bold text-slate-800">Edit Due Date</h3>
@@ -1561,7 +1562,7 @@ function PlayerFeesTab() {
       {/* ── EDIT LAST PAID MODAL ── */}
       {showEditLastPaid && account && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center">
-          <div className="bg-white rounded-t-2xl sm:rounded-xl shadow-xl w-full sm:max-w-sm">
+          <div className="bg-white rounded-t-2xl sm:rounded-xl shadow-xl w-full sm:max-w-sm max-h-[85dvh] overflow-y-auto">
             <div className="flex items-center justify-between px-5 py-4 border-b bg-slate-50 rounded-t-2xl sm:rounded-t-xl">
               <div>
                 <h3 className="font-bold text-slate-800">Edit Last Paid Date</h3>
@@ -1725,7 +1726,7 @@ function RegFeeModal({
 }) {
   return (
     <div className="fixed inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center">
-      <div className="bg-white rounded-t-2xl sm:rounded-xl shadow-xl w-full sm:max-w-sm">
+      <div className="bg-white rounded-t-2xl sm:rounded-xl shadow-xl w-full sm:max-w-sm max-h-[85dvh] overflow-y-auto">
         <div className="flex items-center justify-between px-5 py-4 border-b bg-slate-50 rounded-t-2xl sm:rounded-t-xl">
           <div>
             <h3 className="font-bold text-slate-800">
@@ -1851,6 +1852,7 @@ function InstallmentSection({ playerPublicId }: { playerPublicId: string }) {
     amount: "",
     paymentMode: "CASH",
     referenceNumber: "",
+    paidOn: new Date().toISOString().split("T")[0],
   });
   const [savingPayInst, setSavingPayInst] = useState(false);
 
@@ -1922,11 +1924,12 @@ function InstallmentSection({ playerPublicId }: { playerPublicId: string }) {
         amount: parseFloat(payInstForm.amount),
         paymentMode: payInstForm.paymentMode,
         referenceNumber: payInstForm.referenceNumber || null,
+        paidOn: payInstForm.paidOn || null,
         notes: null,
       });
       toast.success("Payment recorded!");
       setShowPayInstallment(null);
-      setPayInstForm({ amount: "", paymentMode: "CASH", referenceNumber: "" });
+      setPayInstForm({ amount: "", paymentMode: "CASH", referenceNumber: "", paidOn: new Date().toISOString().split("T")[0] });
       loadPlans();
     } catch (err: any) {
       toast.error(err.response?.data?.message || "Failed to record payment");
@@ -2139,6 +2142,7 @@ function InstallmentSection({ playerPublicId }: { playerPublicId: string }) {
                                       ),
                                       paymentMode: "CASH",
                                       referenceNumber: "",
+                                      paidOn: new Date().toISOString().split("T")[0],
                                     });
                                     setShowPayInstallment(inst);
                                   }}
@@ -2178,7 +2182,7 @@ function InstallmentSection({ playerPublicId }: { playerPublicId: string }) {
 
       {showCreatePlan && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center">
-          <div className="bg-white rounded-t-2xl sm:rounded-xl shadow-xl w-full sm:max-w-sm">
+          <div className="bg-white rounded-t-2xl sm:rounded-xl shadow-xl w-full sm:max-w-sm max-h-[85dvh] overflow-y-auto">
             <div className="flex items-center justify-between px-5 py-4 border-b bg-slate-50 rounded-t-2xl sm:rounded-t-xl">
               <h3 className="font-bold text-slate-800">New Installment Plan</h3>
               <button onClick={() => setShowCreatePlan(false)}>
@@ -2237,7 +2241,7 @@ function InstallmentSection({ playerPublicId }: { playerPublicId: string }) {
 
       {showAddInstallment && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center">
-          <div className="bg-white rounded-t-2xl sm:rounded-xl shadow-xl w-full sm:max-w-sm">
+          <div className="bg-white rounded-t-2xl sm:rounded-xl shadow-xl w-full sm:max-w-sm max-h-[85dvh] overflow-y-auto">
             <div className="flex items-center justify-between px-5 py-4 border-b bg-slate-50 rounded-t-2xl sm:rounded-t-xl">
               <h3 className="font-bold text-slate-800">Add Installment</h3>
               <button onClick={() => setShowAddInstallment(null)}>
@@ -2311,7 +2315,7 @@ function InstallmentSection({ playerPublicId }: { playerPublicId: string }) {
 
       {showPayInstallment && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center">
-          <div className="bg-white rounded-t-2xl sm:rounded-xl shadow-xl w-full sm:max-w-sm">
+          <div className="bg-white rounded-t-2xl sm:rounded-xl shadow-xl w-full sm:max-w-sm max-h-[85dvh] overflow-y-auto">
             <div className="flex items-center justify-between px-5 py-4 border-b bg-slate-50 rounded-t-2xl sm:rounded-t-xl">
               <div>
                 <h3 className="font-bold text-slate-800">Record Payment</h3>
@@ -2386,6 +2390,20 @@ function InstallmentSection({ playerPublicId }: { playerPublicId: string }) {
                   className="w-full px-4 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
               </div>
+              <div>
+                <label className="text-xs font-semibold text-slate-600 block mb-1.5">
+                  Paid On
+                </label>
+                <input
+                  type="date"
+                  value={payInstForm.paidOn}
+                  max={new Date().toISOString().split("T")[0]}
+                  onChange={(e) =>
+                    setPayInstForm((f) => ({ ...f, paidOn: e.target.value }))
+                  }
+                  className="w-full px-4 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
               <div className="flex gap-2 pt-1 pb-4">
                 <button
                   onClick={() => setShowPayInstallment(null)}
@@ -2408,7 +2426,7 @@ function InstallmentSection({ playerPublicId }: { playerPublicId: string }) {
 
       {editAmountPlan && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center">
-          <div className="bg-white rounded-t-2xl sm:rounded-xl shadow-xl w-full sm:max-w-sm">
+          <div className="bg-white rounded-t-2xl sm:rounded-xl shadow-xl w-full sm:max-w-sm max-h-[85dvh] overflow-y-auto">
             <div className="flex items-center justify-between px-5 py-4 border-b bg-slate-50 rounded-t-2xl sm:rounded-t-xl">
               <div>
                 <h3 className="font-bold text-slate-800">Edit Plan Amount</h3>
@@ -2485,7 +2503,7 @@ function PlanSelectorModal({
 }) {
   return (
     <div className="fixed inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center">
-      <div className="bg-white rounded-t-2xl sm:rounded-xl shadow-xl w-full sm:max-w-lg max-h-[85vh] overflow-y-auto">
+      <div className="bg-white rounded-t-2xl sm:rounded-xl shadow-xl w-full sm:max-w-lg max-h-[85dvh] overflow-y-auto">
         <div className="px-5 py-4 border-b bg-slate-50 rounded-t-2xl sm:rounded-t-xl sticky top-0">
           <h3 className="font-bold text-base">{title}</h3>
         </div>

@@ -602,7 +602,7 @@ function AttendancePage() {
 
       {showSuccessDialog && selectedBatch && (
         <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl p-7 w-full max-w-xs shadow-2xl">
+          <div className="bg-white rounded-2xl p-7 w-full max-w-xs shadow-2xl max-h-[85dvh] overflow-y-auto">
             <div className="text-center space-y-3">
               <div className="mx-auto w-14 h-14 bg-emerald-100 rounded-full flex items-center justify-center">
                 <CheckCircle2 className="text-emerald-600" size={28} />

@@ -95,7 +95,7 @@ const PlayerSelector = ({
     );
   return (
     <div className="fixed inset-0 z-[70] bg-black/70 flex items-end">
-      <div className="w-full bg-gray-900 rounded-t-2xl max-h-[80vh] overflow-hidden flex flex-col">
+      <div className="w-full bg-gray-900 rounded-t-2xl max-h-[85dvh] overflow-hidden flex flex-col">
         <div className="p-4 border-b border-gray-800">
           <div className="w-10 h-1 bg-gray-600 rounded-full mx-auto mb-3" />
           <h3 className="text-sm font-semibold text-white text-center">
@@ -1596,7 +1596,7 @@ export default function LiveScorerPage() {
           });
           return (
             <div className="fixed inset-0 z-50 bg-black/60 flex items-end">
-              <div className="w-full bg-white rounded-t-2xl max-h-[80vh] overflow-hidden flex flex-col">
+              <div className="w-full bg-white rounded-t-2xl max-h-[85dvh] overflow-hidden flex flex-col">
                 <div className="p-4 border-b border-gray-100">
                   <div className="w-10 h-1 bg-gray-300 rounded-full mx-auto mb-3" />
                   <h3 className="text-sm font-semibold text-gray-900 text-center">
@@ -1743,7 +1743,7 @@ export default function LiveScorerPage() {
       {/* ── WICKET MODAL ── */}
       {showWicket && (
         <div className="fixed inset-0 z-50 bg-black/60 flex items-end">
-          <div className="w-full bg-white rounded-t-2xl max-h-[90vh] overflow-y-auto">
+          <div className="w-full bg-white rounded-t-2xl max-h-[85dvh] overflow-y-auto">
             <div className="p-4 border-b border-gray-100">
               <div className="w-10 h-1 bg-gray-300 rounded-full mx-auto mb-3" />
               <h3 className="text-sm font-semibold text-gray-900 text-center">
@@ -2281,7 +2281,7 @@ export default function LiveScorerPage() {
       {/* ── RECORD RESULT ── */}
       {showResult && (
         <div className="fixed inset-0 z-50 bg-black/60 flex items-end">
-          <div className="w-full bg-white rounded-t-2xl p-5 max-h-[80vh] overflow-y-auto">
+          <div className="w-full bg-white rounded-t-2xl p-5 max-h-[85dvh] overflow-y-auto">
             <div className="w-10 h-1 bg-gray-300 rounded-full mx-auto mb-4" />
             <h3 className="text-sm font-semibold text-gray-900 text-center mb-3">
               Match Result

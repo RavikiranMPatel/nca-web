@@ -380,7 +380,7 @@ export default function ContactInbox() {
       {/* Delete Confirm Modal */}
       {deleteConfirm && (
         <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center px-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 max-h-[85dvh] overflow-y-auto">
             <h3 className="text-lg font-semibold text-gray-800 mb-2">
               Delete Message?
             </h3>

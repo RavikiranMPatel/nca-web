@@ -363,7 +363,7 @@ const WagonWheelModal = ({
       onClick={onClose}
     >
       <div
-        className="w-full max-w-sm bg-gray-900 rounded-t-2xl md:rounded-2xl max-h-[90vh] overflow-y-auto"
+        className="w-full max-w-sm bg-gray-900 rounded-t-2xl md:rounded-2xl max-h-[85dvh] overflow-y-auto"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="w-10 h-1 bg-gray-700 rounded-full mx-auto mt-3 mb-2 md:hidden" />

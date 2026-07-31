@@ -76,7 +76,7 @@ export default function PlayerAvatar({
             onClick={() => setShowPhoto(false)}
           >
             <div
-              className="bg-white rounded-2xl shadow-2xl p-6 flex flex-col items-center gap-4 relative max-w-sm w-full"
+              className="bg-white rounded-2xl shadow-2xl p-6 flex flex-col items-center gap-4 relative max-w-sm w-full max-h-[85dvh] overflow-y-auto"
               onClick={(e) => e.stopPropagation()}
             >
               <button

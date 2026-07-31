@@ -35,7 +35,7 @@ function LogoutConfirmModal({
   if (!open) return null;
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 backdrop-blur-sm">
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm mx-4 p-6">
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm mx-4 p-6 max-h-[85dvh] overflow-y-auto">
         <div className="flex flex-col items-center gap-3 text-center">
           <div className="w-12 h-12 rounded-full bg-red-50 flex items-center justify-center">
             <LogOut size={22} className="text-red-500" />
