@@ -51,7 +51,7 @@ import PlayerAttendanceHistoryPage from "./pages/regular-camp-attendance/PlayerA
 // import PlayerAnalysisPage from "./pages/player/PlayerAnalysisPage"; // disabled 2026-07-30 — Analysis tab hidden pending redesign
 import PlayerAssessmentDashboardPage from "./pages/player/PlayerAssessmentDashboardPage";
 import PlayerFeesTab from "./pages/player/PlayerFeesTab";
-import PlayerMediaPage from "./pages/player/PlayerMediaPage";
+// import PlayerMediaPage from "./pages/player/PlayerMediaPage"; // disabled 2026-07-31 — Media tab hidden pending content strategy
 import OnboardingPage from "./pages/OnboardingPage";
 import { checkOnboardingStatus } from "./api/auth.api";
 import TeamMembersAdmin from "./pages/admin/TeamMembersAdmin";
@@ -65,7 +65,7 @@ import UserProfilePage from "./pages/UserProfilePage";
 import AdminRevenueDashboard from "./pages/admin/AdminRevenueDashboard";
 import AdminExcelImportPage from "./pages/admin/AdminExcelImportPage";
 import FeesDuePage from "./pages/admin/FeesDuePage";
-import PlayerCoachingPage from "./pages/player/PlayerCoachingPage";
+// import PlayerCoachingPage from "./pages/player/PlayerCoachingPage"; // disabled 2026-07-31 — Coaching tab hidden pending content strategy
 import CoachingDashboardPage from "./pages/coaching/CoachingDashboardPage";
 import PlayerCoachingViewPage from "./pages/player/PlayerCoachingViewPage";
 import UserFormPage from "./pages/UserFormPage";
@@ -538,8 +538,8 @@ function App() {
             </ProtectedRoute>
           }
         />
-        <Route path="media" element={<PlayerMediaPage />} />
-        <Route path="coaching" element={<PlayerCoachingPage />} />
+        {/* <Route path="media" element={<PlayerMediaPage />} /> */}{/* disabled 2026-07-31 */}
+        {/* <Route path="coaching" element={<PlayerCoachingPage />} /> */}{/* disabled 2026-07-31 */}
       </Route>
 
       <Route

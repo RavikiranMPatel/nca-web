@@ -453,7 +453,7 @@ function ViewAllBookings() {
 
       {/* ── STATS — 2-col on mobile, up to 5-col on desktop ── */}
       <div
-        className={`grid gap-3 ${isSuperAdmin ? "grid-cols-2 md:grid-cols-5" : "grid-cols-3"}`}
+        className={`grid gap-3 ${isSuperAdmin ? "grid-cols-2 md:grid-cols-5" : "grid-cols-2 md:grid-cols-4"}`}
       >
         <div className="bg-white rounded-xl border border-gray-200 p-3 md:p-4">
           <p className="text-xs text-gray-500">Showing</p>
@@ -474,23 +474,23 @@ function ViewAllBookings() {
             {pendingCount}
           </p>
         </div>
+        {/* BM Sessions — visible to Admin and Super Admin */}
+        <div className="bg-white rounded-xl border border-gray-200 p-3 md:p-4">
+          <p className="text-xs text-gray-500">BM Sessions</p>
+          <p className="text-xl md:text-2xl font-bold text-purple-600">
+            {totalBmSessions}
+          </p>
+          <p className="text-[10px] text-gray-400">bowling machine</p>
+        </div>
+        {/* Revenue — Super Admin only */}
         {isSuperAdmin && (
-          <>
-            <div className="bg-white rounded-xl border border-gray-200 p-3 md:p-4">
-              <p className="text-xs text-gray-500">BM Sessions</p>
-              <p className="text-xl md:text-2xl font-bold text-purple-600">
-                {totalBmSessions}
-              </p>
-              <p className="text-[10px] text-gray-400">bowling machine</p>
-            </div>
-            <div className="bg-white rounded-xl border border-gray-200 p-3 md:p-4">
-              <p className="text-xs text-gray-500">Revenue</p>
-              <p className="text-xl md:text-2xl font-bold text-blue-600">
-                ₹{paidRevenue.toLocaleString()}
-              </p>
-              <p className="text-[10px] text-gray-400">excl. excluded rows</p>
-            </div>
-          </>
+          <div className="bg-white rounded-xl border border-gray-200 p-3 md:p-4">
+            <p className="text-xs text-gray-500">Revenue</p>
+            <p className="text-xl md:text-2xl font-bold text-blue-600">
+              ₹{paidRevenue.toLocaleString()}
+            </p>
+            <p className="text-[10px] text-gray-400">excl. excluded rows</p>
+          </div>
         )}
       </div>
 

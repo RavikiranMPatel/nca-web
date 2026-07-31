@@ -37,11 +37,9 @@ function PlayerOverviewPage() {
     // : location.pathname.includes("/analysis") ? "Analysis" // disabled 2026-07-30
     : location.pathname.includes("/fees")
         ? "Fees"
-        : location.pathname.includes("/media")
-          ? "Media"
-          : location.pathname.includes("/coaching")
-            ? "Coaching"
-            : "Info";
+        // : location.pathname.includes("/media") ? "Media"       // disabled 2026-07-31
+        // : location.pathname.includes("/coaching") ? "Coaching" // disabled 2026-07-31
+        : "Info";
 
   const handleUpdateClick = () => {
     navigate(`/admin/players/${playerPublicId}/edit`);
@@ -132,21 +130,25 @@ function PlayerOverviewPage() {
               </TabButton>
             )}
 
+            {/* Media tab disabled 2026-07-31 — hidden pending content strategy
             <TabButton
               active={activeTab === "Media"}
               onClick={() => navigate(`/admin/players/${playerPublicId}/media`)}
             >
               📸 Media
             </TabButton>
+            */}
           </>
         )}
 
+        {/* Coaching tab disabled 2026-07-31 — hidden pending content strategy
         <TabButton
           active={activeTab === "Coaching"}
           onClick={() => navigate(`/admin/players/${playerPublicId}/coaching`)}
         >
           🏋️ Coaching
         </TabButton>
+        */}
       </div>
 
       {/* ================= CHILD CONTENT ================= */}
