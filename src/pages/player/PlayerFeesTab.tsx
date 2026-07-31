@@ -327,6 +327,12 @@ function PlayerFeesTab() {
 
   const handleMarkPaid = async () => {
     if (!account) return;
+    if (instPlans.some((p) => p.status === "ACTIVE")) {
+      const proceed = window.confirm(
+        "Warning: This player has an active installment plan.\n\nRecording a direct payment here may create a duplicate revenue entry if the same payment is also tracked as an installment.\n\nProceed anyway?",
+      );
+      if (!proceed) return;
+    }
     setMarkingPaid(true);
     try {
       const formData = new FormData();
@@ -405,6 +411,20 @@ function PlayerFeesTab() {
       window.URL.revokeObjectURL(url);
     } catch (e: any) {
       toast.error(e?.response?.data?.message || "Failed to download receipt");
+    }
+  };
+
+  const handleDeleteReversed = async (normalPaymentPublicId: string) => {
+    const ok = window.confirm(
+      "Permanently delete this payment and its reversal record? This cannot be undone.",
+    );
+    if (!ok) return;
+    try {
+      await api.delete(`/admin/fees/payments/${normalPaymentPublicId}`);
+      toast.success("Payment pair deleted permanently");
+      loadAll();
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || "Failed to delete payment");
     }
   };
 
@@ -878,7 +898,7 @@ function PlayerFeesTab() {
                             </td>
                             {isSuperAdmin && (
                               <td className="px-5 py-3 text-right">
-                                {!reversal && (
+                                {!reversal ? (
                                   <div className="flex items-center gap-2 justify-end">
                                     <button
                                       onClick={() => {
@@ -898,6 +918,15 @@ function PlayerFeesTab() {
                                       Reverse
                                     </button>
                                   </div>
+                                ) : (
+                                  <button
+                                    onClick={() =>
+                                      handleDeleteReversed(p.publicId)
+                                    }
+                                    className="text-xs text-red-500 hover:text-red-700 font-medium hover:underline"
+                                  >
+                                    Delete
+                                  </button>
                                 )}
                               </td>
                             )}
@@ -1061,6 +1090,16 @@ function PlayerFeesTab() {
                                 </button>
                               </div>
                             )}
+                          </div>
+                        )}
+                        {reversal && isSuperAdmin && (
+                          <div className="flex justify-end mt-2">
+                            <button
+                              onClick={() => handleDeleteReversed(p.publicId)}
+                              className="text-xs text-red-500 font-medium"
+                            >
+                              Delete
+                            </button>
                           </div>
                         )}
                       </div>
@@ -1938,6 +1977,20 @@ function InstallmentSection({ playerPublicId }: { playerPublicId: string }) {
     }
   };
 
+  const handleCancelPlan = async (planPublicId: string) => {
+    const reason = prompt("Reason for cancellation (required):");
+    if (!reason || !reason.trim()) return;
+    try {
+      await api.post(`/admin/fee-installments/plans/${planPublicId}/cancel`, {
+        reason: reason.trim(),
+      });
+      toast.success("Plan cancelled");
+      loadPlans();
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || "Failed to cancel plan");
+    }
+  };
+
   const handleEditAmount = async () => {
     if (!editAmountPlan || !editAmountValue) return;
     setSavingAmount(true);
@@ -2157,20 +2210,31 @@ function InstallmentSection({ playerPublicId }: { playerPublicId: string }) {
                       })
                     )}
                     {plan.status === "ACTIVE" && (
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setInstForm({
-                            dueDate: "",
-                            dueAmount: "",
-                            notes: "",
-                          });
-                          setShowAddInstallment(plan.publicId);
-                        }}
-                        className="w-full py-2 border-2 border-dashed border-slate-300 text-slate-500 text-xs font-medium rounded-lg hover:border-blue-400 hover:text-blue-600 transition"
-                      >
-                        + Add Installment
-                      </button>
+                      <>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setInstForm({
+                              dueDate: "",
+                              dueAmount: "",
+                              notes: "",
+                            });
+                            setShowAddInstallment(plan.publicId);
+                          }}
+                          className="w-full py-2 border-2 border-dashed border-slate-300 text-slate-500 text-xs font-medium rounded-lg hover:border-blue-400 hover:text-blue-600 transition"
+                        >
+                          + Add Installment
+                        </button>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleCancelPlan(plan.publicId);
+                          }}
+                          className="w-full py-2 border border-red-200 text-red-500 text-xs font-medium rounded-lg hover:bg-red-50 hover:border-red-400 transition"
+                        >
+                          Cancel Plan
+                        </button>
+                      </>
                     )}
                   </div>
                 )}

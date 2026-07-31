@@ -165,42 +165,7 @@ export function FeeSummaryTable({
       `- Team ${academy}`,
     ].join("\n");
 
-    // ── DEBUG: open browser DevTools console before clicking ──────────────────
-    // Check 1: are the emoji intact in the JS string right before encoding?
-    const emojiCheck: Record<string, string> = {};
-    Array.from(msg).forEach((ch) => {
-      const cp = ch.codePointAt(0)!;
-      if (cp > 0x7f) {
-        emojiCheck[`U+${cp.toString(16).toUpperCase().padStart(5, "0")}`] = ch;
-      }
-    });
-    console.log("[WA-DEBUG] Non-ASCII chars in msg (should include all 5 emoji):", emojiCheck);
-
-    // Check 2: produce both encodings and compare
-    const encodedFull = encodeURIComponent(msg);
-    const encodedPerChar = Array.from(msg).map((c) => encodeURIComponent(c)).join("");
-    console.log("[WA-DEBUG] Full encodeURIComponent === per-char:", encodedFull === encodedPerChar);
-
-    // Check 3: confirm the correct 4-byte sequences are present
-    const expected: Record<string, string> = {
-      "👋": "%F0%9F%91%8B",
-      "📅": "%F0%9F%93%85",
-      "💰": "%F0%9F%92%B0",
-      "🙏": "%F0%9F%99%8F",
-      "📸": "%F0%9F%93%B8",
-    };
-    Object.entries(expected).forEach(([emoji, hex]) => {
-      console.log(`[WA-DEBUG] ${emoji} → ${hex}: ${encodedPerChar.includes(hex) ? "✅ PRESENT" : "❌ MISSING — corrupt encoding detected"}`);
-    });
-
-    const encoded = encodedPerChar;
-    // Check 4: log the full URL so you can paste it into the browser bar directly
-    console.log("[WA-DEBUG] Full URL:\n", `https://api.whatsapp.com/send/?phone=91${phone}&text=${encoded}`);
-    // ── END DEBUG ─────────────────────────────────────────────────────────────
-
-    // Use api.whatsapp.com/send directly — skips the wa.me redirect server which
-    // may corrupt multi-byte percent-encoded sequences during its server-side
-    // re-encoding step before handing off to WhatsApp Desktop/Web.
+    const encoded = encodeURIComponent(msg);
     return `https://api.whatsapp.com/send/?phone=91${phone}&text=${encoded}`;
   };
 
