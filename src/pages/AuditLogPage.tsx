@@ -3,7 +3,6 @@ import api from "../api/axios";
 import { Shield, RefreshCw, ChevronLeft, ChevronRight } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
-// Jackson JsonNode serialises as any JSON value; unknown is the safe TS stand-in
 type JsonNode = Record<string, unknown> | null;
 
 type AuditLogEntry = {
@@ -26,6 +25,8 @@ type Page<T> = {
   number: number;
   size: number;
 };
+
+const PAGE_SIZE = 25;
 
 const ACTION_LABELS: Record<string, string> = {
   PLAYER_CREATED: "Player created",
@@ -52,6 +53,11 @@ const ACTION_LABELS: Record<string, string> = {
   KIT_DETAILS_CREATED: "Kit details created",
   KIT_DETAILS_UPDATED: "Kit details updated",
   KIT_BULK_IMPORT: "Kit bulk import",
+  FEE_MARKED_PAID: "Fee marked paid",
+  FEE_PAYMENT_REVERSED: "Fee payment reversed",
+  FEE_PAYMENT_DATE_UPDATED: "Fee payment date updated",
+  FEE_ACCOUNT_CREATED: "Fee account created",
+  FEE_PLAN_CHANGED: "Fee plan changed",
 };
 
 const ENTITY_TYPES = [
@@ -63,9 +69,18 @@ const ENTITY_TYPES = [
   "INVENTORY_CHECKOUT",
   "BULK_IMPORT",
   "KIT_DETAILS",
+  "FEE_PAYMENT",
+  "FEE_ACCOUNT",
 ];
 
-function formatDate(iso: string) {
+const FEE_ACTIONS = new Set([
+  "FEE_MARKED_PAID",
+  "FEE_PAYMENT_REVERSED",
+  "FEE_PAYMENT_DATE_UPDATED",
+  "FEE_ACCOUNT_CREATED",
+]);
+
+function formatTimestamp(iso: string) {
   return new Date(iso).toLocaleString(undefined, {
     year: "numeric",
     month: "short",
@@ -73,6 +88,21 @@ function formatDate(iso: string) {
     hour: "2-digit",
     minute: "2-digit",
   });
+}
+
+function formatDetailValue(v: unknown): string {
+  if (v === null || v === undefined) return "—";
+  const s = String(v);
+  // ISO date-time: "2026-07-31T14:30:00Z" or similar
+  if (/^\d{4}-\d{2}-\d{2}(T[\d:.Z+\-]+)?$/.test(s)) {
+    const d = new Date(s);
+    if (!isNaN(d.getTime())) {
+      return s.includes("T")
+        ? d.toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })
+        : d.toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" });
+    }
+  }
+  return s;
 }
 
 function EntityLink({
@@ -85,36 +115,116 @@ function EntityLink({
   const navigate = useNavigate();
   if (!entityPublicId) return <span className="text-gray-400">—</span>;
 
-  const playerTypes = ["PLAYER"];
-  if (playerTypes.includes(entityType)) {
+  const preview = entityPublicId.length > 12
+    ? entityPublicId.slice(0, 10) + "…"
+    : entityPublicId;
+
+  if (entityType === "PLAYER") {
     return (
       <button
         onClick={() => navigate(`/admin/players/${entityPublicId}`)}
         className="text-indigo-600 hover:underline text-sm font-mono"
+        title={entityPublicId}
       >
-        {entityPublicId.slice(0, 8)}…
+        {preview}
       </button>
     );
   }
 
   return (
-    <span className="text-gray-600 text-sm font-mono">
-      {entityPublicId.slice(0, 8)}…
+    <span className="text-gray-600 text-sm font-mono" title={entityPublicId}>
+      {preview}
     </span>
   );
 }
 
-function DetailsCell({ details }: { details: JsonNode | null }) {
-  if (!details || typeof details !== "object") return null;
-  const entries = Object.entries(details as Record<string, unknown>);
-  if (entries.length === 0) return null;
+function ChangesBlock({ changes }: { changes: Record<string, unknown> }) {
+  const entries = Object.entries(changes);
+  if (entries.length === 0) return <span className="text-gray-400 text-xs">No field changes recorded</span>;
   return (
-    <div className="text-xs text-gray-500 mt-0.5 space-x-1">
+    <div className="space-y-1">
+      {entries.map(([field, diff]) => {
+        const d = diff as { old?: unknown; new?: unknown };
+        const oldVal = formatDetailValue(d?.old);
+        const newVal = formatDetailValue(d?.new);
+        return (
+          <div key={field} className="text-xs flex flex-wrap gap-1 items-center">
+            <span className="font-semibold text-gray-600">{field}:</span>
+            <span className="line-through text-red-500 bg-red-50 px-1 rounded">{oldVal}</span>
+            <span className="text-gray-400">→</span>
+            <span className="text-green-700 bg-green-50 px-1 rounded font-medium">{newVal}</span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function FeeBlock({ details }: { details: Record<string, unknown> }) {
+  const rows: { label: string; value: string }[] = [];
+  if (details.amount != null) rows.push({ label: "Amount", value: `₹${details.amount}` });
+  if (details.paymentMode) rows.push({ label: "Mode", value: String(details.paymentMode) });
+  if (details.paidOn) rows.push({ label: "Paid on", value: formatDetailValue(details.paidOn) });
+  if (details.markedBy) rows.push({ label: "Marked by", value: String(details.markedBy) });
+  if (details.referenceNumber) rows.push({ label: "Ref", value: String(details.referenceNumber) });
+  // FEE_PAYMENT_REVERSED may have a reason string at top level
+  if (typeof details === "string") rows.push({ label: "Reason", value: details });
+
+  return (
+    <div className="space-y-0.5">
+      {rows.map(({ label, value }) => (
+        <div key={label} className="text-xs flex gap-1">
+          <span className="font-medium text-gray-500 min-w-[60px]">{label}:</span>
+          <span className="text-gray-700">{value}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function DetailsCell({
+  action,
+  details,
+}: {
+  action: string;
+  details: JsonNode | null;
+}) {
+  if (!details) return <span className="text-gray-300 text-xs">—</span>;
+
+  // Flat string or primitive (e.g. FEE_PAYMENT_REVERSED passes a reason string)
+  if (typeof details !== "object") {
+    return (
+      <span className="text-xs text-gray-500 bg-gray-100 rounded px-1.5 py-0.5">
+        {String(details)}
+      </span>
+    );
+  }
+
+  const obj = details as Record<string, unknown>;
+
+  // Before/after diff produced by PLAYER_UPDATED
+  if (obj.changes && typeof obj.changes === "object") {
+    return <ChangesBlock changes={obj.changes as Record<string, unknown>} />;
+  }
+
+  // Fee-specific curated view
+  if (FEE_ACTIONS.has(action)) {
+    return <FeeBlock details={obj} />;
+  }
+
+  // Generic key→value (e.g. USER_ROLE_CHANGED, USER_DELETED, logCriticalAction)
+  const entries = Object.entries(obj).filter(
+    ([, v]) => typeof v !== "object" || v === null,
+  );
+  if (entries.length === 0) return <span className="text-gray-300 text-xs">—</span>;
+
+  return (
+    <div className="text-xs text-gray-500 space-y-0.5">
       {entries.map(([k, v]) => (
-        <span key={k} className="inline-block bg-gray-100 rounded px-1 py-0.5">
-          <span className="font-medium text-gray-600">{k}:</span>{" "}
-          {String(v)}
-        </span>
+        <div key={k} className="flex gap-1">
+          <span className="font-medium text-gray-600">{k}:</span>
+          <span>{formatDetailValue(v)}</span>
+        </div>
       ))}
     </div>
   );
@@ -140,7 +250,7 @@ export default function AuditLogPage() {
     setLoading(true);
     setError(null);
     try {
-      const params: Record<string, string | number> = { page, size: 50 };
+      const params: Record<string, string | number> = { page, size: PAGE_SIZE };
       if (from) params.from = `${from}T00:00:00Z`;
       if (to) params.to = `${to}T23:59:59Z`;
       if (actor) params.actor = actor;
@@ -323,13 +433,18 @@ export default function AuditLogPage() {
               {data?.content.map((entry) => (
                 <tr key={entry.publicId} className="hover:bg-gray-50">
                   <td className="px-4 py-3 text-gray-500 whitespace-nowrap text-xs">
-                    {formatDate(entry.createdAt)}
+                    {formatTimestamp(entry.createdAt)}
                   </td>
-                  <td className="px-4 py-3 text-gray-700 max-w-[160px] truncate">
-                    <span title={entry.actorPublicId}>{entry.actorPublicId}</span>
+                  <td className="px-4 py-3 text-gray-700 max-w-[180px]">
+                    <span
+                      className="block truncate"
+                      title={entry.actorPublicId}
+                    >
+                      {entry.actorPublicId}
+                    </span>
                     {entry.actorRole && (
-                      <span className="ml-1 text-xs text-gray-400">
-                        ({entry.actorRole.replace("ROLE_", "")})
+                      <span className="text-xs text-gray-400">
+                        {entry.actorRole.replace("ROLE_", "")}
                       </span>
                     )}
                   </td>
@@ -338,15 +453,15 @@ export default function AuditLogPage() {
                       {ACTION_LABELS[entry.action] ?? entry.action}
                     </span>
                   </td>
-                  <td className="px-4 py-3">
+                  <td className="px-4 py-3 max-w-[140px]">
                     <div className="text-xs text-gray-500">{entry.entityType}</div>
                     <EntityLink
                       entityType={entry.entityType}
                       entityPublicId={entry.entityPublicId}
                     />
                   </td>
-                  <td className="px-4 py-3">
-                    <DetailsCell details={entry.details} />
+                  <td className="px-4 py-3 max-w-[320px]">
+                    <DetailsCell action={entry.action} details={entry.details} />
                   </td>
                 </tr>
               ))}
@@ -354,18 +469,20 @@ export default function AuditLogPage() {
           </table>
         </div>
 
-        {/* Pagination */}
-        {data && data.totalPages > 1 && (
+        {/* Pagination — always visible when there is data */}
+        {data && (
           <div className="border-t border-gray-200 px-4 py-3 flex items-center justify-between text-sm text-gray-600">
             <span>
-              Page {data.number + 1} of {data.totalPages} &bull;{" "}
-              {data.totalElements} total events
+              {data.totalElements === 0
+                ? "No events"
+                : `Page ${data.number + 1} of ${data.totalPages} · ${data.totalElements} total`}
             </span>
             <div className="flex gap-2">
               <button
                 disabled={data.number === 0}
                 onClick={() => setPage((p) => Math.max(0, p - 1))}
                 className="p-1 rounded hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed"
+                title="Previous page"
               >
                 <ChevronLeft className="w-4 h-4" />
               </button>
@@ -373,6 +490,7 @@ export default function AuditLogPage() {
                 disabled={data.number >= data.totalPages - 1}
                 onClick={() => setPage((p) => p + 1)}
                 className="p-1 rounded hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed"
+                title="Next page"
               >
                 <ChevronRight className="w-4 h-4" />
               </button>
