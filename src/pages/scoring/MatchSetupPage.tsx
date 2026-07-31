@@ -522,17 +522,6 @@ export default function MatchSetupPage() {
       setError("Team A already has 11 players");
       return;
     }
-    // Use a local synthetic ID for UI tracking; the server uses externalName, not this ID
-    const syntheticId = `guest-${Date.now()}-a`;
-    const newPlayer: PlayerOption = {
-      publicId: syntheticId,
-      displayName: name,
-      battingStyle:
-        teamAExternalBattingStyle === "RIGHT_HAND_BAT"
-          ? "Right Hand Bat"
-          : "Left Hand Bat",
-    };
-    setAllPlayers((prev) => [...prev, newPlayer]);
     setTeamAPlayers((prev) => [
       ...prev,
       {
@@ -556,16 +545,6 @@ export default function MatchSetupPage() {
       setError("Team B already has 11 players");
       return;
     }
-    const syntheticId = `guest-${Date.now()}-b`;
-    const newPlayer: PlayerOption = {
-      publicId: syntheticId,
-      displayName: name,
-      battingStyle:
-        teamBExternalBattingStyle === "RIGHT_HAND_BAT"
-          ? "Right Hand Bat"
-          : "Left Hand Bat",
-    };
-    setAllPlayers((prev) => [...prev, newPlayer]);
     setTeamBPlayers((prev) => [
       ...prev,
       {
