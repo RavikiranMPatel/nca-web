@@ -7,7 +7,12 @@ import {
   ChevronUp,
   Clock,
 } from "lucide-react";
-import type { PracticeDayResponse } from "../../api/playerService/coachingService";
+import { toast } from "react-hot-toast";
+import type {
+  PracticeDayResponse,
+  CompletionStatus,
+} from "../../api/playerService/coachingService";
+import { coachingService } from "../../api/playerService/coachingService";
 
 const FOCUS_COLORS: Record<string, string> = {
   BATTING: "bg-blue-100 text-blue-700",
@@ -32,6 +37,13 @@ function formatDate(d: string) {
   });
 }
 
+const DRILL_STATUS_OPTIONS: { value: CompletionStatus; label: string; cls: string }[] = [
+  { value: "ASSIGNED",    label: "Assigned",    cls: "bg-blue-50 text-blue-700" },
+  { value: "IN_PROGRESS", label: "In Progress", cls: "bg-yellow-50 text-yellow-700" },
+  { value: "COMPLETED",   label: "Completed",   cls: "bg-green-100 text-green-700" },
+  { value: "SKIPPED",     label: "Skipped",     cls: "bg-slate-100 text-slate-500" },
+];
+
 type Props = {
   practiceDays: PracticeDayResponse[];
   loading: boolean;
@@ -40,17 +52,37 @@ type Props = {
   onNew: () => void;
   onEdit: (publicId: string) => void;
   onDelete: (publicId: string) => void;
+  onRefresh?: () => void;
 };
 
 export default function PracticeDayList({
   practiceDays,
   loading,
   isSuperAdmin,
+  playerPublicId,
   onNew,
   onEdit,
   onDelete,
+  onRefresh,
 }: Props) {
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [updatingDrill, setUpdatingDrill] = useState<string | null>(null);
+
+  const handleDrillStatusChange = async (
+    drillPublicId: string,
+    status: CompletionStatus,
+  ) => {
+    setUpdatingDrill(drillPublicId);
+    try {
+      await coachingService.updateDrillStatus(playerPublicId, drillPublicId, status);
+      toast.success("Drill status updated");
+      onRefresh?.();
+    } catch {
+      toast.error("Failed to update drill status");
+    } finally {
+      setUpdatingDrill(null);
+    }
+  };
 
   return (
     <div className="space-y-4">
@@ -217,18 +249,28 @@ export default function PracticeDayList({
                                           · {drill.targetDuration}
                                         </span>
                                       )}
-                                      <span
-                                        className={`ml-auto text-[10px] px-1.5 py-0.5 rounded ${
-                                          drill.completionStatus === "COMPLETED"
-                                            ? "bg-green-100 text-green-700"
-                                            : drill.completionStatus ===
-                                                "IN_PROGRESS"
-                                              ? "bg-yellow-100 text-yellow-700"
-                                              : "bg-slate-100 text-slate-500"
-                                        }`}
+                                      <select
+                                        value={drill.completionStatus}
+                                        disabled={updatingDrill === drill.publicId}
+                                        onChange={(e) =>
+                                          handleDrillStatusChange(
+                                            drill.publicId,
+                                            e.target.value as CompletionStatus,
+                                          )
+                                        }
+                                        onClick={(e) => e.stopPropagation()}
+                                        className={`ml-auto text-[10px] font-semibold px-1.5 py-1 rounded border-0 cursor-pointer focus:outline-none focus:ring-1 focus:ring-blue-400 ${
+                                          DRILL_STATUS_OPTIONS.find(
+                                            (o) => o.value === drill.completionStatus,
+                                          )?.cls || "bg-slate-100 text-slate-500"
+                                        } ${updatingDrill === drill.publicId ? "opacity-50" : ""}`}
                                       >
-                                        {drill.completionStatus}
-                                      </span>
+                                        {DRILL_STATUS_OPTIONS.map((o) => (
+                                          <option key={o.value} value={o.value}>
+                                            {o.label}
+                                          </option>
+                                        ))}
+                                      </select>
                                     </div>
                                   ))}
                                 </div>

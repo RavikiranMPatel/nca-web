@@ -5,7 +5,7 @@ import axios from "axios";
 const publicApi = axios.create({ baseURL: "/api/public" });
 
 export const getPublicScorecard = (matchId: string) =>
-  publicApi.get(`/matches/${matchId}/scorecard`).then((r) => r.data);
+  publicApi.get(`/scorecard/${matchId}`).then((r) => r.data);
 
 export const getPublicStandings = (tournamentId: string) =>
   publicApi.get(`/tournaments/${tournamentId}/standings`).then((r) => r.data);

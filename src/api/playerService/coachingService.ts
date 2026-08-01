@@ -70,6 +70,9 @@ export interface DrillAssignmentResponse {
   isSharedWithPlayer: boolean;
   whatsappSent: boolean;
   createdAt: string;
+  // Stage 4: practice context
+  practiceDate?: string;
+  slotFocusArea?: string;
 }
 
 export interface PracticeSlotResponse {
@@ -367,6 +370,30 @@ export const coachingService = {
       status,
       completionNote,
     });
+  },
+
+  // Stage 2: coach updates drill status
+  updateDrillStatus: async (
+    playerPublicId: string,
+    drillPublicId: string,
+    status: CompletionStatus,
+    notes?: string,
+  ): Promise<DrillAssignmentResponse> => {
+    const res = await api.patch(
+      `/admin/players/${playerPublicId}/practice-days/drills/${drillPublicId}/status`,
+      { status, notes },
+    );
+    return res.data;
+  },
+
+  // Stage 3: all drills for a player across practice days (coach view)
+  getPlayerDrills: async (
+    playerPublicId: string,
+  ): Promise<DrillAssignmentResponse[]> => {
+    const res = await api.get(
+      `/admin/players/${playerPublicId}/practice-days/drills`,
+    );
+    return res.data;
   },
 };
 

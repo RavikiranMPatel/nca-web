@@ -501,6 +501,16 @@ function DrillCard({
             </p>
           )}
           <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+            {drill.practiceDate && (
+              <span className="text-xs text-gray-400">
+                📅 {formatDate(drill.practiceDate)}
+              </span>
+            )}
+            {drill.slotFocusArea && (
+              <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${FOCUS_COLORS[drill.slotFocusArea] || "bg-slate-100 text-slate-600"}`}>
+                {drill.slotFocusArea}
+              </span>
+            )}
             {drill.targetReps && (
               <span className="text-xs text-gray-500">
                 🎯 {drill.targetReps} reps
@@ -513,7 +523,7 @@ function DrillCard({
             )}
             {drill.dueDate && (
               <span className="text-xs text-gray-400">
-                📅 Due {formatDate(drill.dueDate)}
+                Due {formatDate(drill.dueDate)}
               </span>
             )}
           </div>
@@ -525,9 +535,11 @@ function DrillCard({
         </span>
       </div>
 
-      {drill.completionNotes && !isPending && (
+      {drill.completionNotes && (
         <div className="bg-gray-50 rounded-xl px-3 py-2 border border-gray-100">
-          <p className="text-xs text-gray-500 font-medium mb-0.5">Your note:</p>
+          <p className="text-xs text-gray-500 font-medium mb-0.5">
+            {isPending ? "Coach note:" : "Your note:"}
+          </p>
           <p className="text-xs text-gray-600">{drill.completionNotes}</p>
         </div>
       )}

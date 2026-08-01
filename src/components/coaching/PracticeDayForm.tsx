@@ -290,7 +290,7 @@ export default function PracticeDayForm({
           <h3 className="font-bold text-slate-900 text-sm">Practice Slots</h3>
           <button
             onClick={() => setSlots((p) => [...p, emptySlot()])}
-            className="flex items-center gap-1 text-xs font-semibold text-blue-600 hover:text-blue-700"
+            className="flex items-center gap-1.5 px-3 py-2 bg-blue-50 text-blue-700 rounded-lg text-xs font-semibold hover:bg-blue-100 transition-all min-h-[40px]"
           >
             <Plus size={14} /> Add Slot
           </button>
@@ -442,7 +442,7 @@ export default function PracticeDayForm({
                 </span>
                 <button
                   onClick={() => addDrill(slotIdx)}
-                  className="text-xs text-blue-600 font-semibold hover:text-blue-700 flex items-center gap-1"
+                  className="flex items-center gap-1.5 px-3 py-2 bg-orange-50 text-orange-700 rounded-lg text-xs font-semibold hover:bg-orange-100 transition-all min-h-[40px]"
                 >
                   <Plus size={12} /> Add Drill
                 </button>
