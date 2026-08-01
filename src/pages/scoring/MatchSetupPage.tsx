@@ -1124,33 +1124,103 @@ export default function MatchSetupPage() {
                 </div>
                 <div className="flex flex-wrap gap-1.5">
                   {currentPlayers.map((sel, idx) => {
+                    const isGuest = !sel.playerPublicId && !!sel.externalName;
                     const p = sel.playerPublicId
                       ? allPlayers.find((pl) => pl.publicId === sel.playerPublicId)
                       : undefined;
                     const displayName = p?.displayName ?? sel.externalName ?? "Guest";
+                    const removeBtn = (
+                      <button
+                        onClick={() => {
+                          setCurrentPlayers(
+                            currentPlayers
+                              .filter((_, i) => i !== idx)
+                              .map((s, i) => ({ ...s, battingOrder: i + 1 })),
+                          );
+                          setError("");
+                        }}
+                        className="ml-0.5 w-4 h-4 rounded-full bg-blue-200 dark:bg-blue-800 hover:bg-red-200 hover:text-red-600 flex items-center justify-center transition-colors flex-shrink-0"
+                      >
+                        <X />
+                      </button>
+                    );
+
+                    if (isGuest) {
+                      return (
+                        <div
+                          key={`guest-${idx}`}
+                          className="inline-flex items-center gap-1 text-xs bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 pl-2 pr-1 py-1 rounded-xl"
+                        >
+                          <span className="font-medium mr-0.5">
+                            {sel.battingOrder}. {displayName} 👤
+                          </span>
+                          <button
+                            onClick={() =>
+                              setCurrentPlayers(
+                                currentPlayers.map((p, i) =>
+                                  i === idx
+                                    ? { ...p, isCaptain: !p.isCaptain }
+                                    : { ...p, isCaptain: false },
+                                ),
+                              )
+                            }
+                            className={`px-1.5 py-0.5 rounded font-bold transition-colors ${
+                              sel.isCaptain
+                                ? "bg-yellow-200 text-yellow-700 dark:bg-yellow-900/40 dark:text-yellow-400"
+                                : "bg-blue-200 text-blue-500 dark:bg-blue-800 dark:text-blue-400"
+                            }`}
+                          >
+                            C
+                          </button>
+                          <button
+                            onClick={() =>
+                              setCurrentPlayers(
+                                currentPlayers.map((p, i) =>
+                                  i === idx
+                                    ? { ...p, isWicketkeeper: !p.isWicketkeeper }
+                                    : p,
+                                ),
+                              )
+                            }
+                            className={`px-1.5 py-0.5 rounded font-bold transition-colors ${
+                              sel.isWicketkeeper
+                                ? "bg-green-200 text-green-700 dark:bg-green-900/40 dark:text-green-400"
+                                : "bg-blue-200 text-blue-500 dark:bg-blue-800 dark:text-blue-400"
+                            }`}
+                          >
+                            WK
+                          </button>
+                          <button
+                            onClick={() =>
+                              setCurrentPlayers(
+                                currentPlayers.map((p, i) =>
+                                  i === idx ? { ...p, isForeign: !p.isForeign } : p,
+                                ),
+                              )
+                            }
+                            className={`px-1.5 py-0.5 rounded font-bold transition-colors ${
+                              sel.isForeign
+                                ? "bg-orange-200 text-orange-700 dark:bg-orange-900/40 dark:text-orange-400"
+                                : "bg-blue-200 text-blue-500 dark:bg-blue-800 dark:text-blue-400"
+                            }`}
+                          >
+                            ✈
+                          </button>
+                          {removeBtn}
+                        </div>
+                      );
+                    }
+
                     return (
                       <span
-                        key={sel.playerPublicId || `guest-${idx}`}
+                        key={sel.playerPublicId}
                         className="inline-flex items-center gap-1 text-xs bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 pl-2 pr-1 py-0.5 rounded-full"
                       >
                         {sel.battingOrder}. {displayName}
                         {sel.isCaptain ? " (C)" : ""}
                         {sel.isWicketkeeper ? " (WK)" : ""}
                         {sel.isForeign ? " ✈" : ""}
-                        {sel.externalName && !sel.playerPublicId ? " 👤" : ""}
-                        <button
-                          onClick={() => {
-                            setCurrentPlayers(
-                              currentPlayers
-                                .filter((_, i) => i !== idx)
-                                .map((s, i) => ({ ...s, battingOrder: i + 1 })),
-                            );
-                            setError("");
-                          }}
-                          className="ml-0.5 w-4 h-4 rounded-full bg-blue-200 dark:bg-blue-800 hover:bg-red-200 hover:text-red-600 flex items-center justify-center transition-colors flex-shrink-0"
-                        >
-                          <X />
-                        </button>
+                        {removeBtn}
                       </span>
                     );
                   })}
