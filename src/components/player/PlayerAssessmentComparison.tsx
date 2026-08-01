@@ -62,6 +62,7 @@ const OVERALL_CONFIG: Record<string, { card: string; text: string }> = {
 
 const TABS = [
   { key: "cricket", label: "Cricket", icon: "🏏" },
+  { key: "fielding", label: "Fielding", icon: "🥊" },
   { key: "fitness", label: "Fitness", icon: "💪" },
   { key: "diet", label: "Diet", icon: "🍎" },
   { key: "mental", label: "Mental", icon: "🧠" },
@@ -313,6 +314,7 @@ export default function PlayerAssessmentComparison({
     if (!leftData || !rightData) return [];
     const keyMap: Record<string, string> = {
       cricket: "cricketSkills",
+      fielding: "fielding",
       fitness: "fitness",
       diet: "diet",
       mental: "mental",

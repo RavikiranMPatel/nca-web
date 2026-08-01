@@ -1,6 +1,6 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { toast } from "react-hot-toast";
-import { Save } from "lucide-react";
+import { Save, CheckCircle, AlertCircle, Loader2 } from "lucide-react";
 import { playerAssessmentService } from "../../api/playerService/playerAssessmentService.ts";
 import type {
   PlayerAssessmentRequest,
@@ -15,40 +15,27 @@ import type {
   MentalData,
   SkillEntry,
 } from "../../api/playerService/playerAssessmentService.ts";
+import {
+  RATINGS,
+  getSkill,
+  RatingPills,
+  SkillRow,
+  TierHeader,
+  SectionCard,
+} from "./assessmentComponents.tsx";
+
+// ─── HELPERS ─────────────────────────────────────────────
+
+function formatTimeAgo(date: Date): string {
+  const secs = Math.floor((Date.now() - date.getTime()) / 1000);
+  if (secs < 10) return "just now";
+  if (secs < 60) return `${secs}s ago`;
+  const mins = Math.floor(secs / 60);
+  if (mins < 60) return `${mins}m ago`;
+  return `${Math.floor(mins / 60)}h ago`;
+}
 
 // ─── CONSTANTS ───────────────────────────────────────────
-
-const RATINGS: {
-  value: RatingValue;
-  label: string;
-  color: string;
-  bg: string;
-}[] = [
-  {
-    value: "NEEDS_WORK",
-    label: "Needs Work",
-    color: "text-red-800",
-    bg: "bg-red-100 border-red-200",
-  },
-  {
-    value: "DEVELOPING",
-    label: "Developing",
-    color: "text-yellow-800",
-    bg: "bg-yellow-100 border-yellow-200",
-  },
-  {
-    value: "GOOD",
-    label: "Good",
-    color: "text-green-800",
-    bg: "bg-green-100 border-green-200",
-  },
-  {
-    value: "EXCELLENT",
-    label: "Excellent",
-    color: "text-blue-800",
-    bg: "bg-blue-100 border-blue-200",
-  },
-];
 
 const ROLES: { value: PlayerRole; label: string }[] = [
   { value: "BATSMEN", label: "Batsmen" },
@@ -196,148 +183,7 @@ const MENTAL_CATEGORIES = {
   ],
 };
 
-// ─── REUSABLE COMPONENTS ─────────────────────────────────
-
-function RatingPills({
-  value,
-  onChange,
-}: {
-  value?: RatingValue;
-  onChange: (v: RatingValue) => void;
-}) {
-  return (
-    <div className="flex gap-1.5 flex-wrap">
-      {RATINGS.map((r) => (
-        <button
-          key={r.value}
-          type="button"
-          onClick={() => onChange(r.value)}
-          className={`px-3 py-1 rounded-full text-xs font-semibold border transition-all ${
-            value === r.value
-              ? `${r.bg} ${r.color}`
-              : "bg-white border-slate-200 text-slate-400 hover:border-slate-300"
-          }`}
-        >
-          {r.label}
-        </button>
-      ))}
-    </div>
-  );
-}
-
-function SkillRow({
-  label,
-  entry,
-  onChange,
-  commentRows = 1,
-}: {
-  label: string;
-  entry: SkillEntry;
-  onChange: (e: SkillEntry) => void;
-  commentRows?: number;
-}) {
-  const [open, setOpen] = useState(!!entry.rating || !!entry.comment);
-
-  return (
-    <div className="mb-2">
-      <button
-        type="button"
-        onClick={() => setOpen(!open)}
-        className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-left transition-all ${
-          open
-            ? "bg-blue-50 border border-blue-200"
-            : "bg-slate-50 border border-slate-100 hover:border-slate-200"
-        }`}
-      >
-        <span className="text-sm font-medium text-slate-700">{label}</span>
-        <div className="flex items-center gap-2">
-          {entry.rating && !open && (
-            <span
-              className={`text-[10px] font-semibold px-2 py-0.5 rounded-md ${
-                RATINGS.find((r) => r.value === entry.rating)?.bg || ""
-              } ${RATINGS.find((r) => r.value === entry.rating)?.color || ""}`}
-            >
-              {entry.rating.replace(/_/g, " ")}
-            </span>
-          )}
-          <span
-            className={`text-xs text-slate-400 transition-transform ${open ? "rotate-180" : ""}`}
-          >
-            ▼
-          </span>
-        </div>
-      </button>
-      {open && (
-        <div className="px-3 pt-3 pb-1 space-y-2">
-          <RatingPills
-            value={entry.rating}
-            onChange={(v) => onChange({ ...entry, rating: v })}
-          />
-          <textarea
-            value={entry.comment || ""}
-            onChange={(e) => onChange({ ...entry, comment: e.target.value })}
-            placeholder="Coach comments..."
-            rows={commentRows}
-            className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-y bg-slate-50"
-          />
-        </div>
-      )}
-    </div>
-  );
-}
-
-function TierHeader({ tier, label }: { tier: string; label: string }) {
-  const styles: Record<string, { dot: string; bg: string; text: string }> = {
-    Basics: { dot: "bg-green-500", bg: "bg-green-50", text: "text-green-700" },
-    Intermediate: {
-      dot: "bg-orange-500",
-      bg: "bg-orange-50",
-      text: "text-orange-700",
-    },
-    Advanced: { dot: "bg-pink-500", bg: "bg-pink-50", text: "text-pink-700" },
-  };
-  const s = styles[tier] || styles.Basics;
-
-  return (
-    <div className="flex items-center gap-2 mt-4 mb-2">
-      <span className={`w-2 h-2 rounded-full ${s.dot}`} />
-      <span
-        className={`text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-md ${s.bg} ${s.text}`}
-      >
-        {tier} — {label}
-      </span>
-    </div>
-  );
-}
-
-function SectionCard({
-  title,
-  icon,
-  children,
-}: {
-  title: string;
-  icon: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className="bg-white border border-slate-200 rounded-lg p-4 shadow-sm">
-      <div className="flex items-center gap-2 mb-3">
-        <span className="text-base">{icon}</span>
-        <span className="font-bold text-sm text-slate-900">{title}</span>
-      </div>
-      {children}
-    </div>
-  );
-}
-
-// ─── HELPER: get/set nested skill data ──────────────────
-
-function getSkill(
-  data: Record<string, SkillEntry> | undefined,
-  key: string,
-): SkillEntry {
-  return data?.[key] || {};
-}
+// ─── (RatingPills, SkillRow, TierHeader, SectionCard, getSkill imported above) ─
 
 // ─── MAIN FORM COMPONENT ─────────────────────────────────
 
@@ -405,6 +251,24 @@ function PlayerAssessmentForm({
   const [goalProgress, setGoalProgress] = useState("");
   const [nextMilestone, setNextMilestone] = useState("");
 
+  // ─── VIEW MODE (Detailed / Quick Rate) ────────────────
+  const [viewMode, setViewMode] = useState<"detailed" | "compact">("detailed");
+
+  // ─── PREVIOUS ASSESSMENT (for inline "last rating") ────
+  const [previousAssessment, setPreviousAssessment] =
+    useState<PlayerAssessmentResponse | null>(null);
+
+  // ─── AUTOSAVE STATE ────────────────────────────────────
+  type AutoSaveStatus = "idle" | "saving" | "saved" | "error";
+  const [autoSaveStatus, setAutoSaveStatus] = useState<AutoSaveStatus>("idle");
+  const [lastAutoSavedAt, setLastAutoSavedAt] = useState<Date | null>(null);
+  // publicId of the DRAFT created by autosave when in "new" mode
+  const autosavePublicIdRef = useRef<string | undefined>(undefined);
+  const isDirtyRef = useRef(false);
+  const autosaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Prevent autosave from firing during initial data load
+  const [isInitialized, setIsInitialized] = useState(false);
+
   // ─── LOAD EXISTING DATA ────────────────────────────────
 
   useEffect(() => {
@@ -412,6 +276,12 @@ function PlayerAssessmentForm({
       loadAssessment(assessmentPublicId);
     } else if (isFollowUp) {
       loadLatestForFollowUp();
+    } else {
+      // New assessment: fetch latest completed for inline "last rating" hints
+      playerAssessmentService
+        .getLatest(playerPublicId)
+        .then((d) => setPreviousAssessment(d))
+        .catch(() => {});
     }
   }, []);
 
@@ -614,24 +484,23 @@ function PlayerAssessmentForm({
     }));
   };
 
-  // ─── SAVE ──────────────────────────────────────────────
+  // ─── SAVE / AUTOSAVE ───────────────────────────────────
 
-  const handleSave = async (status: "DRAFT" | "COMPLETED") => {
-    if (!assessmentDate) {
-      toast.error("Assessment date is required");
-      return;
-    }
+  // Ref holding the current build-payload function so autosave
+  // always reads the latest state without needing deps.
+  const buildPayloadRef = useRef<(status: "DRAFT" | "COMPLETED") => PlayerAssessmentRequest>(
+    () => ({ assessmentDate: "", assessmentType: "MONTHLY", playerRole: "BATSMEN", status: "DRAFT" })
+  );
 
-    setSaving(true);
-
+  // Keep buildPayloadRef current on every render (captures latest closure values)
+  buildPayloadRef.current = (status: "DRAFT" | "COMPLETED"): PlayerAssessmentRequest => {
     const bmi =
       height && weight
         ? Math.round(
             (parseFloat(weight) / (parseFloat(height) / 100) ** 2) * 10,
           ) / 10
         : undefined;
-
-    const payload: PlayerAssessmentRequest = {
+    return {
       assessmentDate,
       assessmentType,
       playerRole,
@@ -669,19 +538,101 @@ function PlayerAssessmentForm({
       parentAssessmentPublicId: parentPublicId,
       status,
     };
+  };
 
+  // Autosave ref — always has latest logic, no stale closure issues
+  const autosaveRef = useRef<() => Promise<void>>(async () => {});
+  autosaveRef.current = async () => {
+    if (!assessmentDate) return;
+    const payload = buildPayloadRef.current("DRAFT");
+    setAutoSaveStatus("saving");
     try {
-      if (isEdit && assessmentPublicId) {
-        await playerAssessmentService.update(
-          playerPublicId,
-          assessmentPublicId,
-          payload,
+      const effectiveId = isEdit ? assessmentPublicId : autosavePublicIdRef.current;
+      if (effectiveId) {
+        await playerAssessmentService.update(playerPublicId, effectiveId, payload);
+      } else {
+        const created = await playerAssessmentService.create(playerPublicId, payload);
+        autosavePublicIdRef.current = created.publicId;
+      }
+      setAutoSaveStatus("saved");
+      setLastAutoSavedAt(new Date());
+      isDirtyRef.current = false;
+    } catch {
+      setAutoSaveStatus("error");
+    }
+  };
+
+  const scheduleAutosave = useCallback(() => {
+    isDirtyRef.current = true;
+    setAutoSaveStatus("idle"); // clear previous saved badge until next save completes
+    if (autosaveTimerRef.current) clearTimeout(autosaveTimerRef.current);
+    autosaveTimerRef.current = setTimeout(() => {
+      autosaveRef.current();
+    }, 2500);
+  }, []);
+
+  // Trigger autosave on any form state change (after initial load)
+  useEffect(() => {
+    if (!isInitialized) return;
+    scheduleAutosave();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    assessmentDate, assessmentType, playerRole, ageGroup,
+    cricketSkills, fielding, fitness, diet, mental,
+    overallRating, overallSummary,
+    supplements, coachDietNotes, complianceRating,
+    currentGoal, goalProgress, nextMilestone,
+    height, weight, spinType, balancePriority,
+  ]);
+
+  // Mark initialized after loading completes (prevents autosave during data load)
+  useEffect(() => {
+    if (!loadingData) {
+      const t = setTimeout(() => setIsInitialized(true), 200);
+      return () => clearTimeout(t);
+    }
+  }, [loadingData]);
+
+  // Warn before leaving with unsaved changes
+  useEffect(() => {
+    const handler = (e: BeforeUnloadEvent) => {
+      if (isDirtyRef.current) {
+        e.preventDefault();
+        e.returnValue = "";
+      }
+    };
+    window.addEventListener("beforeunload", handler);
+    return () => {
+      window.removeEventListener("beforeunload", handler);
+      if (autosaveTimerRef.current) clearTimeout(autosaveTimerRef.current);
+    };
+  }, []);
+
+  const handleSave = async (status: "DRAFT" | "COMPLETED") => {
+    if (!assessmentDate) {
+      toast.error("Assessment date is required");
+      return;
+    }
+
+    // Cancel any pending autosave
+    if (autosaveTimerRef.current) clearTimeout(autosaveTimerRef.current);
+
+    setSaving(true);
+    const payload = buildPayloadRef.current(status);
+    try {
+      // Use autosave-created draft id if available (avoids duplicate create)
+      const effectiveId = isEdit ? assessmentPublicId : autosavePublicIdRef.current;
+      if (effectiveId) {
+        await playerAssessmentService.update(playerPublicId, effectiveId, payload);
+        toast.success(
+          isEdit ? "Assessment updated successfully" : "Assessment saved successfully",
         );
-        toast.success("Assessment updated successfully");
       } else {
         await playerAssessmentService.create(playerPublicId, payload);
         toast.success("Assessment saved successfully");
       }
+      isDirtyRef.current = false;
+      setAutoSaveStatus("idle");
       onSuccess();
     } catch (error: any) {
       toast.error(
@@ -705,6 +656,8 @@ function PlayerAssessmentForm({
 
   // ─── RENDER ────────────────────────────────────────────
 
+  const isCompact = viewMode === "compact";
+
   const showBatting =
     playerRole === "BATSMEN" ||
     playerRole === "ALL_ROUNDER" ||
@@ -712,17 +665,170 @@ function PlayerAssessmentForm({
   const showBowling = playerRole === "BOWLER" || playerRole === "ALL_ROUNDER";
   const showWK = playerRole === "WICKET_KEEPER";
 
+  // ─── PER-CATEGORY COMPLETION COUNTS ───────────────────
+
+  function countSkills(
+    data: Record<string, SkillEntry> | undefined,
+    skills: string[],
+  ): { rated: number; total: number } {
+    let rated = 0;
+    skills.forEach((s) => { if ((data as any)?.[s]?.rating) rated++; });
+    return { rated, total: skills.length };
+  }
+
+  const tabCounts = (() => {
+    // Cricket
+    let cRated = 0, cTotal = 0;
+    if (showBatting) {
+      [
+        [cricketSkills.batting?.basics, BATTING_SKILLS.basics],
+        [cricketSkills.batting?.intermediate, BATTING_SKILLS.intermediate],
+        [cricketSkills.batting?.advanced, BATTING_SKILLS.advanced],
+      ].forEach(([d, l]) => {
+        const c = countSkills(d as Record<string, SkillEntry>, l as string[]);
+        cRated += c.rated; cTotal += c.total;
+      });
+    }
+    if (showBowling) {
+      [
+        [cricketSkills.bowling?.basics, BOWLING_SKILLS.basics],
+        [cricketSkills.bowling?.intermediate, BOWLING_SKILLS.intermediate],
+        [cricketSkills.bowling?.advanced, BOWLING_SKILLS.advanced],
+      ].forEach(([d, l]) => {
+        const c = countSkills(d as Record<string, SkillEntry>, l as string[]);
+        cRated += c.rated; cTotal += c.total;
+      });
+    }
+    if (showWK) {
+      [
+        [cricketSkills.wicketKeeping?.basics, WICKET_KEEPING_SKILLS.basics],
+        [cricketSkills.wicketKeeping?.intermediate, WICKET_KEEPING_SKILLS.intermediate],
+        [cricketSkills.wicketKeeping?.advanced, WICKET_KEEPING_SKILLS.advanced],
+      ].forEach(([d, l]) => {
+        const c = countSkills(d as Record<string, SkillEntry>, l as string[]);
+        cRated += c.rated; cTotal += c.total;
+      });
+    }
+
+    // Fielding
+    let fRated = 0, fTotal = 0;
+    [
+      [fielding.common?.basics, COMMON_FIELDING_SKILLS.basics],
+      [fielding.common?.intermediate, COMMON_FIELDING_SKILLS.intermediate],
+      [fielding.common?.advanced, COMMON_FIELDING_SKILLS.advanced],
+    ].forEach(([d, l]) => {
+      const c = countSkills(d as Record<string, SkillEntry>, l as string[]);
+      fRated += c.rated; fTotal += c.total;
+    });
+    if (showWK) {
+      [
+        [fielding.wicketKeeping?.basics, WK_FIELDING_SKILLS.basics],
+        [fielding.wicketKeeping?.intermediate, WK_FIELDING_SKILLS.intermediate],
+        [fielding.wicketKeeping?.advanced, WK_FIELDING_SKILLS.advanced],
+      ].forEach(([d, l]) => {
+        const c = countSkills(d as Record<string, SkillEntry>, l as string[]);
+        fRated += c.rated; fTotal += c.total;
+      });
+    }
+
+    // Fitness
+    let fitRated = 0, fitTotal = 0;
+    Object.entries(FITNESS_CATEGORIES).forEach(([cat, skills]) => {
+      const c = countSkills(
+        (fitness as any)[cat] as Record<string, SkillEntry>,
+        skills,
+      );
+      fitRated += c.rated; fitTotal += c.total;
+    });
+
+    // Diet
+    let dRated = 0, dTotal = 0;
+    Object.entries(DIET_FIELDS).forEach(([cat, skills]) => {
+      const c = countSkills(
+        (diet as any)[cat] as Record<string, SkillEntry>,
+        skills,
+      );
+      dRated += c.rated; dTotal += c.total;
+    });
+
+    // Mental
+    let mRated = 0, mTotal = 0;
+    Object.entries(MENTAL_CATEGORIES).forEach(([cat, skills]) => {
+      const c = countSkills(
+        (mental as any)[cat] as Record<string, SkillEntry>,
+        skills,
+      );
+      mRated += c.rated; mTotal += c.total;
+    });
+
+    return {
+      cricket: { rated: cRated, total: cTotal },
+      fielding: { rated: fRated, total: fTotal },
+      fitness: { rated: fitRated, total: fitTotal },
+      diet: { rated: dRated, total: dTotal },
+      mental: { rated: mRated, total: mTotal },
+    };
+  })();
+
   return (
     <div className="space-y-6">
       {/* ─── HEADER ────────────────────────────────────── */}
       <div className="bg-white rounded-lg shadow p-6">
-        <h2 className="text-lg font-bold text-slate-900 mb-1">
-          {isEdit
-            ? "Edit Assessment"
-            : isFollowUp
-              ? "Quick Follow-up"
-              : "New Assessment"}
-        </h2>
+        <div className="flex items-start justify-between gap-3 mb-1">
+          <h2 className="text-lg font-bold text-slate-900">
+            {isEdit
+              ? "Edit Assessment"
+              : isFollowUp
+                ? "Quick Follow-up"
+                : "New Assessment"}
+          </h2>
+          <div className="flex items-center gap-3 flex-shrink-0">
+            {/* Autosave status indicator */}
+            {autoSaveStatus === "saving" && (
+              <span className="flex items-center gap-1 text-xs text-slate-400">
+                <Loader2 size={12} className="animate-spin" />
+                Saving…
+              </span>
+            )}
+            {autoSaveStatus === "saved" && lastAutoSavedAt && (
+              <span className="flex items-center gap-1 text-xs text-green-600">
+                <CheckCircle size={12} />
+                Draft saved {formatTimeAgo(lastAutoSavedAt)}
+              </span>
+            )}
+            {autoSaveStatus === "error" && (
+              <span className="flex items-center gap-1 text-xs text-red-500">
+                <AlertCircle size={12} />
+                Autosave failed
+              </span>
+            )}
+            {/* View mode toggle */}
+            <div className="flex items-center rounded-lg border border-slate-200 overflow-hidden text-xs font-semibold">
+              <button
+                type="button"
+                onClick={() => setViewMode("detailed")}
+                className={`px-3 py-1.5 transition-all ${
+                  viewMode === "detailed"
+                    ? "bg-blue-600 text-white"
+                    : "bg-white text-slate-500 hover:bg-slate-50"
+                }`}
+              >
+                Detailed
+              </button>
+              <button
+                type="button"
+                onClick={() => setViewMode("compact")}
+                className={`px-3 py-1.5 border-l border-slate-200 transition-all ${
+                  viewMode === "compact"
+                    ? "bg-blue-600 text-white"
+                    : "bg-white text-slate-500 hover:bg-slate-50"
+                }`}
+              >
+                Quick Rate
+              </button>
+            </div>
+          </div>
+        </div>
         {isFollowUp && parentPublicId && (
           <p className="text-xs text-green-600 bg-green-50 px-3 py-1 rounded-md inline-block mb-3">
             📋 Based on previous assessment — pre-filled with last data
@@ -800,21 +906,40 @@ function PlayerAssessmentForm({
 
       {/* ─── TABS ──────────────────────────────────────── */}
       <div className="flex gap-1 bg-white rounded-lg shadow p-1 overflow-x-auto">
-        {TABS.map((tab) => (
-          <button
-            key={tab.key}
-            type="button"
-            onClick={() => setActiveTab(tab.key)}
-            className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-md text-xs font-semibold transition-all whitespace-nowrap ${
-              activeTab === tab.key
-                ? "bg-blue-600 text-white shadow-sm"
-                : "text-slate-500 hover:bg-slate-50"
-            }`}
-          >
-            <span>{tab.icon}</span>
-            <span className="hidden sm:inline">{tab.label}</span>
-          </button>
-        ))}
+        {TABS.map((tab) => {
+          const cnt = tabCounts[tab.key as keyof typeof tabCounts];
+          const allDone = cnt.rated === cnt.total && cnt.total > 0;
+          return (
+            <button
+              key={tab.key}
+              type="button"
+              onClick={() => setActiveTab(tab.key)}
+              className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-md text-xs font-semibold transition-all whitespace-nowrap ${
+                activeTab === tab.key
+                  ? "bg-blue-600 text-white shadow-sm"
+                  : "text-slate-500 hover:bg-slate-50"
+              }`}
+            >
+              <span>{tab.icon}</span>
+              <span className="hidden sm:inline">{tab.label}</span>
+              {cnt.total > 0 && (
+                <span
+                  className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${
+                    activeTab === tab.key
+                      ? allDone
+                        ? "bg-white/30 text-white"
+                        : "bg-white/20 text-white"
+                      : allDone
+                        ? "bg-green-100 text-green-700"
+                        : "bg-slate-100 text-slate-500"
+                  }`}
+                >
+                  {cnt.rated}/{cnt.total}
+                </span>
+              )}
+            </button>
+          );
+        })}
       </div>
 
       {/* ─── TAB: CRICKET SKILLS ──────────────────────── */}
@@ -835,57 +960,45 @@ function PlayerAssessmentForm({
               )}
 
               <TierHeader tier="Basics" label="Fundamentals" />
-              <SectionCard title="Batting Basics" icon="🏏">
+              <SectionCard title="Batting Basics" icon="🏏" compact={isCompact}>
                 {BATTING_SKILLS.basics.map((s) => (
                   <SkillRow
                     key={s}
                     label={s}
-                    entry={getSkill(
-                      cricketSkills.batting?.basics as Record<
-                        string,
-                        SkillEntry
-                      >,
-                      s,
-                    )}
+                    entry={getSkill(cricketSkills.batting?.basics as Record<string, SkillEntry>, s)}
                     onChange={(e) => updateBattingSkill("basics", s, e)}
+                    previousRating={previousAssessment?.cricketSkills?.batting?.basics?.[s]?.rating}
+                  compact={isCompact}
                   />
                 ))}
               </SectionCard>
 
               <TierHeader tier="Intermediate" label="Body Mechanics" />
-              <SectionCard title="Batting Intermediate" icon="⚡">
+              <SectionCard title="Batting Intermediate" icon="⚡" compact={isCompact}>
                 {BATTING_SKILLS.intermediate.map((s) => (
                   <SkillRow
                     key={s}
                     label={s}
-                    entry={getSkill(
-                      cricketSkills.batting?.intermediate as Record<
-                        string,
-                        SkillEntry
-                      >,
-                      s,
-                    )}
+                    entry={getSkill(cricketSkills.batting?.intermediate as Record<string, SkillEntry>, s)}
                     onChange={(e) => updateBattingSkill("intermediate", s, e)}
                     commentRows={2}
+                    previousRating={previousAssessment?.cricketSkills?.batting?.intermediate?.[s]?.rating}
+                  compact={isCompact}
                   />
                 ))}
               </SectionCard>
 
               <TierHeader tier="Advanced" label="High Performance" />
-              <SectionCard title="Batting Advanced" icon="🔥">
+              <SectionCard title="Batting Advanced" icon="🔥" compact={isCompact}>
                 {BATTING_SKILLS.advanced.map((s) => (
                   <SkillRow
                     key={s}
                     label={s}
-                    entry={getSkill(
-                      cricketSkills.batting?.advanced as Record<
-                        string,
-                        SkillEntry
-                      >,
-                      s,
-                    )}
+                    entry={getSkill(cricketSkills.batting?.advanced as Record<string, SkillEntry>, s)}
                     onChange={(e) => updateBattingSkill("advanced", s, e)}
                     commentRows={2}
+                    previousRating={previousAssessment?.cricketSkills?.batting?.advanced?.[s]?.rating}
+                  compact={isCompact}
                   />
                 ))}
               </SectionCard>
@@ -905,57 +1018,45 @@ function PlayerAssessmentForm({
               )}
 
               <TierHeader tier="Basics" label="Bowling Action" />
-              <SectionCard title="Bowling Basics" icon="🎯">
+              <SectionCard title="Bowling Basics" icon="🎯" compact={isCompact}>
                 {BOWLING_SKILLS.basics.map((s) => (
                   <SkillRow
                     key={s}
                     label={s}
-                    entry={getSkill(
-                      cricketSkills.bowling?.basics as Record<
-                        string,
-                        SkillEntry
-                      >,
-                      s,
-                    )}
+                    entry={getSkill(cricketSkills.bowling?.basics as Record<string, SkillEntry>, s)}
                     onChange={(e) => updateBowlingSkill("basics", s, e)}
+                    previousRating={previousAssessment?.cricketSkills?.bowling?.basics?.[s]?.rating}
+                  compact={isCompact}
                   />
                 ))}
               </SectionCard>
 
               <TierHeader tier="Intermediate" label="Bowling Mechanics" />
-              <SectionCard title="Bowling Intermediate" icon="⚡">
+              <SectionCard title="Bowling Intermediate" icon="⚡" compact={isCompact}>
                 {BOWLING_SKILLS.intermediate.map((s) => (
                   <SkillRow
                     key={s}
                     label={s}
-                    entry={getSkill(
-                      cricketSkills.bowling?.intermediate as Record<
-                        string,
-                        SkillEntry
-                      >,
-                      s,
-                    )}
+                    entry={getSkill(cricketSkills.bowling?.intermediate as Record<string, SkillEntry>, s)}
                     onChange={(e) => updateBowlingSkill("intermediate", s, e)}
                     commentRows={2}
+                    previousRating={previousAssessment?.cricketSkills?.bowling?.intermediate?.[s]?.rating}
+                  compact={isCompact}
                   />
                 ))}
               </SectionCard>
 
               <TierHeader tier="Advanced" label="Advanced Bowling" />
-              <SectionCard title="Bowling Advanced" icon="🔥">
+              <SectionCard title="Bowling Advanced" icon="🔥" compact={isCompact}>
                 {BOWLING_SKILLS.advanced.map((s) => (
                   <SkillRow
                     key={s}
                     label={s}
-                    entry={getSkill(
-                      cricketSkills.bowling?.advanced as Record<
-                        string,
-                        SkillEntry
-                      >,
-                      s,
-                    )}
+                    entry={getSkill(cricketSkills.bowling?.advanced as Record<string, SkillEntry>, s)}
                     onChange={(e) => updateBowlingSkill("advanced", s, e)}
                     commentRows={2}
+                    previousRating={previousAssessment?.cricketSkills?.bowling?.advanced?.[s]?.rating}
+                  compact={isCompact}
                   />
                 ))}
 
@@ -983,17 +1084,11 @@ function PlayerAssessmentForm({
                   {spinType && (
                     <SkillRow
                       label={`${spinType} — Position & Release`}
-                      entry={getSkill(
-                        cricketSkills.bowling?.advanced as Record<
-                          string,
-                          SkillEntry
-                        >,
-                        spinType,
-                      )}
-                      onChange={(e) =>
-                        updateBowlingSkill("advanced", spinType, e)
-                      }
+                      entry={getSkill(cricketSkills.bowling?.advanced as Record<string, SkillEntry>, spinType)}
+                      onChange={(e) => updateBowlingSkill("advanced", spinType, e)}
                       commentRows={2}
+                      previousRating={previousAssessment?.cricketSkills?.bowling?.advanced?.[spinType]?.rating}
+                    compact={isCompact}
                     />
                   )}
                 </div>
@@ -1010,57 +1105,45 @@ function PlayerAssessmentForm({
               </div>
 
               <TierHeader tier="Basics" label="Keeping Fundamentals" />
-              <SectionCard title="Wicket Keeping Basics" icon="🧤">
+              <SectionCard title="Wicket Keeping Basics" icon="🧤" compact={isCompact}>
                 {WICKET_KEEPING_SKILLS.basics.map((s) => (
                   <SkillRow
                     key={s}
                     label={s}
-                    entry={getSkill(
-                      cricketSkills.wicketKeeping?.basics as Record<
-                        string,
-                        SkillEntry
-                      >,
-                      s,
-                    )}
+                    entry={getSkill(cricketSkills.wicketKeeping?.basics as Record<string, SkillEntry>, s)}
                     onChange={(e) => updateWKSkill("basics", s, e)}
+                    previousRating={previousAssessment?.cricketSkills?.wicketKeeping?.basics?.[s]?.rating}
+                  compact={isCompact}
                   />
                 ))}
               </SectionCard>
 
               <TierHeader tier="Intermediate" label="Keeping Mechanics" />
-              <SectionCard title="Wicket Keeping Intermediate" icon="⚡">
+              <SectionCard title="Wicket Keeping Intermediate" icon="⚡" compact={isCompact}>
                 {WICKET_KEEPING_SKILLS.intermediate.map((s) => (
                   <SkillRow
                     key={s}
                     label={s}
-                    entry={getSkill(
-                      cricketSkills.wicketKeeping?.intermediate as Record<
-                        string,
-                        SkillEntry
-                      >,
-                      s,
-                    )}
+                    entry={getSkill(cricketSkills.wicketKeeping?.intermediate as Record<string, SkillEntry>, s)}
                     onChange={(e) => updateWKSkill("intermediate", s, e)}
                     commentRows={2}
+                    previousRating={previousAssessment?.cricketSkills?.wicketKeeping?.intermediate?.[s]?.rating}
+                  compact={isCompact}
                   />
                 ))}
               </SectionCard>
 
               <TierHeader tier="Advanced" label="Advanced Keeping" />
-              <SectionCard title="Wicket Keeping Advanced" icon="🔥">
+              <SectionCard title="Wicket Keeping Advanced" icon="🔥" compact={isCompact}>
                 {WICKET_KEEPING_SKILLS.advanced.map((s) => (
                   <SkillRow
                     key={s}
                     label={s}
-                    entry={getSkill(
-                      cricketSkills.wicketKeeping?.advanced as Record<
-                        string,
-                        SkillEntry
-                      >,
-                      s,
-                    )}
+                    entry={getSkill(cricketSkills.wicketKeeping?.advanced as Record<string, SkillEntry>, s)}
                     onChange={(e) => updateWKSkill("advanced", s, e)}
                     commentRows={2}
+                    previousRating={previousAssessment?.cricketSkills?.wicketKeeping?.advanced?.[s]?.rating}
+                  compact={isCompact}
                   />
                 ))}
               </SectionCard>
@@ -1106,50 +1189,45 @@ function PlayerAssessmentForm({
           </div>
 
           <TierHeader tier="Basics" label="Fielding Fundamentals" />
-          <SectionCard title="Fielding Basics" icon="🏃">
+          <SectionCard title="Fielding Basics" icon="🏃" compact={isCompact}>
             {COMMON_FIELDING_SKILLS.basics.map((s) => (
               <SkillRow
                 key={s}
                 label={s}
-                entry={getSkill(
-                  fielding.common?.basics as Record<string, SkillEntry>,
-                  s,
-                )}
+                entry={getSkill(fielding.common?.basics as Record<string, SkillEntry>, s)}
                 onChange={(e) => updateCommonFieldingSkill("basics", s, e)}
+                previousRating={previousAssessment?.fielding?.common?.basics?.[s]?.rating}
+              compact={isCompact}
               />
             ))}
           </SectionCard>
 
           <TierHeader tier="Intermediate" label="Match Situations" />
-          <SectionCard title="Fielding Intermediate" icon="⚡">
+          <SectionCard title="Fielding Intermediate" icon="⚡" compact={isCompact}>
             {COMMON_FIELDING_SKILLS.intermediate.map((s) => (
               <SkillRow
                 key={s}
                 label={s}
-                entry={getSkill(
-                  fielding.common?.intermediate as Record<string, SkillEntry>,
-                  s,
-                )}
-                onChange={(e) =>
-                  updateCommonFieldingSkill("intermediate", s, e)
-                }
+                entry={getSkill(fielding.common?.intermediate as Record<string, SkillEntry>, s)}
+                onChange={(e) => updateCommonFieldingSkill("intermediate", s, e)}
                 commentRows={2}
+                previousRating={previousAssessment?.fielding?.common?.intermediate?.[s]?.rating}
+              compact={isCompact}
               />
             ))}
           </SectionCard>
 
           <TierHeader tier="Advanced" label="Pressure Scenarios" />
-          <SectionCard title="Fielding Advanced" icon="🔥">
+          <SectionCard title="Fielding Advanced" icon="🔥" compact={isCompact}>
             {COMMON_FIELDING_SKILLS.advanced.map((s) => (
               <SkillRow
                 key={s}
                 label={s}
-                entry={getSkill(
-                  fielding.common?.advanced as Record<string, SkillEntry>,
-                  s,
-                )}
+                entry={getSkill(fielding.common?.advanced as Record<string, SkillEntry>, s)}
                 onChange={(e) => updateCommonFieldingSkill("advanced", s, e)}
                 commentRows={2}
+                previousRating={previousAssessment?.fielding?.common?.advanced?.[s]?.rating}
+              compact={isCompact}
               />
             ))}
           </SectionCard>
@@ -1166,59 +1244,45 @@ function PlayerAssessmentForm({
               </p>
 
               <TierHeader tier="Basics" label="Keeper Fielding Basics" />
-              <SectionCard title="WK Fielding Basics" icon="🧤">
+              <SectionCard title="WK Fielding Basics" icon="🧤" compact={isCompact}>
                 {WK_FIELDING_SKILLS.basics.map((s) => (
                   <SkillRow
                     key={s}
                     label={s}
-                    entry={getSkill(
-                      fielding.wicketKeeping?.basics as Record<
-                        string,
-                        SkillEntry
-                      >,
-                      s,
-                    )}
+                    entry={getSkill(fielding.wicketKeeping?.basics as Record<string, SkillEntry>, s)}
                     onChange={(e) => updateWKFieldingSkill("basics", s, e)}
+                    previousRating={previousAssessment?.fielding?.wicketKeeping?.basics?.[s]?.rating}
+                  compact={isCompact}
                   />
                 ))}
               </SectionCard>
 
               <TierHeader tier="Intermediate" label="Keeper Techniques" />
-              <SectionCard title="WK Fielding Intermediate" icon="⚡">
+              <SectionCard title="WK Fielding Intermediate" icon="⚡" compact={isCompact}>
                 {WK_FIELDING_SKILLS.intermediate.map((s) => (
                   <SkillRow
                     key={s}
                     label={s}
-                    entry={getSkill(
-                      fielding.wicketKeeping?.intermediate as Record<
-                        string,
-                        SkillEntry
-                      >,
-                      s,
-                    )}
-                    onChange={(e) =>
-                      updateWKFieldingSkill("intermediate", s, e)
-                    }
+                    entry={getSkill(fielding.wicketKeeping?.intermediate as Record<string, SkillEntry>, s)}
+                    onChange={(e) => updateWKFieldingSkill("intermediate", s, e)}
                     commentRows={2}
+                    previousRating={previousAssessment?.fielding?.wicketKeeping?.intermediate?.[s]?.rating}
+                  compact={isCompact}
                   />
                 ))}
               </SectionCard>
 
               <TierHeader tier="Advanced" label="Advanced Keeper Skills" />
-              <SectionCard title="WK Fielding Advanced" icon="🔥">
+              <SectionCard title="WK Fielding Advanced" icon="🔥" compact={isCompact}>
                 {WK_FIELDING_SKILLS.advanced.map((s) => (
                   <SkillRow
                     key={s}
                     label={s}
-                    entry={getSkill(
-                      fielding.wicketKeeping?.advanced as Record<
-                        string,
-                        SkillEntry
-                      >,
-                      s,
-                    )}
+                    entry={getSkill(fielding.wicketKeeping?.advanced as Record<string, SkillEntry>, s)}
                     onChange={(e) => updateWKFieldingSkill("advanced", s, e)}
                     commentRows={2}
+                    previousRating={previousAssessment?.fielding?.wicketKeeping?.advanced?.[s]?.rating}
+                  compact={isCompact}
                   />
                 ))}
               </SectionCard>
@@ -1230,63 +1294,59 @@ function PlayerAssessmentForm({
       {/* ─── TAB: FITNESS ─────────────────────────────── */}
       {activeTab === "fitness" && (
         <div className="space-y-4">
-          <SectionCard title="Endurance" icon="🫁">
+          <SectionCard title="Endurance" icon="🫁" compact={isCompact}>
             {FITNESS_CATEGORIES.endurance.map((s) => (
               <SkillRow
                 key={s}
                 label={s}
-                entry={getSkill(
-                  fitness.endurance as Record<string, SkillEntry>,
-                  s,
-                )}
+                entry={getSkill(fitness.endurance as Record<string, SkillEntry>, s)}
                 onChange={(e) => updateFitnessSkill("endurance", s, e)}
+                previousRating={previousAssessment?.fitness?.endurance?.[s]?.rating}
+              compact={isCompact}
               />
             ))}
           </SectionCard>
 
-          <SectionCard title="Speed & Agility" icon="💨">
+          <SectionCard title="Speed & Agility" icon="💨" compact={isCompact}>
             {FITNESS_CATEGORIES.speedAgility.map((s) => (
               <SkillRow
                 key={s}
                 label={s}
-                entry={getSkill(
-                  fitness.speedAgility as Record<string, SkillEntry>,
-                  s,
-                )}
+                entry={getSkill(fitness.speedAgility as Record<string, SkillEntry>, s)}
                 onChange={(e) => updateFitnessSkill("speedAgility", s, e)}
+                previousRating={previousAssessment?.fitness?.speedAgility?.[s]?.rating}
+              compact={isCompact}
               />
             ))}
           </SectionCard>
 
-          <SectionCard title="Strength" icon="💪">
+          <SectionCard title="Strength" icon="💪" compact={isCompact}>
             {FITNESS_CATEGORIES.strength.map((s) => (
               <SkillRow
                 key={s}
                 label={s}
-                entry={getSkill(
-                  fitness.strength as Record<string, SkillEntry>,
-                  s,
-                )}
+                entry={getSkill(fitness.strength as Record<string, SkillEntry>, s)}
                 onChange={(e) => updateFitnessSkill("strength", s, e)}
+                previousRating={previousAssessment?.fitness?.strength?.[s]?.rating}
+              compact={isCompact}
               />
             ))}
           </SectionCard>
 
-          <SectionCard title="Flexibility" icon="🤸">
+          <SectionCard title="Flexibility" icon="🤸" compact={isCompact}>
             {FITNESS_CATEGORIES.flexibility.map((s) => (
               <SkillRow
                 key={s}
                 label={s}
-                entry={getSkill(
-                  fitness.flexibility as Record<string, SkillEntry>,
-                  s,
-                )}
+                entry={getSkill(fitness.flexibility as Record<string, SkillEntry>, s)}
                 onChange={(e) => updateFitnessSkill("flexibility", s, e)}
+                previousRating={previousAssessment?.fitness?.flexibility?.[s]?.rating}
+              compact={isCompact}
               />
             ))}
           </SectionCard>
 
-          <SectionCard title="Body Metrics" icon="📊">
+          <SectionCard title="Body Metrics" icon="📊" compact={isCompact}>
             <div className="grid grid-cols-3 gap-3 mb-2">
               <div>
                 <label className="text-[10px] font-semibold text-slate-500 block mb-1">
@@ -1334,17 +1394,16 @@ function PlayerAssessmentForm({
             </div>
           </SectionCard>
 
-          <SectionCard title="Injury Tracker" icon="🩹">
+          <SectionCard title="Injury Tracker" icon="🩹" compact={isCompact}>
             {FITNESS_CATEGORIES.injuryTracker.map((s) => (
               <SkillRow
                 key={s}
                 label={s}
-                entry={getSkill(
-                  fitness.injuryTracker as Record<string, SkillEntry>,
-                  s,
-                )}
+                entry={getSkill(fitness.injuryTracker as Record<string, SkillEntry>, s)}
                 onChange={(e) => updateFitnessSkill("injuryTracker", s, e)}
                 commentRows={2}
+                previousRating={previousAssessment?.fitness?.injuryTracker?.[s]?.rating}
+              compact={isCompact}
               />
             ))}
           </SectionCard>
@@ -1354,16 +1413,15 @@ function PlayerAssessmentForm({
       {/* ─── TAB: DIET ────────────────────────────────── */}
       {activeTab === "diet" && (
         <div className="space-y-4">
-          <SectionCard title="Current Diet Assessment" icon="🍽️">
+          <SectionCard title="Current Diet Assessment" icon="🍽️" compact={isCompact}>
             {DIET_FIELDS.currentAssessment.map((s) => (
               <SkillRow
                 key={s}
                 label={s}
-                entry={getSkill(
-                  diet.currentAssessment as Record<string, SkillEntry>,
-                  s,
-                )}
+                entry={getSkill(diet.currentAssessment as Record<string, SkillEntry>, s)}
                 onChange={(e) => updateDietSkill("currentAssessment", s, e)}
+                previousRating={previousAssessment?.diet?.currentAssessment?.[s]?.rating}
+              compact={isCompact}
               />
             ))}
             <div className="mt-3 px-1">
@@ -1377,22 +1435,21 @@ function PlayerAssessmentForm({
             </div>
           </SectionCard>
 
-          <SectionCard title="Recommended Plan" icon="📋">
+          <SectionCard title="Recommended Plan" icon="📋" compact={isCompact}>
             {DIET_FIELDS.recommendedPlan.map((s) => (
               <SkillRow
                 key={s}
                 label={s}
-                entry={getSkill(
-                  diet.recommendedPlan as Record<string, SkillEntry>,
-                  s,
-                )}
+                entry={getSkill(diet.recommendedPlan as Record<string, SkillEntry>, s)}
                 onChange={(e) => updateDietSkill("recommendedPlan", s, e)}
                 commentRows={2}
+                previousRating={previousAssessment?.diet?.recommendedPlan?.[s]?.rating}
+              compact={isCompact}
               />
             ))}
           </SectionCard>
 
-          <SectionCard title="Supplements (if any)" icon="💊">
+          <SectionCard title="Supplements (if any)" icon="💊" compact={isCompact}>
             <textarea
               value={supplements}
               onChange={(e) => setSupplements(e.target.value)}
@@ -1402,7 +1459,7 @@ function PlayerAssessmentForm({
             />
           </SectionCard>
 
-          <SectionCard title="Coach / Nutritionist Notes" icon="📝">
+          <SectionCard title="Coach / Nutritionist Notes" icon="📝" compact={isCompact}>
             <textarea
               value={coachDietNotes}
               onChange={(e) => setCoachDietNotes(e.target.value)}
@@ -1417,50 +1474,47 @@ function PlayerAssessmentForm({
       {/* ─── TAB: MENTAL ──────────────────────────────── */}
       {activeTab === "mental" && (
         <div className="space-y-4">
-          <SectionCard title="Discipline" icon="🎯">
+          <SectionCard title="Discipline" icon="🎯" compact={isCompact}>
             {MENTAL_CATEGORIES.discipline.map((s) => (
               <SkillRow
                 key={s}
                 label={s}
-                entry={getSkill(
-                  mental.discipline as Record<string, SkillEntry>,
-                  s,
-                )}
+                entry={getSkill(mental.discipline as Record<string, SkillEntry>, s)}
                 onChange={(e) => updateMentalSkill("discipline", s, e)}
+                previousRating={previousAssessment?.mental?.discipline?.[s]?.rating}
+              compact={isCompact}
               />
             ))}
           </SectionCard>
 
-          <SectionCard title="Match Temperament" icon="🧠">
+          <SectionCard title="Match Temperament" icon="🧠" compact={isCompact}>
             {MENTAL_CATEGORIES.matchTemperament.map((s) => (
               <SkillRow
                 key={s}
                 label={s}
-                entry={getSkill(
-                  mental.matchTemperament as Record<string, SkillEntry>,
-                  s,
-                )}
+                entry={getSkill(mental.matchTemperament as Record<string, SkillEntry>, s)}
                 onChange={(e) => updateMentalSkill("matchTemperament", s, e)}
                 commentRows={2}
+                previousRating={previousAssessment?.mental?.matchTemperament?.[s]?.rating}
+              compact={isCompact}
               />
             ))}
           </SectionCard>
 
-          <SectionCard title="Team Behavior" icon="🤝">
+          <SectionCard title="Team Behavior" icon="🤝" compact={isCompact}>
             {MENTAL_CATEGORIES.teamBehavior.map((s) => (
               <SkillRow
                 key={s}
                 label={s}
-                entry={getSkill(
-                  mental.teamBehavior as Record<string, SkillEntry>,
-                  s,
-                )}
+                entry={getSkill(mental.teamBehavior as Record<string, SkillEntry>, s)}
                 onChange={(e) => updateMentalSkill("teamBehavior", s, e)}
+                previousRating={previousAssessment?.mental?.teamBehavior?.[s]?.rating}
+              compact={isCompact}
               />
             ))}
           </SectionCard>
 
-          <SectionCard title="Goal Tracking" icon="🎯">
+          <SectionCard title="Goal Tracking" icon="🎯" compact={isCompact}>
             <div className="space-y-3 px-1">
               <div>
                 <label className="text-[10px] font-semibold text-slate-500 block mb-1">
