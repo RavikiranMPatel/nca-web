@@ -138,6 +138,25 @@ function EntityLink({
   );
 }
 
+function EntityContextBlock({ ctx }: { ctx: Record<string, unknown> }) {
+  const rows: { label: string; value: string }[] = [];
+  if (ctx.createdBy) rows.push({ label: "Created by", value: String(ctx.createdBy) });
+  if (ctx.createdAt) rows.push({ label: "Created", value: formatDetailValue(ctx.createdAt) });
+  if (ctx.updatedBy) rows.push({ label: "Updated by", value: String(ctx.updatedBy) });
+  if (ctx.updatedAt) rows.push({ label: "Updated", value: formatDetailValue(ctx.updatedAt) });
+  if (rows.length === 0) return null;
+  return (
+    <div className="mt-1.5 pt-1.5 border-t border-gray-100 space-y-0.5">
+      {rows.map(({ label, value }) => (
+        <div key={label} className="text-xs flex gap-1">
+          <span className="font-medium text-gray-400 min-w-[68px]">{label}:</span>
+          <span className="text-gray-400">{value}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function ChangesBlock({ changes }: { changes: Record<string, unknown> }) {
   const entries = Object.entries(changes);
   if (entries.length === 0) return <span className="text-gray-400 text-xs">No field changes recorded</span>;
@@ -202,9 +221,24 @@ function DetailsCell({
 
   const obj = details as Record<string, unknown>;
 
-  // Before/after diff produced by PLAYER_UPDATED
-  if (obj.changes && typeof obj.changes === "object") {
-    return <ChangesBlock changes={obj.changes as Record<string, unknown>} />;
+  const hasChanges = obj.changes && typeof obj.changes === "object";
+  const ctx = obj.entityContext && typeof obj.entityContext === "object"
+    ? (obj.entityContext as Record<string, unknown>)
+    : null;
+
+  // Before/after diff (PLAYER_UPDATED, SETTINGS_BATCH_UPDATED, and any forUpdate() action)
+  if (hasChanges) {
+    return (
+      <div>
+        <ChangesBlock changes={obj.changes as Record<string, unknown>} />
+        {ctx && <EntityContextBlock ctx={ctx} />}
+      </div>
+    );
+  }
+
+  // entityContext alone (no-op update where diff() produced no changes)
+  if (ctx) {
+    return <EntityContextBlock ctx={ctx} />;
   }
 
   // Fee-specific curated view
