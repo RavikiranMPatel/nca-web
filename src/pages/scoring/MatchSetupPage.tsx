@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { ArrowLeft } from "lucide-react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import {
   createMatch,
@@ -1559,8 +1560,9 @@ export default function MatchSetupPage() {
               setStep((s) => s - 1);
               setError("");
             }}
-            className="flex-1 py-3 rounded-xl border border-gray-200 dark:border-gray-700 text-sm font-medium text-gray-600 dark:text-gray-400 active:scale-95 transition-all"
+            className="flex-1 flex items-center justify-center gap-1.5 py-3 rounded-xl bg-gray-100 dark:bg-gray-800 text-sm font-semibold text-gray-800 dark:text-gray-100 active:scale-95 transition-all"
           >
+            <ArrowLeft size={16} />
             Back
           </button>
         )}
