@@ -1,5 +1,14 @@
 // ── Cricket scoring types ─────────────────────────────────────────────────────
 
+export interface KeyMoment {
+  overNumber?: number;
+  ballNumber?: number;
+  description: string;
+  tag: string;
+  playerPublicId?: string;
+  playerName?: string;
+}
+
 export type MatchType = "INTERNAL" | "INTER_ACADEMY" | "KSCA_TOURNAMENT";
 export type MatchStatus =
   | "SETUP"
@@ -8,7 +17,7 @@ export type MatchStatus =
   | "SUPER_OVER"
   | "COMPLETED"
   | "ABANDONED";
-export type DataSource = "BALL_BY_BALL" | "MANUAL";
+export type DataSource = "BALL_BY_BALL" | "MANUAL" | "EXTERNAL";
 export type TossDecision = "BAT" | "FIELD";
 export type ResultType =
   | "WON_BY_RUNS"
@@ -32,9 +41,35 @@ export interface CricketMatch {
   dataSource: DataSource;
   tossDecision?: TossDecision;
   resultType?: ResultType;
+  resultMargin?: number;
   resultDescription?: string;
+  playerOfMatchNote?: string;
   notes?: string;
+  keyMoments?: KeyMoment[];
   tournament?: { name: string; publicId: string };
+  // Ground conditions
+  groundName?: string;
+  groundNumber?: string;
+  pitchType?: string;
+  pitchCondition?: string;
+  outfield?: string;
+  weather?: string;
+  matchFormat?: string;
+}
+
+export interface UpdateExternalMatchRequest {
+  resultType?: string;
+  resultDescription?: string;
+  resultMargin?: number;
+  playerOfMatchPublicId?: string;
+  playerOfMatchNote?: string;
+  groundName?: string;
+  groundNumber?: string;
+  pitchType?: string;
+  pitchCondition?: string;
+  outfield?: string;
+  weather?: string;
+  matchFormat?: string;
 }
 
 export interface CricketTeam {
@@ -78,6 +113,14 @@ export interface CreateMatchRequest {
   dataSource?: DataSource;
   tournamentPublicId?: string;
   notes?: string;
+  // Ground conditions — for EXTERNAL matches
+  groundName?: string;
+  groundNumber?: string;
+  pitchType?: string;
+  pitchCondition?: string;
+  outfield?: string;
+  weather?: string;
+  matchFormat?: string;
 }
 
 export interface SetTeamsRequest {

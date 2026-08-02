@@ -165,6 +165,7 @@ export interface MatchPerformanceRequest {
   coachObservations?: string;
   playerReflection?: string;
   isSharedWithPlayer?: boolean;
+  cricketMatchPublicId?: string;
 }
 
 export interface MatchPerformanceResponse {
@@ -184,6 +185,7 @@ export interface MatchPerformanceResponse {
   coachObservations?: string;
   playerReflection?: string;
   isSharedWithPlayer: boolean;
+  cricketMatchPublicId?: string;
   createdBy?: string;
   createdAt: string;
   updatedAt: string;

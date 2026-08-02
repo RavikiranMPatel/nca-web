@@ -369,6 +369,10 @@ export default function MatchListPage() {
   };
 
   const handleMatchClick = (match: CricketMatch) => {
+    if (match.dataSource === "EXTERNAL") {
+      navigate(`/admin/cricket/matches/${match.publicId}/report`);
+      return;
+    }
     if (match.status === "SETUP") {
       navigate(`/admin/cricket/matches/new?resume=${match.publicId}`);
     } else if (["IN_PROGRESS", "INNINGS_BREAK", "SUPER_OVER"].includes(match.status)) {
@@ -567,17 +571,56 @@ export default function MatchListPage() {
 
       {/* ── Notes modal (shared across Matches + Match Notes tabs) ────────── */}
       {notesModal && (
-        <div className="fixed inset-0 z-[60] bg-black/60 flex items-center justify-center p-6">
-          <div className="w-full max-w-sm bg-white dark:bg-gray-900 rounded-2xl p-5 shadow-xl">
+        <div className="fixed inset-0 z-[60] bg-black/60 flex items-center justify-center p-4">
+          <div className="w-full max-w-md bg-white dark:bg-gray-900 rounded-2xl p-5 shadow-xl max-h-[90vh] flex flex-col">
             <h3 className="text-base font-semibold text-gray-900 dark:text-white mb-1">
               Match Notes
             </h3>
             <p className="text-xs text-gray-400 dark:text-gray-500 mb-3 truncate">
               {notesModal.match.title}
             </p>
+
+            {/* Key Moments compact summary */}
+            <div className="mb-3 p-3 rounded-xl bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700">
+              <div className="flex items-center justify-between mb-1.5">
+                <span className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
+                  Key Moments
+                </span>
+                <button
+                  onClick={() => {
+                    setNotesModal(null);
+                    if (notesModal.match.dataSource === "EXTERNAL") {
+                      navigate(`/admin/cricket/matches/${notesModal.match.publicId}/report`);
+                    } else {
+                      navigate(`/match/${notesModal.match.publicId}/scorecard#key-moments`);
+                    }
+                  }}
+                  className="text-xs text-blue-600 dark:text-blue-400 font-medium hover:underline"
+                >
+                  Manage →
+                </button>
+              </div>
+              {notesModal.match.keyMoments && notesModal.match.keyMoments.length > 0 ? (
+                <div className="space-y-1">
+                  <p className="text-xs text-gray-500 dark:text-gray-400">
+                    {notesModal.match.keyMoments.length} moment{notesModal.match.keyMoments.length !== 1 ? "s" : ""} logged
+                  </p>
+                  {notesModal.match.keyMoments.slice(0, 2).map((km, i) => (
+                    <p key={i} className="text-xs text-gray-700 dark:text-gray-300 truncate">
+                      {km.overNumber != null ? `${km.overNumber}${km.ballNumber != null ? `.${km.ballNumber}` : ""} — ` : ""}
+                      {km.description}
+                      {km.playerName ? ` (${km.playerName})` : ""}
+                    </p>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-xs text-gray-400">None logged yet</p>
+              )}
+            </div>
+
             <textarea
               autoFocus
-              rows={12}
+              rows={8}
               value={notesModal.text}
               onChange={(e) =>
                 setNotesModal((prev) =>
@@ -585,7 +628,7 @@ export default function MatchListPage() {
                 )
               }
               placeholder="Fill in notes above each heading…"
-              className="w-full px-3 py-2.5 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-sm text-gray-900 dark:text-gray-100 placeholder-gray-400 outline-none focus:ring-2 focus:ring-blue-500 resize-y font-mono"
+              className="w-full px-3 py-2.5 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-sm text-gray-900 dark:text-gray-100 placeholder-gray-400 outline-none focus:ring-2 focus:ring-blue-500 resize-y font-mono flex-1 min-h-0"
             />
             <div className="flex gap-3 mt-4">
               <button

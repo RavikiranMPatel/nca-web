@@ -6,6 +6,8 @@ import type {
   CreateMatchRequest,
   SetTeamsRequest,
   TossRequest,
+  UpdateExternalMatchRequest,
+  KeyMoment,
 } from "../../types/match";
 
 const BASE = "/admin/cricket/matches";
@@ -61,3 +63,21 @@ export const deleteMatch = (publicId: string) =>
 
 export const patchMatchNotes = (publicId: string, notes: string) =>
   api.patch(`${BASE}/${publicId}/notes`, { notes }).then((r) => r.data);
+
+export const patchKeyMoments = (publicId: string, keyMoments: KeyMoment[]) =>
+  api.patch<KeyMoment[]>(`${BASE}/${publicId}/key-moments`, { keyMoments }).then((r) => r.data);
+
+export const patchExternalMatchDetails = (
+  publicId: string,
+  req: UpdateExternalMatchRequest,
+) =>
+  api
+    .patch<CricketMatch>(`${BASE}/${publicId}/external-details`, req)
+    .then((r) => r.data);
+
+export const getMatchPerformances = (publicId: string) =>
+  api
+    .get<import("../../api/playerService/coachingService").MatchPerformanceResponse[]>(
+      `${BASE}/${publicId}/performances`,
+    )
+    .then((r) => r.data);

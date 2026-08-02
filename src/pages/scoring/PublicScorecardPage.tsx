@@ -2,9 +2,11 @@ import { useState, useEffect, useCallback } from "react";
 import { getPublicScorecard } from "../../api/scoring/publicApi";
 import publicApi from "../../api/publicApi";
 import { FieldSVG, ZONES } from "./WagonWheelModal";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "../../auth/useAuth";
 import { getMatch, patchMatchNotes } from "../../api/scoring/matchApi";
+import KeyMomentsEditor from "../../components/scoring/KeyMomentsEditor";
+import type { KeyMoment } from "../../types/match";
 import { MATCH_NOTES_TEMPLATE } from "./MatchListPage";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -840,6 +842,7 @@ const InningsCard = ({
 export default function PublicScorecardPage() {
   const { matchId } = useParams<{ matchId: string }>();
   const navigate = useNavigate();
+  const { hash } = useLocation();
   const { userRole } = useAuth();
   const canEditNotes =
     userRole === "ROLE_ADMIN" ||
@@ -862,6 +865,7 @@ export default function PublicScorecardPage() {
   const [notesDraft, setNotesDraft] = useState("");
   const [notesSaving, setNotesSaving] = useState(false);
   const [notesSaved, setNotesSaved] = useState(false);
+  const [keyMoments, setKeyMoments] = useState<KeyMoment[]>([]);
 
   useEffect(() => {
     publicApi
@@ -925,17 +929,25 @@ export default function PublicScorecardPage() {
     setSelectedBatterInnings(inningsNumber);
   };
 
-  // Load existing notes via the admin API when user is authenticated as admin/coach
+  // Load existing notes and key moments via the admin API when authenticated as admin/coach
   useEffect(() => {
     if (!canEditNotes || !matchId) return;
     getMatch(matchId)
       .then((m) => {
         setNotesDraft(m.notes?.trim() ? m.notes : MATCH_NOTES_TEMPLATE);
+        setKeyMoments(m.keyMoments ?? []);
       })
       .catch(() => {
         setNotesDraft(MATCH_NOTES_TEMPLATE);
       });
   }, [canEditNotes, matchId]);
+
+  // Scroll to anchor (e.g. #key-moments) after page finishes loading
+  useEffect(() => {
+    if (loading || !hash) return;
+    const el = document.getElementById(hash.replace("#", ""));
+    if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [loading, hash]);
 
   const handleSaveNotes = async () => {
     if (!matchId) return;
@@ -1254,6 +1266,30 @@ export default function PublicScorecardPage() {
           </div>
         )}
       </div>
+
+      {/* Key Moments — admin/coach only */}
+      {canEditNotes && matchId && (
+        <div id="key-moments" className="px-4 py-5 border-t border-gray-100 dark:border-gray-800">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
+              Key Moments
+            </h3>
+            <span className="text-[10px] bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400 px-2 py-0.5 rounded-full font-medium">
+              Admin only
+            </span>
+          </div>
+          <KeyMomentsEditor
+            matchPublicId={matchId}
+            initialMoments={keyMoments}
+            playerOptions={
+              scorecard?.playingXI
+                .flatMap((team) => team.players)
+                .filter((p) => !!p.playerPublicId)
+                .map((p) => ({ value: p.playerPublicId!, label: p.playerName })) ?? []
+            }
+          />
+        </div>
+      )}
 
       {/* Match Notes — admin/coach only, not shown to public visitors */}
       {canEditNotes && (

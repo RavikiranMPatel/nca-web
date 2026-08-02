@@ -18,6 +18,13 @@ import type {
   PlayerSelection,
 } from "../../types/match";
 import api from "../../api/axios";
+import {
+  PlayerCard,
+  togglePlayer as doTogglePlayer,
+  removePlayer as doRemovePlayer,
+  toggleRole as doToggleRole,
+  toggleForeign as doToggleForeign,
+} from "../../components/scoring/PlayerPicker";
 
 const STEPS = [
   "Match Details",
@@ -79,125 +86,7 @@ const OFFICIAL_ROLES = [
   { role: "REFEREE", label: "Match Referee", required: false },
 ];
 
-const PlayerCard = ({
-  player,
-  selected,
-  onToggle,
-  onRoleToggle,
-  onForeignToggle,
-  isInSquad,
-  squadIsForeign,
-}: {
-  player: PlayerOption;
-  selected: PlayerSelection[];
-  onToggle: () => void;
-  onRoleToggle: (role: "isCaptain" | "isWicketkeeper") => void;
-  onForeignToggle: () => void;
-  isInSquad?: boolean;
-  squadIsForeign?: boolean;
-}) => {
-  const sel = selected.find((s) => s.playerPublicId === player.publicId);
-  const isSelected = !!sel;
-
-  return (
-    <div
-      className={`flex items-center justify-between p-3 rounded-xl border transition-all ${
-        isSelected
-          ? "bg-blue-50 border-blue-300 dark:bg-blue-900/20 dark:border-blue-600"
-          : "bg-white border-gray-200 dark:bg-gray-800 dark:border-gray-700"
-      }`}
-    >
-      <button
-        className="flex items-center gap-3 flex-1 text-left"
-        onClick={onToggle}
-      >
-        <div
-          className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 ${
-            isSelected
-              ? "bg-blue-600 text-white"
-              : "bg-gray-100 dark:bg-gray-700 text-gray-500"
-          }`}
-        >
-          {isSelected
-            ? sel!.battingOrder
-            : player.displayName.charAt(0).toUpperCase()}
-        </div>
-        <div>
-          <div className="flex items-center gap-1.5">
-            <div className="text-sm font-medium text-gray-900 dark:text-gray-100">
-              {player.displayName}
-            </div>
-            {isInSquad && !isSelected && (
-              <span className="text-xs px-1.5 py-0.5 bg-green-50 dark:bg-green-900/20 text-green-600 dark:text-green-400 rounded font-medium">
-                Squad
-              </span>
-            )}
-            {/* Show ✈ if squad marks them as foreign */}
-            {isInSquad && squadIsForeign && !isSelected && (
-              <span className="text-xs text-orange-500">✈</span>
-            )}
-          </div>
-          {(player.battingStyle ||
-            player.bowlingStyle ||
-            player.playerRole) && (
-            <div className="text-xs text-gray-400">
-              {[
-                player.playerRole === "WK_BATSMAN"
-                  ? "🧤 WK"
-                  : player.playerRole === "BATSMAN"
-                    ? "🏏 Bat"
-                    : player.playerRole === "BOWLER"
-                      ? "⚾ Bowl"
-                      : player.playerRole === "ALL_ROUNDER"
-                        ? "⭐ AR"
-                        : null,
-                player.battingStyle,
-                player.bowlingStyle,
-              ]
-                .filter(Boolean)
-                .join(" · ")}
-            </div>
-          )}
-        </div>
-      </button>
-      {isSelected && (
-        <div className="flex gap-1.5 ml-2 flex-wrap justify-end">
-          <button
-            onClick={() => onRoleToggle("isCaptain")}
-            className={`text-xs px-2 py-1 rounded-lg font-medium transition-colors ${
-              sel!.isCaptain
-                ? "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400"
-                : "bg-gray-100 text-gray-500 dark:bg-gray-700 dark:text-gray-400"
-            }`}
-          >
-            C
-          </button>
-          <button
-            onClick={() => onRoleToggle("isWicketkeeper")}
-            className={`text-xs px-2 py-1 rounded-lg font-medium transition-colors ${
-              sel!.isWicketkeeper
-                ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
-                : "bg-gray-100 text-gray-500 dark:bg-gray-700 dark:text-gray-400"
-            }`}
-          >
-            WK
-          </button>
-          <button
-            onClick={onForeignToggle}
-            className={`text-xs px-2 py-1 rounded-lg font-medium transition-colors ${
-              sel!.isForeign
-                ? "bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400"
-                : "bg-gray-100 text-gray-500 dark:bg-gray-700 dark:text-gray-400"
-            }`}
-            title="Mark as foreign/overseas player"
-          >
-            ✈
-          </button>
-        </div>
-      )}
-    </div>
-  );
-};
+// PlayerCard is imported from components/scoring/PlayerPicker
 
 export default function MatchSetupPage() {
   const navigate = useNavigate();
@@ -256,7 +145,7 @@ export default function MatchSetupPage() {
     matchType: "INTERNAL" as "INTERNAL" | "INTER_ACADEMY" | "KSCA_TOURNAMENT",
     venue: "",
     totalOvers: 20,
-    dataSource: "BALL_BY_BALL" as "BALL_BY_BALL" | "MANUAL",
+    dataSource: "BALL_BY_BALL" as "BALL_BY_BALL" | "MANUAL" | "EXTERNAL",
   });
 
   const [createdMatch, setCreatedMatch] = useState<CricketMatch | null>(null);
@@ -475,44 +364,14 @@ export default function MatchSetupPage() {
     selected: PlayerSelection[],
     setSelected: (s: PlayerSelection[]) => void,
     squadForeignIds: Set<string>,
-  ) => {
-    const exists = selected.find((s) => s.playerPublicId === player.publicId);
-    if (exists) {
-      setSelected(
-        selected
-          .filter((s) => s.playerPublicId !== player.publicId)
-          .map((s, idx) => ({ ...s, battingOrder: idx + 1 })),
-      );
-    } else {
-      if (selected.length >= 11) {
-        setError("Playing XI cannot have more than 11 players");
-        return;
-      }
-      setSelected([
-        ...selected,
-        {
-          playerPublicId: player.publicId,
-          battingOrder: selected.length + 1,
-          isCaptain: false,
-          isWicketkeeper: player.playerRole === "WK_BATSMAN",
-          isImpactPlayer: false,
-          isForeign: squadForeignIds.has(player.publicId),
-        },
-      ]);
-    }
-    setError("");
-  };
+  ) => doTogglePlayer(player, selected, setSelected, squadForeignIds, setError);
 
   const removePlayer = (
     publicId: string,
     selected: PlayerSelection[],
     setSelected: (s: PlayerSelection[]) => void,
   ) => {
-    setSelected(
-      selected
-        .filter((s) => s.playerPublicId !== publicId)
-        .map((s, idx) => ({ ...s, battingOrder: idx + 1 })),
-    );
+    doRemovePlayer(publicId, selected, setSelected);
     setError("");
   };
 
@@ -526,7 +385,7 @@ export default function MatchSetupPage() {
     setTeamAPlayers((prev) => [
       ...prev,
       {
-        playerPublicId: "",    // blank → server uses externalName
+        playerPublicId: "",
         externalName: name,
         battingOrder: prev.length + 1,
         isCaptain: false,
@@ -549,7 +408,7 @@ export default function MatchSetupPage() {
     setTeamBPlayers((prev) => [
       ...prev,
       {
-        playerPublicId: "",    // blank → server uses externalName
+        playerPublicId: "",
         externalName: name,
         battingOrder: prev.length + 1,
         isCaptain: false,
@@ -567,34 +426,22 @@ export default function MatchSetupPage() {
     role: "isCaptain" | "isWicketkeeper",
     selected: PlayerSelection[],
     setSelected: (s: PlayerSelection[]) => void,
-  ) => {
-    setSelected(
-      selected.map((p) =>
-        p.playerPublicId === publicId
-          ? { ...p, [role]: !p[role] }
-          : role === "isCaptain"
-            ? { ...p, isCaptain: false }
-            : p,
-      ),
-    );
-  };
+  ) => doToggleRole(publicId, role, selected, setSelected);
 
   const toggleForeign = (
     publicId: string,
     selected: PlayerSelection[],
     setSelected: (s: PlayerSelection[]) => void,
-  ) => {
-    setSelected(
-      selected.map((p) =>
-        p.playerPublicId === publicId ? { ...p, isForeign: !p.isForeign } : p,
-      ),
-    );
-  };
+  ) => doToggleForeign(publicId, selected, setSelected);
 
   const handleCreateMatch = async () => {
     // Guard: match already created (user went back to step 0 and hit Next again)
     if (createdMatch) {
-      setStep(1);
+      if (matchDetails.dataSource === "EXTERNAL") {
+        navigate(`/admin/cricket/matches/${createdMatch.publicId}/report`);
+      } else {
+        setStep(1);
+      }
       return;
     }
     if (!matchDetails.title.trim()) {
@@ -615,7 +462,11 @@ export default function MatchSetupPage() {
         tournamentPublicId: tournamentId ?? undefined,
       });
       setCreatedMatch(match);
-      setStep(1);
+      if (matchDetails.dataSource === "EXTERNAL") {
+        navigate(`/admin/cricket/matches/${match.publicId}/report`);
+      } else {
+        setStep(1);
+      }
     } catch (e: any) {
       setError(e.response?.data?.message || "Failed to create match");
     } finally {
@@ -876,7 +727,7 @@ export default function MatchSetupPage() {
               <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
                 Scoring Mode
               </label>
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-1 gap-2">
                 {(
                   [
                     {
@@ -888,6 +739,11 @@ export default function MatchSetupPage() {
                       val: "MANUAL",
                       label: "Post-match Entry",
                       desc: "Enter final scorecard",
+                    },
+                    {
+                      val: "EXTERNAL",
+                      label: "External Match Report",
+                      desc: "Log away-game result & player performances",
                     },
                   ] as const
                 ).map(({ val, label, desc }) => (

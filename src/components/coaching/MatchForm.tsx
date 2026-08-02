@@ -15,6 +15,11 @@ type Props = {
   matchPublicId?: string;
   onSuccess: () => void;
   onCancel: () => void;
+  // Pre-fill from an external match report context
+  defaultMatchDate?: string;
+  defaultOppositionTeam?: string;
+  defaultVenue?: string;
+  cricketMatchPublicId?: string;
 };
 
 export default function MatchForm({
@@ -22,15 +27,19 @@ export default function MatchForm({
   matchPublicId,
   onSuccess,
   onCancel,
+  defaultMatchDate,
+  defaultOppositionTeam,
+  defaultVenue,
+  cricketMatchPublicId,
 }: Props) {
   const isEdit = !!matchPublicId;
 
   const [matchDate, setMatchDate] = useState(
-    new Date().toISOString().split("T")[0],
+    defaultMatchDate ?? new Date().toISOString().split("T")[0],
   );
   const [matchType, setMatchType] = useState<MatchType>("PRACTICE_MATCH");
-  const [oppositionTeam, setOppositionTeam] = useState("");
-  const [venue, setVenue] = useState("");
+  const [oppositionTeam, setOppositionTeam] = useState(defaultOppositionTeam ?? "");
+  const [venue, setVenue] = useState(defaultVenue ?? "");
   const [result, setResult] = useState<MatchResult | "">("");
   const [playerRole, setPlayerRole] = useState("BATSMEN");
   const [isSharedWithPlayer, setIsSharedWithPlayer] = useState(false);
@@ -119,6 +128,7 @@ export default function MatchForm({
       isSharedWithPlayer,
       coachObservations: coachObservations || undefined,
       playerReflection: playerReflection || undefined,
+      cricketMatchPublicId: cricketMatchPublicId || undefined,
       battingStats:
         runs || balls || fours || sixes || dismissalType
           ? {
