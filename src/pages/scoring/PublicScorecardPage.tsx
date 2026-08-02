@@ -3,6 +3,9 @@ import { getPublicScorecard } from "../../api/scoring/publicApi";
 import publicApi from "../../api/publicApi";
 import { FieldSVG, ZONES } from "./WagonWheelModal";
 import { useParams, useNavigate } from "react-router-dom";
+import { useAuth } from "../../auth/useAuth";
+import { getMatch, patchMatchNotes } from "../../api/scoring/matchApi";
+import { MATCH_NOTES_TEMPLATE } from "./MatchListPage";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 interface BattingLine {
@@ -837,6 +840,12 @@ const InningsCard = ({
 export default function PublicScorecardPage() {
   const { matchId } = useParams<{ matchId: string }>();
   const navigate = useNavigate();
+  const { userRole } = useAuth();
+  const canEditNotes =
+    userRole === "ROLE_ADMIN" ||
+    userRole === "ROLE_SUPER_ADMIN" ||
+    userRole === "ROLE_COACH";
+
   const [scorecard, setScorecard] = useState<Scorecard | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -849,6 +858,10 @@ export default function PublicScorecardPage() {
   );
   const [selectedBatterInnings, setSelectedBatterInnings] = useState<number>(1);
   const [primaryColor, setPrimaryColor] = useState("#1d4ed8");
+
+  const [notesDraft, setNotesDraft] = useState("");
+  const [notesSaving, setNotesSaving] = useState(false);
+  const [notesSaved, setNotesSaved] = useState(false);
 
   useEffect(() => {
     publicApi
@@ -910,6 +923,32 @@ export default function PublicScorecardPage() {
   const handleBatterClick = (batter: BattingLine, inningsNumber: number) => {
     setSelectedBatter(batter);
     setSelectedBatterInnings(inningsNumber);
+  };
+
+  // Load existing notes via the admin API when user is authenticated as admin/coach
+  useEffect(() => {
+    if (!canEditNotes || !matchId) return;
+    getMatch(matchId)
+      .then((m) => {
+        setNotesDraft(m.notes?.trim() ? m.notes : MATCH_NOTES_TEMPLATE);
+      })
+      .catch(() => {
+        setNotesDraft(MATCH_NOTES_TEMPLATE);
+      });
+  }, [canEditNotes, matchId]);
+
+  const handleSaveNotes = async () => {
+    if (!matchId) return;
+    setNotesSaving(true);
+    try {
+      await patchMatchNotes(matchId, notesDraft);
+      setNotesSaved(true);
+      setTimeout(() => setNotesSaved(false), 2000);
+    } catch {
+      /* silent */
+    } finally {
+      setNotesSaving(false);
+    }
   };
 
   if (loading)
@@ -1215,6 +1254,36 @@ export default function PublicScorecardPage() {
           </div>
         )}
       </div>
+
+      {/* Match Notes — admin/coach only, not shown to public visitors */}
+      {canEditNotes && (
+        <div className="px-4 py-5 border-t border-gray-100 dark:border-gray-800">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
+              Match Notes
+            </h3>
+            <span className="text-[10px] bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400 px-2 py-0.5 rounded-full font-medium">
+              Admin only
+            </span>
+          </div>
+          <textarea
+            rows={14}
+            value={notesDraft}
+            onChange={(e) => setNotesDraft(e.target.value)}
+            className="w-full px-3 py-2.5 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-sm text-gray-900 dark:text-gray-100 outline-none focus:ring-2 focus:ring-blue-500 resize-y font-mono"
+          />
+          <div className="flex items-center justify-between mt-2">
+            <span className="text-xs text-gray-400">{notesDraft.length} chars</span>
+            <button
+              onClick={handleSaveNotes}
+              disabled={notesSaving}
+              className="px-4 py-2 rounded-xl bg-blue-600 text-white text-sm font-semibold active:scale-95 disabled:opacity-60 transition-all"
+            >
+              {notesSaving ? "Saving…" : notesSaved ? "Saved ✓" : "Save Notes"}
+            </button>
+          </div>
+        </div>
+      )}
 
       {isLive && (
         <div className="fixed bottom-4 left-1/2 -translate-x-1/2 bg-gray-900 text-green-400 text-xs px-4 py-2 rounded-full border border-green-800 shadow-lg">

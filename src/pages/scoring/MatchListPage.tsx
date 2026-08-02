@@ -1,7 +1,12 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { listMatches } from "../../api/scoring/matchApi";
+import { listMatches, patchMatchNotes, deleteMatch } from "../../api/scoring/matchApi";
+import { useAuth } from "../../auth/useAuth";
 import type { CricketMatch } from "../../types/match";
+
+// ── Notes template — injected only when notes field is null/empty ─────────────
+export const MATCH_NOTES_TEMPLATE =
+  "Overall Match Summary:\n\nTurning Point:\n\nKey Moments:\n\nWinning Factors:\n\nObservations:\n\nOpposition Strengths:\n\nOpposition Weaknesses:\n\nNext Match Strategy:";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 const statusBadge = (status: string) => {
@@ -133,10 +138,14 @@ const MatchCard = ({
   match,
   onClick,
   onDelete,
+  onNotes,
+  canEditNotes,
 }: {
   match: CricketMatch;
   onClick: () => void;
   onDelete: (publicId: string) => void;
+  onNotes: (match: CricketMatch) => void;
+  canEditNotes: boolean;
 }) => (
   <div
     onClick={onClick}
@@ -164,7 +173,7 @@ const MatchCard = ({
           {match.title}
         </h3>
 
-        {/* Date + venue */}
+        {/* Date + result */}
         <p className="text-xs text-gray-400 mt-0.5">
           {match.matchDate}
           {match.resultDescription && (
@@ -175,12 +184,31 @@ const MatchCard = ({
         </p>
       </div>
 
-      {/* Share buttons — always visible for started matches */}
+      {/* Action buttons */}
       <div
         className="flex items-center gap-1.5"
         onClick={(e) => e.stopPropagation()}
       >
         {match.status !== "SETUP" && <ShareButton match={match} />}
+        {canEditNotes && (
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onNotes(match);
+            }}
+            className={`p-2 rounded-lg active:scale-90 transition-all ${
+              match.notes
+                ? "bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400"
+                : "bg-gray-100 dark:bg-gray-800 text-gray-400 dark:text-gray-500"
+            }`}
+            title={match.notes ? "Edit notes" : "Add notes"}
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+            </svg>
+          </button>
+        )}
         <button
           onClick={(e) => {
             e.stopPropagation();
@@ -250,6 +278,12 @@ const ActionChip = ({ label, color }: { label: string; color: string }) => {
 // ── MAIN PAGE ─────────────────────────────────────────────────────────────────
 export default function MatchListPage() {
   const navigate = useNavigate();
+  const { userRole } = useAuth();
+  const canEditNotes =
+    userRole === "ROLE_ADMIN" ||
+    userRole === "ROLE_SUPER_ADMIN" ||
+    userRole === "ROLE_COACH";
+
   const [matches, setMatches] = useState<CricketMatch[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<
@@ -257,6 +291,11 @@ export default function MatchListPage() {
   >("all");
   const [search, setSearch] = useState("");
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
+  const [notesModal, setNotesModal] = useState<{
+    match: CricketMatch;
+    text: string;
+  } | null>(null);
+  const [notesSaving, setNotesSaving] = useState(false);
 
   const handleDelete = async (publicId: string) => {
     setConfirmDelete(publicId);
@@ -265,9 +304,7 @@ export default function MatchListPage() {
   const confirmDeleteMatch = async () => {
     if (!confirmDelete) return;
     try {
-      await import("../../api/scoring/matchApi").then((m) =>
-        m.deleteMatch(confirmDelete),
-      );
+      await deleteMatch(confirmDelete);
       setMatches((prev) => prev.filter((m) => m.publicId !== confirmDelete));
     } catch {
       /* silent */
@@ -297,6 +334,26 @@ export default function MatchListPage() {
     const matchesSearch = m.title.toLowerCase().includes(search.toLowerCase());
     return matchesFilter && matchesSearch;
   });
+
+  const handleSaveNotes = async () => {
+    if (!notesModal) return;
+    setNotesSaving(true);
+    try {
+      await patchMatchNotes(notesModal.match.publicId, notesModal.text);
+      setMatches((prev) =>
+        prev.map((m) =>
+          m.publicId === notesModal.match.publicId
+            ? { ...m, notes: notesModal.text }
+            : m,
+        ),
+      );
+      setNotesModal(null);
+    } catch {
+      /* silent — backend returns error details in the future */
+    } finally {
+      setNotesSaving(false);
+    }
+  };
 
   const handleMatchClick = (match: CricketMatch) => {
     if (match.status === "SETUP") {
@@ -404,10 +461,58 @@ export default function MatchListPage() {
               match={match}
               onClick={() => handleMatchClick(match)}
               onDelete={handleDelete}
+              onNotes={(m) =>
+                setNotesModal({
+                  match: m,
+                  text: m.notes?.trim() ? m.notes : MATCH_NOTES_TEMPLATE,
+                })
+              }
+              canEditNotes={canEditNotes}
             />
           ))
         )}
       </div>
+
+      {/* Notes modal */}
+      {notesModal && (
+        <div className="fixed inset-0 z-[60] bg-black/60 flex items-center justify-center p-6">
+          <div className="w-full max-w-sm bg-white dark:bg-gray-900 rounded-2xl p-5 shadow-xl">
+            <h3 className="text-base font-semibold text-gray-900 dark:text-white mb-1">
+              Match Notes
+            </h3>
+            <p className="text-xs text-gray-400 dark:text-gray-500 mb-3 truncate">
+              {notesModal.match.title}
+            </p>
+            <textarea
+              autoFocus
+              rows={12}
+              value={notesModal.text}
+              onChange={(e) =>
+                setNotesModal((prev) =>
+                  prev ? { ...prev, text: e.target.value } : prev,
+                )
+              }
+              placeholder="Fill in notes above each heading…"
+              className="w-full px-3 py-2.5 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-sm text-gray-900 dark:text-gray-100 placeholder-gray-400 outline-none focus:ring-2 focus:ring-blue-500 resize-y font-mono"
+            />
+            <div className="flex gap-3 mt-4">
+              <button
+                onClick={() => setNotesModal(null)}
+                className="flex-1 py-2.5 rounded-xl border border-gray-200 dark:border-gray-700 text-sm font-medium text-gray-600 dark:text-gray-400"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSaveNotes}
+                disabled={notesSaving}
+                className="flex-1 py-2.5 rounded-xl bg-blue-600 text-white text-sm font-semibold active:scale-95 disabled:opacity-60"
+              >
+                {notesSaving ? "Saving…" : "Save"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Delete confirmation */}
       {confirmDelete && (

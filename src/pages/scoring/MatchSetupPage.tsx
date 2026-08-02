@@ -591,6 +591,11 @@ export default function MatchSetupPage() {
   };
 
   const handleCreateMatch = async () => {
+    // Guard: match already created (user went back to step 0 and hit Next again)
+    if (createdMatch) {
+      setStep(1);
+      return;
+    }
     if (!matchDetails.title.trim()) {
       setError("Match title is required");
       return;

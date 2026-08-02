@@ -33,6 +33,7 @@ export interface CricketMatch {
   tossDecision?: TossDecision;
   resultType?: ResultType;
   resultDescription?: string;
+  notes?: string;
   tournament?: { name: string; publicId: string };
 }
 

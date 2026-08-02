@@ -58,3 +58,6 @@ export const getBranchPlayers = () =>
 
 export const deleteMatch = (publicId: string) =>
   api.delete(`/admin/cricket/matches/${publicId}`);
+
+export const patchMatchNotes = (publicId: string, notes: string) =>
+  api.patch(`${BASE}/${publicId}/notes`, { notes }).then((r) => r.data);
