@@ -22,8 +22,8 @@ function Button({
         ? "bg-gray-400 text-white cursor-not-allowed"
         : "bg-blue-600 text-white hover:bg-blue-700"
       : disabled
-        ? "border border-gray-300 text-gray-400 cursor-not-allowed"
-        : "border border-gray-300 text-gray-700 hover:bg-gray-100";
+        ? "bg-gray-100 dark:bg-gray-800 text-gray-400 dark:text-gray-500 cursor-not-allowed"
+        : "bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700";
 
   return (
     <button
