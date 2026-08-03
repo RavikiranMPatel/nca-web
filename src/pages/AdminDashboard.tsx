@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import {
   Activity,
   Calendar,
+  ClipboardCheck,
   ClipboardList,
   Globe,
   Package,
@@ -508,6 +509,14 @@ function AdminDashboard() {
             onClick={() => navigate("/admin/cricket/matches")}
             gradient="bg-gradient-to-br from-cyan-500 to-blue-600"
             textLight="text-cyan-100"
+          />
+          <ActionCard
+            icon={ClipboardCheck}
+            title="Match Report"
+            description="Log detailed post-match analysis, reviews and lessons"
+            onClick={() => navigate("/admin/cricket/matches")}
+            gradient="bg-gradient-to-br from-rose-500 to-pink-600"
+            textLight="text-rose-100"
           />
           {showTournaments && (
             <ActionCard

@@ -1274,9 +1274,17 @@ export default function PublicScorecardPage() {
             <h3 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
               Key Moments
             </h3>
-            <span className="text-[10px] bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400 px-2 py-0.5 rounded-full font-medium">
-              Admin only
-            </span>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => navigate(`/admin/cricket/matches/${matchId}/report`)}
+                className="text-xs text-indigo-600 dark:text-indigo-400 font-medium hover:underline"
+              >
+                View/Edit Report →
+              </button>
+              <span className="text-[10px] bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400 px-2 py-0.5 rounded-full font-medium">
+                Admin only
+              </span>
+            </div>
           </div>
           <KeyMomentsEditor
             matchPublicId={matchId}

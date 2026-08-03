@@ -28,6 +28,24 @@ export type ResultType =
   | "NO_RESULT"
   | "ABANDONED";
 
+export interface TeamChecklist {
+  batting: string[];
+  bowling: string[];
+  fielding: string[];
+}
+
+export interface TeamPerformanceComments {
+  batting: string;
+  bowling: string;
+  fielding: string;
+}
+
+export interface IndividualObservation {
+  playerPublicId: string;
+  playerName: string;
+  observation: string;
+}
+
 export interface CricketMatch {
   id: string;
   publicId: string;
@@ -55,6 +73,16 @@ export interface CricketMatch {
   outfield?: string;
   weather?: string;
   matchFormat?: string;
+  // Pitch analysis (Phase 3)
+  bounce?: string;
+  swingAvailable?: string;
+  spinAvailable?: string;
+  // Match report (Phase 3)
+  positives?: TeamChecklist;
+  improvements?: TeamChecklist;
+  teamPerformanceComments?: TeamPerformanceComments;
+  individualObservations?: IndividualObservation[];
+  lessonsLearned?: string[];
 }
 
 export interface UpdateExternalMatchRequest {
@@ -70,6 +98,9 @@ export interface UpdateExternalMatchRequest {
   outfield?: string;
   weather?: string;
   matchFormat?: string;
+  bounce?: string;
+  swingAvailable?: string;
+  spinAvailable?: string;
 }
 
 export interface CricketTeam {

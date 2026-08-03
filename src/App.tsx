@@ -58,7 +58,7 @@ import PublicScorecardPage from "./pages/scoring/PublicScorecardPage";
 import PublicPlayerProfilePage from "./pages/scoring/PublicPlayerProfilePage";
 import PublicClubDetail from "./pages/PublicClubDetail";
 import MatchListPage from "./pages/scoring/MatchListPage";
-import ExternalMatchReportPage from "./pages/scoring/ExternalMatchReportPage";
+import MatchReportPage from "./pages/scoring/MatchReportPage";
 import TournamentCreatePage from "./pages/scoring/TournamentCreatePage";
 import TournamentDetailPage from "./pages/scoring/TournamentDetailPage";
 import TournamentListPage from "./pages/scoring/TournamentListPage";
@@ -421,9 +421,9 @@ function App() {
       <Route
         path="/admin/cricket/matches/:publicId/report"
         element={
-          <ProtectedRoute roles={["ROLE_ADMIN", "ROLE_SUPER_ADMIN"]}>
+          <ProtectedRoute roles={["ROLE_ADMIN", "ROLE_SUPER_ADMIN", "ROLE_COACH"]}>
             <AppLayout>
-              <ExternalMatchReportPage />
+              <MatchReportPage />
             </AppLayout>
           </ProtectedRoute>
         }

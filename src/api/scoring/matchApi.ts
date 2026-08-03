@@ -8,6 +8,9 @@ import type {
   TossRequest,
   UpdateExternalMatchRequest,
   KeyMoment,
+  TeamChecklist,
+  TeamPerformanceComments,
+  IndividualObservation,
 } from "../../types/match";
 
 const BASE = "/admin/cricket/matches";
@@ -80,4 +83,34 @@ export const getMatchPerformances = (publicId: string) =>
     .get<import("../../api/playerService/coachingService").MatchPerformanceResponse[]>(
       `${BASE}/${publicId}/performances`,
     )
+    .then((r) => r.data);
+
+export const getMatchInnings = (publicId: string) =>
+  api
+    .get<Array<{
+      inningsNumber: number;
+      status: string;
+      totalRuns: number;
+      totalWickets: number;
+      totalBalls: number;
+      target?: number;
+      battingTeamPublicId: string;
+      bowlingTeamPublicId: string;
+    }>>(`${BASE}/${publicId}/innings`)
+    .then((r) => r.data);
+
+export const patchTeamChecklists = (
+  publicId: string,
+  req: { positives?: TeamChecklist; improvements?: TeamChecklist; teamPerformanceComments?: TeamPerformanceComments },
+) =>
+  api.patch<CricketMatch>(`${BASE}/${publicId}/team-checklists`, req).then((r) => r.data);
+
+export const patchIndividualObservations = (publicId: string, observations: IndividualObservation[]) =>
+  api
+    .patch<CricketMatch>(`${BASE}/${publicId}/individual-observations`, { individualObservations: observations })
+    .then((r) => r.data);
+
+export const patchLessonsLearned = (publicId: string, lessons: string[]) =>
+  api
+    .patch<CricketMatch>(`${BASE}/${publicId}/lessons-learned`, { lessonsLearned: lessons })
     .then((r) => r.data);
