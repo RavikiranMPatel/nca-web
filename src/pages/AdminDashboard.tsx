@@ -514,7 +514,7 @@ function AdminDashboard() {
             icon={ClipboardCheck}
             title="Match Report"
             description="Log detailed post-match analysis, reviews and lessons"
-            onClick={() => navigate("/admin/cricket/matches")}
+            onClick={() => navigate("/admin/cricket/matches?tab=notes")}
             gradient="bg-gradient-to-br from-rose-500 to-pink-600"
             textLight="text-rose-100"
           />

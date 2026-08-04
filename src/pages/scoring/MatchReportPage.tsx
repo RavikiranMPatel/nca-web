@@ -1,7 +1,8 @@
 import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { ArrowLeft, Edit2, Save, Plus, X } from "lucide-react";
+import { ArrowLeft, Edit2, Save, Plus, X, FileText, Trophy, Target, Zap, Users, BookOpen, TrendingUp, Activity, BarChart2, Download } from "lucide-react";
 import { toast } from "react-hot-toast";
+import api from "../../api/axios";
 import {
   getMatch,
   getTeams,
@@ -88,9 +89,20 @@ const FIELDING_IMPROVEMENTS = [
 ];
 
 // ── Section header ────────────────────────────────────────────────────────────
-const Section = ({ title, children }: { title: string; children: React.ReactNode }) => (
+const Section = ({
+  title,
+  icon: Icon,
+  iconColor = "text-gray-400",
+  children,
+}: {
+  title: string;
+  icon?: React.ElementType;
+  iconColor?: string;
+  children: React.ReactNode;
+}) => (
   <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 overflow-hidden">
-    <div className="px-4 py-3 border-b border-gray-100 dark:border-gray-800">
+    <div className="px-4 py-3 border-b border-gray-100 dark:border-gray-800 flex items-center gap-2">
+      {Icon && <Icon className={`w-4 h-4 flex-shrink-0 ${iconColor}`} />}
       <h2 className="text-sm font-semibold text-gray-900 dark:text-gray-100">{title}</h2>
     </div>
     <div className="p-4">{children}</div>
@@ -139,14 +151,22 @@ const ChipSelect = ({
 );
 
 // ── Multi-select chip ─────────────────────────────────────────────────────────
+const CHIP_SELECTED: Record<string, string> = {
+  positive: "bg-green-600 text-white border-green-600",
+  improvement: "bg-red-500 text-white border-red-500",
+  default: "bg-blue-600 text-white border-blue-600",
+};
+
 const MultiChipSelect = ({
   options,
   value,
   onChange,
+  variant = "default",
 }: {
   options: string[];
   value: string[];
   onChange: (v: string[]) => void;
+  variant?: "positive" | "improvement" | "default";
 }) => (
   <div className="flex flex-wrap gap-2">
     {options.map((opt) => {
@@ -157,7 +177,7 @@ const MultiChipSelect = ({
           onClick={() => onChange(selected ? value.filter((v) => v !== opt) : [...value, opt])}
           className={`px-3 py-1.5 text-xs rounded-lg border transition-all ${
             selected
-              ? "bg-blue-600 text-white border-blue-600"
+              ? (CHIP_SELECTED[variant] ?? CHIP_SELECTED.default)
               : "bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-400 border-gray-200 dark:border-gray-700"
           }`}
         >
@@ -297,16 +317,22 @@ const DisciplineReview = ({
 }) => (
   <div className="space-y-4">
     <div>
-      <label className="block text-xs font-medium text-green-700 dark:text-green-400 mb-2">
-        Positives
-      </label>
-      <MultiChipSelect options={posOptions} value={positives} onChange={onPositivesChange} />
+      <div className="flex items-center gap-1.5 mb-2">
+        <span className="w-2 h-2 rounded-full bg-green-500 flex-shrink-0" />
+        <label className="text-xs font-semibold text-green-700 dark:text-green-400">
+          Positives {positives.length > 0 && <span className="ml-1 text-green-500">({positives.length})</span>}
+        </label>
+      </div>
+      <MultiChipSelect options={posOptions} value={positives} onChange={onPositivesChange} variant="positive" />
     </div>
     <div>
-      <label className="block text-xs font-medium text-red-600 dark:text-red-400 mb-2">
-        Improvements
-      </label>
-      <MultiChipSelect options={impOptions} value={improvements} onChange={onImprovementsChange} />
+      <div className="flex items-center gap-1.5 mb-2">
+        <span className="w-2 h-2 rounded-full bg-red-500 flex-shrink-0" />
+        <label className="text-xs font-semibold text-red-600 dark:text-red-400">
+          Improvements {improvements.length > 0 && <span className="ml-1 text-red-400">({improvements.length})</span>}
+        </label>
+      </div>
+      <MultiChipSelect options={impOptions} value={improvements} onChange={onImprovementsChange} variant="improvement" />
     </div>
     <div>
       <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
@@ -407,6 +433,9 @@ export default function MatchReportPage() {
   // Lessons learned
   const [lessons, setLessons] = useState<string[]>([]);
   const [savingLessons, setSavingLessons] = useState(false);
+
+  // PDF export
+  const [downloadingPdf, setDownloadingPdf] = useState(false);
 
   // ── Load data ───────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -650,6 +679,26 @@ export default function MatchReportPage() {
     }
   };
 
+  // ── Download PDF ────────────────────────────────────────────────────────────
+  const handleDownloadPdf = async () => {
+    if (!publicId) return;
+    setDownloadingPdf(true);
+    try {
+      const res = await api.get(`/admin/cricket/matches/${publicId}/report.pdf`, { responseType: "blob" });
+      const url = window.URL.createObjectURL(res.data as Blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `match-report-${publicId}.pdf`;
+      link.click();
+      window.URL.revokeObjectURL(url);
+      toast.success("Report PDF downloaded");
+    } catch {
+      toast.error("Failed to download report PDF");
+    } finally {
+      setDownloadingPdf(false);
+    }
+  };
+
   // ── After performance logged ────────────────────────────────────────────────
   const handlePerfSuccess = async () => {
     setLogTarget(null);
@@ -763,13 +812,22 @@ export default function MatchReportPage() {
               Match Report · {new Date(match.matchDate).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
             </p>
           </div>
+          <button
+            onClick={handleDownloadPdf}
+            disabled={downloadingPdf}
+            className="flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-800 rounded-lg disabled:opacity-50 active:scale-95 transition-all"
+            title="Download PDF"
+          >
+            <Download className="w-3.5 h-3.5" />
+            {downloadingPdf ? "…" : "PDF"}
+          </button>
         </div>
       </div>
 
       <div className="px-4 pt-5 max-w-2xl mx-auto space-y-4">
 
         {/* ── Result Banner ──────────────────────────────────────────────────── */}
-        <Section title="Result">
+        <Section title="Result" icon={Trophy} iconColor="text-yellow-500">
           {isExternal ? (
             editingResult ? (
               <div className="space-y-3">
@@ -819,14 +877,20 @@ export default function MatchReportPage() {
               </div>
             ) : (
               <div className="flex items-start justify-between gap-3">
-                <div>
+                <div className="flex-1 space-y-2">
                   {match.resultType ? (
                     <>
-                      <div className="text-sm font-semibold text-gray-900 dark:text-gray-100">
+                      <span className={`inline-flex items-center px-3 py-1 rounded-xl text-xs font-bold ${
+                        ["WON_BY_RUNS", "WON_BY_WICKETS"].includes(match.resultType)
+                          ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
+                          : ["TIE", "DRAW", "NO_RESULT"].includes(match.resultType)
+                            ? "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-500"
+                            : "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400"
+                      }`}>
                         {RESULT_TYPES.find((r) => r.val === match.resultType)?.label ?? match.resultType}
-                      </div>
+                      </span>
                       {match.resultDescription && (
-                        <p className="text-xs text-gray-500 mt-0.5">{match.resultDescription}</p>
+                        <p className="text-sm font-medium text-gray-800 dark:text-gray-200 mt-1">{match.resultDescription}</p>
                       )}
                     </>
                   ) : (
@@ -850,7 +914,7 @@ export default function MatchReportPage() {
         </Section>
 
         {/* ── Match Info ────────────────────────────────────────────────────── */}
-        <Section title="Match Info">
+        <Section title="Match Info" icon={BarChart2} iconColor="text-gray-400">
           <div className="space-y-1 text-sm">
             {[
               { label: "Date", value: new Date(match.matchDate).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" }) },
@@ -1198,7 +1262,7 @@ export default function MatchReportPage() {
 
         {/* ── Key Moments ──────────────────────────────────────────────────── */}
         {publicId && (
-          <Section title="Key Moments">
+          <Section title="Key Moments" icon={Zap} iconColor="text-yellow-500">
             <KeyMomentsEditor
               matchPublicId={publicId}
               initialMoments={keyMoments}
@@ -1210,7 +1274,7 @@ export default function MatchReportPage() {
         )}
 
         {/* ── Match Notes ───────────────────────────────────────────────────── */}
-        <Section title="Match Notes">
+        <Section title="Match Notes" icon={FileText} iconColor="text-blue-500">
           {editingNotes ? (
             <div className="space-y-3">
               <textarea
@@ -1260,7 +1324,7 @@ export default function MatchReportPage() {
         </Section>
 
         {/* ── Batting Review ────────────────────────────────────────────────── */}
-        <Section title="Batting Review">
+        <Section title="Batting Review" icon={TrendingUp} iconColor="text-blue-500">
           <DisciplineReview
             discipline="Batting"
             positives={battingPositives}
@@ -1277,7 +1341,7 @@ export default function MatchReportPage() {
         </Section>
 
         {/* ── Bowling Review ────────────────────────────────────────────────── */}
-        <Section title="Bowling Review">
+        <Section title="Bowling Review" icon={Activity} iconColor="text-purple-500">
           <DisciplineReview
             discipline="Bowling"
             positives={bowlingPositives}
@@ -1294,7 +1358,7 @@ export default function MatchReportPage() {
         </Section>
 
         {/* ── Fielding Review ───────────────────────────────────────────────── */}
-        <Section title="Fielding Review">
+        <Section title="Fielding Review" icon={Target} iconColor="text-green-500">
           <DisciplineReview
             discipline="Fielding"
             positives={fieldingPositives}
@@ -1311,79 +1375,95 @@ export default function MatchReportPage() {
         </Section>
 
         {/* ── Individual Observations ───────────────────────────────────────── */}
-        <Section title="Individual Observations">
+        <Section title="Individual Observations" icon={Users} iconColor="text-indigo-500">
           <div className="space-y-3">
-            {observations.map((obs, idx) => (
-              <div key={idx} className="flex gap-2 items-start">
-                <div className="flex-1 space-y-1">
-                  <select
-                    value={obs.playerPublicId}
-                    onChange={(e) => {
-                      const player = allXIPlayers.find((p) => p.playerPublicId === e.target.value);
-                      setObservations((prev) =>
-                        prev.map((o, i) =>
-                          i === idx
-                            ? { ...o, playerPublicId: e.target.value, playerName: player?.displayName ?? "" }
-                            : o,
-                        ),
-                      );
-                    }}
-                    className="w-full px-3 py-2 text-sm bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  >
-                    <option value="">Select player…</option>
-                    {allXIPlayers.map((p) => (
-                      <option key={p.playerPublicId} value={p.playerPublicId ?? ""}>
-                        {p.displayName}
-                      </option>
-                    ))}
-                  </select>
-                  <input
-                    type="text"
-                    value={obs.observation}
-                    onChange={(e) =>
-                      setObservations((prev) =>
-                        prev.map((o, i) => (i === idx ? { ...o, observation: e.target.value } : o)),
-                      )
-                    }
-                    placeholder="Observation…"
-                    className="w-full px-3 py-2 text-sm bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
-                <button
-                  onClick={() => setObservations((prev) => prev.filter((_, i) => i !== idx))}
-                  className="mt-1 p-2 rounded-lg bg-red-50 dark:bg-red-900/20 text-red-500"
-                >
-                  <X className="w-3.5 h-3.5" />
-                </button>
+            {allXIPlayers.length === 0 && observations.length === 0 ? (
+              <div className="py-6 flex flex-col items-center gap-2 text-center">
+                <Users className="w-8 h-8 text-gray-300 dark:text-gray-600" />
+                <p className="text-sm text-gray-400">Set your Playing XI to add individual observations</p>
               </div>
-            ))}
-            <div className="flex gap-2">
-              <button
-                onClick={() =>
-                  setObservations((prev) => [
-                    ...prev,
-                    { playerPublicId: "", playerName: "", observation: "" },
-                  ])
-                }
-                className="flex items-center gap-1.5 text-xs text-blue-600 dark:text-blue-400 font-medium"
-              >
-                <Plus className="w-3.5 h-3.5" />
-                Add player
-              </button>
-            </div>
-            <button
-              onClick={handleSaveObservations}
-              disabled={savingObservations}
-              className="flex items-center gap-1.5 px-4 py-2 bg-blue-600 text-white text-sm rounded-xl font-medium disabled:opacity-50"
-            >
-              <Save className="w-3.5 h-3.5" />
-              {savingObservations ? "Saving…" : "Save Observations"}
-            </button>
+            ) : (
+              <>
+                {observations.map((obs, idx) => {
+                  const playerName = obs.playerName || allXIPlayers.find((p) => p.playerPublicId === obs.playerPublicId)?.displayName || "";
+                  const initial = playerName.charAt(0).toUpperCase();
+                  return (
+                    <div key={idx} className="flex gap-2 items-start">
+                      <div className="w-7 h-7 rounded-full bg-indigo-100 dark:bg-indigo-900/30 flex items-center justify-center text-xs font-bold text-indigo-600 dark:text-indigo-400 flex-shrink-0 mt-1">
+                        {initial || "?"}
+                      </div>
+                      <div className="flex-1 space-y-1">
+                        <select
+                          value={obs.playerPublicId}
+                          onChange={(e) => {
+                            const player = allXIPlayers.find((p) => p.playerPublicId === e.target.value);
+                            setObservations((prev) =>
+                              prev.map((o, i) =>
+                                i === idx
+                                  ? { ...o, playerPublicId: e.target.value, playerName: player?.displayName ?? "" }
+                                  : o,
+                              ),
+                            );
+                          }}
+                          className="w-full px-3 py-2 text-sm bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        >
+                          <option value="">Select player…</option>
+                          {allXIPlayers.map((p) => (
+                            <option key={p.playerPublicId} value={p.playerPublicId ?? ""}>
+                              {p.displayName}
+                            </option>
+                          ))}
+                        </select>
+                        <input
+                          type="text"
+                          value={obs.observation}
+                          onChange={(e) =>
+                            setObservations((prev) =>
+                              prev.map((o, i) => (i === idx ? { ...o, observation: e.target.value } : o)),
+                            )
+                          }
+                          placeholder="Observation…"
+                          className="w-full px-3 py-2 text-sm bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        />
+                      </div>
+                      <button
+                        onClick={() => setObservations((prev) => prev.filter((_, i) => i !== idx))}
+                        className="mt-1 p-2 rounded-lg bg-red-50 dark:bg-red-900/20 text-red-500"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  );
+                })}
+                {allXIPlayers.length > 0 && (
+                  <button
+                    onClick={() =>
+                      setObservations((prev) => [
+                        ...prev,
+                        { playerPublicId: "", playerName: "", observation: "" },
+                      ])
+                    }
+                    className="flex items-center gap-1.5 text-xs text-blue-600 dark:text-blue-400 font-medium"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    Add player
+                  </button>
+                )}
+                <button
+                  onClick={handleSaveObservations}
+                  disabled={savingObservations}
+                  className="flex items-center gap-1.5 px-4 py-2 bg-blue-600 text-white text-sm rounded-xl font-medium disabled:opacity-50"
+                >
+                  <Save className="w-3.5 h-3.5" />
+                  {savingObservations ? "Saving…" : "Save Observations"}
+                </button>
+              </>
+            )}
           </div>
         </Section>
 
         {/* ── Lessons Learned ───────────────────────────────────────────────── */}
-        <Section title="Lessons Learned">
+        <Section title="Lessons Learned" icon={BookOpen} iconColor="text-amber-500">
           <div className="space-y-3">
             {lessons.map((lesson, idx) => (
               <div key={idx} className="flex gap-2 items-center">

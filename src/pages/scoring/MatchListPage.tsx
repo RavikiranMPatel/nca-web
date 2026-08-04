@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { listMatches, patchMatchNotes, deleteMatch } from "../../api/scoring/matchApi";
 import { useAuth } from "../../auth/useAuth";
 import type { CricketMatch } from "../../types/match";
@@ -285,6 +285,7 @@ const NotesCard = ({
 // ── MAIN PAGE ─────────────────────────────────────────────────────────────────
 export default function MatchListPage() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { userRole } = useAuth();
   const canEditNotes =
     userRole === "ROLE_ADMIN" ||
@@ -295,8 +296,13 @@ export default function MatchListPage() {
   const [matches, setMatches] = useState<CricketMatch[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // ── Top-level tab ─────────────────────────────────────────────────────────
-  const [topTab, setTopTab] = useState<TopTab>("matches");
+  // ── Top-level tab — initialised from ?tab= query param ───────────────────
+  const [topTab, setTopTab] = useState<TopTab>(() => {
+    const param = searchParams.get("tab");
+    return (["matches", "notes", "analysis"] as TopTab[]).includes(param as TopTab)
+      ? (param as TopTab)
+      : "matches";
+  });
 
   // ── Matches tab state ─────────────────────────────────────────────────────
   const [filter, setFilter] = useState<"all" | "live" | "completed" | "tournament">("all");
