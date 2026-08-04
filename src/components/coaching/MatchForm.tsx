@@ -15,6 +15,7 @@ type Props = {
   matchPublicId?: string;
   onSuccess: () => void;
   onCancel: () => void;
+  backLabel?: string;
   // Pre-fill from an external match report context
   defaultMatchDate?: string;
   defaultOppositionTeam?: string;
@@ -27,6 +28,7 @@ export default function MatchForm({
   matchPublicId,
   onSuccess,
   onCancel,
+  backLabel,
   defaultMatchDate,
   defaultOppositionTeam,
   defaultVenue,
@@ -202,7 +204,7 @@ export default function MatchForm({
         onClick={onCancel}
         className="flex items-center gap-2 text-blue-600 text-sm font-medium hover:text-blue-700"
       >
-        <ArrowLeft size={16} /> Back to Matches
+        <ArrowLeft size={16} /> {backLabel ?? "Back to Matches"}
       </button>
 
       {/* Match details */}

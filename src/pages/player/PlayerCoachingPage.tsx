@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useParams } from "react-router-dom";
+import { useParams, useSearchParams, useNavigate } from "react-router-dom";
 import { Target, Calendar, Trophy, Dumbbell } from "lucide-react";
 import { toast } from "react-hot-toast";
 import { coachingService } from "../../api/playerService/coachingService";
@@ -49,6 +49,9 @@ type MatchView =
 
 function PlayerCoachingPage() {
   const { playerPublicId } = useParams<{ playerPublicId: string }>();
+  const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
+  const returnTo = searchParams.get("returnTo");
   const [activeSubTab, setActiveSubTab] = useState<SubTab>("practice");
 
   // Practice state
@@ -162,10 +165,14 @@ function PlayerCoachingPage() {
         <PracticeDayForm
           playerPublicId={playerPublicId}
           onSuccess={() => {
+            if (returnTo) { navigate(returnTo); return; }
             setPracticeView({ type: "list" });
             loadPracticeDays();
           }}
-          onCancel={() => setPracticeView({ type: "list" })}
+          onCancel={() => {
+            if (returnTo) { navigate(returnTo); return; }
+            setPracticeView({ type: "list" });
+          }}
         />
       );
     }
@@ -175,10 +182,14 @@ function PlayerCoachingPage() {
           playerPublicId={playerPublicId}
           practiceDayPublicId={practiceView.publicId}
           onSuccess={() => {
+            if (returnTo) { navigate(returnTo); return; }
             setPracticeView({ type: "list" });
             loadPracticeDays();
           }}
-          onCancel={() => setPracticeView({ type: "list" })}
+          onCancel={() => {
+            if (returnTo) { navigate(returnTo); return; }
+            setPracticeView({ type: "list" });
+          }}
         />
       );
     }

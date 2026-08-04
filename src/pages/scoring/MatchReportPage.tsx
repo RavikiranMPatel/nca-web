@@ -88,11 +88,15 @@ const FIELDING_IMPROVEMENTS = [
   "Slow to ball", "Poor communication", "Misfields",
 ];
 
+// ── Palette tokens ────────────────────────────────────────────────────────────
+const NAVY = "#0C3C78";
+const GOLD = "#F2B705";
+
 // ── Section header ────────────────────────────────────────────────────────────
 const Section = ({
   title,
   icon: Icon,
-  iconColor = "text-gray-400",
+  iconColor = `text-[${NAVY}]`,
   children,
 }: {
   title: string;
@@ -101,9 +105,9 @@ const Section = ({
   children: React.ReactNode;
 }) => (
   <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 overflow-hidden">
-    <div className="px-4 py-3 border-b border-gray-100 dark:border-gray-800 flex items-center gap-2">
+    <div className="px-4 py-3 border-b border-gray-100 dark:border-gray-800 flex items-center gap-2 bg-[#0C3C78]/[0.05] dark:bg-white/[0.04]">
       {Icon && <Icon className={`w-4 h-4 flex-shrink-0 ${iconColor}`} />}
-      <h2 className="text-sm font-semibold text-gray-900 dark:text-gray-100">{title}</h2>
+      <h2 className="text-sm font-semibold text-[#0C3C78] dark:text-blue-200">{title}</h2>
     </div>
     <div className="p-4">{children}</div>
   </div>
@@ -175,7 +179,7 @@ const MultiChipSelect = ({
         <button
           key={opt}
           onClick={() => onChange(selected ? value.filter((v) => v !== opt) : [...value, opt])}
-          className={`px-3 py-1.5 text-xs rounded-lg border transition-all ${
+          className={`px-3 py-1.5 text-xs rounded-full border transition-all ${
             selected
               ? (CHIP_SELECTED[variant] ?? CHIP_SELECTED.default)
               : "bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-400 border-gray-200 dark:border-gray-700"
@@ -205,33 +209,42 @@ interface ResultBannerProps {
 const ResultBanner = ({ innings, resultDescription, toss, playerOfMatch }: ResultBannerProps) => {
   if (!innings.length && !resultDescription) return null;
   return (
-    <div className="space-y-1">
+    <div className="-m-4 bg-[#0C3C78] rounded-b-2xl p-4 space-y-3">
       {innings.map((inn, i) => (
-        <div key={i} className="flex items-baseline gap-2">
-          <span className="text-sm font-semibold text-gray-800 dark:text-gray-100 min-w-0 truncate">
-            {inn.teamName}
-          </span>
-          <span className="text-base font-bold text-gray-900 dark:text-white flex-shrink-0">
-            {inn.runs}/{inn.wickets}
-          </span>
-          <span className="text-xs text-gray-400 flex-shrink-0">
-            ({Math.floor(inn.balls / 6)}.{inn.balls % 6} ov)
-            {inn.target ? ` T:${inn.target}` : ""}
-          </span>
+        <div key={i} className="flex items-center gap-3">
+          <div className={`w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold flex-shrink-0 ${
+            i === 0 ? "bg-[#F2B705] text-[#0C3C78]" : "bg-white/20 text-white/70"
+          }`}>
+            {inn.teamName.charAt(0).toUpperCase()}
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="text-xs text-white/60 truncate">{inn.teamName}</div>
+            <div className="text-xl font-bold text-white leading-tight">
+              {inn.runs}/{inn.wickets}
+              <span className="text-xs font-normal text-white/50 ml-1.5">
+                ({Math.floor(inn.balls / 6)}.{inn.balls % 6} ov)
+              </span>
+            </div>
+          </div>
+          {inn.target && (
+            <span className="text-xs text-white/50 flex-shrink-0">T: {inn.target}</span>
+          )}
         </div>
       ))}
       {resultDescription && (
-        <p className="text-sm font-semibold text-blue-600 dark:text-blue-400 mt-1">{resultDescription}</p>
+        <p className="text-sm font-semibold text-[#F2B705] border-t border-white/10 pt-2">{resultDescription}</p>
       )}
       {toss && (
-        <p className="text-xs text-gray-400 mt-0.5">
+        <p className="text-xs text-white/50">
           {toss.winnerName} won toss · elected to {toss.decision.toLowerCase()} first
         </p>
       )}
       {playerOfMatch && (
-        <p className="text-xs text-yellow-600 dark:text-yellow-400 mt-0.5">
-          🏅 Player of the match: {playerOfMatch}
-        </p>
+        <div className="flex items-center gap-1.5">
+          <span className="text-sm text-[#F2B705]">🏅</span>
+          <span className="text-xs text-white/60">Player of the match:</span>
+          <span className="text-xs font-semibold text-white">{playerOfMatch}</span>
+        </div>
       )}
     </div>
   );
@@ -560,6 +573,35 @@ export default function MatchReportPage() {
     }
   };
 
+  // ── Open team picker pre-populated with existing XI ─────────────────────────
+  const handleEditPlayingXI = () => {
+    setPickerAPlayers(
+      teamAPlayers.map((p, i) => ({
+        playerPublicId: p.playerPublicId ?? "",
+        externalName: p.playerPublicId ? undefined : p.displayName,
+        battingOrder: p.battingOrder ?? i + 1,
+        isCaptain: p.isCaptain ?? false,
+        isWicketkeeper: p.isWicketkeeper ?? false,
+        isImpactPlayer: (p as any).isImpactPlayer ?? false,
+        isForeign: (p as any).isForeign ?? false,
+      })),
+    );
+    setPickerBPlayers(
+      teamBPlayers.map((p, i) => ({
+        playerPublicId: p.playerPublicId ?? "",
+        externalName: p.playerPublicId ? undefined : p.displayName,
+        battingOrder: p.battingOrder ?? i + 1,
+        isCaptain: p.isCaptain ?? false,
+        isWicketkeeper: p.isWicketkeeper ?? false,
+        isImpactPlayer: (p as any).isImpactPlayer ?? false,
+        isForeign: (p as any).isForeign ?? false,
+      })),
+    );
+    setTeamAName(teams.find((t) => t.teamType === "TEAM_A")?.name ?? teamAName);
+    setTeamBName(teams.find((t) => t.teamType === "TEAM_B")?.name ?? teamBName);
+    setShowTeamPicker(true);
+  };
+
   // ── Save result banner (EXTERNAL only) ─────────────────────────────────────
   const handleSaveResult = async () => {
     if (!publicId) return;
@@ -777,6 +819,7 @@ export default function MatchReportPage() {
             matchPublicId={logTarget.existingPublicId}
             onSuccess={handlePerfSuccess}
             onCancel={() => setLogTarget(null)}
+            backLabel="Back to Report"
             defaultMatchDate={match.matchDate}
             defaultOppositionTeam={
               logTarget.player.battingOrder != null
@@ -815,7 +858,7 @@ export default function MatchReportPage() {
           <button
             onClick={handleDownloadPdf}
             disabled={downloadingPdf}
-            className="flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-800 rounded-lg disabled:opacity-50 active:scale-95 transition-all"
+            className="flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-[#0C3C78] bg-[#F2B705] rounded-lg disabled:opacity-50 active:scale-95 transition-all"
             title="Download PDF"
           >
             <Download className="w-3.5 h-3.5" />
@@ -827,7 +870,7 @@ export default function MatchReportPage() {
       <div className="px-4 pt-5 max-w-2xl mx-auto space-y-4">
 
         {/* ── Result Banner ──────────────────────────────────────────────────── */}
-        <Section title="Result" icon={Trophy} iconColor="text-yellow-500">
+        <Section title="Result" icon={Trophy} iconColor="text-[#F2B705]">
           {isExternal ? (
             editingResult ? (
               <div className="space-y-3">
@@ -914,7 +957,7 @@ export default function MatchReportPage() {
         </Section>
 
         {/* ── Match Info ────────────────────────────────────────────────────── */}
-        <Section title="Match Info" icon={BarChart2} iconColor="text-gray-400">
+        <Section title="Match Info" icon={BarChart2} iconColor="text-[#0C3C78] dark:text-blue-300">
           <div className="space-y-1 text-sm">
             {[
               { label: "Date", value: new Date(match.matchDate).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" }) },
@@ -1115,6 +1158,25 @@ export default function MatchReportPage() {
                     </button>
                   </div>
                 </div>
+                {/* Selected guest players (no publicId — not in roster list) */}
+                {pickerAPlayers.filter((s) => !s.playerPublicId).length > 0 && (
+                  <div className="flex flex-wrap gap-1.5 pt-1">
+                    {pickerAPlayers.filter((s) => !s.playerPublicId).map((s, i) => (
+                      <span
+                        key={i}
+                        className="inline-flex items-center gap-1 px-2 py-1 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 text-xs rounded-lg border border-blue-200 dark:border-blue-700"
+                      >
+                        {s.externalName}
+                        <button
+                          onClick={() => setPickerAPlayers((prev) => prev.filter((p) => p !== s))}
+                          className="text-blue-400 hover:text-red-500 transition-colors"
+                        >
+                          ×
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                )}
                 <div className="space-y-1 max-h-64 overflow-y-auto">
                   {filteredA.map((p) => (
                     <PlayerCard
@@ -1176,6 +1238,25 @@ export default function MatchReportPage() {
                     </button>
                   </div>
                 </div>
+                {/* Selected guest players (no publicId — not in roster list) */}
+                {pickerBPlayers.filter((s) => !s.playerPublicId).length > 0 && (
+                  <div className="flex flex-wrap gap-1.5 pt-1">
+                    {pickerBPlayers.filter((s) => !s.playerPublicId).map((s, i) => (
+                      <span
+                        key={i}
+                        className="inline-flex items-center gap-1 px-2 py-1 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 text-xs rounded-lg border border-blue-200 dark:border-blue-700"
+                      >
+                        {s.externalName}
+                        <button
+                          onClick={() => setPickerBPlayers((prev) => prev.filter((p) => p !== s))}
+                          className="text-blue-400 hover:text-red-500 transition-colors"
+                        >
+                          ×
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                )}
                 <div className="space-y-1 max-h-64 overflow-y-auto">
                   {filteredB.map((p) => (
                     <PlayerCard
@@ -1251,7 +1332,7 @@ export default function MatchReportPage() {
 
             {(teamAPlayers.length > 0 || teamBPlayers.length > 0) && (
               <button
-                onClick={() => setShowTeamPicker(true)}
+                onClick={handleEditPlayingXI}
                 className="text-xs text-blue-600 dark:text-blue-400 underline"
               >
                 Edit Playing XI
@@ -1262,7 +1343,7 @@ export default function MatchReportPage() {
 
         {/* ── Key Moments ──────────────────────────────────────────────────── */}
         {publicId && (
-          <Section title="Key Moments" icon={Zap} iconColor="text-yellow-500">
+          <Section title="Key Moments" icon={Zap} iconColor="text-[#F2B705]">
             <KeyMomentsEditor
               matchPublicId={publicId}
               initialMoments={keyMoments}
@@ -1274,7 +1355,7 @@ export default function MatchReportPage() {
         )}
 
         {/* ── Match Notes ───────────────────────────────────────────────────── */}
-        <Section title="Match Notes" icon={FileText} iconColor="text-blue-500">
+        <Section title="Match Notes" icon={FileText} iconColor="text-[#0C3C78] dark:text-blue-300">
           {editingNotes ? (
             <div className="space-y-3">
               <textarea
@@ -1324,7 +1405,7 @@ export default function MatchReportPage() {
         </Section>
 
         {/* ── Batting Review ────────────────────────────────────────────────── */}
-        <Section title="Batting Review" icon={TrendingUp} iconColor="text-blue-500">
+        <Section title="Batting Review" icon={TrendingUp} iconColor="text-[#0C3C78] dark:text-blue-300">
           <DisciplineReview
             discipline="Batting"
             positives={battingPositives}
@@ -1341,7 +1422,7 @@ export default function MatchReportPage() {
         </Section>
 
         {/* ── Bowling Review ────────────────────────────────────────────────── */}
-        <Section title="Bowling Review" icon={Activity} iconColor="text-purple-500">
+        <Section title="Bowling Review" icon={Activity} iconColor="text-[#0C3C78] dark:text-blue-300">
           <DisciplineReview
             discipline="Bowling"
             positives={bowlingPositives}
@@ -1358,7 +1439,7 @@ export default function MatchReportPage() {
         </Section>
 
         {/* ── Fielding Review ───────────────────────────────────────────────── */}
-        <Section title="Fielding Review" icon={Target} iconColor="text-green-500">
+        <Section title="Fielding Review" icon={Target} iconColor="text-[#0C3C78] dark:text-blue-300">
           <DisciplineReview
             discipline="Fielding"
             positives={fieldingPositives}
@@ -1375,7 +1456,7 @@ export default function MatchReportPage() {
         </Section>
 
         {/* ── Individual Observations ───────────────────────────────────────── */}
-        <Section title="Individual Observations" icon={Users} iconColor="text-indigo-500">
+        <Section title="Individual Observations" icon={Users} iconColor="text-[#0C3C78] dark:text-blue-300">
           <div className="space-y-3">
             {allXIPlayers.length === 0 && observations.length === 0 ? (
               <div className="py-6 flex flex-col items-center gap-2 text-center">
@@ -1389,7 +1470,7 @@ export default function MatchReportPage() {
                   const initial = playerName.charAt(0).toUpperCase();
                   return (
                     <div key={idx} className="flex gap-2 items-start">
-                      <div className="w-7 h-7 rounded-full bg-indigo-100 dark:bg-indigo-900/30 flex items-center justify-center text-xs font-bold text-indigo-600 dark:text-indigo-400 flex-shrink-0 mt-1">
+                      <div className="w-7 h-7 rounded-full bg-[#0C3C78] flex items-center justify-center text-xs font-bold text-[#F2B705] flex-shrink-0 mt-1">
                         {initial || "?"}
                       </div>
                       <div className="flex-1 space-y-1">
@@ -1463,7 +1544,7 @@ export default function MatchReportPage() {
         </Section>
 
         {/* ── Lessons Learned ───────────────────────────────────────────────── */}
-        <Section title="Lessons Learned" icon={BookOpen} iconColor="text-amber-500">
+        <Section title="Lessons Learned" icon={BookOpen} iconColor="text-[#F2B705]">
           <div className="space-y-3">
             {lessons.map((lesson, idx) => (
               <div key={idx} className="flex gap-2 items-center">
@@ -1525,7 +1606,7 @@ export default function MatchReportPage() {
                   </div>
                   <button
                     onClick={() =>
-                      navigate(`/admin/players/${p.playerPublicId}/coaching`)
+                      navigate(`/admin/players/${p.playerPublicId}/coaching?returnTo=/admin/cricket/matches/${publicId}/report`)
                     }
                     className="text-xs px-3 py-1.5 rounded-lg font-medium bg-purple-50 dark:bg-purple-900/20 text-purple-600 dark:text-purple-400 border border-purple-200 dark:border-purple-700 active:scale-95 transition-all"
                   >
