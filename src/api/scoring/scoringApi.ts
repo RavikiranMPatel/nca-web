@@ -1,5 +1,5 @@
 import api from "../../api/axios";
-import type { BallRequest, BallResponse, Delivery } from "../../types/scoring";
+import type { BallRequest, BallResponse, Delivery, DeliveryRecord, EditDeliveryRequest } from "../../types/scoring";
 
 const BASE = (matchId: string) => `/admin/cricket/matches/${matchId}/scoring`;
 
@@ -18,6 +18,33 @@ export const getThisOver = (matchId: string) =>
 export const closeInnings = (matchId: string, reason = "OVERS_COMPLETE") =>
   api
     .post(`/admin/cricket/matches/${matchId}/innings/close`, { reason })
+    .then((r) => r.data);
+
+export const awardPenalty = (matchId: string, awardedTo: "FIELDING" | "BATTING") =>
+  api
+    .post<BallResponse>(`${BASE(matchId)}/penalty`, { awardedTo })
+    .then((r) => r.data);
+
+export const swapBatters = (matchId: string) =>
+  api.post<BallResponse>(`${BASE(matchId)}/swap-batters`).then((r) => r.data);
+
+export const correctBowler = (matchId: string, bowlerPublicId: string) =>
+  api
+    .post<BallResponse>(`${BASE(matchId)}/correct-bowler`, { bowlerPublicId })
+    .then((r) => r.data);
+
+export const editDelivery = (
+  matchId: string,
+  deliveryPublicId: string,
+  req: EditDeliveryRequest,
+) =>
+  api
+    .patch<BallResponse>(`${BASE(matchId)}/deliveries/${deliveryPublicId}`, req)
+    .then((r) => r.data);
+
+export const getDeliveries = (matchId: string) =>
+  api
+    .get<DeliveryRecord[]>(`${BASE(matchId)}/deliveries`)
     .then((r) => r.data);
 
 export const recordResult = (

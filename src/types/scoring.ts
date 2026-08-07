@@ -41,12 +41,43 @@ export interface BallDTO {
   displayClass: string;
 }
 
+export interface BatterStatDTO {
+  runs: number;
+  balls: number;
+  fours: number;
+  sixes: number;
+  isOut: boolean;
+  dismissalType?: string;
+}
+
+export interface BowlerStatDTO {
+  legalBalls: number;
+  runsConceded: number;
+  wickets: number;
+  maidens: number;
+  dots: number;
+  wides: number;
+  noBalls: number;
+}
+
 export interface BallResponse {
   inningsState: InningsState;
   lastBall?: BallDTO;
   overComplete: boolean;
   inningsComplete: boolean;
   lastDeliveryPublicId?: string;
+  // V78 fields — server-authoritative live state
+  currentStrikerPublicId?: string | null;
+  currentNonStrikerPublicId?: string | null;
+  currentBowlerPublicId?: string | null;
+  lastBowlerPublicId?: string | null;
+  isFreeHit?: boolean;
+  overJustEnded?: boolean;
+  partnershipRuns?: number;
+  partnershipBalls?: number;
+  batterStats?: Record<string, BatterStatDTO>;
+  bowlerStats?: Record<string, BowlerStatDTO>;
+  dismissedMtpPublicIds?: string[];
 }
 
 export interface Delivery {
@@ -58,6 +89,35 @@ export interface Delivery {
   isLegalBall: boolean;
   displayLabel?: string;
   displayClass?: string;
+}
+
+export interface EditDeliveryRequest {
+  runsBatsman?: number;
+  runsExtras?: number;
+  extraType?: string;       // "" to clear (make legitimate delivery)
+  dismissalType?: string;
+  bowlerPublicId?: string;
+  isFreeHit?: boolean;
+}
+
+export interface DeliveryRecord {
+  publicId: string;
+  overNumber: number;
+  ballNumber: number;
+  sequenceNumber?: number;
+  runsBatsman: number;
+  runsExtras: number;
+  extraType?: string;
+  isWicket: boolean;
+  isLegalBall: boolean;
+  dismissalType?: string;
+  isFreeHit: boolean;
+  displayLabel: string;
+  displayClass: string;
+  bowlerPublicId?: string;
+  bowlerName?: string;
+  batsmanPublicId?: string;
+  batsmanName?: string;
 }
 
 export interface ScoringPlayer {

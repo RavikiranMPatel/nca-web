@@ -28,6 +28,7 @@ import {
   Trophy,
   BarChart,
   MessageCircle,
+  ChevronDown,
 } from "lucide-react";
 import StatCard from "../components/StatCard";
 import api from "../api/axios";
@@ -162,6 +163,7 @@ function AdminDashboard() {
   const [error, setError] = useState<string | null>(null);
   const [feesDue, setFeesDue] = useState<FeesDueRow[]>([]);
   const [flags, setFlags] = useState<Record<string, string>>({});
+  const [showFeeList, setShowFeeList] = useState(false);
   const role = localStorage.getItem("userRole");
   const isSuperAdmin = role === "ROLE_SUPER_ADMIN";
 
@@ -330,12 +332,21 @@ function AdminDashboard() {
             color="red"
             onClick={() => navigate("/admin/attendance")}
           />
-          <StatCard
-            label="Fees Due"
-            value={summary.feesDueToday}
-            icon={Clock}
-            color="orange"
-          />
+          <div className="relative">
+            <StatCard
+              label="Fees Due"
+              value={summary.feesDueToday}
+              icon={Clock}
+              color="orange"
+              onClick={() => setShowFeeList((prev) => !prev)}
+            />
+            <ChevronDown
+              size={14}
+              className={`absolute bottom-2 right-2 text-orange-400 pointer-events-none transition-transform duration-200${
+                showFeeList ? " rotate-180" : ""
+              }`}
+            />
+          </div>
           <StatCard
             label="Overdue Fees"
             value={summary.overdueFees}
@@ -346,7 +357,7 @@ function AdminDashboard() {
       </section>
 
       {/* ═══════════════ FEES DUE ═══════════════ */}
-      {feesDue.length > 0 && (
+      {showFeeList && feesDue.length > 0 && (
         <section>
           <SectionHeader
             icon={AlertTriangle}

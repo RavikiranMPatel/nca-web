@@ -26,6 +26,7 @@ import {
   Shield,
   ArrowUpRight,
   ChevronRight,
+  Bell,
 } from "lucide-react";
 import api from "../../api/axios";
 import Button from "../../components/Button";
@@ -48,6 +49,7 @@ import YouTubeSettings from "./YouTubeSettings";
 import InstagramSettings from "./InstagramSettings";
 import PresenceBanner from "../../components/PresenceBanner";
 import { useAuth } from "../../auth/useAuth";
+import NotificationSettings from "./NotificationSettings";
 
 type SettingsMap = Record<string, string>;
 
@@ -68,6 +70,7 @@ type TabType =
   | "branches"
   | "youtube"
   | "instagram"
+  | "notifications"
 
 type NavItemDef = {
   key: TabType | "homepage-sections" | "clubs" | "representative-honors";
@@ -91,6 +94,7 @@ const NAV_GROUPS: NavGroupDef[] = [
       { key: "branding", label: "Branding & Theme", icon: Palette },
       { key: "batch", label: "Camp Settings", icon: CalendarDays },
       { key: "fees", label: "Fees", icon: CreditCard },
+      { key: "notifications", label: "Notifications", icon: Bell },
       { key: "contact", label: "Contact Info", icon: Phone },
     ],
   },
@@ -1404,6 +1408,7 @@ function AcademySettings() {
 
             {activeTab === "starperformer" && <StarPerformerSettings />}
             {activeTab === "fees" && <FeeSettingsManager />}
+            {activeTab === "notifications" && <NotificationSettings />}
             {activeTab === "media" && <MediaSettingsManager />}
 
           </div>
