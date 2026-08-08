@@ -47,6 +47,46 @@ export const getDeliveries = (matchId: string) =>
     .get<DeliveryRecord[]>(`${BASE(matchId)}/deliveries`)
     .then((r) => r.data);
 
+export const selectBatter = (
+  matchId: string,
+  batterPublicId: string,
+  position: "striker" | "nonstriker",
+) =>
+  api
+    .post<BallResponse>(`${BASE(matchId)}/select-batter`, { batterPublicId, position })
+    .then((r) => r.data);
+
+export const substitutePlayer = (
+  matchId: string,
+  originalMtpPublicId: string,
+  substitutePlayerPublicId: string,
+  reason: string,
+) =>
+  api
+    .post(`${BASE(matchId)}/substitute-player`, {
+      originalMtpPublicId,
+      substitutePlayerPublicId,
+      reason,
+    })
+    .then((r) => r.data);
+
+export const changeWicketkeeper = (
+  matchId: string,
+  newKeeperPublicId: string,
+  reason?: string,
+) =>
+  api
+    .post<BallResponse>(`${BASE(matchId)}/change-wicketkeeper`, { newKeeperPublicId, reason })
+    .then((r) => r.data);
+
+export const createAnnotation = (matchId: string, noteText: string) =>
+  api
+    .post(`${BASE(matchId)}/annotations`, { noteText })
+    .then((r) => r.data);
+
+export const getAnnotations = (matchId: string) =>
+  api.get(`${BASE(matchId)}/annotations`).then((r) => r.data);
+
 export const recordResult = (
   matchId: string,
   req: {

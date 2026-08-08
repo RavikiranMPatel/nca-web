@@ -17,6 +17,7 @@ import {
   patchIndividualObservations,
   patchLessonsLearned,
 } from "../../api/scoring/matchApi";
+import { getAnnotations } from "../../api/scoring/scoringApi";
 import type {
   CricketMatch,
   CricketTeam,
@@ -425,6 +426,10 @@ export default function MatchReportPage() {
   // Key moments
   const [keyMoments, setKeyMoments] = useState<KeyMoment[]>([]);
 
+  // Live annotations (admin/coach only)
+  const [annotations, setAnnotations] = useState<Record<string, unknown>[]>([]);
+  const [annotationsOpen, setAnnotationsOpen] = useState(false);
+
   // Team checklists — per discipline
   const [battingPositives, setBattingPositives] = useState<string[]>([]);
   const [battingImprovements, setBattingImprovements] = useState<string[]>([]);
@@ -536,6 +541,13 @@ export default function MatchReportPage() {
         setPerformances(perfs);
       } catch {
         // non-fatal
+      }
+
+      try {
+        const anns = await getAnnotations(publicId);
+        setAnnotations(Array.isArray(anns) ? anns : []);
+      } catch {
+        // non-fatal — annotations only visible to admin/coach; 403 expected for player tokens
       }
     } catch {
       toast.error("Failed to load match");
@@ -772,6 +784,7 @@ export default function MatchReportPage() {
   const teamA = teams.find((t) => t.teamType === "TEAM_A");
   const teamB = teams.find((t) => t.teamType === "TEAM_B");
   const isExternal = match.dataSource === "EXTERNAL";
+  const cap = match.allowExtendedSquad ? 12 : 11;
 
   const filteredA = allPlayers
     .filter((p) => !pickerBPlayers.some((s) => s.playerPublicId === p.publicId))
@@ -1121,7 +1134,7 @@ export default function MatchReportPage() {
                     value={teamAName}
                     onChange={(e) => setTeamAName(e.target.value)}
                   />
-                  <span className="text-xs text-gray-400">{pickerAPlayers.length}/11</span>
+                  <span className="text-xs text-gray-400">{pickerAPlayers.length}/{cap}</span>
                 </div>
                 <div className="flex gap-2">
                   <input
@@ -1139,7 +1152,7 @@ export default function MatchReportPage() {
                       value={teamAGuestName}
                       onChange={(e) => setTeamAGuestName(e.target.value)}
                       onKeyDown={(e) => {
-                        if (e.key === "Enter" && teamAGuestName.trim() && pickerAPlayers.length < 11) {
+                        if (e.key === "Enter" && teamAGuestName.trim() && pickerAPlayers.length < cap) {
                           setPickerAPlayers((prev) => [...prev, { playerPublicId: "", externalName: teamAGuestName.trim(), battingOrder: prev.length + 1, isCaptain: false, isWicketkeeper: false, isImpactPlayer: false, isForeign: false }]);
                           setTeamAGuestName("");
                         }
@@ -1147,7 +1160,7 @@ export default function MatchReportPage() {
                     />
                     <button
                       onClick={() => {
-                        if (teamAGuestName.trim() && pickerAPlayers.length < 11) {
+                        if (teamAGuestName.trim() && pickerAPlayers.length < cap) {
                           setPickerAPlayers((prev) => [...prev, { playerPublicId: "", externalName: teamAGuestName.trim(), battingOrder: prev.length + 1, isCaptain: false, isWicketkeeper: false, isImpactPlayer: false, isForeign: false }]);
                           setTeamAGuestName("");
                         }
@@ -1183,7 +1196,7 @@ export default function MatchReportPage() {
                       key={p.publicId}
                       player={p}
                       selected={pickerAPlayers}
-                      onToggle={() => doTogglePlayer(p, pickerAPlayers, setPickerAPlayers, new Set(), setPickerError)}
+                      onToggle={() => doTogglePlayer(p, pickerAPlayers, setPickerAPlayers, new Set(), setPickerError, match.allowExtendedSquad)}
                       onRoleToggle={(role) => doToggleRole(p.publicId, role, pickerAPlayers, setPickerAPlayers)}
                       onForeignToggle={() => doToggleForeign(p.publicId, pickerAPlayers, setPickerAPlayers)}
                     />
@@ -1201,7 +1214,7 @@ export default function MatchReportPage() {
                     value={teamBName}
                     onChange={(e) => setTeamBName(e.target.value)}
                   />
-                  <span className="text-xs text-gray-400">{pickerBPlayers.length}/11</span>
+                  <span className="text-xs text-gray-400">{pickerBPlayers.length}/{cap}</span>
                 </div>
                 <div className="flex gap-2">
                   <input
@@ -1219,7 +1232,7 @@ export default function MatchReportPage() {
                       value={teamBGuestName}
                       onChange={(e) => setTeamBGuestName(e.target.value)}
                       onKeyDown={(e) => {
-                        if (e.key === "Enter" && teamBGuestName.trim() && pickerBPlayers.length < 11) {
+                        if (e.key === "Enter" && teamBGuestName.trim() && pickerBPlayers.length < cap) {
                           setPickerBPlayers((prev) => [...prev, { playerPublicId: "", externalName: teamBGuestName.trim(), battingOrder: prev.length + 1, isCaptain: false, isWicketkeeper: false, isImpactPlayer: false, isForeign: false }]);
                           setTeamBGuestName("");
                         }
@@ -1227,7 +1240,7 @@ export default function MatchReportPage() {
                     />
                     <button
                       onClick={() => {
-                        if (teamBGuestName.trim() && pickerBPlayers.length < 11) {
+                        if (teamBGuestName.trim() && pickerBPlayers.length < cap) {
                           setPickerBPlayers((prev) => [...prev, { playerPublicId: "", externalName: teamBGuestName.trim(), battingOrder: prev.length + 1, isCaptain: false, isWicketkeeper: false, isImpactPlayer: false, isForeign: false }]);
                           setTeamBGuestName("");
                         }
@@ -1263,7 +1276,7 @@ export default function MatchReportPage() {
                       key={p.publicId}
                       player={p}
                       selected={pickerBPlayers}
-                      onToggle={() => doTogglePlayer(p, pickerBPlayers, setPickerBPlayers, new Set(), setPickerError)}
+                      onToggle={() => doTogglePlayer(p, pickerBPlayers, setPickerBPlayers, new Set(), setPickerError, match.allowExtendedSquad)}
                       onRoleToggle={(role) => doToggleRole(p.publicId, role, pickerBPlayers, setPickerBPlayers)}
                       onForeignToggle={() => doToggleForeign(p.publicId, pickerBPlayers, setPickerBPlayers)}
                     />
@@ -1352,6 +1365,44 @@ export default function MatchReportPage() {
                 .map((p) => ({ value: p.playerPublicId!, label: p.displayName }))}
             />
           </Section>
+        )}
+
+        {/* ── Annotations (admin/coach only) ───────────────────────────────── */}
+        {annotations.length > 0 && (
+          <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800 overflow-hidden">
+            <button
+              onClick={() => setAnnotationsOpen((v) => !v)}
+              className="w-full flex items-center justify-between px-4 py-4 text-left"
+            >
+              <div className="flex items-center gap-2">
+                <BookOpen className="w-4 h-4 text-green-600 dark:text-green-400" />
+                <span className="text-sm font-semibold text-gray-900 dark:text-white">
+                  Annotations ({annotations.length})
+                </span>
+              </div>
+              <span className="text-xs text-gray-400">{annotationsOpen ? "▲" : "▼"}</span>
+            </button>
+            {annotationsOpen && (
+              <div className="px-4 pb-4 space-y-3 border-t border-gray-100 dark:border-gray-800 pt-3">
+                {annotations.map((ann: Record<string, unknown>, idx: number) => (
+                  <div
+                    key={(ann.publicId as string) ?? idx}
+                    className="p-3 bg-gray-50 dark:bg-gray-800 rounded-xl"
+                  >
+                    <div className="text-xs text-gray-400 mb-1">
+                      Inn {ann.inningsNumber as number} · Over {ann.overNumber as number}.{ann.ballNumber as number}
+                      {ann.strikerName ? ` · ${ann.strikerName}` : ""}
+                      {ann.bowlerName ? ` vs ${ann.bowlerName}` : ""}
+                    </div>
+                    <p className="text-sm text-gray-800 dark:text-gray-200">{ann.noteText as string}</p>
+                    {ann.createdBy && (
+                      <div className="text-xs text-gray-400 mt-1">{ann.createdBy as string}</div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         )}
 
         {/* ── Match Notes ───────────────────────────────────────────────────── */}

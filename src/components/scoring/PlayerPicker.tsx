@@ -130,6 +130,7 @@ export function togglePlayer(
   setSelected: (s: PlayerSelection[]) => void,
   squadForeignIds: Set<string>,
   onError: (msg: string) => void,
+  allowExtendedSquad = false,
 ) {
   const exists = selected.find((s) => s.playerPublicId === player.publicId);
   if (exists) {
@@ -139,8 +140,9 @@ export function togglePlayer(
         .map((s, idx) => ({ ...s, battingOrder: idx + 1 })),
     );
   } else {
-    if (selected.length >= 11) {
-      onError("Playing XI cannot have more than 11 players");
+    const cap = allowExtendedSquad ? 12 : 11;
+    if (selected.length >= cap) {
+      onError(`Playing XI cannot have more than ${cap} players`);
       return;
     }
     setSelected([

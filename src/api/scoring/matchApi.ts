@@ -61,8 +61,10 @@ export const recordResult = (
 export const getBranchPlayers = () =>
   api.get("/admin/players").then((r) => r.data);
 
-export const deleteMatch = (publicId: string) =>
-  api.delete(`/admin/cricket/matches/${publicId}`);
+export const deleteMatch = (publicId: string, confirmDeletePerformances = false) =>
+  api.delete(`/admin/cricket/matches/${publicId}`, {
+    params: confirmDeletePerformances ? { confirmDeletePerformances: true } : undefined,
+  });
 
 export const patchMatchNotes = (publicId: string, notes: string) =>
   api.patch(`${BASE}/${publicId}/notes`, { notes }).then((r) => r.data);
@@ -114,3 +116,9 @@ export const patchLessonsLearned = (publicId: string, lessons: string[]) =>
   api
     .patch<CricketMatch>(`${BASE}/${publicId}/lessons-learned`, { lessonsLearned: lessons })
     .then((r) => r.data);
+
+export const pauseMatch = (publicId: string, reason: string) =>
+  api.post<CricketMatch>(`${BASE}/${publicId}/pause`, { reason }).then((r) => r.data);
+
+export const resumeMatch = (publicId: string) =>
+  api.post<CricketMatch>(`${BASE}/${publicId}/resume`).then((r) => r.data);

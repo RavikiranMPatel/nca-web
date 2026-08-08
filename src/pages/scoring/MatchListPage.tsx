@@ -200,7 +200,8 @@ const MatchCard = ({
 
     <div className="flex gap-2 mt-3 pt-3 border-t border-gray-50 dark:border-gray-800">
       {match.status === "SETUP" && <ActionChip label="Set Teams →" color="blue" />}
-      {match.status === "IN_PROGRESS" && <ActionChip label="🔴 Continue Scoring" color="green" />}
+      {match.status === "IN_PROGRESS" && match.pauseReason && <ActionChip label="⏸ Paused — Resume" color="yellow" />}
+      {match.status === "IN_PROGRESS" && !match.pauseReason && <ActionChip label="🔴 Continue Scoring" color="green" />}
       {match.status === "INNINGS_BREAK" && <ActionChip label="Start 2nd Innings" color="yellow" />}
       {match.status === "COMPLETED" && <ActionChip label="View Scorecard" color="gray" />}
       {match.dataSource === "MANUAL" && match.status === "SETUP" && (
@@ -308,6 +309,8 @@ export default function MatchListPage() {
   const [filter, setFilter] = useState<"all" | "live" | "completed" | "tournament">("all");
   const [search, setSearch] = useState("");
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
+  // Non-null when a delete hit 409 — holds the performance count for the second confirm dialog
+  const [linkedPerformanceCount, setLinkedPerformanceCount] = useState<number | null>(null);
 
   // ── Notes modal state (shared between Matches and Match Notes tabs) ───────
   const [notesModal, setNotesModal] = useState<{
@@ -356,11 +359,35 @@ export default function MatchListPage() {
     try {
       await deleteMatch(confirmDelete);
       setMatches((prev) => prev.filter((m) => m.publicId !== confirmDelete));
+      setConfirmDelete(null);
+    } catch (err: unknown) {
+      const status = (err as { response?: { status?: number } })?.response?.status;
+      const count  = (err as { response?: { data?: { performanceCount?: number } } })?.response?.data?.performanceCount;
+      if (status === 409 && typeof count === "number") {
+        setLinkedPerformanceCount(count);
+        // keep confirmDelete set so the second dialog knows which match
+      } else {
+        setConfirmDelete(null);
+      }
+    }
+  };
+
+  const confirmDeleteWithPerformances = async () => {
+    if (!confirmDelete) return;
+    try {
+      await deleteMatch(confirmDelete, true);
+      setMatches((prev) => prev.filter((m) => m.publicId !== confirmDelete));
     } catch {
       /* silent */
     } finally {
       setConfirmDelete(null);
+      setLinkedPerformanceCount(null);
     }
+  };
+
+  const cancelDeleteWithPerformances = () => {
+    setLinkedPerformanceCount(null);
+    setConfirmDelete(null);
   };
 
   const openNotesModal = (match: CricketMatch) =>
@@ -671,8 +698,8 @@ export default function MatchListPage() {
         </div>
       )}
 
-      {/* ── Delete confirmation ────────────────────────────────────────────── */}
-      {confirmDelete && (
+      {/* ── Delete confirmation — step 1 ──────────────────────────────────── */}
+      {confirmDelete && linkedPerformanceCount === null && (
         <div className="fixed inset-0 z-[60] bg-black/60 flex items-center justify-center p-6">
           <div className="w-full max-w-sm bg-white dark:bg-gray-900 rounded-2xl p-5 shadow-xl max-h-[90vh] overflow-y-auto">
             <h3 className="text-base font-semibold text-gray-900 dark:text-white mb-2">
@@ -694,6 +721,39 @@ export default function MatchListPage() {
                 className="flex-1 py-2.5 rounded-xl bg-red-600 text-white text-sm font-semibold active:scale-95"
               >
                 Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Delete confirmation — step 2 (linked performances) ───────────── */}
+      {confirmDelete && linkedPerformanceCount !== null && (
+        <div className="fixed inset-0 z-[60] bg-black/60 flex items-center justify-center p-6">
+          <div className="w-full max-w-sm bg-white dark:bg-gray-900 rounded-2xl p-5 shadow-xl max-h-[90vh] overflow-y-auto">
+            <h3 className="text-base font-semibold text-gray-900 dark:text-white mb-2">
+              Also delete performance records?
+            </h3>
+            <p className="text-sm text-gray-500 dark:text-gray-400 mb-5">
+              This match has{" "}
+              <span className="font-semibold text-gray-800 dark:text-gray-200">
+                {linkedPerformanceCount} linked performance record{linkedPerformanceCount !== 1 ? "s" : ""}
+              </span>
+              . Deleting the match will also permanently delete{" "}
+              {linkedPerformanceCount !== 1 ? "those records" : "that record"}. Continue?
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={cancelDeleteWithPerformances}
+                className="flex-1 py-2.5 rounded-xl border border-gray-200 dark:border-gray-700 text-sm font-medium text-gray-600 dark:text-gray-400"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={confirmDeleteWithPerformances}
+                className="flex-1 py-2.5 rounded-xl bg-red-600 text-white text-sm font-semibold active:scale-95"
+              >
+                Delete anyway
               </button>
             </div>
           </div>

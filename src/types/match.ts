@@ -9,7 +9,7 @@ export interface KeyMoment {
   playerName?: string;
 }
 
-export type MatchType = "INTERNAL" | "INTER_ACADEMY" | "KSCA_TOURNAMENT";
+export type MatchType = "INTERNAL" | "INTER_ACADEMY" | "KSCA_TOURNAMENT" | "PRACTICE";
 export type MatchStatus =
   | "SETUP"
   | "IN_PROGRESS"
@@ -83,6 +83,11 @@ export interface CricketMatch {
   teamPerformanceComments?: TeamPerformanceComments;
   individualObservations?: IndividualObservation[];
   lessonsLearned?: string[];
+  // Pause state (Stage 5) — null when not paused; match stays IN_PROGRESS during a pause
+  pauseReason?: string;
+  pausedAt?: string;
+  // Item 4: when true, Playing XI cap is 12 instead of 11
+  allowExtendedSquad?: boolean;
 }
 
 export interface UpdateExternalMatchRequest {
@@ -124,6 +129,9 @@ export interface MatchTeamPlayer {
   isWicketkeeper: boolean;
   isImpactPlayer: boolean;
   isForeign: boolean;
+  // Substitution (Item 3)
+  isSubstitutedOut?: boolean;
+  isSubstitute?: boolean;
 }
 
 export interface PlayerOption {
@@ -144,6 +152,8 @@ export interface CreateMatchRequest {
   dataSource?: DataSource;
   tournamentPublicId?: string;
   notes?: string;
+  // Item 4: when true, Playing XI cap is raised to 12
+  allowExtendedSquad?: boolean;
   // Ground conditions — for EXTERNAL matches
   groundName?: string;
   groundNumber?: string;

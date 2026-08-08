@@ -56,6 +56,27 @@ interface OverSummary {
   cumulativeRuns: number;
 }
 
+interface WicketkeeperChange {
+  overNumber: number;
+  ballNumber: number;
+  fromKeeperName: string | null;
+  fromKeeperPublicId: string | null;
+  toKeeperName: string | null;
+  toKeeperPublicId: string | null;
+  reason: string | null;
+  changedAt: string | null;
+}
+
+interface WicketkeeperStat {
+  keeperPublicId: string;
+  keeperName: string;
+  fromOverNumber: number;
+  fromBallNumber: number;
+  catches: number;
+  stumpings: number;
+  byes: number;
+}
+
 interface InningsScorecard {
   inningsNumber: number;
   isSuperOver: boolean;
@@ -77,6 +98,8 @@ interface InningsScorecard {
   fallOfWickets: FallOfWicket[];
   bowlingCard: BowlingLine[];
   overBreakdown: OverSummary[];
+  wicketkeeperChanges: WicketkeeperChange[];
+  wicketkeeperStats: WicketkeeperStat[];
 }
 
 interface PlayingXIPlayer {
@@ -111,6 +134,8 @@ interface Scorecard {
   tournamentName?: string;
   tournamentPublicId?: string;
   ballName?: string;
+  pauseReason?: string;
+  pausedAt?: string;
   officials: { role: string; name: string; kscaId?: string }[];
   innings: InningsScorecard[];
   playingXI: PlayingXITeam[];
@@ -836,6 +861,37 @@ const InningsCard = ({
       </table>
     </div>
   </div>
+
+  {/* Wicketkeeper changes — rendered below bowling card when WK was swapped during match */}
+  {inn.wicketkeeperChanges && inn.wicketkeeperChanges.length > 0 && (
+    <div className="px-4 py-3 border-t border-gray-100 dark:border-gray-800">
+      <div className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">
+        Wicketkeeper Changes
+      </div>
+      <div className="space-y-1">
+        {inn.wicketkeeperChanges.map((c, i) => (
+          <div key={i} className="text-xs text-gray-600 dark:text-gray-400">
+            <span className="font-medium">{c.overNumber}.{c.ballNumber} ov</span>
+            {" — "}
+            {c.fromKeeperName && <>{c.fromKeeperName} → </>}
+            <span className="font-medium text-gray-800 dark:text-gray-200">{c.toKeeperName}</span>
+            {c.reason && <span className="ml-1 text-gray-400">({c.reason})</span>}
+          </div>
+        ))}
+      </div>
+      {inn.wicketkeeperStats && inn.wicketkeeperStats.length > 0 && (
+        <div className="mt-2 space-y-0.5">
+          {inn.wicketkeeperStats.map((s, i) => (
+            <div key={i} className="text-xs text-gray-500 dark:text-gray-400">
+              {s.keeperName}: {s.catches}ct {s.stumpings}st
+              {s.byes > 0 ? ` ${s.byes}b` : ""}
+              <span className="text-gray-400"> (from {s.fromOverNumber}.{s.fromBallNumber} ov)</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )}
 );
 
 // ── MAIN PAGE ─────────────────────────────────────────────────────────────────
@@ -866,6 +922,8 @@ export default function PublicScorecardPage() {
   const [notesSaving, setNotesSaving] = useState(false);
   const [notesSaved, setNotesSaved] = useState(false);
   const [keyMoments, setKeyMoments] = useState<KeyMoment[]>([]);
+  // Only true after getMatch() succeeds — prevents stale localStorage role from showing admin sections
+  const [adminAccessConfirmed, setAdminAccessConfirmed] = useState(false);
 
   useEffect(() => {
     publicApi
@@ -929,13 +987,16 @@ export default function PublicScorecardPage() {
     setSelectedBatterInnings(inningsNumber);
   };
 
-  // Load existing notes and key moments via the admin API when authenticated as admin/coach
+  // Load existing notes and key moments via the admin API when authenticated as admin/coach.
+  // adminAccessConfirmed is reset on each run so stale localStorage role can't keep sections visible.
   useEffect(() => {
+    setAdminAccessConfirmed(false);
     if (!canEditNotes || !matchId) return;
     getMatch(matchId)
       .then((m) => {
         setNotesDraft(m.notes?.trim() ? m.notes : MATCH_NOTES_TEMPLATE);
         setKeyMoments(m.keyMoments ?? []);
+        setAdminAccessConfirmed(true);
       })
       .catch(() => {
         setNotesDraft(MATCH_NOTES_TEMPLATE);
@@ -990,6 +1051,7 @@ export default function PublicScorecardPage() {
     );
 
   const isLive = scorecard.status === "IN_PROGRESS";
+  const isPaused = isLive && !!scorecard.pauseReason;
 
   return (
     <div className="min-h-screen bg-white dark:bg-gray-950">
@@ -1039,9 +1101,13 @@ export default function PublicScorecardPage() {
       <div className="border-b border-gray-100 dark:border-gray-800 px-4 py-4 max-w-4xl mx-auto">
         <div className="flex flex-wrap items-center gap-2 mb-2">
           <span
-            className={`text-xs px-2 py-0.5 rounded-full font-medium ${statusColor(scorecard.status)}`}
+            className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+              isPaused
+                ? "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400"
+                : statusColor(scorecard.status)
+            }`}
           >
-            {isLive ? "🔴 LIVE" : scorecard.status.replace("_", " ")}
+            {isPaused ? "⏸ PAUSED" : isLive ? "🔴 LIVE" : scorecard.status.replace("_", " ")}
           </span>
           <span className="text-xs text-gray-400">
             {matchTypeBadge(scorecard.matchType)} · {scorecard.matchDate}
@@ -1080,6 +1146,15 @@ export default function PublicScorecardPage() {
             </div>
           ))}
         </div>
+
+        {isPaused && (
+          <div className="mt-3 flex items-center gap-2 px-3 py-2 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800">
+            <span className="text-base">⏸</span>
+            <span className="text-sm font-medium text-amber-700 dark:text-amber-400">
+              Match Delayed — {scorecard.pauseReason}
+            </span>
+          </div>
+        )}
 
         {scorecard.resultDescription && (
           <div className="mt-2 text-sm font-semibold" style={{ color: primaryColor }}>
@@ -1267,8 +1342,8 @@ export default function PublicScorecardPage() {
         )}
       </div>
 
-      {/* Key Moments — admin/coach only */}
-      {canEditNotes && matchId && (
+      {/* Key Moments — admin/coach only; adminAccessConfirmed guards against stale localStorage token */}
+      {adminAccessConfirmed && matchId && (
         <div id="key-moments" className="px-4 py-5 border-t border-gray-100 dark:border-gray-800">
           <div className="flex items-center justify-between mb-3">
             <h3 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
@@ -1300,7 +1375,7 @@ export default function PublicScorecardPage() {
       )}
 
       {/* Match Notes — admin/coach only, not shown to public visitors */}
-      {canEditNotes && (
+      {adminAccessConfirmed && (
         <div className="px-4 py-5 border-t border-gray-100 dark:border-gray-800">
           <div className="flex items-center justify-between mb-3">
             <h3 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
@@ -1330,8 +1405,12 @@ export default function PublicScorecardPage() {
       )}
 
       {isLive && (
-        <div className="fixed bottom-4 left-1/2 -translate-x-1/2 bg-gray-900 text-green-400 text-xs px-4 py-2 rounded-full border border-green-800 shadow-lg">
-          🔴 Live · refreshing every 15s
+        <div className={`fixed bottom-4 left-1/2 -translate-x-1/2 text-xs px-4 py-2 rounded-full shadow-lg ${
+          isPaused
+            ? "bg-amber-900/90 text-amber-300 border border-amber-700"
+            : "bg-gray-900 text-green-400 border border-green-800"
+        }`}>
+          {isPaused ? "⏸ Paused · checking every 15s" : "🔴 Live · refreshing every 15s"}
         </div>
       )}
 

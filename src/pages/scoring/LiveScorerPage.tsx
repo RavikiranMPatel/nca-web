@@ -11,8 +11,12 @@ import {
   correctBowler,
   editDelivery,
   getDeliveries,
+  selectBatter,
+  substitutePlayer,
+  changeWicketkeeper,
+  createAnnotation,
 } from "../../api/scoring/scoringApi";
-import { getMatch, getTeams } from "../../api/scoring/matchApi";
+import { getMatch, getTeams, pauseMatch, resumeMatch } from "../../api/scoring/matchApi";
 import type {
   BallResponse,
   BatterStatDTO,
@@ -75,6 +79,7 @@ const DISMISSALS = [
   "Stumped",
   "Hit Wicket",
   "Retired Hurt",
+  "Retired Out",
   "Obstructing Field",
 ];
 
@@ -327,11 +332,65 @@ export default function LiveScorerPage() {
   const [editIsFreeHit, setEditIsFreeHit] = useState(false);
   const [showEditBowlerPicker, setShowEditBowlerPicker] = useState(false);
 
+  // ── Stage 5: pause/resume ─────────────────────────────────────────────────
+  const [matchPauseReason, setMatchPauseReason] = useState<string | null>(null);
+  const [showPauseModal, setShowPauseModal] = useState(false);
+  const [pauseReasonInput, setPauseReasonInput] = useState("");
+
+  // ── Substitution ──────────────────────────────────────────────────────────
+  // Tracks publicIds of MTPs that have been substituted out — excluded from
+  // batter/bowler selection (same mechanism as dismissedPlayerIds).
+  const [substitutedOutIds, setSubstitutedOutIds] = useState<Set<string>>(new Set());
+  const [showSubstituteModal, setShowSubstituteModal] = useState(false);
+  const [subOriginalMtp, setSubOriginalMtp] = useState<ScoringPlayer | null>(null);
+  const [subReasonInput, setSubReasonInput] = useState<string>("Injury");
+  const [subPosting, setSubPosting] = useState(false);
+
+  // ── WK change ─────────────────────────────────────────────────────────────
+  const [showChangeWkModal, setShowChangeWkModal] = useState(false);
+  const [wkSelectedPid, setWkSelectedPid] = useState<string>("");
+  const [wkReason, setWkReason] = useState<string>("");
+  const [wkPosting, setWkPosting] = useState(false);
+
+  // ── Live annotations ──────────────────────────────────────────────────────
+  const [showAnnotationForm, setShowAnnotationForm] = useState(false);
+  const [annotationText, setAnnotationText] = useState("");
+
   const loadingRef = useRef(false);
 
   const showToast = (msg: string) => {
     setToast(msg);
     setTimeout(() => setToast(null), 2000);
+  };
+
+  const handleSaveAnnotation = async () => {
+    if (!matchId || !annotationText.trim()) return;
+    try {
+      await createAnnotation(matchId, annotationText.trim());
+      showToast("Note saved");
+      setAnnotationText("");
+      setShowAnnotationForm(false);
+    } catch {
+      showToast("Failed to save note");
+    }
+  };
+
+  const handleChangeWk = async () => {
+    if (!matchId || !wkSelectedPid.trim()) return;
+    setWkPosting(true);
+    try {
+      const updated = await changeWicketkeeper(matchId, wkSelectedPid.trim(), wkReason || undefined);
+      applyBallResponse(updated);
+      showToast("Wicketkeeper changed");
+      setShowChangeWkModal(false);
+      setWkSelectedPid("");
+      setWkReason("");
+    } catch (e: unknown) {
+      const msg = (e as { response?: { data?: { message?: string } } })?.response?.data?.message;
+      showToast(msg || "Failed to change wicketkeeper");
+    } finally {
+      setWkPosting(false);
+    }
   };
 
   const saveShotZone = async (zone: string) => {
@@ -362,6 +421,7 @@ export default function LiveScorerPage() {
     try {
       const [m, ts] = await Promise.all([getMatch(matchId), getTeams(matchId)]);
       setMatch(m);
+      setMatchPauseReason(m.pauseReason ?? null);
       setTeams(ts as CricketTeam[]);
 
       const teamPlayers: Record<string, ScoringPlayer[]> = {};
@@ -372,11 +432,26 @@ export default function LiveScorerPage() {
           )
           .then((r) => r.data as Record<string, unknown>[]);
         // Use mtpPublicId as the scoring identifier (works for both academy and guest players)
+        // Collect substituted-out MTP publicIds to exclude from selection
+        const subOutForTeam = xi
+          .filter((mtp) => mtp.isSubstitutedOut)
+          .map((mtp) => (mtp.mtpPublicId ?? mtp.playerPublicId) as string);
+        if (subOutForTeam.length > 0) {
+          setSubstitutedOutIds((prev) => new Set([...prev, ...subOutForTeam]));
+        }
+
         teamPlayers[team.publicId] = xi
-          .filter((mtp) => (mtp.mtpPublicId || mtp.playerPublicId) && mtp.displayName)
+          .filter(
+            (mtp) =>
+              (mtp.mtpPublicId || mtp.playerPublicId) &&
+              mtp.displayName &&
+              !mtp.isSubstitutedOut,
+          )
           .map((mtp) => ({
             publicId: (mtp.mtpPublicId ?? mtp.playerPublicId) as string,
-            displayName: mtp.displayName as string,
+            displayName: (mtp.isSubstitute
+              ? `${mtp.displayName as string} (sub)`
+              : (mtp.displayName as string)),
             battingStyle: mtp.battingStyle as string | undefined,
             bowlingStyle: mtp.bowlingStyle as string | undefined,
             isWicketkeeper: !!mtp.isWicketkeeper,
@@ -830,6 +905,58 @@ export default function LiveScorerPage() {
     }
   };
 
+  const PAUSE_REASONS = [
+    "Rain",
+    "Bad Light",
+    "Wet Outfield",
+    "Lightning",
+    "Crowd",
+    "Medical Emergency",
+    "Equipment Failure",
+    "Other",
+  ];
+
+  const handlePauseMatch = async () => {
+    if (!matchId) return;
+    const reason = pauseReasonInput.trim() || "Delay";
+    setPosting(true);
+    setError("");
+    try {
+      const updated = await pauseMatch(matchId, reason);
+      setMatchPauseReason(updated.pauseReason ?? reason);
+      setMatch(updated);
+      setShowPauseModal(false);
+      setPauseReasonInput("");
+      showToast(`⏸ Match paused — ${reason}`);
+    } catch (e: unknown) {
+      const msg =
+        (e as { response?: { data?: { message?: string } } })?.response?.data
+          ?.message ?? "Failed to pause match";
+      setError(msg);
+    } finally {
+      setPosting(false);
+    }
+  };
+
+  const handleResumeMatch = async () => {
+    if (!matchId) return;
+    setPosting(true);
+    setError("");
+    try {
+      const updated = await resumeMatch(matchId);
+      setMatchPauseReason(null);
+      setMatch(updated);
+      showToast("▶ Match resumed");
+    } catch (e: unknown) {
+      const msg =
+        (e as { response?: { data?: { message?: string } } })?.response?.data
+          ?.message ?? "Failed to resume match";
+      setError(msg);
+    } finally {
+      setPosting(false);
+    }
+  };
+
   const loadBallHistory = async () => {
     if (!matchId) return;
     try {
@@ -1019,42 +1146,112 @@ export default function LiveScorerPage() {
     <div className="min-h-screen bg-gray-950 text-gray-100 flex flex-col select-none">
       {/* Match header */}
       <div className="bg-gray-900 border-b border-gray-800 px-4 pt-3 pb-2">
-        <div className="text-xs text-gray-500 uppercase tracking-wider mb-1">
-          {match?.title} · {match?.totalOvers} Ov
-        </div>
-        <div className="flex items-baseline gap-2">
-          <span className="text-4xl font-bold tracking-tight text-white">
-            {totalRuns}/{totalWickets}
-          </span>
-          <span className="text-lg text-gray-400">
-            {Math.floor(totalBalls / (match?.ballsPerOver ?? 6))}.
-            {totalBalls % (match?.ballsPerOver ?? 6)} ov
-          </span>
-        </div>
-        <div className="flex gap-4 mt-1 text-xs text-gray-500">
-          <span>
-            CRR <b className="text-gray-300">{crr}</b>
-          </span>
-          {innings?.target && (
-            <>
-              <span>
-                Target <b className="text-gray-300">{innings.target}</b>
+        <div className="flex items-start justify-between gap-2">
+          <div className="flex-1 min-w-0">
+            <div className="text-xs text-gray-500 uppercase tracking-wider mb-1">
+              {match?.title} · {match?.totalOvers} Ov
+            </div>
+            <div className="flex items-baseline gap-2">
+              <span className="text-4xl font-bold tracking-tight text-white">
+                {totalRuns}/{totalWickets}
               </span>
-              <span>
-                Need <b className="text-yellow-400">{innings.requiredRuns}</b>
+              <span className="text-lg text-gray-400">
+                {Math.floor(totalBalls / (match?.ballsPerOver ?? 6))}.
+                {totalBalls % (match?.ballsPerOver ?? 6)} ov
               </span>
-            </>
-          )}
-          {isFreeHit && (
-            <span className="text-orange-400 font-semibold animate-pulse">
-              FREE HIT
-            </span>
-          )}
+            </div>
+            <div className="flex gap-4 mt-1 text-xs text-gray-500">
+              <span>
+                CRR <b className="text-gray-300">{crr}</b>
+              </span>
+              {innings?.target && (
+                <>
+                  <span>
+                    Target <b className="text-gray-300">{innings.target}</b>
+                  </span>
+                  <span>
+                    Need <b className="text-yellow-400">{innings.requiredRuns}</b>
+                  </span>
+                </>
+              )}
+              {isFreeHit && (
+                <span className="text-orange-400 font-semibold animate-pulse">
+                  FREE HIT
+                </span>
+              )}
+            </div>
+          </div>
+          {/* Report + Note buttons — top-right corner of header */}
+          <div className="flex flex-col gap-1 flex-shrink-0 items-end">
+            <button
+              onClick={() => window.open(`/matches/${matchId}/report`, "_blank")}
+              className="text-xs text-gray-500 hover:text-blue-400 active:scale-95 transition-all px-2 py-1 rounded border border-gray-700 bg-gray-800"
+            >
+              📋 Report
+            </button>
+            <button
+              onClick={() => setShowAnnotationForm((v) => !v)}
+              className="text-xs text-gray-500 hover:text-green-400 active:scale-95 transition-all px-2 py-1 rounded border border-gray-700 bg-gray-800"
+            >
+              ✏️ Note
+            </button>
+          </div>
         </div>
+        {/* Inline annotation form — collapsed by default */}
+        {showAnnotationForm && (
+          <div className="mt-2 p-3 bg-gray-800 rounded-xl border border-gray-700">
+            <div className="text-xs text-gray-400 mb-2">
+              Auto-context: {Math.floor(totalBalls / (match?.ballsPerOver ?? 6))}.{totalBalls % (match?.ballsPerOver ?? 6)} ov
+              {striker ? ` · ${striker.name}` : ""}
+              {bowler ? ` · ${bowler.name}` : ""}
+            </div>
+            <textarea
+              value={annotationText}
+              onChange={(e) => setAnnotationText(e.target.value)}
+              placeholder="Add a coaching note…"
+              className="w-full bg-gray-900 text-white text-sm rounded-lg px-3 py-2 border border-gray-600 focus:outline-none focus:border-blue-500 resize-none"
+              rows={2}
+            />
+            <div className="flex gap-2 mt-2 justify-end">
+              <button
+                onClick={() => { setShowAnnotationForm(false); setAnnotationText(""); }}
+                className="text-xs text-gray-400 px-3 py-1.5 rounded-lg bg-gray-700 hover:bg-gray-600"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSaveAnnotation}
+                disabled={!annotationText.trim()}
+                className="text-xs text-white px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 disabled:opacity-40"
+              >
+                Save note
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
+      {/* Pause banner — shown when match is paused; blocks scorer interaction visually */}
+      {matchPauseReason && (
+        <div className="bg-amber-900/40 border-b border-amber-700 px-4 py-3 flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2 min-w-0">
+            <span className="text-lg flex-shrink-0">⏸</span>
+            <span className="text-sm font-semibold text-amber-300 truncate">
+              Match Paused — {matchPauseReason}
+            </span>
+          </div>
+          <button
+            onClick={handleResumeMatch}
+            disabled={posting}
+            className="flex-shrink-0 text-xs px-3 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-500 active:scale-95 text-white font-semibold transition-all disabled:opacity-40"
+          >
+            ▶ Resume
+          </button>
+        </div>
+      )}
+
       {/* Batters */}
-      <div className="bg-gray-900 px-4 py-2 border-b border-gray-800">
+      <div className={`bg-gray-900 px-4 py-2 border-b border-gray-800 ${matchPauseReason ? "opacity-40 pointer-events-none" : ""}`}>
         {(
           [
             { player: striker, stats: strikerStats, isStriker: true },
@@ -1112,9 +1309,27 @@ export default function LiveScorerPage() {
         ))}
       </div>
 
+      {/* Substitute / Change WK — only visible when match is active (not paused) */}
+      {!matchPauseReason && (
+        <div className="bg-gray-900 px-4 pb-1 border-b border-gray-800 flex gap-4">
+          <button
+            onClick={() => setShowSubstituteModal(true)}
+            className="text-xs text-gray-600 hover:text-amber-400 active:scale-95 transition-all py-0.5"
+          >
+            ⇆ Substitute player
+          </button>
+          <button
+            onClick={() => setShowChangeWkModal(true)}
+            className="text-xs text-gray-600 hover:text-blue-400 active:scale-95 transition-all py-0.5"
+          >
+            🧤 Change WK
+          </button>
+        </div>
+      )}
+
       {/* Partnership */}
       {striker && nonStriker && (
-        <div className="bg-gray-950 px-4 py-1.5 border-b border-gray-800 flex items-center justify-between">
+        <div className={`bg-gray-950 px-4 py-1.5 border-b border-gray-800 flex items-center justify-between ${matchPauseReason ? "opacity-40 pointer-events-none" : ""}`}>
           <span className="text-xs text-gray-600">
             Partnership: <b className="text-gray-400">{partnershipRuns}</b> (
             {partnershipBalls}b)
@@ -1131,7 +1346,7 @@ export default function LiveScorerPage() {
       )}
 
       {/* Bowler */}
-      <div className="bg-gray-950 px-4 py-2 border-b border-gray-800 flex justify-between items-center">
+      <div className={`bg-gray-950 px-4 py-2 border-b border-gray-800 flex justify-between items-center ${matchPauseReason ? "opacity-40 pointer-events-none" : ""}`}>
         <button
           onClick={() => setShowBowlerSelect(true)}
           className="flex-1 flex justify-between items-center active:opacity-70 transition-opacity"
@@ -1159,7 +1374,7 @@ export default function LiveScorerPage() {
       </div>
 
       {/* Over strip */}
-      <div className="bg-gray-900 px-4 py-2.5 border-b border-gray-800 flex items-center gap-2 flex-wrap">
+      <div className={`bg-gray-900 px-4 py-2.5 border-b border-gray-800 flex items-center gap-2 flex-wrap ${matchPauseReason ? "opacity-40 pointer-events-none" : ""}`}>
         <span className="text-xs text-gray-600 min-w-[48px] uppercase">
           This Ov
         </span>
@@ -1202,7 +1417,7 @@ export default function LiveScorerPage() {
       )}
 
       {/* Scoring pad */}
-      <div className="flex-1 px-3 pt-4 pb-2">
+      <div className={`flex-1 px-3 pt-4 pb-2 ${matchPauseReason ? "opacity-40 pointer-events-none" : ""}`}>
         <div className="text-xs text-gray-600 uppercase tracking-wider mb-2">
           Runs
         </div>
@@ -1345,12 +1560,22 @@ export default function LiveScorerPage() {
       {/* Bottom bar */}
       <div className="px-3 pb-6 flex gap-2">
         <button
-          disabled={posting}
+          disabled={posting || !!matchPauseReason}
           onClick={handleUndo}
           className="flex-1 h-11 rounded-xl bg-gray-900 border border-red-900 text-red-400 text-sm font-semibold active:scale-95 transition-all disabled:opacity-40 flex items-center justify-center gap-2"
         >
           <span>↩</span> Undo Last Ball
         </button>
+        {!matchPauseReason ? (
+          <button
+            disabled={posting}
+            onClick={() => setShowPauseModal(true)}
+            className="w-11 h-11 rounded-xl bg-gray-900 border border-amber-800 text-amber-500 flex items-center justify-center text-lg active:scale-95 transition-all disabled:opacity-40"
+            title="Pause match"
+          >
+            ⏸
+          </button>
+        ) : null}
         <button
           onClick={() => setShowCloseInnings(true)}
           className="w-11 h-11 rounded-xl bg-gray-900 border border-gray-700 text-gray-500 flex items-center justify-center text-lg active:scale-95"
@@ -1678,17 +1903,241 @@ export default function LiveScorerPage() {
               ? (nonStriker?.publicId ?? "")
               : (striker?.publicId ?? ""),
             ...Array.from(dismissedPlayerIds),
+            ...Array.from(substitutedOutIds),
           ].filter(Boolean)}
           searchValue={showPlayerSearch}
           onSearchChange={setShowPlayerSearch}
           onClose={closeSelector}
-          onSelect={(p) => {
-            if (showBatterSelect === "striker") setStriker(p);
-            else setNonStriker(p);
-            setShowBatterSelect(null);
-            setShowPlayerSearch("");
+          onSelect={async (p) => {
+            if (!matchId) return;
+            const pos = showBatterSelect as "striker" | "nonstriker";
+            // Persist to server immediately — fixes refresh-loses-selection bug.
+            try {
+              const state = await selectBatter(matchId, p.publicId, pos);
+              if (pos === "striker") setStriker(p);
+              else setNonStriker(p);
+              setShowBatterSelect(null);
+              setShowPlayerSearch("");
+              applyBallResponse(state);
+            } catch (e: unknown) {
+              const msg =
+                (e as { response?: { data?: { message?: string } } })
+                  ?.response?.data?.message ?? "Failed to select batter";
+              setError(msg);
+            }
           }}
         />
+      )}
+
+      {/* Substitute player modal */}
+      {showSubstituteModal && (
+        <div className="fixed inset-0 z-[60] bg-black/70 flex items-end">
+          <div className="w-full bg-gray-900 rounded-t-2xl max-h-[85vh] overflow-y-auto">
+            <div className="p-4 border-b border-gray-800">
+              <div className="w-10 h-1 bg-gray-600 rounded-full mx-auto mb-3" />
+              <h3 className="text-sm font-semibold text-white text-center">
+                Player Substitution
+              </h3>
+              <p className="text-xs text-gray-500 text-center mt-1">
+                Original player's stats are frozen. Substitute enters with fresh stats.
+              </p>
+            </div>
+            <div className="p-4 space-y-4">
+              {/* Step 1: pick original player from current batting XI */}
+              <div>
+                <div className="text-xs text-gray-500 uppercase mb-2">Player leaving the field</div>
+                <div className="space-y-1">
+                  {[...battingPlayers, ...bowlingPlayers]
+                    .filter((p, idx, arr) => arr.findIndex((x) => x.publicId === p.publicId) === idx)
+                    .map((p) => (
+                      <button
+                        key={p.publicId}
+                        onClick={() => setSubOriginalMtp(p)}
+                        className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left text-sm transition-all ${
+                          subOriginalMtp?.publicId === p.publicId
+                            ? "bg-amber-900/50 border border-amber-700 text-amber-200"
+                            : "bg-gray-800 border border-gray-700 text-gray-300 active:scale-95"
+                        }`}
+                      >
+                        <div className="w-7 h-7 bg-gray-700 rounded-full flex items-center justify-center text-xs font-bold text-white flex-shrink-0">
+                          {p.displayName.charAt(0).toUpperCase()}
+                        </div>
+                        {p.displayName}
+                      </button>
+                    ))}
+                </div>
+              </div>
+              {/* Step 2: reason */}
+              <div>
+                <div className="text-xs text-gray-500 uppercase mb-2">Reason</div>
+                <div className="grid grid-cols-3 gap-2">
+                  {["Concussion", "Injury", "Other"].map((r) => (
+                    <button
+                      key={r}
+                      onClick={() => setSubReasonInput(r)}
+                      className={`py-2 rounded-xl text-xs font-medium border transition-all ${
+                        subReasonInput === r
+                          ? "bg-amber-900 border-amber-600 text-amber-200"
+                          : "bg-gray-800 border-gray-700 text-gray-400"
+                      }`}
+                    >
+                      {r}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              {/* Step 3: pick substitute from team roster (via a simple picker) */}
+              <div>
+                <div className="text-xs text-gray-500 uppercase mb-2">Substitute entering the field</div>
+                <p className="text-xs text-gray-600">
+                  After confirming, use "Select Striker / Non-Striker" or "Correct Bowler"
+                  to bring the substitute on to the field.
+                </p>
+                <p className="text-xs text-amber-500 mt-2">
+                  Substitute player selection is done via their academy Player Public ID.
+                  Enter it below (ask coach for the player's ID from the roster).
+                </p>
+                <input
+                  type="text"
+                  id="sub-player-id"
+                  placeholder="Substitute player publicId (e.g. PLY-ABC-1234)"
+                  className="mt-2 w-full px-3 py-2.5 bg-gray-800 border border-gray-700 rounded-xl text-sm text-white placeholder-gray-500 outline-none focus:border-amber-600"
+                />
+              </div>
+              <p className="text-xs text-red-400">
+                This action is permanent for this match — the original player cannot bat or bowl again.
+              </p>
+              <div className="flex gap-2 pt-2">
+                <button
+                  onClick={() => {
+                    setShowSubstituteModal(false);
+                    setSubOriginalMtp(null);
+                    setSubReasonInput("Injury");
+                  }}
+                  className="flex-1 py-3 rounded-xl bg-gray-800 border border-gray-700 text-gray-300 text-sm font-semibold"
+                >
+                  Cancel
+                </button>
+                <button
+                  disabled={!subOriginalMtp || subPosting}
+                  onClick={async () => {
+                    if (!matchId || !subOriginalMtp) return;
+                    const inputEl = document.getElementById("sub-player-id") as HTMLInputElement | null;
+                    const subPid = inputEl?.value?.trim();
+                    if (!subPid) { setError("Enter the substitute player's publicId"); return; }
+                    setSubPosting(true);
+                    try {
+                      const newMtp = await substitutePlayer(
+                        matchId,
+                        subOriginalMtp.publicId,
+                        subPid,
+                        subReasonInput,
+                      ) as { mtpPublicId: string; displayName: string };
+                      // Mark original as substituted out
+                      setSubstitutedOutIds((prev) => new Set([...prev, subOriginalMtp.publicId]));
+                      // Add substitute to batting players list
+                      const subPlayer: ScoringPlayer = {
+                        publicId: newMtp.mtpPublicId,
+                        displayName: `${newMtp.displayName} (sub)`,
+                        isWicketkeeper: false,
+                        isCaptain: false,
+                      };
+                      setBattingPlayers((prev) => [...prev, subPlayer]);
+                      showToast(`✓ ${subOriginalMtp.displayName} substituted out`);
+                      setShowSubstituteModal(false);
+                      setSubOriginalMtp(null);
+                      setSubReasonInput("Injury");
+                    } catch (e: unknown) {
+                      const msg =
+                        (e as { response?: { data?: { message?: string } } })
+                          ?.response?.data?.message ?? "Substitution failed";
+                      setError(msg);
+                    } finally {
+                      setSubPosting(false);
+                    }
+                  }}
+                  className="flex-1 py-3 rounded-xl bg-amber-600 text-white text-sm font-semibold disabled:opacity-40 active:scale-95 transition-all"
+                >
+                  {subPosting ? "Substituting…" : "Confirm Substitution"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Change wicketkeeper modal */}
+      {showChangeWkModal && (
+        <div className="fixed inset-0 z-[60] bg-black/70 flex items-end">
+          <div className="w-full bg-gray-900 rounded-t-2xl max-h-[80vh] overflow-y-auto">
+            <div className="p-4 border-b border-gray-800">
+              <div className="w-10 h-1 bg-gray-600 rounded-full mx-auto mb-3" />
+              <h3 className="text-sm font-semibold text-white text-center">Change Wicketkeeper</h3>
+              <p className="text-xs text-gray-500 text-center mt-1">
+                Select a fielding-team player. Mid-over changes are allowed.
+              </p>
+            </div>
+            <div className="p-4 space-y-4">
+              <div>
+                <div className="text-xs text-gray-500 uppercase mb-2">New keeper (fielding team)</div>
+                <div className="space-y-1">
+                  {bowlingPlayers.map((p) => (
+                    <button
+                      key={p.publicId}
+                      onClick={() => setWkSelectedPid(p.publicId)}
+                      className={`w-full flex items-center gap-3 px-3 py-3 rounded-xl text-left transition-all ${
+                        wkSelectedPid === p.publicId
+                          ? "bg-blue-900/60 border border-blue-600"
+                          : "bg-gray-800 border border-gray-700"
+                      }`}
+                    >
+                      <div className="w-8 h-8 bg-gray-700 rounded-full flex items-center justify-center text-xs font-bold text-white flex-shrink-0">
+                        {p.name.charAt(0)}
+                      </div>
+                      <span className="text-sm text-white">{p.name}</span>
+                      {p.isWicketkeeper && (
+                        <span className="ml-auto text-xs text-blue-400">current WK</span>
+                      )}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <div className="text-xs text-gray-500 uppercase mb-2">Reason</div>
+                <div className="flex gap-2 flex-wrap">
+                  {["Injury", "Concussion", "Tactical", "Other"].map((r) => (
+                    <button
+                      key={r}
+                      onClick={() => setWkReason(r)}
+                      className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-all ${
+                        wkReason === r
+                          ? "bg-blue-600 border-blue-500 text-white"
+                          : "bg-gray-800 border-gray-700 text-gray-400"
+                      }`}
+                    >
+                      {r}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="flex gap-3 pt-2">
+                <button
+                  onClick={() => { setShowChangeWkModal(false); setWkSelectedPid(""); setWkReason(""); }}
+                  className="flex-1 py-3 rounded-xl bg-gray-700 text-gray-300 text-sm font-semibold"
+                >
+                  Cancel
+                </button>
+                <button
+                  disabled={!wkSelectedPid || wkPosting}
+                  onClick={handleChangeWk}
+                  className="flex-1 py-3 rounded-xl bg-blue-600 text-white text-sm font-semibold disabled:opacity-40 active:scale-95 transition-all"
+                >
+                  {wkPosting ? "Changing…" : "Confirm"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Bowler selector */}
@@ -2499,6 +2948,61 @@ export default function LiveScorerPage() {
             setLastDeliveryPublicId(null);
           }}
         />
+      )}
+
+      {/* Pause match modal */}
+      {showPauseModal && (
+        <div className="fixed inset-0 z-[60] bg-black/70 flex items-end">
+          <div className="w-full bg-gray-900 rounded-t-2xl p-5 max-h-[90vh] overflow-y-auto">
+            <div className="w-10 h-1 bg-gray-600 rounded-full mx-auto mb-4" />
+            <h3 className="text-base font-semibold text-white text-center mb-4">
+              Pause Match
+            </h3>
+            <div className="text-xs text-gray-500 uppercase tracking-wider mb-2">
+              Reason
+            </div>
+            <div className="grid grid-cols-2 gap-2 mb-3">
+              {PAUSE_REASONS.map((r) => (
+                <button
+                  key={r}
+                  onClick={() => setPauseReasonInput(r)}
+                  className={`py-2.5 px-3 rounded-xl text-sm font-medium border transition-all active:scale-95 ${
+                    pauseReasonInput === r
+                      ? "bg-amber-600 border-amber-500 text-white"
+                      : "bg-gray-800 border-gray-700 text-gray-300"
+                  }`}
+                >
+                  {r}
+                </button>
+              ))}
+            </div>
+            <input
+              type="text"
+              placeholder="Or type a custom reason…"
+              value={pauseReasonInput}
+              onChange={(e) => setPauseReasonInput(e.target.value)}
+              className="w-full bg-gray-800 border border-gray-700 rounded-xl px-3 py-2.5 text-sm text-gray-100 placeholder:text-gray-600 mb-4 outline-none focus:border-amber-600"
+            />
+            <div className="flex gap-2">
+              <button
+                onClick={() => {
+                  setShowPauseModal(false);
+                  setPauseReasonInput("");
+                }}
+                className="flex-1 h-11 rounded-xl bg-gray-800 border border-gray-700 text-gray-300 text-sm font-semibold active:scale-95 transition-all"
+              >
+                Cancel
+              </button>
+              <button
+                disabled={posting}
+                onClick={handlePauseMatch}
+                className="flex-1 h-11 rounded-xl bg-amber-600 text-white text-sm font-semibold active:scale-95 transition-all disabled:opacity-40"
+              >
+                ⏸ Pause Match
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Toast */}
