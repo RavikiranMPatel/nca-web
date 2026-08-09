@@ -315,7 +315,7 @@ export default function BulkImportPlayerPage() {
           <div className="flex justify-center gap-3">
             <button
               onClick={reset}
-              className="px-4 py-2 text-sm font-medium border border-gray-300 rounded-lg hover:bg-gray-50 transition"
+              className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-800 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700 transition"
             >
               Import Another File
             </button>

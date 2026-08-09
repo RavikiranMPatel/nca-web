@@ -146,6 +146,8 @@ export default function MatchSetupPage() {
     venue: "",
     totalOvers: 20,
     dataSource: "BALL_BY_BALL" as "BALL_BY_BALL" | "MANUAL" | "EXTERNAL",
+    scheduledStartTime: "",
+    inningsIntervalMinutes: 20 as number | "",
   });
   const [allowExtendedSquad, setAllowExtendedSquad] = useState(false);
 
@@ -257,6 +259,14 @@ export default function MatchSetupPage() {
       })
       .catch(() => setError("Failed to load match"));
   }, []);
+
+  // ── Session interval default from overs (informational clock only) ──────────
+  const defaultIntervalMinutes = (overs: number): number => {
+    if (overs <= 10) return 15;
+    if (overs <= 25) return 20;
+    if (overs <= 35) return 25;
+    return 30;
+  };
 
   // ── Official search ───────────────────────────────────────────────────────
   const searchOfficials = async (role: string, query: string) => {
@@ -464,6 +474,8 @@ export default function MatchSetupPage() {
         ...matchDetails,
         tournamentPublicId: tournamentId ?? undefined,
         allowExtendedSquad,
+        scheduledStartTime: matchDetails.scheduledStartTime || undefined,
+        inningsIntervalMinutes: matchDetails.inningsIntervalMinutes !== "" ? Number(matchDetails.inningsIntervalMinutes) : undefined,
       });
       setCreatedMatch(match);
       if (matchDetails.dataSource === "EXTERNAL") {
@@ -670,12 +682,15 @@ export default function MatchSetupPage() {
                 <select
                   className="w-full px-3 py-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
                   value={matchDetails.totalOvers}
-                  onChange={(e) =>
+                  onChange={(e) => {
+                    const overs = Number(e.target.value);
                     setMatchDetails((p) => ({
                       ...p,
-                      totalOvers: Number(e.target.value),
-                    }))
-                  }
+                      totalOvers: overs,
+                      // Auto-fill interval default only if user hasn't overridden it
+                      inningsIntervalMinutes: defaultIntervalMinutes(overs),
+                    }));
+                  }}
                 >
                   {[5, 6, 8, 10, 12, 15, 20, 25, 30, 40, 50].map((o) => (
                     <option key={o} value={o}>
@@ -726,6 +741,40 @@ export default function MatchSetupPage() {
                   setMatchDetails((p) => ({ ...p, venue: e.target.value }))
                 }
               />
+            </div>
+            {/* Match clock — optional; no clock display if left blank */}
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
+                  Scheduled Start (optional)
+                </label>
+                <input
+                  type="time"
+                  className="w-full px-3 py-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  value={matchDetails.scheduledStartTime}
+                  onChange={(e) =>
+                    setMatchDetails((p) => ({ ...p, scheduledStartTime: e.target.value }))
+                  }
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
+                  Innings Break (min)
+                </label>
+                <input
+                  type="number"
+                  min={5}
+                  max={90}
+                  className="w-full px-3 py-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  value={matchDetails.inningsIntervalMinutes}
+                  onChange={(e) =>
+                    setMatchDetails((p) => ({
+                      ...p,
+                      inningsIntervalMinutes: e.target.value === "" ? "" : Number(e.target.value),
+                    }))
+                  }
+                />
+              </div>
             </div>
             <div>
               <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">

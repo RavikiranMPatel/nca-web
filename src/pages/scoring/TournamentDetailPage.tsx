@@ -1267,7 +1267,7 @@ export default function TournamentDetailPage() {
                     <div className="flex gap-2">
                       <button
                         onClick={() => setEditingVenue(null)}
-                        className="flex-1 py-2 border border-gray-200 dark:border-gray-700 rounded-xl text-xs text-gray-500"
+                        className="flex-1 py-2 bg-gray-100 dark:bg-gray-800 rounded-xl text-xs text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700"
                       >
                         Cancel
                       </button>
@@ -2453,7 +2453,7 @@ export default function TournamentDetailPage() {
               <div className="flex gap-3 pt-2">
                 <button
                   onClick={() => setShowAddTeam(false)}
-                  className="flex-1 py-2.5 border border-gray-200 dark:border-gray-700 rounded-xl text-sm text-gray-600 dark:text-gray-400"
+                  className="flex-1 py-2.5 bg-gray-100 dark:bg-gray-800 rounded-xl text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700"
                 >
                   Cancel
                 </button>
@@ -2587,7 +2587,7 @@ export default function TournamentDetailPage() {
                 <div className="p-3 border-t border-gray-100 dark:border-gray-800 flex gap-3">
                   <button
                     onClick={closeAddPlayer}
-                    className="flex-1 py-2.5 border border-gray-200 dark:border-gray-700 rounded-xl text-sm text-gray-600 dark:text-gray-400"
+                    className="flex-1 py-2.5 bg-gray-100 dark:bg-gray-800 rounded-xl text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700"
                   >
                     Cancel
                   </button>
@@ -2665,7 +2665,7 @@ export default function TournamentDetailPage() {
                 <div className="p-3 border-t border-gray-100 dark:border-gray-800 flex gap-3">
                   <button
                     onClick={closeAddPlayer}
-                    className="flex-1 py-2.5 border border-gray-200 dark:border-gray-700 rounded-xl text-sm text-gray-600 dark:text-gray-400"
+                    className="flex-1 py-2.5 bg-gray-100 dark:bg-gray-800 rounded-xl text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700"
                   >
                     Cancel
                   </button>
@@ -2923,7 +2923,7 @@ export default function TournamentDetailPage() {
               <div className="flex gap-3">
                 <button
                   onClick={() => setShowGenerate(false)}
-                  className="flex-1 py-2.5 border border-gray-200 dark:border-gray-700 rounded-xl text-sm text-gray-600 dark:text-gray-400"
+                  className="flex-1 py-2.5 bg-gray-100 dark:bg-gray-800 rounded-xl text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700"
                 >
                   Cancel
                 </button>
@@ -3070,7 +3070,7 @@ export default function TournamentDetailPage() {
               <div className="flex gap-3 pt-2">
                 <button
                   onClick={() => setShowManualFixture(false)}
-                  className="flex-1 py-2.5 border border-gray-200 dark:border-gray-700 rounded-xl text-sm text-gray-600 dark:text-gray-400"
+                  className="flex-1 py-2.5 bg-gray-100 dark:bg-gray-800 rounded-xl text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700"
                 >
                   Cancel
                 </button>
@@ -3119,7 +3119,7 @@ export default function TournamentDetailPage() {
             <div className="flex gap-3">
               <button
                 onClick={() => setShowDeclareWinner(false)}
-                className="flex-1 py-2.5 border border-gray-200 dark:border-gray-700 rounded-xl text-sm text-gray-600 dark:text-gray-400"
+                className="flex-1 py-2.5 bg-gray-100 dark:bg-gray-800 rounded-xl text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700"
               >
                 Cancel
               </button>
@@ -3312,7 +3312,7 @@ export default function TournamentDetailPage() {
                     setShowEditFixture(false);
                     setEditingFixture(null);
                   }}
-                  className="flex-1 py-2.5 border border-gray-200 dark:border-gray-700 rounded-xl text-sm text-gray-600 dark:text-gray-400"
+                  className="flex-1 py-2.5 bg-gray-100 dark:bg-gray-800 rounded-xl text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700"
                 >
                   Cancel
                 </button>
@@ -3412,7 +3412,7 @@ export default function TournamentDetailPage() {
               <div className="flex gap-3 pt-1">
                 <button
                   onClick={() => setShowAdvancePlayoffs(false)}
-                  className="flex-1 py-2.5 border border-gray-200 dark:border-gray-700 rounded-xl text-sm text-gray-600 dark:text-gray-400"
+                  className="flex-1 py-2.5 bg-gray-100 dark:bg-gray-800 rounded-xl text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700"
                 >
                   Cancel
                 </button>
@@ -3472,7 +3472,7 @@ export default function TournamentDetailPage() {
               <div className="flex gap-3 pt-2">
                 <button
                   onClick={() => setShowAddVenue(false)}
-                  className="flex-1 py-2.5 border border-gray-200 dark:border-gray-700 rounded-xl text-sm text-gray-600 dark:text-gray-400"
+                  className="flex-1 py-2.5 bg-gray-100 dark:bg-gray-800 rounded-xl text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700"
                 >
                   Cancel
                 </button>
@@ -3532,7 +3532,7 @@ export default function TournamentDetailPage() {
               <div className="flex gap-3 pt-2">
                 <button
                   onClick={() => setShowAddOfficial(false)}
-                  className="flex-1 py-2.5 border border-gray-200 dark:border-gray-700 rounded-xl text-sm text-gray-600 dark:text-gray-400"
+                  className="flex-1 py-2.5 bg-gray-100 dark:bg-gray-800 rounded-xl text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700"
                 >
                   Cancel
                 </button>

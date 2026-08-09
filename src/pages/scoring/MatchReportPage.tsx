@@ -57,6 +57,16 @@ const OUTFIELD_CONDITIONS = ["FAST", "AVERAGE", "SLOW", "WET"];
 const WEATHER_CONDITIONS = ["CLEAR", "OVERCAST", "HUMID", "WINDY", "RAIN_INTERRUPTED"];
 const MATCH_FORMATS = ["T20", "T10", "ODI", "TEST", "THE_HUNDRED", "OTHER"];
 const BOUNCE_OPTIONS = ["LOW", "MEDIUM", "HIGH", "VARIABLE"];
+
+// ── Annotation display helpers ────────────────────────────────────────────────
+function fmtAnnotationTime(iso: string): string {
+  return new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+}
+function fmtPartnershipDuration(seconds: number): string {
+  const m = Math.floor(seconds / 60);
+  const s = seconds % 60;
+  return m > 0 ? `${m}m ${s}s` : `${s}s`;
+}
 const SWING_OPTIONS = ["NONE", "CONVENTIONAL", "REVERSE", "BOTH"];
 const SPIN_OPTIONS = ["NONE", "OFF_SPIN", "LEG_SPIN", "BOTH"];
 
@@ -386,6 +396,7 @@ export default function MatchReportPage() {
   const [innings, setInnings] = useState<Array<{
     inningsNumber: number; status: string; totalRuns: number; totalWickets: number;
     totalBalls: number; target?: number; battingTeamPublicId: string; bowlingTeamPublicId: string;
+    createdAt?: string;
   }>>([]);
 
   // Team XI picker state
@@ -986,6 +997,26 @@ export default function MatchReportPage() {
                 </div>
               ) : null,
             )}
+            {/* Match clock historical summary — shown only when scheduledStartTime was set */}
+            {match.scheduledStartTime && (() => {
+              const startStr = match.scheduledStartTime.slice(0, 5); // "HH:MM"
+              const firstInn = innings.find((i) => i.inningsNumber === 1);
+              const firstBallTime = firstInn?.createdAt
+                ? new Date(firstInn.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+                : null;
+              const breakMins = Math.floor((match.totalBreakSeconds ?? 0) / 60);
+              return (
+                <div className="mt-2 pt-2 border-t border-gray-100 dark:border-gray-800 flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-gray-500">
+                  <span>⏱ Scheduled <b className="text-gray-700 dark:text-gray-300">{startStr}</b></span>
+                  {firstBallTime && (
+                    <span>1st ball <b className="text-gray-700 dark:text-gray-300">{firstBallTime}</b></span>
+                  )}
+                  {breakMins > 0 && (
+                    <span>Total break <b className="text-gray-700 dark:text-gray-300">{breakMins}m</b></span>
+                  )}
+                </div>
+              );
+            })()}
           </div>
         </Section>
 
@@ -1389,14 +1420,55 @@ export default function MatchReportPage() {
                     key={(ann.publicId as string) ?? idx}
                     className="p-3 bg-gray-50 dark:bg-gray-800 rounded-xl"
                   >
-                    <div className="text-xs text-gray-400 mb-1">
-                      Inn {ann.inningsNumber as number} · Over {ann.overNumber as number}.{ann.ballNumber as number}
-                      {ann.strikerName ? ` · ${ann.strikerName}` : ""}
-                      {ann.bowlerName ? ` vs ${ann.bowlerName}` : ""}
+                    {/* Location line + category badge */}
+                    <div className="flex items-center gap-2 flex-wrap mb-1">
+                      <span className="text-xs text-gray-400">
+                        Inn {ann.inningsNumber as number} · Over {ann.overNumber as number}.{ann.ballNumber as number}
+                        {ann.strikerName ? ` · ${ann.strikerName as string}` : ""}
+                        {ann.bowlerName ? ` vs ${ann.bowlerName as string}` : ""}
+                      </span>
+                      {ann.category && (
+                        <span className="text-xs bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 px-1.5 py-0.5 rounded-full font-medium">
+                          {ann.category as string}
+                        </span>
+                      )}
                     </div>
+                    {/* Match-state context */}
+                    {(ann.teamScore != null || ann.strikerRuns != null) && (
+                      <div className="text-xs text-gray-500 dark:text-gray-400 mb-1 flex flex-wrap gap-x-3 gap-y-0.5">
+                        {ann.teamScore != null && (
+                          <span>Score: {ann.teamScore as number}/{ann.teamWickets as number}</span>
+                        )}
+                        {ann.strikerRuns != null && (
+                          <span>
+                            {ann.strikerName as string}: {ann.strikerRuns as number}({ann.strikerBalls as number}
+                            {ann.strikerStrikeRate != null ? `, SR ${ann.strikerStrikeRate as number}` : ""})
+                          </span>
+                        )}
+                        {ann.nonStrikerRuns != null && (
+                          <span>
+                            {ann.nonStrikerName as string}: {ann.nonStrikerRuns as number}({ann.nonStrikerBalls as number})
+                          </span>
+                        )}
+                        {ann.requiredRunRate != null && (
+                          <span>RRR: {ann.requiredRunRate as number}</span>
+                        )}
+                        {ann.projectedScore != null && (
+                          <span>Proj: ~{ann.projectedScore as number}</span>
+                        )}
+                        {ann.partnershipDurationSeconds != null && (
+                          <span>P-ship: {fmtPartnershipDuration(ann.partnershipDurationSeconds as number)}</span>
+                        )}
+                      </div>
+                    )}
+                    {/* Note text */}
                     <p className="text-sm text-gray-800 dark:text-gray-200">{ann.noteText as string}</p>
-                    {ann.createdBy && (
-                      <div className="text-xs text-gray-400 mt-1">{ann.createdBy as string}</div>
+                    {/* Author + time */}
+                    {(ann.createdByName || ann.createdBy) && (
+                      <div className="text-xs text-gray-400 mt-1">
+                        — {(ann.createdByName as string) || (ann.createdBy as string)}
+                        {ann.createdAt ? ` · ${fmtAnnotationTime(ann.createdAt as string)}` : ""}
+                      </div>
                     )}
                   </div>
                 ))}

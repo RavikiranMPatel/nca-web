@@ -79,9 +79,9 @@ export const changeWicketkeeper = (
     .post<BallResponse>(`${BASE(matchId)}/change-wicketkeeper`, { newKeeperPublicId, reason })
     .then((r) => r.data);
 
-export const createAnnotation = (matchId: string, noteText: string) =>
+export const createAnnotation = (matchId: string, noteText: string, category?: string) =>
   api
-    .post(`${BASE(matchId)}/annotations`, { noteText })
+    .post(`${BASE(matchId)}/annotations`, { noteText, category: category || undefined })
     .then((r) => r.data);
 
 export const getAnnotations = (matchId: string) =>

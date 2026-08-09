@@ -224,7 +224,7 @@ export default function PlayerKitPage() {
               </button>
               <button
                 onClick={() => { setEditing(false); }}
-                className="px-4 py-2 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50 transition"
+                className="px-4 py-2 text-sm text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-800 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700 transition"
               >
                 Cancel
               </button>

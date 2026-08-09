@@ -38,6 +38,86 @@ const fmtCRR = (runs: number, balls: number, perOver = 6) => {
   return ((runs / balls) * perOver).toFixed(2);
 };
 
+// ── Match clock helpers ───────────────────────────────────────────────────────
+// Session duration estimate: overs × 4.25 min (standard limited-overs over rate)
+const sessionMinutes = (overs: number) => Math.round(overs * 4.25);
+
+// Default innings interval by overs bracket if not overridden per-match
+const defaultIntervalMins = (overs: number) => {
+  if (overs <= 10) return 15;
+  if (overs <= 25) return 20;
+  if (overs <= 35) return 25;
+  return 30;
+};
+
+// Parse "HH:MM:SS" or "HH:MM" into { h, m } — handles LocalTime serialisation from Java
+const parseHHMM = (t: string): { h: number; m: number } | null => {
+  const parts = t.split(":");
+  if (parts.length < 2) return null;
+  const h = parseInt(parts[0], 10);
+  const m = parseInt(parts[1], 10);
+  if (isNaN(h) || isNaN(m)) return null;
+  return { h, m };
+};
+
+interface ClockInfo {
+  scheduledLabel: string;   // "09:30"
+  estEndLabel: string;      // "~11:15"
+  sessionMins: number;
+  breakMins: number;
+  deltaMinutes: number;     // positive = behind, negative = ahead
+  inningsMins: number;      // wall-clock minutes since first ball
+}
+
+const computeClock = (
+  scheduledStartTime: string,
+  totalOvers: number,
+  inningsIntervalMinutes: number | undefined,
+  totalBreakSeconds: number,
+  inningsCreatedAt: string | undefined,
+  nowMs: number,
+): ClockInfo | null => {
+  const parsed = parseHHMM(scheduledStartTime);
+  if (!parsed) return null;
+
+  const todayDate = new Date(nowMs);
+  const scheduledMs =
+    new Date(
+      todayDate.getFullYear(),
+      todayDate.getMonth(),
+      todayDate.getDate(),
+      parsed.h,
+      parsed.m,
+    ).getTime();
+
+  const sessMins = sessionMinutes(totalOvers);
+  const intervalMins = inningsIntervalMinutes ?? defaultIntervalMins(totalOvers);
+  const breakMins = Math.floor(totalBreakSeconds / 60);
+
+  // Expected innings end = scheduled start + session + pauses
+  const estEndMs = scheduledMs + (sessMins + breakMins) * 60_000;
+  const estEndDate = new Date(estEndMs);
+  const estEndLabel = `~${String(estEndDate.getHours()).padStart(2, "0")}:${String(estEndDate.getMinutes()).padStart(2, "0")}`;
+
+  // How far ahead/behind relative to expected end
+  const deltaMinutes = Math.round((nowMs - estEndMs) / 60_000);
+
+  // Minutes since first ball (innings start)
+  let inningsMins = 0;
+  if (inningsCreatedAt) {
+    inningsMins = Math.round((nowMs - new Date(inningsCreatedAt).getTime()) / 60_000);
+  }
+
+  return {
+    scheduledLabel: `${String(parsed.h).padStart(2, "0")}:${String(parsed.m).padStart(2, "0")}`,
+    estEndLabel,
+    sessionMins: sessMins,
+    breakMins,
+    deltaMinutes,
+    inningsMins,
+  };
+};
+
 const BallCircle = ({
   label,
   cls,
@@ -228,6 +308,7 @@ export default function LiveScorerPage() {
   const [match, setMatch] = useState<CricketMatch | null>(null);
   const [teams, setTeams] = useState<CricketTeam[]>([]);
   const [innings, setInnings] = useState<InningsState | null>(null);
+  const [inningsCreatedAt, setInningsCreatedAt] = useState<string | undefined>(undefined);
   const [thisOver, setThisOver] = useState<BallDTO[]>([]);
   const [loading, setLoading] = useState(true);
   const [posting, setPosting] = useState(false);
@@ -352,9 +433,17 @@ export default function LiveScorerPage() {
   const [wkReason, setWkReason] = useState<string>("");
   const [wkPosting, setWkPosting] = useState(false);
 
+  // ── Match clock (V86) ─────────────────────────────────────────────────────
+  const [clockNow, setClockNow] = useState(() => Date.now());
+  useEffect(() => {
+    const id = setInterval(() => setClockNow(Date.now()), 30_000);
+    return () => clearInterval(id);
+  }, []);
+
   // ── Live annotations ──────────────────────────────────────────────────────
   const [showAnnotationForm, setShowAnnotationForm] = useState(false);
   const [annotationText, setAnnotationText] = useState("");
+  const [annotationCategory, setAnnotationCategory] = useState("");
 
   const loadingRef = useRef(false);
 
@@ -366,9 +455,10 @@ export default function LiveScorerPage() {
   const handleSaveAnnotation = async () => {
     if (!matchId || !annotationText.trim()) return;
     try {
-      await createAnnotation(matchId, annotationText.trim());
+      await createAnnotation(matchId, annotationText.trim(), annotationCategory || undefined);
       showToast("Note saved");
       setAnnotationText("");
+      setAnnotationCategory("");
       setShowAnnotationForm(false);
     } catch {
       showToast("Failed to save note");
@@ -468,6 +558,9 @@ export default function LiveScorerPage() {
       const currentInnings = inningsList.find(
         (i) => i.status === "IN_PROGRESS",
       );
+      if (currentInnings?.createdAt) {
+        setInningsCreatedAt(currentInnings.createdAt as string);
+      }
 
       // Capture player arrays locally — React state won't update until next render,
       // so we must use local variables when resolving publicIds immediately below.
@@ -1197,6 +1290,41 @@ export default function LiveScorerPage() {
             </button>
           </div>
         </div>
+        {/* Match clock row — informational only, rendered only when scheduledStartTime is set */}
+        {(() => {
+          if (!match?.scheduledStartTime) return null;
+          const clock = computeClock(
+            match.scheduledStartTime,
+            match.totalOvers,
+            match.inningsIntervalMinutes,
+            match.totalBreakSeconds ?? 0,
+            inningsCreatedAt,
+            clockNow,
+          );
+          if (!clock) return null;
+          const behind = clock.deltaMinutes > 0;
+          const ahead = clock.deltaMinutes < -2;
+          return (
+            <div className="mt-2 flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-gray-500 border-t border-gray-800 pt-2">
+              <span>⏱ <b className="text-gray-400">{clock.scheduledLabel}</b></span>
+              <span>Session <b className="text-gray-400">{clock.sessionMins}m</b></span>
+              {clock.breakMins > 0 && (
+                <span>Break <b className="text-amber-400">{clock.breakMins}m</b></span>
+              )}
+              <span>Est. end <b className="text-gray-400">{clock.estEndLabel}</b></span>
+              {behind && (
+                <span className="text-amber-400 font-semibold">
+                  {clock.deltaMinutes}m behind
+                </span>
+              )}
+              {ahead && (
+                <span className="text-green-500 font-semibold">
+                  {Math.abs(clock.deltaMinutes)}m ahead
+                </span>
+              )}
+            </div>
+          );
+        })()}
         {/* Inline annotation form — collapsed by default */}
         {showAnnotationForm && (
           <div className="mt-2 p-3 bg-gray-800 rounded-xl border border-gray-700">
@@ -1205,6 +1333,23 @@ export default function LiveScorerPage() {
               {striker ? ` · ${striker.name}` : ""}
               {bowler ? ` · ${bowler.name}` : ""}
             </div>
+            <select
+              value={annotationCategory}
+              onChange={(e) => setAnnotationCategory(e.target.value)}
+              className="w-full bg-gray-900 text-white text-sm rounded-lg px-3 py-2 border border-gray-600 focus:outline-none focus:border-blue-500 mb-2"
+            >
+              <option value="">General</option>
+              <option value="Bowling">Bowling</option>
+              <option value="Batting">Batting</option>
+              <option value="Fielding">Fielding</option>
+              <option value="Dismissal">Dismissal</option>
+              <option value="Strategy">Strategy</option>
+              <option value="Injury / Pause">Injury / Pause</option>
+              <option value="Weather / Ground">Weather / Ground</option>
+              <option value="Milestone">Milestone</option>
+              <option value="Partnership">Partnership</option>
+              <option value="Match Situation">Match Situation</option>
+            </select>
             <textarea
               value={annotationText}
               onChange={(e) => setAnnotationText(e.target.value)}
@@ -1358,7 +1503,7 @@ export default function LiveScorerPage() {
             </b>
           </span>
           <span className="text-xs text-gray-500">
-            {Math.floor((curBowlerStats?.legalBalls ?? 0) / bpo)}-{curBowlerStats?.maidens ?? 0}-{curBowlerStats?.runsConceded ?? 0}-{curBowlerStats?.wickets ?? 0}
+            {fmtOvers(curBowlerStats?.legalBalls ?? 0, bpo)}-{curBowlerStats?.maidens ?? 0}-{curBowlerStats?.runsConceded ?? 0}-{curBowlerStats?.wickets ?? 0}
           </span>
         </button>
         {/* Bowler correction — only before first ball of the over */}

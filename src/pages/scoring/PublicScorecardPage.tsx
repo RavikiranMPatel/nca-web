@@ -860,38 +860,38 @@ const InningsCard = ({
         </tbody>
       </table>
     </div>
-  </div>
 
-  {/* Wicketkeeper changes — rendered below bowling card when WK was swapped during match */}
-  {inn.wicketkeeperChanges && inn.wicketkeeperChanges.length > 0 && (
-    <div className="px-4 py-3 border-t border-gray-100 dark:border-gray-800">
-      <div className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">
-        Wicketkeeper Changes
-      </div>
-      <div className="space-y-1">
-        {inn.wicketkeeperChanges.map((c, i) => (
-          <div key={i} className="text-xs text-gray-600 dark:text-gray-400">
-            <span className="font-medium">{c.overNumber}.{c.ballNumber} ov</span>
-            {" — "}
-            {c.fromKeeperName && <>{c.fromKeeperName} → </>}
-            <span className="font-medium text-gray-800 dark:text-gray-200">{c.toKeeperName}</span>
-            {c.reason && <span className="ml-1 text-gray-400">({c.reason})</span>}
-          </div>
-        ))}
-      </div>
-      {inn.wicketkeeperStats && inn.wicketkeeperStats.length > 0 && (
-        <div className="mt-2 space-y-0.5">
-          {inn.wicketkeeperStats.map((s, i) => (
-            <div key={i} className="text-xs text-gray-500 dark:text-gray-400">
-              {s.keeperName}: {s.catches}ct {s.stumpings}st
-              {s.byes > 0 ? ` ${s.byes}b` : ""}
-              <span className="text-gray-400"> (from {s.fromOverNumber}.{s.fromBallNumber} ov)</span>
+    {/* Wicketkeeper changes — rendered below bowling card when WK was swapped during match */}
+    {inn.wicketkeeperChanges && inn.wicketkeeperChanges.length > 0 && (
+      <div className="px-4 py-3 border-t border-gray-100 dark:border-gray-800">
+        <div className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">
+          Wicketkeeper Changes
+        </div>
+        <div className="space-y-1">
+          {inn.wicketkeeperChanges.map((c, i) => (
+            <div key={i} className="text-xs text-gray-600 dark:text-gray-400">
+              <span className="font-medium">{c.overNumber}.{c.ballNumber} ov</span>
+              {" — "}
+              {c.fromKeeperName && <>{c.fromKeeperName} → </>}
+              <span className="font-medium text-gray-800 dark:text-gray-200">{c.toKeeperName}</span>
+              {c.reason && <span className="ml-1 text-gray-400">({c.reason})</span>}
             </div>
           ))}
         </div>
-      )}
-    </div>
-  )}
+        {inn.wicketkeeperStats && inn.wicketkeeperStats.length > 0 && (
+          <div className="mt-2 space-y-0.5">
+            {inn.wicketkeeperStats.map((s, i) => (
+              <div key={i} className="text-xs text-gray-500 dark:text-gray-400">
+                {s.keeperName}: {s.catches}ct {s.stumpings}st
+                {s.byes > 0 ? ` ${s.byes}b` : ""}
+                <span className="text-gray-400"> (from {s.fromOverNumber}.{s.fromBallNumber} ov)</span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    )}
+  </div>
 );
 
 // ── MAIN PAGE ─────────────────────────────────────────────────────────────────

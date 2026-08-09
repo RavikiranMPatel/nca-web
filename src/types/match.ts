@@ -88,6 +88,10 @@ export interface CricketMatch {
   pausedAt?: string;
   // Item 4: when true, Playing XI cap is 12 instead of 11
   allowExtendedSquad?: boolean;
+  // Match clock (V86) — all optional; no clock display when scheduledStartTime is absent
+  scheduledStartTime?: string;       // "HH:MM:SS" from DB TIME column
+  inningsIntervalMinutes?: number;   // per-match override; null = use overs-derived default
+  totalBreakSeconds?: number;        // cumulative across all pauses this match
 }
 
 export interface UpdateExternalMatchRequest {
@@ -154,6 +158,9 @@ export interface CreateMatchRequest {
   notes?: string;
   // Item 4: when true, Playing XI cap is raised to 12
   allowExtendedSquad?: boolean;
+  // Match clock — both optional
+  scheduledStartTime?: string;     // "HH:MM" sent to backend
+  inningsIntervalMinutes?: number;
   // Ground conditions — for EXTERNAL matches
   groundName?: string;
   groundNumber?: string;

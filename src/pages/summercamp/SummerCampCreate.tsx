@@ -669,7 +669,7 @@ function SummerCampCreate() {
           <button
             type="button"
             onClick={() => navigate("/admin/summer-camps")}
-            className="px-6 py-2.5 border border-slate-300 rounded-lg text-slate-700 hover:bg-slate-50 font-medium transition-all"
+            className="px-6 py-2.5 bg-slate-100 dark:bg-slate-800 rounded-lg text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 font-medium transition-all"
           >
             Cancel
           </button>
