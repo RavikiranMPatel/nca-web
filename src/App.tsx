@@ -76,6 +76,9 @@ import KitPurchaseOrderPage from "./pages/kit/KitPurchaseOrderPage";
 import InventoryListPage from "./pages/inventory/InventoryListPage";
 import InventoryCheckoutsPage from "./pages/inventory/InventoryCheckoutsPage";
 import AuditLogPage from "./pages/AuditLogPage";
+import InjuriesDashboardPage from "./pages/admin/InjuriesDashboardPage";
+import PlayerInjuriesPage from "./pages/player/PlayerInjuriesPage";
+import PlayerFitnessPage from "./pages/player/PlayerFitnessPage";
 
 function App() {
   const { loading: tenantLoading, error: tenantError, tenant } = useTenant();
@@ -516,6 +519,8 @@ function App() {
         <Route path="media" element={<PlayerMediaPage />} />
         <Route path="coaching" element={<PlayerCoachingPage />} />
         <Route path="kit" element={<PlayerKitPage />} />
+        <Route path="injuries" element={<PlayerInjuriesPage />} />
+        <Route path="fitness" element={<PlayerFitnessPage />} />
       </Route>
 
       <Route
@@ -579,6 +584,17 @@ function App() {
           <ProtectedRoute roles={["ROLE_ADMIN", "ROLE_SUPER_ADMIN"]}>
             <AppLayout>
               <CoachingDashboardPage />
+            </AppLayout>
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/admin/injuries"
+        element={
+          <ProtectedRoute roles={["ROLE_ADMIN", "ROLE_SUPER_ADMIN", "ROLE_COACH"]}>
+            <AppLayout>
+              <InjuriesDashboardPage />
             </AppLayout>
           </ProtectedRoute>
         }

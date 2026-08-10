@@ -273,12 +273,18 @@ function SectionHeader({
 type Props = {
   playerPublicId: string;
   assessments: PlayerAssessmentResponse[];
+  categories?: string[];
 };
 
 export default function PlayerAssessmentComparison({
   playerPublicId,
   assessments,
+  categories,
 }: Props) {
+  const filteredTabs = categories
+    ? TABS.filter((t) => categories.includes(t.key))
+    : TABS;
+
   const [leftId, setLeftId] = useState(assessments[1]?.publicId || "");
   const [rightId, setRightId] = useState(assessments[0]?.publicId || "");
   const [leftData, setLeftData] = useState<PlayerAssessmentResponse | null>(
@@ -288,7 +294,7 @@ export default function PlayerAssessmentComparison({
     null,
   );
   const [loading, setLoading] = useState(false);
-  const [activeTab, setActiveTab] = useState("cricket");
+  const [activeTab, setActiveTab] = useState(filteredTabs[0]?.key ?? "cricket");
 
   useEffect(() => {
     if (leftId && rightId) loadBoth();
@@ -503,7 +509,7 @@ export default function PlayerAssessmentComparison({
 
           {/* ── TABS ─────────────────────────────────── */}
           <div className="flex gap-1 bg-white rounded-xl border border-slate-200 shadow-sm p-1">
-            {TABS.map((tab) => (
+            {filteredTabs.map((tab) => (
               <button
                 key={tab.key}
                 onClick={() => setActiveTab(tab.key)}

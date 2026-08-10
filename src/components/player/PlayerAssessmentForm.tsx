@@ -148,12 +148,27 @@ const WK_FIELDING_SKILLS = {
   ],
 };
 
-const FITNESS_CATEGORIES = {
+const FITNESS_PHYSICAL = {
   endurance: ["Yo-Yo Test / Beep Test Level", "2km Run Time"],
   speedAgility: ["30m Sprint Time", "T-Test / Shuttle Run Time"],
   strength: ["Push-ups Count", "Plank Hold Duration", "Throwing Distance"],
   flexibility: ["Sit & Reach Test", "Shoulder Mobility"],
-  injuryTracker: ["Current Injuries", "Recovery Status", "Areas of Concern"],
+};
+
+const FITNESS_PERFORMANCE = {
+  performanceFitness: ["Reaction Time", "Balance & Coordination", "Explosive Power"],
+};
+
+const FITNESS_HEALTH = {
+  healthWellness: ["Sleep Quality", "Stress Management", "Recovery Between Sessions"],
+};
+
+const FITNESS_MOBILITY = {
+  movementMobility: ["Joint Mobility", "Posture Assessment", "Functional Movement Screen"],
+};
+
+const FITNESS_REHAB = {
+  rehabAndRecovery: ["Rehab Compliance"],
 };
 
 const DIET_FIELDS = {
@@ -191,6 +206,7 @@ type Props = {
   playerPublicId: string;
   assessmentPublicId?: string; // for edit
   isFollowUp?: boolean;
+  initialTab?: string;
   onSuccess: () => void;
   onCancel: () => void;
 };
@@ -199,6 +215,7 @@ function PlayerAssessmentForm({
   playerPublicId,
   assessmentPublicId,
   isFollowUp = false,
+  initialTab,
   onSuccess,
   onCancel,
 }: Props) {
@@ -213,7 +230,7 @@ function PlayerAssessmentForm({
   );
   const [playerRole, setPlayerRole] = useState<PlayerRole>("BATSMEN");
   const [ageGroup, setAgeGroup] = useState("");
-  const [activeTab, setActiveTab] = useState("cricket");
+  const [activeTab, setActiveTab] = useState(initialTab ?? "cricket");
 
   // Tab data
   const [cricketSkills, setCricketSkills] = useState<CricketSkillsData>({});
@@ -733,7 +750,14 @@ function PlayerAssessmentForm({
 
     // Fitness
     let fitRated = 0, fitTotal = 0;
-    Object.entries(FITNESS_CATEGORIES).forEach(([cat, skills]) => {
+    const allFitnessCategories = {
+      ...FITNESS_PHYSICAL,
+      ...FITNESS_PERFORMANCE,
+      ...FITNESS_HEALTH,
+      ...FITNESS_MOBILITY,
+      ...FITNESS_REHAB,
+    };
+    Object.entries(allFitnessCategories).forEach(([cat, skills]) => {
       const c = countSkills(
         (fitness as any)[cat] as Record<string, SkillEntry>,
         skills,
@@ -1294,117 +1318,134 @@ function PlayerAssessmentForm({
       {/* ─── TAB: FITNESS ─────────────────────────────── */}
       {activeTab === "fitness" && (
         <div className="space-y-4">
+          {/* ── Physical Fitness ── */}
+          <div className="text-sm font-bold text-blue-700 bg-blue-50 px-4 py-2 rounded-lg inline-block">
+            💪 PHYSICAL FITNESS
+          </div>
+
           <SectionCard title="Endurance" icon="🫁" compact={isCompact}>
-            {FITNESS_CATEGORIES.endurance.map((s) => (
-              <SkillRow
-                key={s}
-                label={s}
+            {FITNESS_PHYSICAL.endurance.map((s) => (
+              <SkillRow key={s} label={s}
                 entry={getSkill(fitness.endurance as Record<string, SkillEntry>, s)}
                 onChange={(e) => updateFitnessSkill("endurance", s, e)}
                 previousRating={previousAssessment?.fitness?.endurance?.[s]?.rating}
-              compact={isCompact}
-              />
+                compact={isCompact} />
             ))}
           </SectionCard>
 
           <SectionCard title="Speed & Agility" icon="💨" compact={isCompact}>
-            {FITNESS_CATEGORIES.speedAgility.map((s) => (
-              <SkillRow
-                key={s}
-                label={s}
+            {FITNESS_PHYSICAL.speedAgility.map((s) => (
+              <SkillRow key={s} label={s}
                 entry={getSkill(fitness.speedAgility as Record<string, SkillEntry>, s)}
                 onChange={(e) => updateFitnessSkill("speedAgility", s, e)}
                 previousRating={previousAssessment?.fitness?.speedAgility?.[s]?.rating}
-              compact={isCompact}
-              />
+                compact={isCompact} />
             ))}
           </SectionCard>
 
-          <SectionCard title="Strength" icon="💪" compact={isCompact}>
-            {FITNESS_CATEGORIES.strength.map((s) => (
-              <SkillRow
-                key={s}
-                label={s}
+          <SectionCard title="Strength" icon="🏋️" compact={isCompact}>
+            {FITNESS_PHYSICAL.strength.map((s) => (
+              <SkillRow key={s} label={s}
                 entry={getSkill(fitness.strength as Record<string, SkillEntry>, s)}
                 onChange={(e) => updateFitnessSkill("strength", s, e)}
                 previousRating={previousAssessment?.fitness?.strength?.[s]?.rating}
-              compact={isCompact}
-              />
+                compact={isCompact} />
             ))}
           </SectionCard>
 
           <SectionCard title="Flexibility" icon="🤸" compact={isCompact}>
-            {FITNESS_CATEGORIES.flexibility.map((s) => (
-              <SkillRow
-                key={s}
-                label={s}
+            {FITNESS_PHYSICAL.flexibility.map((s) => (
+              <SkillRow key={s} label={s}
                 entry={getSkill(fitness.flexibility as Record<string, SkillEntry>, s)}
                 onChange={(e) => updateFitnessSkill("flexibility", s, e)}
                 previousRating={previousAssessment?.fitness?.flexibility?.[s]?.rating}
-              compact={isCompact}
-              />
+                compact={isCompact} />
             ))}
           </SectionCard>
 
           <SectionCard title="Body Metrics" icon="📊" compact={isCompact}>
             <div className="grid grid-cols-3 gap-3 mb-2">
               <div>
-                <label className="text-[10px] font-semibold text-slate-500 block mb-1">
-                  Height (cm)
-                </label>
-                <input
-                  type="number"
-                  value={height}
-                  onChange={(e) => setHeight(e.target.value)}
-                  placeholder="—"
-                  className="w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
+                <label className="text-[10px] font-semibold text-slate-500 block mb-1">Height (cm)</label>
+                <input type="number" value={height} onChange={(e) => setHeight(e.target.value)}
+                  placeholder="—" className="w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
               </div>
               <div>
-                <label className="text-[10px] font-semibold text-slate-500 block mb-1">
-                  Weight (kg)
-                </label>
-                <input
-                  type="number"
-                  value={weight}
-                  onChange={(e) => setWeight(e.target.value)}
-                  placeholder="—"
-                  className="w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
+                <label className="text-[10px] font-semibold text-slate-500 block mb-1">Weight (kg)</label>
+                <input type="number" value={weight} onChange={(e) => setWeight(e.target.value)}
+                  placeholder="—" className="w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
               </div>
               <div>
-                <label className="text-[10px] font-semibold text-slate-500 block mb-1">
-                  BMI (auto)
-                </label>
-                <input
-                  type="text"
-                  value={
-                    height && weight
-                      ? (
-                          parseFloat(weight) /
-                          (parseFloat(height) / 100) ** 2
-                        ).toFixed(1)
-                      : ""
-                  }
-                  disabled
-                  placeholder="—"
-                  className="w-full px-3 py-2 border rounded-lg text-sm bg-slate-100 text-slate-600"
-                />
+                <label className="text-[10px] font-semibold text-slate-500 block mb-1">BMI (auto)</label>
+                <input type="text" disabled placeholder="—"
+                  value={height && weight ? (parseFloat(weight) / (parseFloat(height) / 100) ** 2).toFixed(1) : ""}
+                  className="w-full px-3 py-2 border rounded-lg text-sm bg-slate-100 text-slate-600" />
               </div>
             </div>
           </SectionCard>
 
-          <SectionCard title="Injury Tracker" icon="🩹" compact={isCompact}>
-            {FITNESS_CATEGORIES.injuryTracker.map((s) => (
-              <SkillRow
-                key={s}
-                label={s}
-                entry={getSkill(fitness.injuryTracker as Record<string, SkillEntry>, s)}
-                onChange={(e) => updateFitnessSkill("injuryTracker", s, e)}
+          {/* ── Performance Fitness ── */}
+          <hr className="border-t-2 border-dashed border-slate-200 my-2" />
+          <div className="text-sm font-bold text-purple-700 bg-purple-50 px-4 py-2 rounded-lg inline-block">
+            ⚡ PERFORMANCE FITNESS
+          </div>
+          <SectionCard title="Athleticism Metrics" icon="🎯" compact={isCompact}>
+            {FITNESS_PERFORMANCE.performanceFitness.map((s) => (
+              <SkillRow key={s} label={s}
+                entry={getSkill(fitness.performanceFitness as Record<string, SkillEntry>, s)}
+                onChange={(e) => updateFitnessSkill("performanceFitness", s, e)}
+                previousRating={previousAssessment?.fitness?.performanceFitness?.[s]?.rating}
+                compact={isCompact} />
+            ))}
+          </SectionCard>
+
+          {/* ── Health & Wellness ── */}
+          <hr className="border-t-2 border-dashed border-slate-200 my-2" />
+          <div className="text-sm font-bold text-green-700 bg-green-50 px-4 py-2 rounded-lg inline-block">
+            🌿 HEALTH & WELLNESS
+          </div>
+          <SectionCard title="Lifestyle & Recovery" icon="😴" compact={isCompact}>
+            {FITNESS_HEALTH.healthWellness.map((s) => (
+              <SkillRow key={s} label={s}
+                entry={getSkill(fitness.healthWellness as Record<string, SkillEntry>, s)}
+                onChange={(e) => updateFitnessSkill("healthWellness", s, e)}
                 commentRows={2}
-                previousRating={previousAssessment?.fitness?.injuryTracker?.[s]?.rating}
-              compact={isCompact}
-              />
+                previousRating={previousAssessment?.fitness?.healthWellness?.[s]?.rating}
+                compact={isCompact} />
+            ))}
+          </SectionCard>
+
+          {/* ── Movement & Mobility ── */}
+          <hr className="border-t-2 border-dashed border-slate-200 my-2" />
+          <div className="text-sm font-bold text-orange-700 bg-orange-50 px-4 py-2 rounded-lg inline-block">
+            🔄 MOVEMENT & MOBILITY
+          </div>
+          <SectionCard title="Movement Quality" icon="🤸" compact={isCompact}>
+            {FITNESS_MOBILITY.movementMobility.map((s) => (
+              <SkillRow key={s} label={s}
+                entry={getSkill(fitness.movementMobility as Record<string, SkillEntry>, s)}
+                onChange={(e) => updateFitnessSkill("movementMobility", s, e)}
+                previousRating={previousAssessment?.fitness?.movementMobility?.[s]?.rating}
+                compact={isCompact} />
+            ))}
+          </SectionCard>
+
+          {/* ── Rehab & Recovery ── */}
+          <hr className="border-t-2 border-dashed border-slate-200 my-2" />
+          <div className="text-sm font-bold text-red-700 bg-red-50 px-4 py-2 rounded-lg inline-block">
+            🩹 REHAB & RECOVERY
+          </div>
+          <SectionCard title="Rehabilitation" icon="🏥" compact={isCompact}>
+            <p className="text-[10px] text-slate-400 mb-3 px-1">
+              Injury data is tracked in the Injuries section. Rate the player's compliance with the rehab protocol here.
+            </p>
+            {FITNESS_REHAB.rehabAndRecovery.map((s) => (
+              <SkillRow key={s} label={s}
+                entry={getSkill(fitness.rehabAndRecovery as Record<string, SkillEntry>, s)}
+                onChange={(e) => updateFitnessSkill("rehabAndRecovery", s, e)}
+                commentRows={2}
+                previousRating={previousAssessment?.fitness?.rehabAndRecovery?.[s]?.rating}
+                compact={isCompact} />
             ))}
           </SectionCard>
         </div>

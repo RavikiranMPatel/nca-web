@@ -185,6 +185,7 @@ function PlayerAnalysisPage() {
         <PlayerAssessmentComparison
           playerPublicId={playerPublicId}
           assessments={assessments.filter((a) => a.status === "COMPLETED")}
+          categories={["cricket", "fielding", "mental"]}
         />
       </div>
     );

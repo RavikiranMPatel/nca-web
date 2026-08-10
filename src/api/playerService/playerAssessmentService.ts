@@ -66,7 +66,11 @@ export interface FitnessData {
     weight?: number;
     bmi?: number;
   };
-  injuryTracker?: Record<string, SkillEntry>;
+  injuryTracker?: Record<string, SkillEntry>; // legacy — kept for backward-compat with old records
+  performanceFitness?: Record<string, SkillEntry>;
+  healthWellness?: Record<string, SkillEntry>;
+  movementMobility?: Record<string, SkillEntry>;
+  rehabAndRecovery?: Record<string, SkillEntry>;
 }
 
 export interface DietData {

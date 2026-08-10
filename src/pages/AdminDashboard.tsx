@@ -529,6 +529,14 @@ function AdminDashboard() {
             gradient="bg-gradient-to-br from-rose-500 to-pink-600"
             textLight="text-rose-100"
           />
+          <ActionCard
+            icon={Activity}
+            title="Injuries & Fitness"
+            description="Track player injuries, recovery progress and fitness alerts"
+            onClick={() => navigate("/admin/injuries")}
+            gradient="bg-gradient-to-br from-red-500 to-rose-600"
+            textLight="text-red-100"
+          />
           {showTournaments && (
             <ActionCard
               icon={Trophy}

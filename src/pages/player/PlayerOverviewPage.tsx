@@ -47,7 +47,9 @@ function PlayerOverviewPage() {
             ? "Coaching"
             : location.pathname.includes("/kit")
               ? "Kit"
-              : "Info";
+              : location.pathname.includes("/fitness") || location.pathname.includes("/injuries")
+                ? "Fitness"
+                : "Info";
 
   const handleUpdateClick = () => {
     if (isSuperAdmin) {
@@ -217,6 +219,15 @@ function PlayerOverviewPage() {
         >
           🏋️ Coaching
         </TabButton>
+
+        {!isExternalPlayer && (
+          <TabButton
+            active={activeTab === "Fitness"}
+            onClick={() => navigate(`/admin/players/${playerPublicId}/fitness`)}
+          >
+            💪 Fitness & Injury
+          </TabButton>
+        )}
       </div>
 
       {/* ================= CHILD CONTENT ================= */}
