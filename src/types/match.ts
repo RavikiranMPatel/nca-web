@@ -171,11 +171,18 @@ export interface CreateMatchRequest {
   matchFormat?: string;
 }
 
+export interface StaffEntry {
+  name: string;
+  role: string;
+}
+
 export interface SetTeamsRequest {
   teamAName: string;
   teamBName: string;
   teamAPlayers: PlayerSelection[];
   teamBPlayers: PlayerSelection[];
+  teamAStaff?: StaffEntry[];
+  teamBStaff?: StaffEntry[];
 }
 
 export interface PlayerSelection {

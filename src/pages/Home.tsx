@@ -96,7 +96,6 @@ type AcademySettings = {
   INSTAGRAM_POST_3?: string;
   INSTAGRAM_POST_4?: string;
   INSTAGRAM_POST_5?: string;
-  SECTION_CRICKET_STATS_ENABLED?: string;
   CORNER_STYLE?: string;
   FONT_PAIRING?: string;
   HERO_PHOTO_URL?: string;
@@ -599,8 +598,6 @@ function Home() {
   const starPerformerEnabled =
     settings.SECTION_STAR_PERFORMER_ENABLED !== "false";
   const youtubeEnabled = settings.SECTION_YOUTUBE_ENABLED !== "false";
-  const cricketStatsEnabled =
-    settings.SECTION_CRICKET_STATS_ENABLED !== "false";
   const youtubeHeading = settings.YOUTUBE_HEADING || "Watch Us in Action";
   const youtubeSubheading =
     settings.YOUTUBE_SUBHEADING ||
@@ -1179,192 +1176,6 @@ function Home() {
           </div>
         </section>
       )}
-
-      {cricketStatsEnabled &&
-        topPerformers &&
-        (topPerformers.topBatters.length > 0 ||
-          topPerformers.topBowlers.length > 0) && (
-          <section className="py-10 md:py-14 px-4 bg-white">
-            <div className="max-w-6xl mx-auto">
-              <div className="flex items-start justify-between mb-8">
-                <div>
-                  <div className="inline-flex items-center gap-2.5 mb-2">
-                    <div className="h-px w-6" style={{ backgroundColor: primaryColor }} />
-                    <span className="text-[10px] font-extrabold tracking-[0.18em] uppercase" style={{ color: primaryColor }}>LEADERBOARD</span>
-                    <div className="h-px w-6" style={{ backgroundColor: primaryColor }} />
-                  </div>
-                  <h2 className="text-2xl md:text-3xl font-bold text-gray-900">
-                    Top Performers
-                  </h2>
-                  <p className="text-sm text-gray-400 mt-1">
-                    Academy cricket leaderboard
-                  </p>
-                </div>
-                <button
-                  onClick={() => navigate("/cricket-stats")}
-                  className="flex items-center gap-1.5 text-xs font-semibold px-3 py-2 transition"
-                  style={{
-                    color: primaryColor,
-                    background: `${primaryColor}10`,
-                    borderRadius: `${buttonRadius}px`,
-                  }}
-                >
-                  View All →
-                </button>
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {/* Top Batter */}
-                {topPerformers.topBatters[0] && (
-                  <div
-                    className={`bg-white overflow-hidden cursor-pointer hover:shadow-xl transition-shadow ${getCardShadow()}`}
-                    style={{ ...getCardStyle() }}
-                    onClick={() => navigate("/cricket-stats")}
-                  >
-                    <div
-                      className="px-4 py-2 flex items-center gap-2"
-                      style={{ background: `${primaryColor}08` }}
-                    >
-                      <span className="text-sm">🏏</span>
-                      <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
-                        Top Batter
-                      </span>
-                    </div>
-                    <div className="p-4">
-                      <div className="flex items-center gap-3 mb-3">
-                        <div
-                          className="w-11 h-11 rounded-full overflow-hidden flex-shrink-0 flex items-center justify-center font-bold text-white text-base"
-                          style={{ backgroundColor: primaryColor }}
-                        >
-                          {topPerformers.topBatters[0].photoUrl ? (
-                            <img
-                              src={topPerformers.topBatters[0].photoUrl}
-                              alt=""
-                              className="w-full h-full object-cover"
-                            />
-                          ) : (
-                            topPerformers.topBatters[0].playerName.charAt(0)
-                          )}
-                        </div>
-                        <div>
-                          <div className="text-sm font-bold text-gray-900">
-                            {topPerformers.topBatters[0].playerName}
-                          </div>
-                          <div className="text-xs text-gray-400">
-                            {topPerformers.topBatters[0].matches} matches
-                          </div>
-                        </div>
-                      </div>
-                      <div className="grid grid-cols-3 gap-2">
-                        {[
-                          {
-                            label: "Runs",
-                            value: topPerformers.topBatters[0].runs,
-                          },
-                          {
-                            label: "HS",
-                            value: topPerformers.topBatters[0].highScore,
-                          },
-                          {
-                            label: "Avg",
-                            value: topPerformers.topBatters[0].average,
-                          },
-                        ].map(({ label, value }) => (
-                          <div
-                            key={label}
-                            className="text-center p-2 rounded-xl"
-                            style={{ background: `${primaryColor}08` }}
-                          >
-                            <div
-                              className="text-base font-black"
-                              style={{ color: primaryColor }}
-                            >
-                              {value ?? "—"}
-                            </div>
-                            <div className="text-xs text-gray-400">{label}</div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-                )}
-                {/* Top Bowler */}
-                {topPerformers.topBowlers[0] && (
-                  <div
-                    className={`bg-white overflow-hidden cursor-pointer hover:shadow-xl transition-shadow ${getCardShadow()}`}
-                    style={{ ...getCardStyle() }}
-                    onClick={() => navigate("/cricket-stats")}
-                  >
-                    <div
-                      className="px-4 py-2 flex items-center gap-2"
-                      style={{ background: `${primaryColor}08` }}
-                    >
-                      <span className="text-sm">⚾</span>
-                      <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
-                        Top Bowler
-                      </span>
-                    </div>
-                    <div className="p-4">
-                      <div className="flex items-center gap-3 mb-3">
-                        <div
-                          className="w-11 h-11 rounded-full overflow-hidden flex-shrink-0 flex items-center justify-center font-bold text-white text-base"
-                          style={{ backgroundColor: primaryColor }}
-                        >
-                          {topPerformers.topBowlers[0].photoUrl ? (
-                            <img
-                              src={topPerformers.topBowlers[0].photoUrl}
-                              alt=""
-                              className="w-full h-full object-cover"
-                            />
-                          ) : (
-                            topPerformers.topBowlers[0].playerName.charAt(0)
-                          )}
-                        </div>
-                        <div>
-                          <div className="text-sm font-bold text-gray-900">
-                            {topPerformers.topBowlers[0].playerName}
-                          </div>
-                          <div className="text-xs text-gray-400">
-                            {topPerformers.topBowlers[0].matches} matches
-                          </div>
-                        </div>
-                      </div>
-                      <div className="grid grid-cols-3 gap-2">
-                        {[
-                          {
-                            label: "Wkts",
-                            value: topPerformers.topBowlers[0].wickets,
-                          },
-                          {
-                            label: "Best",
-                            value: topPerformers.topBowlers[0].bestFigures,
-                          },
-                          {
-                            label: "Econ",
-                            value: topPerformers.topBowlers[0].economy,
-                          },
-                        ].map(({ label, value }) => (
-                          <div
-                            key={label}
-                            className="text-center p-2 rounded-xl"
-                            style={{ background: `${primaryColor}08` }}
-                          >
-                            <div
-                              className="text-base font-black"
-                              style={{ color: primaryColor }}
-                            >
-                              {value ?? "—"}
-                            </div>
-                            <div className="text-xs text-gray-400">{label}</div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-          </section>
-        )}
 
       {/* ── HERO (no slider) ── */}
       {!hasSlider && (
@@ -2048,6 +1859,119 @@ function Home() {
                 getCardShadow={getCardShadow}
                 getCardStyle={getCardStyle}
               />
+            ) : null;
+
+          case "PLAYER_STATS":
+            return topPerformers &&
+              (topPerformers.topBatters.length > 0 || topPerformers.topBowlers.length > 0) ? (
+              <section key="player-stats" id="player-stats" className={`py-10 md:py-14 px-4 ${sectionBgClass}`} style={sectionBgStyle}>
+                <div className="max-w-6xl mx-auto">
+                  <div className="flex items-start justify-between mb-8">
+                    <div>
+                      <div className="inline-flex items-center gap-2.5 mb-2">
+                        <div className="h-px w-6" style={{ backgroundColor: primaryColor }} />
+                        <span className="text-[10px] font-extrabold tracking-[0.18em] uppercase" style={{ color: primaryColor }}>LEADERBOARD</span>
+                        <div className="h-px w-6" style={{ backgroundColor: primaryColor }} />
+                      </div>
+                      <h2 className="text-2xl md:text-3xl font-bold text-gray-900">Top Performers</h2>
+                      <p className="text-sm text-gray-400 mt-1">Academy cricket leaderboard</p>
+                    </div>
+                    <button
+                      onClick={() => navigate("/cricket-stats")}
+                      className="flex items-center gap-1.5 text-xs font-semibold px-3 py-2 transition"
+                      style={{ color: primaryColor, background: `${primaryColor}10`, borderRadius: `${buttonRadius}px` }}
+                    >
+                      View All →
+                    </button>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    {topPerformers.topBatters[0] && (
+                      <div
+                        className={`bg-white overflow-hidden cursor-pointer hover:shadow-xl transition-shadow ${getCardShadow()}`}
+                        style={{ ...getCardStyle() }}
+                        onClick={() => navigate("/cricket-stats")}
+                      >
+                        <div className="px-4 py-2 flex items-center gap-2" style={{ background: `${primaryColor}08` }}>
+                          <span className="text-sm">🏏</span>
+                          <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Top Batter</span>
+                        </div>
+                        <div className="p-4">
+                          <div className="flex items-center gap-3 mb-3">
+                            <div
+                              className="w-11 h-11 rounded-full overflow-hidden flex-shrink-0 flex items-center justify-center font-bold text-white text-base"
+                              style={{ backgroundColor: primaryColor }}
+                            >
+                              {topPerformers.topBatters[0].photoUrl ? (
+                                <img src={topPerformers.topBatters[0].photoUrl} alt="" className="w-full h-full object-cover" />
+                              ) : (
+                                topPerformers.topBatters[0].playerName.charAt(0)
+                              )}
+                            </div>
+                            <div>
+                              <div className="text-sm font-bold text-gray-900">{topPerformers.topBatters[0].playerName}</div>
+                              <div className="text-xs text-gray-400">{topPerformers.topBatters[0].matches} matches</div>
+                            </div>
+                          </div>
+                          <div className="grid grid-cols-3 gap-2">
+                            {[
+                              { label: "Runs", value: topPerformers.topBatters[0].runs },
+                              { label: "HS",   value: topPerformers.topBatters[0].highScore },
+                              { label: "Avg",  value: topPerformers.topBatters[0].average },
+                            ].map(({ label, value }) => (
+                              <div key={label} className="text-center p-2 rounded-xl" style={{ background: `${primaryColor}08` }}>
+                                <div className="text-base font-black" style={{ color: primaryColor }}>{value ?? "—"}</div>
+                                <div className="text-xs text-gray-400">{label}</div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                    {topPerformers.topBowlers[0] && (
+                      <div
+                        className={`bg-white overflow-hidden cursor-pointer hover:shadow-xl transition-shadow ${getCardShadow()}`}
+                        style={{ ...getCardStyle() }}
+                        onClick={() => navigate("/cricket-stats")}
+                      >
+                        <div className="px-4 py-2 flex items-center gap-2" style={{ background: `${primaryColor}08` }}>
+                          <span className="text-sm">⚾</span>
+                          <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Top Bowler</span>
+                        </div>
+                        <div className="p-4">
+                          <div className="flex items-center gap-3 mb-3">
+                            <div
+                              className="w-11 h-11 rounded-full overflow-hidden flex-shrink-0 flex items-center justify-center font-bold text-white text-base"
+                              style={{ backgroundColor: primaryColor }}
+                            >
+                              {topPerformers.topBowlers[0].photoUrl ? (
+                                <img src={topPerformers.topBowlers[0].photoUrl} alt="" className="w-full h-full object-cover" />
+                              ) : (
+                                topPerformers.topBowlers[0].playerName.charAt(0)
+                              )}
+                            </div>
+                            <div>
+                              <div className="text-sm font-bold text-gray-900">{topPerformers.topBowlers[0].playerName}</div>
+                              <div className="text-xs text-gray-400">{topPerformers.topBowlers[0].matches} matches</div>
+                            </div>
+                          </div>
+                          <div className="grid grid-cols-3 gap-2">
+                            {[
+                              { label: "Wkts", value: topPerformers.topBowlers[0].wickets },
+                              { label: "Best", value: topPerformers.topBowlers[0].bestFigures },
+                              { label: "Econ", value: topPerformers.topBowlers[0].economy },
+                            ].map(({ label, value }) => (
+                              <div key={label} className="text-center p-2 rounded-xl" style={{ background: `${primaryColor}08` }}>
+                                <div className="text-base font-black" style={{ color: primaryColor }}>{value ?? "—"}</div>
+                                <div className="text-xs text-gray-400">{label}</div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </section>
             ) : null;
 
           default:

@@ -16,6 +16,7 @@ const SECTION_LABELS: Record<string, string> = {
   TEAM: "Team",
   CLUB: "Club",
   REPRESENTATIVE_HONORS: "Representative Honors",
+  PLAYER_STATS: "Player Stats",
 };
 
 function HomepageSectionsPage() {

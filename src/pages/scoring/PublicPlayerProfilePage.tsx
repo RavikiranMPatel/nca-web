@@ -29,6 +29,7 @@ interface BowlingStats {
   strikeRate: number;
   fourWicketHauls: number;
   fiveWicketHauls: number;
+  maidens: number;
   dotBalls: number;
 }
 
@@ -53,6 +54,8 @@ interface PlayerProfile {
   battingStyle?: string;
   bowlingStyle?: string;
   photoUrl?: string;
+  playerRole?: string;
+  previousRepresentation?: string;
   careerBatting?: BattingStats;
   careerBowling?: BowlingStats;
   careerFielding?: FieldingStats;
@@ -205,6 +208,11 @@ export default function PublicPlayerProfilePage() {
               <h1 className="text-lg font-bold text-gray-900 dark:text-white truncate">
                 {profile.displayName}
               </h1>
+              {profile.playerRole && (
+                <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5 font-medium">
+                  {profile.playerRole.replace(/_/g, " ")}
+                </div>
+              )}
               <div className="flex flex-wrap gap-2 mt-1.5">
                 {profile.battingStyle && (
                   <span className="text-xs px-2 py-0.5 bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400 rounded-full border border-green-100 dark:border-green-900/30">
@@ -224,6 +232,11 @@ export default function PublicPlayerProfilePage() {
                   </span>
                 )}
               </div>
+              {profile.previousRepresentation && (
+                <p className="text-xs text-gray-400 dark:text-gray-500 mt-1.5 leading-relaxed">
+                  🏆 {profile.previousRepresentation}
+                </p>
+              )}
             </div>
           </div>
 
@@ -329,11 +342,7 @@ export default function PublicPlayerProfilePage() {
                         value: bowl.strikeRate?.toFixed(1) ?? "—",
                       },
                       { label: "Runs Given", value: bowl.runsConceded },
-                      { label: "Dot Balls", value: bowl.dotBalls },
-                      {
-                        label: "4-wkt hauls",
-                        value: bowl.fourWicketHauls ?? 0,
-                      },
+                      { label: "Maidens", value: bowl.maidens ?? 0 },
                       {
                         label: "5-wkt hauls",
                         value: bowl.fiveWicketHauls ?? 0,

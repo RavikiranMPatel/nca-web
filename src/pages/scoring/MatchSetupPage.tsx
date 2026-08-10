@@ -157,6 +157,8 @@ export default function MatchSetupPage() {
   const [teamBName, setTeamBName] = useState("Team B");
   const [teamAPlayers, setTeamAPlayers] = useState<PlayerSelection[]>([]);
   const [teamBPlayers, setTeamBPlayers] = useState<PlayerSelection[]>([]);
+  const [teamAStaff, setTeamAStaff] = useState<{ name: string; role: string }[]>([]);
+  const [teamBStaff, setTeamBStaff] = useState<{ name: string; role: string }[]>([]);
   const [searchA, setSearchA] = useState("");
   const [searchB, setSearchB] = useState("");
   const [tossWinner, setTossWinner] = useState("");
@@ -517,6 +519,8 @@ export default function MatchSetupPage() {
         teamBName,
         teamAPlayers,
         teamBPlayers,
+        teamAStaff: teamAStaff.filter((s) => s.name.trim()),
+        teamBStaff: teamBStaff.filter((s) => s.name.trim()),
       });
       const fetchedTeams = await getTeams(createdMatch.publicId);
       setTeams_(fetchedTeams);
@@ -1162,6 +1166,70 @@ export default function MatchSetupPage() {
                 </div>
               </div>
             )}
+
+            {/* ── Team Management (Staff) ─────────────────────────────────── */}
+            {(() => {
+              const staff = step === 1 ? teamAStaff : teamBStaff;
+              const setStaff = step === 1 ? setTeamAStaff : setTeamBStaff;
+              return (
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-medium text-gray-500 dark:text-gray-400">
+                      Team Management (optional)
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setStaff((prev) => [...prev, { name: "", role: "" }])
+                      }
+                      className="text-xs px-2 py-1 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg active:scale-95 transition-all"
+                    >
+                      + Add
+                    </button>
+                  </div>
+                  {staff.map((entry, idx) => (
+                    <div key={idx} className="flex gap-2 items-center">
+                      <input
+                        type="text"
+                        placeholder="Role (e.g. Head Coach)"
+                        className="w-2/5 px-3 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm text-gray-900 dark:text-gray-100 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        value={entry.role}
+                        onChange={(e) =>
+                          setStaff((prev) =>
+                            prev.map((s, i) =>
+                              i === idx ? { ...s, role: e.target.value } : s,
+                            ),
+                          )
+                        }
+                      />
+                      <input
+                        type="text"
+                        placeholder="Name"
+                        className="flex-1 min-w-0 px-3 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm text-gray-900 dark:text-gray-100 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        value={entry.name}
+                        onChange={(e) =>
+                          setStaff((prev) =>
+                            prev.map((s, i) =>
+                              i === idx ? { ...s, name: e.target.value } : s,
+                            ),
+                          )
+                        }
+                      />
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setStaff((prev) => prev.filter((_, i) => i !== idx))
+                        }
+                        className="flex-shrink-0 p-1.5 text-gray-400 hover:text-red-500 dark:hover:text-red-400 transition-colors"
+                        aria-label="Remove"
+                      >
+                        <X />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              );
+            })()}
           </div>
         )}
 
