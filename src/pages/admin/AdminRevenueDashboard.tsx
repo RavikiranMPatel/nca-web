@@ -9,7 +9,6 @@ import {
   TrendingDown,
   Calendar,
   CreditCard,
-  Download,
   RefreshCw,
   ChevronDown,
   AlertCircle,
@@ -116,6 +115,13 @@ type Suggestions = {
   paidBy: string[];
 };
 
+type RevenueCategory = {
+  publicId: string;
+  label: string;
+  displayOrder: number;
+  active: boolean;
+};
+
 // ── NEW: Registration Fee type ──
 type RegFeeRow = {
   playerPublicId: string;
@@ -217,10 +223,6 @@ const modeLabel: Record<string, string> = {
   OFFLINE: "Offline",
 };
 const fmtMode = (m: string | null) => (m ? modeLabel[m] || m : "—");
-const csvEscape = (s: string) =>
-  s.includes(",") || s.includes('"') || s.includes("\n")
-    ? `"${s.replace(/"/g, '""')}"`
-    : s;
 
 function getDateBounds(range: DateRange, cf: string, ct: string) {
   const now = new Date();
@@ -342,6 +344,7 @@ export default function AdminRevenueDashboard() {
   const [recurringSaving, setRecurringSaving] = useState(false);
 
   const [feePayments, setFeePayments] = useState<FeePayment[]>([]);
+  const [categories, setCategories] = useState<RevenueCategory[]>([]);
   const [expenses, setExpenses] = useState<OtherExpense[]>([]);
   const [partnerSpending, setPartnerSpending] = useState<PartnerSpending[]>([]);
   const [monthlyPayments, setMonthlyPayments] = useState<MonthlyPayment[]>([]);
@@ -407,6 +410,7 @@ export default function AdminRevenueDashboard() {
     null,
   );
   const [expenseForm, setExpenseForm] = useState(EMPTY_EXPENSE_FORM);
+  const [incomeSourceCustom, setIncomeSourceCustom] = useState(false);
   const [expenseSaving, setExpenseSaving] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
   const [payModal, setPayModal] = useState<MonthlyPayment | null>(null);
@@ -510,15 +514,17 @@ export default function AdminRevenueDashboard() {
       };
 
       if (isSuperAdmin) {
-        const [expRes, partnerRes, sugRes] = await Promise.all([
+        const [expRes, partnerRes, sugRes, catRes] = await Promise.all([
           api.get("/admin/expenses"),
           api.get("/admin/expenses/partner-spending"),
           api.get("/admin/expenses/suggestions"),
+          api.get("/admin/revenue-categories").catch(() => ({ data: [] })),
         ]);
         if (thisLoad !== loadRef.current) return;
         newExpenses = expRes.data || [];
         newPartnerSpending = partnerRes.data || [];
         newSuggestions = sugRes.data;
+        setCategories(catRes.data || []);
       }
 
       setFeePayments(feesRes.data || []);
@@ -710,6 +716,28 @@ export default function AdminRevenueDashboard() {
     regFeesTotal;
   const netRevenue = grossRevenue - expensesTotal;
 
+  const categoryBreakdown = useMemo(() => {
+    const activeCatLabels = new Set(
+      categories.filter((c) => c.active).map((c) => c.label),
+    );
+    const tally = new Map<string, number>();
+    for (const inc of filteredIncomes) {
+      const key =
+        inc.budgetHead && activeCatLabels.has(inc.budgetHead)
+          ? inc.budgetHead
+          : "__other__";
+      tally.set(key, (tally.get(key) || 0) + inc.amount);
+    }
+    const result: { label: string; total: number; isOther: boolean }[] = [];
+    for (const cat of categories.filter((c) => c.active)) {
+      const total = tally.get(cat.label);
+      if (total) result.push({ label: cat.label, total, isOther: false });
+    }
+    const otherTotal = tally.get("__other__");
+    if (otherTotal) result.push({ label: "Other", total: otherTotal, isOther: true });
+    return result;
+  }, [filteredIncomes, categories]);
+
   const rangeLabels: Record<DateRange, string> = {
     all: "All Time",
     today: "Today",
@@ -723,10 +751,13 @@ export default function AdminRevenueDashboard() {
   const openAddExpense = () => {
     setEditingExpense(null);
     setExpenseForm(EMPTY_EXPENSE_FORM);
+    setIncomeSourceCustom(false);
     setShowExpenseModal(true);
   };
   const openEditExpense = (e: OtherExpense) => {
     setEditingExpense(e);
+    const knownLabel = categories.some((c) => c.active && c.label === (e.budgetHead || ""));
+    setIncomeSourceCustom(e.transactionType === "INCOME" && !!e.budgetHead && !knownLabel);
     setExpenseForm({
       description: e.description,
       amount: String(e.amount),
@@ -831,210 +862,6 @@ export default function AdminRevenueDashboard() {
     }
   };
 
-  const exportCSV = () => {
-    const rows: string[][] = [
-      [
-        "Type",
-        "Date",
-        "Description",
-        "Area",
-        "Discipline",
-        "Item",
-        "Cost Type",
-        "Budget Head",
-        "Paid By",
-        "Amount",
-        "Mode",
-      ],
-    ];
-    if (showCampFees) {
-      filteredCampFees.forEach((p) =>
-        rows.push([
-          "Camp Fee",
-          fmtDate(p.paidAt),
-          `${p.campName} (${p.enrolledBatchCount} sessions)`,
-          "",
-          "",
-          "",
-          "",
-          "",
-          "",
-          String(p.amount),
-          fmtMode(p.paymentMode),
-        ]),
-      );
-    }
-    filteredInstallmentPayments.forEach((p) =>
-      rows.push([
-        "Installment",
-        fmtDate(p.paidOn),
-        p.planDescription || "Installment Payment",
-        "",
-        "",
-        "",
-        "",
-        "",
-        p.playerName,
-        String(p.amount),
-        fmtMode(p.paymentMode),
-      ]),
-    );
-    filteredFees.forEach((p) =>
-      rows.push([
-        "Fee",
-        fmtDate(p.paidOn),
-        p.feePlan?.name || "",
-        "",
-        "",
-        "",
-        "",
-        "",
-        "",
-        String(p.amount),
-        fmtMode(p.paymentMode),
-      ]),
-    );
-
-    // ── NEW: include reg fees in CSV ──
-    regFees
-      .filter((r) => r.regFeePaid && inRange(r.regFeePaidOn || ""))
-      .forEach((r) =>
-        rows.push([
-          "Reg Fee",
-          fmtDate(r.regFeePaidOn),
-          `${r.playerName} - Registration Fee`,
-          "",
-          "",
-          "",
-          "",
-          "",
-          "",
-          String(r.regFeeAmount),
-          fmtMode(r.regFeePaymentMode),
-        ]),
-      );
-    if (isSuperAdmin) {
-      filteredExpenses.forEach((e) =>
-        rows.push([
-          "Expense",
-          fmtDate(e.expenseDate),
-          csvEscape(e.description),
-          e.area || "",
-          e.discipline || "",
-          e.item || "",
-          e.costType || "",
-          e.budgetHead || "",
-          e.paidBy || "",
-          `-${e.amount}`,
-          "",
-        ]),
-      );
-      filteredIncomes.forEach((e) =>
-        rows.push([
-          "Income",
-          fmtDate(e.expenseDate),
-          csvEscape(e.description),
-          e.area || "",
-          e.discipline || "",
-          e.item || "",
-          e.costType || "",
-          e.budgetHead || "",
-          e.paidBy || "",
-          `+${e.amount}`,
-          "",
-        ]),
-      );
-    }
-    const csv = rows.map((r) => r.join(",")).join("\n");
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));
-    a.download = `revenue-${dateRange}-${new Date().toISOString().split("T")[0]}.csv`;
-    a.click();
-  };
-
-  const exportPartnerSpendingCSV = () => {
-    const rows: string[][] = [["Partner", "Budget Head", "Entries", "Amount"]];
-    partnerSpending.forEach((partner) => {
-      partner.breakdown.forEach((b) =>
-        rows.push([
-          partner.name,
-          b.budgetHead,
-          String(b.count),
-          String(b.amount),
-        ]),
-      );
-      rows.push([partner.name, "TOTAL", "", String(partner.total)]);
-      rows.push(["", "", "", ""]);
-    });
-    rows.push([
-      "GRAND TOTAL",
-      "",
-      "",
-      String(partnerSpending.reduce((s, p) => s + p.total, 0)),
-    ]);
-    const csv = rows.map((r) => r.join(",")).join("\n");
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));
-    a.download = `partner-spending-${new Date().toISOString().split("T")[0]}.csv`;
-    a.click();
-  };
-  const exportMonthlyCSV = () => {
-    const rows: string[][] = [
-      ["Item", "Budget Head", "Status", "Amount", "Paid By", "Paid On"],
-    ];
-    monthlyPayments.forEach((p) =>
-      rows.push([
-        p.item.name,
-        p.item.budgetHead || "",
-        p.status,
-        String(p.amount),
-        p.paidBy || "",
-        p.paidOn ? fmtDate(p.paidOn) : "",
-      ]),
-    );
-    rows.push(["", "", "Total Paid", String(monthlyPaidTotal), "", ""]);
-    const csv = rows.map((r) => r.join(",")).join("\n");
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));
-    a.download = `monthly-expenses-${MONTHS[monthYear.month - 1]}-${monthYear.year}.csv`;
-    a.click();
-  };
-  const exportAllExpensesCSV = () => {
-    const rows: string[][] = [
-      [
-        "Date",
-        "Description",
-        "Area",
-        "Discipline",
-        "Item",
-        "Cost Type",
-        "Budget Head",
-        "Paid By",
-        "Amount",
-        "Notes",
-      ],
-    ];
-    filteredExpenses.forEach((e) =>
-      rows.push([
-        fmtDate(e.expenseDate),
-        csvEscape(e.description),
-        e.area || "",
-        e.discipline || "",
-        e.item || "",
-        e.costType || "",
-        e.budgetHead || "",
-        e.paidBy || "",
-        String(e.amount),
-        e.notes || "",
-      ]),
-    );
-    rows.push(["", "", "", "", "", "", "", "Total", String(expensesTotal), ""]);
-    const csv = rows.map((r) => r.join(",")).join("\n");
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));
-    a.download = `all-expenses-${dateRange}-${new Date().toISOString().split("T")[0]}.csv`;
-    a.click();
-  };
 
   type TxRow = {
     key: string;
@@ -1326,7 +1153,7 @@ export default function AdminRevenueDashboard() {
                   type="text"
                   value={expenseForm.description}
                   onChange={(e) => setF("description")(e.target.value)}
-                  placeholder="e.g. Soil purchase"
+                  placeholder="e.g. Equipment purchase"
                   className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-400 focus:outline-none"
                 />
               </div>
@@ -1364,14 +1191,14 @@ export default function AdminRevenueDashboard() {
                       value={expenseForm.area}
                       onChange={setF("area")}
                       suggestions={suggestions.area}
-                      placeholder="e.g. Turf"
+                      placeholder="e.g. Outdoor"
                     />
                     <AutocompleteInput
                       label="Discipline"
                       value={expenseForm.discipline}
                       onChange={setF("discipline")}
                       suggestions={suggestions.discipline}
-                      placeholder="e.g. Civil"
+                      placeholder="e.g. Facilities"
                     />
                   </div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -1380,7 +1207,7 @@ export default function AdminRevenueDashboard() {
                       value={expenseForm.item}
                       onChange={setF("item")}
                       suggestions={suggestions.item}
-                      placeholder="e.g. Soil"
+                      placeholder="e.g. Supplies"
                     />
                     <AutocompleteInput
                       label="Cost Type"
@@ -1403,26 +1230,47 @@ export default function AdminRevenueDashboard() {
                       value={expenseForm.paidBy}
                       onChange={setF("paidBy")}
                       suggestions={suggestions.paidBy}
-                      placeholder="e.g. Dhanush"
+                      placeholder="e.g. Coach name"
                     />
                   </div>
                 </>
               ) : (
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <AutocompleteInput
-                    label="Source"
-                    value={expenseForm.budgetHead}
-                    onChange={setF("budgetHead")}
-                    suggestions={[
-                      "Sponsorship",
-                      "Ground Hire",
-                      "Merchandise",
-                      "Donation",
-                      "Event",
-                      "Other",
-                    ]}
-                    placeholder="e.g. Sponsorship"
-                  />
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-600 mb-1.5 uppercase tracking-wide">
+                      Source
+                    </label>
+                    <select
+                      value={incomeSourceCustom ? "__custom__" : (expenseForm.budgetHead || "")}
+                      onChange={(e) => {
+                        if (e.target.value === "__custom__") {
+                          setIncomeSourceCustom(true);
+                          setF("budgetHead")("");
+                        } else {
+                          setIncomeSourceCustom(false);
+                          setF("budgetHead")(e.target.value);
+                        }
+                      }}
+                      className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-400 focus:outline-none bg-white"
+                    >
+                      <option value="">Select a category…</option>
+                      {categories.filter((c) => c.active).map((c) => (
+                        <option key={c.publicId} value={c.label}>
+                          {c.label}
+                        </option>
+                      ))}
+                      <option value="__custom__">Other / Custom</option>
+                    </select>
+                    {incomeSourceCustom && (
+                      <input
+                        type="text"
+                        value={expenseForm.budgetHead}
+                        onChange={(e) => setF("budgetHead")(e.target.value)}
+                        placeholder="Describe the income source…"
+                        className="mt-1.5 w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-400 focus:outline-none"
+                      />
+                    )}
+                  </div>
                   <AutocompleteInput
                     label="Received From"
                     value={expenseForm.paidBy}
@@ -1549,7 +1397,7 @@ export default function AdminRevenueDashboard() {
                   onChange={(e) =>
                     setPayForm((f) => ({ ...f, paidBy: e.target.value }))
                   }
-                  placeholder="e.g. Dhanush"
+                  placeholder="e.g. Coach name"
                   className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-emerald-400 focus:outline-none"
                 />
               </div>
@@ -1831,13 +1679,6 @@ export default function AdminRevenueDashboard() {
               Add Expense
             </button>
           )}
-          <button
-            onClick={exportCSV}
-            className="flex items-center gap-1.5 px-3 py-2 bg-emerald-600 text-white rounded-lg text-sm font-semibold hover:bg-emerald-700 shadow-sm"
-          >
-            <Download size={14} />
-            CSV
-          </button>
         </div>
         <div className="flex sm:hidden items-center gap-1.5 flex-shrink-0">
           <button
@@ -1854,12 +1695,6 @@ export default function AdminRevenueDashboard() {
             className="p-2 bg-white border border-slate-200 rounded-lg"
           >
             <RefreshCw size={14} className="text-slate-500" />
-          </button>
-          <button
-            onClick={exportCSV}
-            className="p-2 bg-emerald-600 text-white rounded-lg"
-          >
-            <Download size={14} />
           </button>
           {isSuperAdmin && (
             <>
@@ -1937,18 +1772,44 @@ export default function AdminRevenueDashboard() {
           onClick={() => setActiveTab("regfees")}
         />
 
-        {isSuperAdmin && (
-          <SummaryCard
-            label="Other Income"
-            value={fmt(otherIncomeTotal)}
-            sub={`${filteredIncomes.length} entries`}
-            icon={<TrendingUp size={15} className="text-violet-600" />}
-            bg="bg-gradient-to-br from-violet-50 to-purple-50"
-            border="border-violet-200"
-            valueClass="text-violet-700"
-            onClick={() => setActiveTab("income")}
-          />
-        )}
+        {isSuperAdmin &&
+          (categoryBreakdown.length > 0
+            ? categoryBreakdown.map(({ label, total, isOther }, i) => {
+                const PALETTES = [
+                  { bg: "bg-gradient-to-br from-violet-50 to-purple-50", border: "border-violet-200", val: "text-violet-700", ico: "text-violet-600" },
+                  { bg: "bg-gradient-to-br from-amber-50 to-yellow-50", border: "border-amber-200", val: "text-amber-700", ico: "text-amber-600" },
+                  { bg: "bg-gradient-to-br from-sky-50 to-blue-50", border: "border-sky-200", val: "text-sky-700", ico: "text-sky-600" },
+                  { bg: "bg-gradient-to-br from-rose-50 to-pink-50", border: "border-rose-200", val: "text-rose-700", ico: "text-rose-600" },
+                  { bg: "bg-gradient-to-br from-green-50 to-emerald-50", border: "border-green-200", val: "text-green-700", ico: "text-green-600" },
+                ];
+                const p = PALETTES[i % PALETTES.length];
+                return (
+                  <SummaryCard
+                    key={label}
+                    label={label}
+                    value={fmt(total)}
+                    sub={isOther ? "unmatched entries" : "income"}
+                    icon={<TrendingUp size={15} className={p.ico} />}
+                    bg={p.bg}
+                    border={p.border}
+                    valueClass={p.val}
+                    onClick={() => setActiveTab("income")}
+                  />
+                );
+              })
+            : (
+              <SummaryCard
+                label="Other Income"
+                value={fmt(otherIncomeTotal)}
+                sub={`${filteredIncomes.length} entries`}
+                icon={<TrendingUp size={15} className="text-violet-600" />}
+                bg="bg-gradient-to-br from-violet-50 to-purple-50"
+                border="border-violet-200"
+                valueClass="text-violet-700"
+                onClick={() => setActiveTab("income")}
+              />
+            )
+          )}
         {isSuperAdmin && (
           <SummaryCard
             label="Expenses"
@@ -2981,13 +2842,6 @@ export default function AdminRevenueDashboard() {
                   <h2 className="font-bold text-slate-800 text-sm sm:text-base flex-1">
                     Partner Spending
                   </h2>
-                  <button
-                    onClick={exportPartnerSpendingCSV}
-                    className="flex items-center gap-1 px-2.5 py-1 bg-slate-100 text-slate-600 text-xs font-medium rounded-lg hover:bg-slate-200"
-                  >
-                    <Download size={11} />
-                    CSV
-                  </button>
                 </div>
                 {partnerSpending.length === 0 ? (
                   <div className="text-center py-10">
@@ -3074,13 +2928,6 @@ export default function AdminRevenueDashboard() {
                   />
                 </button>
                 <div className="absolute right-2 top-2 flex items-center gap-1">
-                  <button
-                    onClick={exportMonthlyCSV}
-                    className="p-1.5 hover:bg-slate-100 rounded-lg"
-                    title="Export CSV"
-                  >
-                    <Download size={13} className="text-slate-400" />
-                  </button>
                   <button
                     onClick={() => setShowRecurringModal(true)}
                     className="p-1.5 hover:bg-slate-100 rounded-lg"
@@ -3237,13 +3084,6 @@ export default function AdminRevenueDashboard() {
                     <span className="text-sm font-semibold text-red-600">
                       {fmt(searchedExpenses.reduce((s, e) => s + e.amount, 0))}
                     </span>
-                    <button
-                      onClick={exportAllExpensesCSV}
-                      className="flex items-center gap-1 px-2 py-1.5 bg-slate-100 text-slate-600 text-xs font-medium rounded-lg hover:bg-slate-200"
-                    >
-                      <Download size={11} />
-                      CSV
-                    </button>
                     <button
                       onClick={openAddExpense}
                       className="flex items-center gap-1 px-2.5 py-1.5 bg-red-500 text-white text-xs font-semibold rounded-lg hover:bg-red-600"

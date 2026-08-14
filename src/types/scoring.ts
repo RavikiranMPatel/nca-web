@@ -78,6 +78,11 @@ export interface BallResponse {
   batterStats?: Record<string, BatterStatDTO>;
   bowlerStats?: Record<string, BowlerStatDTO>;
   dismissedMtpPublicIds?: string[];
+  // Runner (injury runner for batter) — null when no runner is active
+  runnerPublicId?: string | null;
+  runnerName?: string | null;
+  runnerForPublicId?: string | null;
+  runnerForName?: string | null;
 }
 
 export interface Delivery {
@@ -122,6 +127,7 @@ export interface DeliveryRecord {
 
 export interface ScoringPlayer {
   publicId: string;
+  playerPublicId?: string;  // actual Player.publicId; absent for guest players
   displayName: string;
   battingStyle?: string;
   bowlingStyle?: string;

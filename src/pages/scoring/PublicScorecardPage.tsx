@@ -4,10 +4,6 @@ import publicApi from "../../api/publicApi";
 import { FieldSVG, ZONES } from "./WagonWheelModal";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "../../auth/useAuth";
-import { getMatch, patchMatchNotes } from "../../api/scoring/matchApi";
-import KeyMomentsEditor from "../../components/scoring/KeyMomentsEditor";
-import type { KeyMoment } from "../../types/match";
-import { MATCH_NOTES_TEMPLATE } from "./MatchListPage";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 interface BattingLine {
@@ -131,6 +127,7 @@ interface Scorecard {
   tossDecision?: string;
   playerOfMatchName?: string;
   playerOfMatchPublicId?: string;
+  playerOfMatchNote?: string;
   tournamentName?: string;
   tournamentPublicId?: string;
   ballName?: string;
@@ -918,12 +915,6 @@ export default function PublicScorecardPage() {
   const [selectedBatterInnings, setSelectedBatterInnings] = useState<number>(1);
   const [primaryColor, setPrimaryColor] = useState("#1d4ed8");
 
-  const [notesDraft, setNotesDraft] = useState("");
-  const [notesSaving, setNotesSaving] = useState(false);
-  const [notesSaved, setNotesSaved] = useState(false);
-  const [keyMoments, setKeyMoments] = useState<KeyMoment[]>([]);
-  // Only true after getMatch() succeeds — prevents stale localStorage role from showing admin sections
-  const [adminAccessConfirmed, setAdminAccessConfirmed] = useState(false);
 
   useEffect(() => {
     publicApi
@@ -957,7 +948,7 @@ export default function PublicScorecardPage() {
   }, [scorecard?.innings.length]);
 
   useEffect(() => {
-    if (scorecard?.status !== "IN_PROGRESS") return;
+    if (!["IN_PROGRESS", "SUPER_OVER"].includes(scorecard?.status ?? "")) return;
     const t = setInterval(load, 15000);
     return () => clearInterval(t);
   }, [scorecard?.status, load]);
@@ -987,21 +978,6 @@ export default function PublicScorecardPage() {
     setSelectedBatterInnings(inningsNumber);
   };
 
-  // Load existing notes and key moments via the admin API when authenticated as admin/coach.
-  // adminAccessConfirmed is reset on each run so stale localStorage role can't keep sections visible.
-  useEffect(() => {
-    setAdminAccessConfirmed(false);
-    if (!canEditNotes || !matchId) return;
-    getMatch(matchId)
-      .then((m) => {
-        setNotesDraft(m.notes?.trim() ? m.notes : MATCH_NOTES_TEMPLATE);
-        setKeyMoments(m.keyMoments ?? []);
-        setAdminAccessConfirmed(true);
-      })
-      .catch(() => {
-        setNotesDraft(MATCH_NOTES_TEMPLATE);
-      });
-  }, [canEditNotes, matchId]);
 
   // Scroll to anchor (e.g. #key-moments) after page finishes loading
   useEffect(() => {
@@ -1010,19 +986,6 @@ export default function PublicScorecardPage() {
     if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
   }, [loading, hash]);
 
-  const handleSaveNotes = async () => {
-    if (!matchId) return;
-    setNotesSaving(true);
-    try {
-      await patchMatchNotes(matchId, notesDraft);
-      setNotesSaved(true);
-      setTimeout(() => setNotesSaved(false), 2000);
-    } catch {
-      /* silent */
-    } finally {
-      setNotesSaving(false);
-    }
-  };
 
   if (loading)
     return (
@@ -1060,7 +1023,16 @@ export default function PublicScorecardPage() {
         <div className="max-w-4xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-2">
             <button
-              onClick={() => navigate(-1)}
+              onClick={() => {
+                const fromSameApp =
+                  document.referrer !== "" &&
+                  new URL(document.referrer).origin === window.location.origin;
+                if (fromSameApp) {
+                  navigate(-1);
+                } else {
+                  navigate("/home");
+                }
+              }}
               className="text-white/80 hover:text-white transition p-1 -ml-1 active:scale-95"
             >
               ←
@@ -1133,6 +1105,9 @@ export default function PublicScorecardPage() {
                 className={`text-lg font-bold ${inn.status === "IN_PROGRESS" ? "text-gray-900 dark:text-white" : "text-gray-500 dark:text-gray-400"}`}
               >
                 {inn.battingTeamName}
+                {inn.isSuperOver && (
+                  <span className="ml-1 text-xs font-semibold text-orange-500 uppercase">(SO)</span>
+                )}
               </span>
               <span
                 className={`text-2xl font-black tracking-tight ${inn.status === "IN_PROGRESS" ? "text-gray-900 dark:text-white" : "text-gray-600 dark:text-gray-300"}`}
@@ -1168,11 +1143,16 @@ export default function PublicScorecardPage() {
           </div>
         )}
         {scorecard.playerOfMatchName && (
-          <div className="mt-2 flex items-center gap-2">
-            <span className="text-xs text-gray-400">Player of the Match</span>
-            <span className="text-xs font-semibold text-yellow-600 dark:text-yellow-400">
-              🏅 {scorecard.playerOfMatchName}
-            </span>
+          <div className="mt-2">
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-gray-400">Player of the Match</span>
+              <span className="text-xs font-semibold text-yellow-600 dark:text-yellow-400">
+                🏅 {scorecard.playerOfMatchName}
+              </span>
+            </div>
+            {scorecard.playerOfMatchNote && (
+              <p className="text-xs text-gray-400 mt-0.5 ml-0">{scorecard.playerOfMatchNote}</p>
+            )}
           </div>
         )}
       </div>
@@ -1189,7 +1169,7 @@ export default function PublicScorecardPage() {
                 ? { borderColor: primaryColor, color: primaryColor }
                 : { borderColor: "transparent", color: "#6b7280" }}
             >
-              {inn.battingTeamName} Innings
+              {inn.isSuperOver ? `${inn.battingTeamName} SO` : `${inn.battingTeamName} Innings`}
             </button>
           ))}
           {/* Playing XI tab */}
@@ -1342,65 +1322,14 @@ export default function PublicScorecardPage() {
         )}
       </div>
 
-      {/* Key Moments — admin/coach only; adminAccessConfirmed guards against stale localStorage token */}
-      {adminAccessConfirmed && matchId && (
-        <div id="key-moments" className="px-4 py-5 border-t border-gray-100 dark:border-gray-800">
-          <div className="flex items-center justify-between mb-3">
-            <h3 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
-              Key Moments
-            </h3>
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => navigate(`/admin/cricket/matches/${matchId}/report`)}
-                className="text-xs text-indigo-600 dark:text-indigo-400 font-medium hover:underline"
-              >
-                View/Edit Report →
-              </button>
-              <span className="text-[10px] bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400 px-2 py-0.5 rounded-full font-medium">
-                Admin only
-              </span>
-            </div>
-          </div>
-          <KeyMomentsEditor
-            matchPublicId={matchId}
-            initialMoments={keyMoments}
-            playerOptions={
-              scorecard?.playingXI
-                .flatMap((team) => team.players)
-                .filter((p) => !!p.playerPublicId)
-                .map((p) => ({ value: p.playerPublicId!, label: p.playerName })) ?? []
-            }
-          />
-        </div>
-      )}
-
-      {/* Match Notes — admin/coach only, not shown to public visitors */}
-      {adminAccessConfirmed && (
-        <div className="px-4 py-5 border-t border-gray-100 dark:border-gray-800">
-          <div className="flex items-center justify-between mb-3">
-            <h3 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
-              Match Notes
-            </h3>
-            <span className="text-[10px] bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400 px-2 py-0.5 rounded-full font-medium">
-              Admin only
-            </span>
-          </div>
-          <textarea
-            rows={14}
-            value={notesDraft}
-            onChange={(e) => setNotesDraft(e.target.value)}
-            className="w-full px-3 py-2.5 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-sm text-gray-900 dark:text-gray-100 outline-none focus:ring-2 focus:ring-blue-500 resize-y font-mono"
-          />
-          <div className="flex items-center justify-between mt-2">
-            <span className="text-xs text-gray-400">{notesDraft.length} chars</span>
-            <button
-              onClick={handleSaveNotes}
-              disabled={notesSaving}
-              className="px-4 py-2 rounded-xl bg-blue-600 text-white text-sm font-semibold active:scale-95 disabled:opacity-60 transition-all"
-            >
-              {notesSaving ? "Saving…" : notesSaved ? "Saved ✓" : "Save Notes"}
-            </button>
-          </div>
+      {canEditNotes && matchId && (
+        <div className="px-4 py-4 border-t border-gray-100 dark:border-gray-800 flex justify-end">
+          <button
+            onClick={() => navigate(`/admin/cricket/matches/${matchId}/report`)}
+            className="text-xs text-indigo-600 dark:text-indigo-400 font-medium hover:underline"
+          >
+            View/Edit Report →
+          </button>
         </div>
       )}
 

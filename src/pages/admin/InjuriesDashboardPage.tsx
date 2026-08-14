@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Plus, Activity } from "lucide-react";
+import { Plus, Activity, FileDown, X } from "lucide-react";
 import { toast } from "react-hot-toast";
+import api from "../../api/axios";
 import {
   injuryService,
   INJURY_LOCATIONS,
@@ -77,14 +78,49 @@ function InjuriesDashboardPage() {
   const navigate = useNavigate();
   const [data, setData] = useState<InjuryDashboardResponse | null>(null);
   const [loading, setLoading] = useState(true);
+  const [from, setFrom] = useState("");
+  const [to, setTo] = useState("");
+  const [downloading, setDownloading] = useState(false);
 
-  useEffect(() => {
+  const load = (f?: string, t?: string) => {
+    setLoading(true);
+    const params = f && t ? { from: f, to: t } : undefined;
     injuryService
-      .dashboard()
+      .dashboard(params)
       .then(setData)
       .catch(() => toast.error("Failed to load injuries dashboard"))
       .finally(() => setLoading(false));
-  }, []);
+  };
+
+  useEffect(() => { load(); }, []);
+
+  const applyFilter = () => {
+    if (!from || !to) { toast.error("Select both start and end dates"); return; }
+    if (from > to) { toast.error("Start date must be before end date"); return; }
+    load(from, to);
+  };
+
+  const clearFilter = () => { setFrom(""); setTo(""); load(); };
+
+  const downloadPdf = async () => {
+    if (!from || !to) { toast.error("Set date range before downloading report"); return; }
+    setDownloading(true);
+    try {
+      const res = await api.get(`/admin/injuries/report.pdf?from=${from}&to=${to}`, { responseType: "blob" });
+      const url = URL.createObjectURL(new Blob([res.data], { type: "application/pdf" }));
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `injury-report-${from}-to-${to}.pdf`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      toast.error("Failed to generate report");
+    } finally {
+      setDownloading(false);
+    }
+  };
+
+  const isFiltered = !!from && !!to;
 
   if (loading) {
     return (
@@ -109,7 +145,9 @@ function InjuriesDashboardPage() {
           <Activity size={22} className="text-red-500 flex-shrink-0" />
           <div>
             <h1 className="text-xl font-bold text-slate-900">Injuries &amp; Fitness</h1>
-            <p className="text-xs text-slate-500">Academy-wide injury tracker</p>
+            <p className="text-xs text-slate-500">
+              Academy-wide injury tracker{isFiltered ? ` · filtered ${from} – ${to}` : ""}
+            </p>
           </div>
         </div>
         <button
@@ -118,6 +156,37 @@ function InjuriesDashboardPage() {
         >
           <Plus size={15} /> Record Injury
         </button>
+      </div>
+
+      {/* Date-range filter */}
+      <div className="flex flex-wrap items-end gap-2 bg-white border border-slate-200 rounded-xl p-3">
+        <div>
+          <label className="block text-[11px] font-medium text-slate-500 mb-1">From</label>
+          <input type="date" value={from} onChange={(e) => setFrom(e.target.value)}
+            className="border border-slate-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+        </div>
+        <div>
+          <label className="block text-[11px] font-medium text-slate-500 mb-1">To</label>
+          <input type="date" value={to} onChange={(e) => setTo(e.target.value)}
+            className="border border-slate-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+        </div>
+        <button onClick={applyFilter}
+          className="px-3 py-1.5 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 font-medium">
+          Apply
+        </button>
+        {isFiltered && (
+          <button onClick={clearFilter}
+            className="px-3 py-1.5 border border-slate-300 text-slate-600 bg-slate-50 text-sm rounded-lg hover:bg-slate-100 flex items-center gap-1">
+            <X size={13} /> Clear
+          </button>
+        )}
+        {isFiltered && (
+          <button onClick={downloadPdf} disabled={downloading}
+            className="ml-auto flex items-center gap-1.5 px-3 py-1.5 border border-slate-300 text-slate-700 bg-white text-sm rounded-lg hover:bg-slate-50 disabled:opacity-50">
+            <FileDown size={14} />
+            {downloading ? "Generating…" : "Download Report"}
+          </button>
+        )}
       </div>
 
       {/* Metric cards */}

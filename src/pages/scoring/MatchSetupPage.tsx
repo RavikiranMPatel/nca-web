@@ -683,25 +683,46 @@ export default function MatchSetupPage() {
                 <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
                   Overs
                 </label>
-                <select
-                  className="w-full px-3 py-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  value={matchDetails.totalOvers}
+                <div className="flex flex-wrap gap-1.5 mb-2">
+                  {[10, 20, 30, 40, 50, 90].map((o) => (
+                    <button
+                      key={o}
+                      type="button"
+                      onClick={() =>
+                        setMatchDetails((p) => ({
+                          ...p,
+                          totalOvers: o,
+                          inningsIntervalMinutes: defaultIntervalMinutes(o),
+                        }))
+                      }
+                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all active:scale-95 ${
+                        matchDetails.totalOvers === o
+                          ? "bg-blue-600 text-white border-blue-600"
+                          : "bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-400 border-gray-200 dark:border-gray-700"
+                      }`}
+                    >
+                      {o}
+                    </button>
+                  ))}
+                </div>
+                <input
+                  type="number"
+                  min={1}
+                  max={999}
+                  placeholder="Custom"
+                  value={[10, 20, 30, 40, 50, 90].includes(matchDetails.totalOvers) ? "" : matchDetails.totalOvers}
                   onChange={(e) => {
                     const overs = Number(e.target.value);
-                    setMatchDetails((p) => ({
-                      ...p,
-                      totalOvers: overs,
-                      // Auto-fill interval default only if user hasn't overridden it
-                      inningsIntervalMinutes: defaultIntervalMinutes(overs),
-                    }));
+                    if (overs > 0) {
+                      setMatchDetails((p) => ({
+                        ...p,
+                        totalOvers: overs,
+                        inningsIntervalMinutes: defaultIntervalMinutes(overs),
+                      }));
+                    }
                   }}
-                >
-                  {[5, 6, 8, 10, 12, 15, 20, 25, 30, 40, 50].map((o) => (
-                    <option key={o} value={o}>
-                      {o} overs
-                    </option>
-                  ))}
-                </select>
+                  className="w-full px-3 py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm text-gray-900 dark:text-gray-100 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
               </div>
             </div>
             <div>
@@ -1245,6 +1266,12 @@ export default function MatchSetupPage() {
               </h2>
               <p className="text-sm text-gray-500 mt-1">Who won the toss?</p>
             </div>
+            {matchDetails.venue && (
+              <div className="flex items-center gap-2 px-3 py-2 bg-gray-50 dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700">
+                <span className="text-gray-400 text-sm">📍</span>
+                <span className="text-sm text-gray-600 dark:text-gray-300">{matchDetails.venue}</span>
+              </div>
+            )}
             <div className="space-y-2">
               {teams.map((team) => (
                 <button

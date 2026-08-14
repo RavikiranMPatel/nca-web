@@ -27,6 +27,8 @@ import {
   ArrowUpRight,
   ChevronRight,
   Bell,
+  Stethoscope,
+  Banknote,
 } from "lucide-react";
 import api from "../../api/axios";
 import Button from "../../components/Button";
@@ -44,6 +46,8 @@ import FeeSettingsManager from "./FeeSettingsManager";
 import CampTypeSettings from "./CampTypeSettings";
 import MediaSettingsManager from "./MediaSettingsManager";
 import TeamMembersAdmin from "./TeamMembersAdmin";
+import MedicalStaffAdmin from "./MedicalStaffAdmin";
+import RevenueCategorySettings from "./RevenueCategorySettings";
 import BranchesTab from "./BranchesTab";
 import YouTubeSettings from "./YouTubeSettings";
 import InstagramSettings from "./InstagramSettings";
@@ -67,10 +71,12 @@ type TabType =
   | "fees"
   | "media"
   | "team"
+  | "medical-staff"
   | "branches"
   | "youtube"
   | "instagram"
   | "notifications"
+  | "income-categories"
 
 type NavItemDef = {
   key: TabType | "homepage-sections" | "clubs" | "representative-honors";
@@ -96,6 +102,8 @@ const NAV_GROUPS: NavGroupDef[] = [
       { key: "fees", label: "Fees", icon: CreditCard },
       { key: "notifications", label: "Notifications", icon: Bell },
       { key: "contact", label: "Contact Info", icon: Phone },
+      { key: "medical-staff", label: "Medical Staff", icon: Stethoscope },
+      { key: "income-categories", label: "Income Categories", icon: Banknote },
     ],
   },
   {
@@ -1410,6 +1418,8 @@ function AcademySettings() {
             {activeTab === "fees" && <FeeSettingsManager />}
             {activeTab === "notifications" && <NotificationSettings />}
             {activeTab === "media" && <MediaSettingsManager />}
+            {activeTab === "medical-staff" && <MedicalStaffAdmin />}
+            {activeTab === "income-categories" && <RevenueCategorySettings />}
 
           </div>
         </div>

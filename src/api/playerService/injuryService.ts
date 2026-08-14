@@ -11,6 +11,9 @@ export interface PlayerInjuryRequest {
   actualRecoveryDate?: string;
   status?: string; // UNDER_REHAB | RECOVERING | RECOVERED
   notes?: string;
+  medicalStaffId?: string;
+  physioSessionsCount?: number;
+  rehabCompliance?: string; // EXCELLENT | GOOD | PARTIAL | NON_COMPLIANT
 }
 
 export interface PlayerInjuryResponse {
@@ -28,6 +31,10 @@ export interface PlayerInjuryResponse {
   status: string;
   doctorReportUrl?: string;
   notes?: string;
+  medicalStaffId?: string;
+  medicalStaffName?: string;
+  physioSessionsCount?: number;
+  rehabCompliance?: string;
   recurrenceCount: number;
   createdAt: string;
   createdBy?: string;
@@ -46,6 +53,12 @@ export interface InjuryDashboardResponse {
   bodyPartBreakdown: BreakdownItem[];
   locationBreakdown: BreakdownItem[];
   recentInjuries: PlayerInjuryResponse[];
+}
+
+export interface MedicalStaffOption {
+  publicId: string;
+  name: string;
+  role: string;
 }
 
 export const injuryService = {
@@ -73,8 +86,12 @@ export const injuryService = {
     }).then((r) => r.data);
   },
 
-  dashboard(): Promise<InjuryDashboardResponse> {
-    return api.get("/admin/injuries/dashboard").then((r) => r.data);
+  dashboard(params?: { from?: string; to?: string }): Promise<InjuryDashboardResponse> {
+    return api.get("/admin/injuries/dashboard", { params }).then((r) => r.data);
+  },
+
+  listMedicalStaff(): Promise<MedicalStaffOption[]> {
+    return api.get("/admin/medical-staff/active").then((r) => r.data);
   },
 };
 
@@ -91,3 +108,10 @@ export const INJURY_STATUSES: Record<string, { label: string; color: string; bg:
   RECOVERING: { label: "Recovering", color: "text-amber-700", bg: "bg-amber-100" },
   RECOVERED: { label: "Recovered", color: "text-green-700", bg: "bg-green-100" },
 };
+
+export const REHAB_COMPLIANCE_OPTIONS = [
+  { value: "EXCELLENT", label: "Excellent" },
+  { value: "GOOD", label: "Good" },
+  { value: "PARTIAL", label: "Partial" },
+  { value: "NON_COMPLIANT", label: "Non-compliant" },
+];

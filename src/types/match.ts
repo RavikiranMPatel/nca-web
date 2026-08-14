@@ -24,6 +24,7 @@ export type ResultType =
   | "WON_BY_WICKETS"
   | "TIE"
   | "SUPER_OVER"
+  | "COIN_FLIP"
   | "DRAW"
   | "NO_RESULT"
   | "ABANDONED";
@@ -61,6 +62,7 @@ export interface CricketMatch {
   resultType?: ResultType;
   resultMargin?: number;
   resultDescription?: string;
+  playerOfMatch?: { publicId: string; displayName: string };
   playerOfMatchNote?: string;
   notes?: string;
   keyMoments?: KeyMoment[];
@@ -92,6 +94,8 @@ export interface CricketMatch {
   scheduledStartTime?: string;       // "HH:MM:SS" from DB TIME column
   inningsIntervalMinutes?: number;   // per-match override; null = use overs-derived default
   totalBreakSeconds?: number;        // cumulative across all pauses this match
+  // Super Over (V92) — number of consecutive SO ties; coin-flip modal shown when this reaches 3
+  consecutiveTiedSuperOvers?: number;
 }
 
 export interface UpdateExternalMatchRequest {

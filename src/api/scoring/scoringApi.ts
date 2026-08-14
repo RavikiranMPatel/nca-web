@@ -70,6 +70,32 @@ export const substitutePlayer = (
     })
     .then((r) => r.data);
 
+export const setRunner = (
+  matchId: string,
+  runnerMtpPublicId: string,
+  injuredBatterMtpPublicId: string,
+) =>
+  api
+    .post<BallResponse>(`${BASE(matchId)}/runner`, { runnerMtpPublicId, injuredBatterMtpPublicId })
+    .then((r) => r.data);
+
+export const clearRunner = (matchId: string) =>
+  api.delete<BallResponse>(`${BASE(matchId)}/runner`).then((r) => r.data);
+
+export const bowlerInjuryReplace = (matchId: string, replacementBowlerPublicId: string) =>
+  api
+    .post<BallResponse>(`${BASE(matchId)}/bowler-injury-replace`, { replacementBowlerPublicId })
+    .then((r) => r.data);
+
+export const addFieldingSubstitute = (
+  matchId: string,
+  teamPublicId: string,
+  req: { playerPublicId?: string; externalName?: string; reason?: string },
+) =>
+  api
+    .post(`/admin/cricket/matches/${matchId}/teams/${teamPublicId}/fielding-substitute`, req)
+    .then((r) => r.data);
+
 export const changeWicketkeeper = (
   matchId: string,
   newKeeperPublicId: string,

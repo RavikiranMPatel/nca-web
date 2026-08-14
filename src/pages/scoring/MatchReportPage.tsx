@@ -415,10 +415,12 @@ export default function MatchReportPage() {
   // Performance form
   const [logTarget, setLogTarget] = useState<{ player: MatchTeamPlayer; existingPublicId?: string } | null>(null);
 
-  // Result banner editing (EXTERNAL only)
+  // Result banner editing
   const [editingResult, setEditingResult] = useState(false);
   const [resultType, setResultType] = useState("");
   const [resultDescription, setResultDescription] = useState("");
+  const [pomPublicId, setPomPublicId] = useState<string | null>(null);
+  const [pomNote, setPomNote] = useState("");
   const [savingResult, setSavingResult] = useState(false);
 
   // Ground conditions editing
@@ -485,6 +487,8 @@ export default function MatchReportPage() {
       setKeyMoments(matchData.keyMoments ?? []);
       setResultType(matchData.resultType ?? "");
       setResultDescription(matchData.resultDescription ?? "");
+      setPomPublicId(matchData.playerOfMatch?.publicId ?? null);
+      setPomNote(matchData.playerOfMatchNote ?? "");
       setGroundFields({
         groundName: matchData.groundName ?? "",
         groundNumber: matchData.groundNumber ?? "",
@@ -633,6 +637,8 @@ export default function MatchReportPage() {
       const updated = await patchExternalMatchDetails(publicId, {
         resultType: resultType || undefined,
         resultDescription: resultDescription || undefined,
+        playerOfMatchPublicId: pomPublicId ?? undefined,
+        playerOfMatchNote: pomNote || undefined,
       });
       setMatch(updated);
       setEditingResult(false);
@@ -921,6 +927,51 @@ export default function MatchReportPage() {
                     onChange={(e) => setResultDescription(e.target.value)}
                   />
                 </div>
+                {/* Player of the Match — optional */}
+                {(() => {
+                  const pomCandidates = [...teamAPlayers, ...teamBPlayers].filter(
+                    (p) => p.playerPublicId
+                  );
+                  if (pomCandidates.length === 0) return null;
+                  return (
+                    <div>
+                      <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
+                        Player of the Match <span className="font-normal text-[10px]">(optional)</span>
+                      </label>
+                      <div className="max-h-32 overflow-y-auto rounded-xl border border-gray-200 dark:border-gray-700 divide-y divide-gray-100 dark:divide-gray-800">
+                        {pomCandidates.map((p) => (
+                          <button
+                            key={p.playerPublicId}
+                            type="button"
+                            onClick={() =>
+                              setPomPublicId(
+                                pomPublicId === p.playerPublicId ? null : (p.playerPublicId ?? null)
+                              )
+                            }
+                            className={`w-full text-left px-3 py-2 text-xs transition-all ${
+                              pomPublicId === p.playerPublicId
+                                ? "bg-yellow-50 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300 font-medium"
+                                : "text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800"
+                            }`}
+                          >
+                            {pomPublicId === p.playerPublicId ? "🏅 " : ""}
+                            {p.displayName}
+                          </button>
+                        ))}
+                      </div>
+                      {pomPublicId && (
+                        <input
+                          type="text"
+                          maxLength={200}
+                          className="mt-2 w-full px-3 py-2 text-sm bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          placeholder="Short note, e.g. '87 off 54 balls'"
+                          value={pomNote}
+                          onChange={(e) => setPomNote(e.target.value)}
+                        />
+                      )}
+                    </div>
+                  );
+                })()}
                 <div className="flex gap-2">
                   <button
                     onClick={handleSaveResult}
@@ -934,6 +985,8 @@ export default function MatchReportPage() {
                     onClick={() => {
                       setResultType(match.resultType ?? "");
                       setResultDescription(match.resultDescription ?? "");
+                      setPomPublicId(match.playerOfMatch?.publicId ?? null);
+                      setPomNote(match.playerOfMatchNote ?? "");
                       setEditingResult(false);
                     }}
                     className="px-4 py-2 bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 text-sm rounded-xl font-medium"
@@ -963,6 +1016,18 @@ export default function MatchReportPage() {
                   ) : (
                     <p className="text-sm text-gray-400">No result recorded yet</p>
                   )}
+                  {match.playerOfMatch && (
+                    <div className="flex items-center gap-1.5 mt-1">
+                      <span className="text-sm">🏅</span>
+                      <span className="text-xs text-gray-500">Player of the Match:</span>
+                      <span className="text-xs font-medium text-gray-800 dark:text-gray-200">
+                        {match.playerOfMatch.displayName}
+                      </span>
+                    </div>
+                  )}
+                  {match.playerOfMatchNote && match.playerOfMatch && (
+                    <p className="text-xs text-gray-400">{match.playerOfMatchNote}</p>
+                  )}
                 </div>
                 <button
                   onClick={() => setEditingResult(true)}
@@ -973,10 +1038,92 @@ export default function MatchReportPage() {
               </div>
             )
           ) : (
-            <ResultBanner
-              innings={inningsLines}
-              resultDescription={match.resultDescription}
-            />
+            <>
+              <ResultBanner
+                innings={inningsLines}
+                resultDescription={match.resultDescription}
+                playerOfMatch={match.playerOfMatch?.displayName}
+              />
+              {/* POM edit for ball-by-ball / manual matches */}
+              {editingResult ? (
+                <div className="mt-3 space-y-3">
+                  {(() => {
+                    const pomCandidates = [...teamAPlayers, ...teamBPlayers].filter(
+                      (p) => p.playerPublicId
+                    );
+                    if (pomCandidates.length === 0) return null;
+                    return (
+                      <div>
+                        <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
+                          Player of the Match <span className="font-normal text-[10px]">(optional)</span>
+                        </label>
+                        <div className="max-h-32 overflow-y-auto rounded-xl border border-gray-200 dark:border-gray-700 divide-y divide-gray-100 dark:divide-gray-800">
+                          {pomCandidates.map((p) => (
+                            <button
+                              key={p.playerPublicId}
+                              type="button"
+                              onClick={() =>
+                                setPomPublicId(
+                                  pomPublicId === p.playerPublicId ? null : (p.playerPublicId ?? null)
+                                )
+                              }
+                              className={`w-full text-left px-3 py-2 text-xs transition-all ${
+                                pomPublicId === p.playerPublicId
+                                  ? "bg-yellow-50 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300 font-medium"
+                                  : "text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800"
+                              }`}
+                            >
+                              {pomPublicId === p.playerPublicId ? "🏅 " : ""}
+                              {p.displayName}
+                            </button>
+                          ))}
+                        </div>
+                        {pomPublicId && (
+                          <input
+                            type="text"
+                            maxLength={200}
+                            className="mt-2 w-full px-3 py-2 text-sm bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            placeholder="Short note, e.g. '87 off 54 balls'"
+                            value={pomNote}
+                            onChange={(e) => setPomNote(e.target.value)}
+                          />
+                        )}
+                      </div>
+                    );
+                  })()}
+                  <div className="flex gap-2">
+                    <button
+                      onClick={handleSaveResult}
+                      disabled={savingResult}
+                      className="flex items-center gap-1.5 px-4 py-2 bg-blue-600 text-white text-sm rounded-xl font-medium disabled:opacity-50"
+                    >
+                      <Save className="w-3.5 h-3.5" />
+                      {savingResult ? "Saving…" : "Save"}
+                    </button>
+                    <button
+                      onClick={() => {
+                        setPomPublicId(match.playerOfMatch?.publicId ?? null);
+                        setPomNote(match.playerOfMatchNote ?? "");
+                        setEditingResult(false);
+                      }}
+                      className="px-4 py-2 bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 text-sm rounded-xl font-medium"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="mt-2 flex justify-end">
+                  <button
+                    onClick={() => setEditingResult(true)}
+                    className="flex items-center gap-1 text-xs text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 py-1 px-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800"
+                  >
+                    <Edit2 className="w-3 h-3" />
+                    Edit POM
+                  </button>
+                </div>
+              )}
+            </>
           )}
         </Section>
 

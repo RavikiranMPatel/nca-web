@@ -122,3 +122,6 @@ export const pauseMatch = (publicId: string, reason: string) =>
 
 export const resumeMatch = (publicId: string) =>
   api.post<CricketMatch>(`${BASE}/${publicId}/resume`).then((r) => r.data);
+
+export const coinFlip = (publicId: string, winnerTeamPublicId: string) =>
+  api.post<CricketMatch>(`${BASE}/${publicId}/coin-flip`, { winnerTeamPublicId }).then((r) => r.data);

@@ -16,7 +16,7 @@ import {
   changeWicketkeeper,
   createAnnotation,
 } from "../../api/scoring/scoringApi";
-import { getMatch, getTeams, pauseMatch, resumeMatch } from "../../api/scoring/matchApi";
+import { getMatch, getTeams, pauseMatch, resumeMatch, coinFlip } from "../../api/scoring/matchApi";
 import type {
   BallResponse,
   BatterStatDTO,
@@ -312,6 +312,7 @@ export default function LiveScorerPage() {
   const [thisOver, setThisOver] = useState<BallDTO[]>([]);
   const [loading, setLoading] = useState(true);
   const [posting, setPosting] = useState(false);
+  const [reconnecting, setReconnecting] = useState(false);
   const [error, setError] = useState("");
   const [toast, setToast] = useState<string | null>(null);
   const [lastOverNumber, setLastOverNumber] = useState(1);
@@ -349,6 +350,10 @@ export default function LiveScorerPage() {
   // Partnership state
   const [partnershipRuns, setPartnershipRuns] = useState(0);
   const [partnershipBalls, setPartnershipBalls] = useState(0);
+
+  // Runner (injury runner for a batter)
+  const [runnerName, setRunnerName] = useState<string | null>(null);
+  const [runnerForName, setRunnerForName] = useState<string | null>(null);
 
   const [bowlerOversMap, setBowlerOversMap] = useState<Record<string, number>>(
     {},
@@ -389,6 +394,8 @@ export default function LiveScorerPage() {
   const [resultType, setResultType] = useState("");
   const [resultMargin, setResultMargin] = useState("");
   const [resultDesc, setResultDesc] = useState("");
+  const [pomPublicId, setPomPublicId] = useState<string | null>(null);
+  const [pomNote, setPomNote] = useState("");
   const [lastOverBalls, setLastOverBalls] = useState<BallDTO[]>([]);
   const [lastOverRuns, setLastOverRuns] = useState(0);
   const [autoResult, setAutoResult] = useState<{
@@ -418,6 +425,9 @@ export default function LiveScorerPage() {
   const [showPauseModal, setShowPauseModal] = useState(false);
   const [pauseReasonInput, setPauseReasonInput] = useState("");
 
+  // ── Coin flip (Super Over tiebreaker after 3 consecutive tied SOs) ────────
+  const [coinFlipPosting, setCoinFlipPosting] = useState(false);
+
   // ── Substitution ──────────────────────────────────────────────────────────
   // Tracks publicIds of MTPs that have been substituted out — excluded from
   // batter/bowler selection (same mechanism as dismissedPlayerIds).
@@ -440,12 +450,26 @@ export default function LiveScorerPage() {
     return () => clearInterval(id);
   }, []);
 
+  // Warn on page close / tab close while a match is actively being scored.
+  useEffect(() => {
+    if (match?.status !== "IN_PROGRESS") return;
+    const handler = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = "";
+    };
+    window.addEventListener("beforeunload", handler);
+    return () => window.removeEventListener("beforeunload", handler);
+  }, [match?.status]);
+
   // ── Live annotations ──────────────────────────────────────────────────────
   const [showAnnotationForm, setShowAnnotationForm] = useState(false);
   const [annotationText, setAnnotationText] = useState("");
   const [annotationCategory, setAnnotationCategory] = useState("");
 
   const loadingRef = useRef(false);
+  const initialLoadDoneRef = useRef(false);
+  // Always points to the latest loadAll — used by stable reconnect event listeners.
+  const loadAllRef = useRef<(() => Promise<void>) | null>(null);
 
   const showToast = (msg: string) => {
     setToast(msg);
@@ -506,7 +530,12 @@ export default function LiveScorerPage() {
   const loadAll = async () => {
     if (!matchId || loadingRef.current) return;
     loadingRef.current = true;
-    setLoading(true);
+    const isReconnect = initialLoadDoneRef.current;
+    if (isReconnect) {
+      setReconnecting(true);
+    } else {
+      setLoading(true);
+    }
     setError("");
     try {
       const [m, ts] = await Promise.all([getMatch(matchId), getTeams(matchId)]);
@@ -539,6 +568,7 @@ export default function LiveScorerPage() {
           )
           .map((mtp) => ({
             publicId: (mtp.mtpPublicId ?? mtp.playerPublicId) as string,
+            playerPublicId: mtp.playerPublicId as string | undefined,
             displayName: (mtp.isSubstitute
               ? `${mtp.displayName as string} (sub)`
               : (mtp.displayName as string)),
@@ -637,9 +667,30 @@ export default function LiveScorerPage() {
       setError("Failed to load match");
     } finally {
       setLoading(false);
+      setReconnecting(false);
       loadingRef.current = false;
+      initialLoadDoneRef.current = true;
     }
   };
+
+  // Always keep loadAllRef pointing at the latest closure so stable reconnect
+  // listeners can call through it without triggering extra re-registrations.
+  loadAllRef.current = loadAll;
+
+  // Reconnect on network restore or tab re-focus (device wake from sleep).
+  // Empty deps = listeners registered once; loadAllRef.current always current.
+  useEffect(() => {
+    const handleOnline = () => { if (!loadingRef.current) loadAllRef.current?.(); };
+    const handleVisibility = () => {
+      if (document.visibilityState === "visible" && !loadingRef.current) loadAllRef.current?.();
+    };
+    window.addEventListener("online", handleOnline);
+    document.addEventListener("visibilitychange", handleVisibility);
+    return () => {
+      window.removeEventListener("online", handleOnline);
+      document.removeEventListener("visibilitychange", handleVisibility);
+    };
+  }, []);
 
   // Applies all server-authoritative fields from a BallResponse to local state.
   // Must only be called after battingPlayers/bowlingPlayers are populated in state.
@@ -653,6 +704,8 @@ export default function LiveScorerPage() {
     setBowlerStatsMap(state.bowlerStats ?? {});
     setLastBowlerPublicId(state.lastBowlerPublicId ?? null);
     setOverJustEnded(state.overJustEnded ?? false);
+    setRunnerName(state.runnerName ?? null);
+    setRunnerForName(state.runnerForName ?? null);
 
     const bpo = match?.ballsPerOver ?? 6;
     const oversMap: Record<string, number> = {};
@@ -815,20 +868,25 @@ export default function LiveScorerPage() {
   };
 
   const confirmWicket = async () => {
+    if (posting) return;
     if (!dismissalType) { setError("Select dismissal type"); return; }
     if (!striker || !nonStriker) { setError("Select striker and non-striker first"); return; }
     if (!bowler) { setError("Select bowler first"); return; }
     if (!matchId) return;
 
+    const dismissalTypeRaw = dismissalType.toUpperCase().replace(/ /g, "_");
+    // Retirement is not a delivery — no ball is bowled, no runs scored.
+    const isRetirement = dismissalTypeRaw === "RETIRED_HURT" || dismissalTypeRaw === "RETIRED_OUT";
+
     const wicketBallForSummary: BallDTO = {
-      runsBatsman: isWideDelivery ? 0 : pendingRuns,
-      runsExtras: isWideDelivery ? 1 : 0,
-      extraType: isWideDelivery ? "WIDE" : undefined,
+      runsBatsman: isRetirement ? 0 : isWideDelivery ? 0 : pendingRuns,
+      runsExtras: isRetirement ? 0 : isWideDelivery ? 1 : 0,
+      extraType: isRetirement ? undefined : isWideDelivery ? "WIDE" : undefined,
       isWicket: true,
-      isLegalBall: !isWideDelivery,
+      isLegalBall: isRetirement ? false : !isWideDelivery,
       sequenceNumber: 0,
-      displayLabel: "W",
-      displayClass: "b-wk",
+      displayLabel: isRetirement ? "R" : "W",
+      displayClass: isRetirement ? "b-dot" : "b-wk",
     };
 
     setPosting(true);
@@ -838,11 +896,11 @@ export default function LiveScorerPage() {
         bowlerPublicId: bowler.publicId,
         batsmanPublicId: striker.publicId,
         nonStrikerPublicId: nonStriker.publicId,
-        runsBatsman: isWideDelivery ? 0 : pendingRuns,
-        runsExtras: isWideDelivery ? 1 : 0,
-        extraType: isWideDelivery ? "WIDE" : null,
+        runsBatsman: isRetirement ? 0 : isWideDelivery ? 0 : pendingRuns,
+        runsExtras: isRetirement ? 0 : isWideDelivery ? 1 : 0,
+        extraType: isRetirement ? null : isWideDelivery ? "WIDE" : null,
         isWicket: true,
-        dismissalType: dismissalType.toUpperCase().replace(/ /g, "_"),
+        dismissalType: dismissalTypeRaw,
         dismissedPlayerPublicId: dismissedPlayer?.publicId,
         fielderPublicId: fielder?.publicId || undefined,
         isFreeHit,
@@ -961,6 +1019,23 @@ export default function LiveScorerPage() {
       setError(msg);
     } finally {
       setPosting(false);
+    }
+  };
+
+  const handleCoinFlip = async (winnerTeamPublicId: string) => {
+    if (!matchId) return;
+    setCoinFlipPosting(true);
+    try {
+      await coinFlip(matchId, winnerTeamPublicId);
+      await loadAll();
+      showToast("✓ Result recorded");
+    } catch (e: unknown) {
+      const msg =
+        (e as { response?: { data?: { message?: string } } })?.response?.data
+          ?.message ?? "Failed to record coin flip result";
+      showToast(msg);
+    } finally {
+      setCoinFlipPosting(false);
     }
   };
 
@@ -1197,6 +1272,8 @@ export default function LiveScorerPage() {
           ? Number(resultMargin)
           : autoResult?.resultMargin,
         resultDescription: resultDesc || autoResult?.resultDescription,
+        playerOfMatchPublicId: pomPublicId ?? undefined,
+        playerOfMatchNote: pomNote || undefined,
       });
       navigate("/admin/cricket/matches");
     } catch (e: unknown) {
@@ -1240,6 +1317,13 @@ export default function LiveScorerPage() {
       {/* Match header */}
       <div className="bg-gray-900 border-b border-gray-800 px-4 pt-3 pb-2">
         <div className="flex items-start justify-between gap-2">
+          <button
+            onClick={() => navigate("/admin/cricket/matches")}
+            className="flex-shrink-0 text-gray-400 hover:text-gray-100 active:scale-95 transition-all p-1 -ml-1 mt-0.5"
+            aria-label="Back to matches"
+          >
+            ←
+          </button>
           <div className="flex-1 min-w-0">
             <div className="text-xs text-gray-500 uppercase tracking-wider mb-1">
               {match?.title} · {match?.totalOvers} Ov
@@ -1277,7 +1361,7 @@ export default function LiveScorerPage() {
           {/* Report + Note buttons — top-right corner of header */}
           <div className="flex flex-col gap-1 flex-shrink-0 items-end">
             <button
-              onClick={() => window.open(`/matches/${matchId}/report`, "_blank")}
+              onClick={() => window.open(`/admin/cricket/matches/${matchId}/report`, "_blank")}
               className="text-xs text-gray-500 hover:text-blue-400 active:scale-95 transition-all px-2 py-1 rounded border border-gray-700 bg-gray-800"
             >
               📋 Report
@@ -1302,8 +1386,8 @@ export default function LiveScorerPage() {
             clockNow,
           );
           if (!clock) return null;
-          const behind = clock.deltaMinutes > 0;
-          const ahead = clock.deltaMinutes < -2;
+          const behind = totalBalls > 0 && clock.deltaMinutes > 0;
+          const ahead = totalBalls > 0 && clock.deltaMinutes < -2;
           return (
             <div className="mt-2 flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-gray-500 border-t border-gray-800 pt-2">
               <span>⏱ <b className="text-gray-400">{clock.scheduledLabel}</b></span>
@@ -1376,6 +1460,14 @@ export default function LiveScorerPage() {
         )}
       </div>
 
+      {/* Reconnecting banner — shown while loadAll() is re-running after a network/wake event */}
+      {reconnecting && (
+        <div className="bg-blue-900/40 border-b border-blue-700 px-4 py-2 flex items-center gap-2">
+          <div className="w-3 h-3 border border-blue-400 border-t-transparent rounded-full animate-spin flex-shrink-0" />
+          <span className="text-xs text-blue-300">Reconnecting…</span>
+        </div>
+      )}
+
       {/* Pause banner — shown when match is paused; blocks scorer interaction visually */}
       {matchPauseReason && (
         <div className="bg-amber-900/40 border-b border-amber-700 px-4 py-3 flex items-center justify-between gap-3">
@@ -1392,6 +1484,19 @@ export default function LiveScorerPage() {
           >
             ▶ Resume
           </button>
+        </div>
+      )}
+
+      {/* Super Over active banner */}
+      {match?.status === "SUPER_OVER" && innings && (
+        <div className="bg-orange-900/40 border-b border-orange-700 px-4 py-2 flex items-center gap-2">
+          <span className="text-sm font-bold text-orange-300 uppercase tracking-wide">⚡ Super Over</span>
+          <span className="text-xs text-orange-400">
+            {innings.inningsNumber !== undefined
+              ? `Innings ${innings.inningsNumber}`
+              : ""}
+            {innings.target ? ` · Target: ${innings.target}` : ""}
+          </span>
         </div>
       )}
 
@@ -1487,6 +1592,16 @@ export default function LiveScorerPage() {
               </b>
             </span>
           )}
+        </div>
+      )}
+
+      {/* Runner indicator */}
+      {runnerName && (
+        <div className="bg-amber-950 border-b border-amber-800 px-4 py-1.5 flex items-center gap-2">
+          <span className="text-xs text-amber-400 font-semibold">RUNNER</span>
+          <span className="text-xs text-amber-200">
+            {runnerName} <span className="text-amber-500">(for {runnerForName})</span>
+          </span>
         </div>
       )}
 
@@ -2778,6 +2893,51 @@ export default function LiveScorerPage() {
                   onChange={(e) => setResultDesc(e.target.value)}
                 />
               </div>
+              {/* Player of the Match — optional, academy players only */}
+              {(() => {
+                const pomCandidates = [...battingPlayers, ...bowlingPlayers].filter(
+                  (p) => p.playerPublicId
+                );
+                if (pomCandidates.length === 0) return null;
+                return (
+                  <div>
+                    <label className="text-xs text-gray-400 mb-1 block">
+                      Player of the Match <span className="text-gray-600 text-[10px]">(optional)</span>
+                    </label>
+                    <div className="max-h-32 overflow-y-auto rounded-xl border border-gray-700 divide-y divide-gray-800">
+                      {pomCandidates.map((p) => (
+                        <button
+                          key={p.playerPublicId}
+                          type="button"
+                          onClick={() =>
+                            setPomPublicId(
+                              pomPublicId === p.playerPublicId ? null : p.playerPublicId!
+                            )
+                          }
+                          className={`w-full text-left px-3 py-2 text-xs transition-all ${
+                            pomPublicId === p.playerPublicId
+                              ? "bg-yellow-700/40 text-yellow-200"
+                              : "text-gray-300 active:bg-gray-800"
+                          }`}
+                        >
+                          {pomPublicId === p.playerPublicId ? "🏅 " : ""}
+                          {p.displayName}
+                        </button>
+                      ))}
+                    </div>
+                    {pomPublicId && (
+                      <input
+                        type="text"
+                        maxLength={200}
+                        className="mt-2 w-full px-3 py-2.5 bg-gray-800 border border-gray-700 rounded-xl text-sm text-white placeholder-gray-500 outline-none"
+                        placeholder="Short note, e.g. '87 off 54 balls'"
+                        value={pomNote}
+                        onChange={(e) => setPomNote(e.target.value)}
+                      />
+                    )}
+                  </div>
+                );
+              })()}
               <button
                 disabled={!resultType || posting}
                 onClick={handleResult}
@@ -3145,6 +3305,34 @@ export default function LiveScorerPage() {
               >
                 ⏸ Pause Match
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Coin flip modal — shown when 3 consecutive SO ties require a coin flip to decide the winner */}
+      {match?.status === "SUPER_OVER" && (match?.consecutiveTiedSuperOvers ?? 0) >= 3 && !innings && (
+        <div className="fixed inset-0 z-[60] bg-black/80 flex items-end">
+          <div className="w-full bg-gray-900 rounded-t-2xl p-5 border-t border-orange-700">
+            <div className="w-10 h-1 bg-gray-700 rounded-full mx-auto mb-4" />
+            <h3 className="text-base font-bold text-orange-400 text-center mb-1">
+              ⚡ Coin Flip Required
+            </h3>
+            <p className="text-xs text-gray-400 text-center mb-5">
+              {match.consecutiveTiedSuperOvers} Super Over{match.consecutiveTiedSuperOvers !== 1 ? "s" : ""} tied —
+              select the team that won the coin flip
+            </p>
+            <div className="space-y-2 mb-4">
+              {teams.map((team) => (
+                <button
+                  key={team.publicId}
+                  disabled={coinFlipPosting}
+                  onClick={() => handleCoinFlip(team.publicId)}
+                  className="w-full py-3.5 bg-orange-700 hover:bg-orange-600 text-white rounded-xl font-semibold text-sm active:scale-95 transition-all disabled:opacity-40"
+                >
+                  {team.name} won the coin flip
+                </button>
+              ))}
             </div>
           </div>
         </div>

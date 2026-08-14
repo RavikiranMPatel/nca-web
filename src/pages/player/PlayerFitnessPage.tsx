@@ -8,8 +8,9 @@ import {
   injuryService,
   INJURY_LOCATIONS,
   INJURY_STATUSES,
+  REHAB_COMPLIANCE_OPTIONS,
 } from "../../api/playerService/injuryService.ts";
-import type { PlayerInjuryResponse, PlayerInjuryRequest } from "../../api/playerService/injuryService.ts";
+import type { PlayerInjuryResponse, PlayerInjuryRequest, MedicalStaffOption } from "../../api/playerService/injuryService.ts";
 import PlayerAssessmentForm from "../../components/player/PlayerAssessmentForm";
 import PlayerAssessmentComparison from "../../components/player/PlayerAssessmentComparison";
 
@@ -34,6 +35,9 @@ function emptyInjuryForm(): PlayerInjuryRequest {
     actualRecoveryDate: "",
     status: "UNDER_REHAB",
     notes: "",
+    medicalStaffId: "",
+    physioSessionsCount: undefined,
+    rehabCompliance: "",
   };
 }
 
@@ -61,12 +65,20 @@ function InjuryForm({
           actualRecoveryDate: editRecord.actualRecoveryDate || "",
           status: editRecord.status,
           notes: editRecord.notes || "",
+          medicalStaffId: editRecord.medicalStaffId || "",
+          physioSessionsCount: editRecord.physioSessionsCount,
+          rehabCompliance: editRecord.rehabCompliance || "",
         }
       : emptyInjuryForm()
   );
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [staffOptions, setStaffOptions] = useState<MedicalStaffOption[]>([]);
   const fileRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    injuryService.listMedicalStaff().then(setStaffOptions).catch(() => {});
+  }, []);
 
   const set = (k: keyof PlayerInjuryRequest, v: any) => setForm((p) => ({ ...p, [k]: v }));
 
@@ -85,6 +97,8 @@ function InjuryForm({
         expectedRecoveryDate: form.expectedRecoveryDate || undefined,
         actualRecoveryDate: form.actualRecoveryDate || undefined,
         notes: form.notes || undefined,
+        medicalStaffId: form.medicalStaffId || undefined,
+        rehabCompliance: form.rehabCompliance || undefined,
       };
       if (editRecord) {
         await injuryService.update(playerPublicId, editRecord.publicId, clean);
@@ -172,11 +186,46 @@ function InjuryForm({
         </div>
       </div>
 
-      <label className="flex items-center gap-2 text-sm cursor-pointer">
-        <input type="checkbox" checked={form.doctorTreated || false} onChange={(e) => set("doctorTreated", e.target.checked)}
-          className="accent-blue-600 w-4 h-4" />
-        <span className="text-slate-700">Doctor treated</span>
-      </label>
+      {/* Medical staff selector */}
+      {staffOptions.length > 0 && (
+        <div>
+          <label className="block text-xs font-medium text-slate-600 mb-1">Assigned Medical Staff</label>
+          <select value={form.medicalStaffId || ""} onChange={(e) => set("medicalStaffId", e.target.value)}
+            className="w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+            <option value="">None (ad-hoc)</option>
+            {staffOptions.map((s) => (
+              <option key={s.publicId} value={s.publicId}>{s.name} — {s.role}</option>
+            ))}
+          </select>
+          <p className="text-[11px] text-slate-400 mt-0.5">Selecting a staff member marks this as doctor/physio treated.</p>
+        </div>
+      )}
+
+      {!form.medicalStaffId && (
+        <label className="flex items-center gap-2 text-sm cursor-pointer">
+          <input type="checkbox" checked={form.doctorTreated || false} onChange={(e) => set("doctorTreated", e.target.checked)}
+            className="accent-blue-600 w-4 h-4" />
+          <span className="text-slate-700">Doctor treated</span>
+        </label>
+      )}
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div>
+          <label className="block text-xs font-medium text-slate-600 mb-1">Physio Sessions (count)</label>
+          <input type="number" min={0} value={form.physioSessionsCount ?? ""}
+            onChange={(e) => set("physioSessionsCount", e.target.value ? parseInt(e.target.value) : undefined)}
+            placeholder="0"
+            className="w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+        </div>
+        <div>
+          <label className="block text-xs font-medium text-slate-600 mb-1">Rehab Compliance</label>
+          <select value={form.rehabCompliance || ""} onChange={(e) => set("rehabCompliance", e.target.value)}
+            className="w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+            <option value="">Not set</option>
+            {REHAB_COMPLIANCE_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+          </select>
+        </div>
+      </div>
 
       <div>
         <label className="block text-xs font-medium text-slate-600 mb-1">Notes</label>

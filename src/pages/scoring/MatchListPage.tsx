@@ -311,6 +311,8 @@ export default function MatchListPage() {
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
   // Non-null when a delete hit 409 — holds the performance count for the second confirm dialog
   const [linkedPerformanceCount, setLinkedPerformanceCount] = useState<number | null>(null);
+  // Non-null when user taps a live/break/super-over match — shows confirm-before-enter modal
+  const [pendingMatch, setPendingMatch] = useState<CricketMatch | null>(null);
 
   // ── Notes modal state (shared between Matches and Match Notes tabs) ───────
   const [notesModal, setNotesModal] = useState<{
@@ -424,7 +426,7 @@ export default function MatchListPage() {
     if (match.status === "SETUP") {
       navigate(`/admin/cricket/matches/new?resume=${match.publicId}`);
     } else if (["IN_PROGRESS", "INNINGS_BREAK", "SUPER_OVER"].includes(match.status)) {
-      navigate(`/admin/cricket/matches/${match.publicId}/score`);
+      setPendingMatch(match);
     } else if (match.status === "COMPLETED") {
       window.open(`/match/${match.publicId}/scorecard`, "_blank");
     }
@@ -754,6 +756,61 @@ export default function MatchListPage() {
                 className="flex-1 py-2.5 rounded-xl bg-red-600 text-white text-sm font-semibold active:scale-95"
               >
                 Delete anyway
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Open scorer confirmation ──────────────────────────────────────── */}
+      {/* Shown for IN_PROGRESS, INNINGS_BREAK, SUPER_OVER to prevent accidentally */}
+      {/* entering the scorer for the wrong match when two matches run simultaneously. */}
+      {pendingMatch && (
+        <div
+          className="fixed inset-0 z-[60] bg-black/60 flex items-end sm:items-center justify-center p-0 sm:p-4"
+          onClick={() => setPendingMatch(null)}
+        >
+          <div
+            className="w-full sm:max-w-sm bg-white dark:bg-gray-900 rounded-t-2xl sm:rounded-2xl p-5 shadow-xl max-h-[90vh] overflow-y-auto"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Status badge */}
+            <div className="flex items-center gap-2 mb-3">
+              <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${statusBadge(pendingMatch.status)}`}>
+                {statusLabel(pendingMatch.status)}
+              </span>
+              <span className="text-xs text-gray-400">
+                {matchTypeLabel(pendingMatch.matchType)} · {pendingMatch.totalOvers} ov
+              </span>
+            </div>
+
+            {/* Match title */}
+            <h3 className="text-base font-semibold text-gray-900 dark:text-white mb-1 leading-snug">
+              {pendingMatch.title}
+            </h3>
+            {pendingMatch.matchDate && (
+              <p className="text-xs text-gray-400 mb-4">{pendingMatch.matchDate}</p>
+            )}
+
+            <p className="text-sm text-gray-500 dark:text-gray-400 mb-5">
+              Open the live scorer for this match?
+            </p>
+
+            <div className="flex gap-3">
+              <button
+                onClick={() => setPendingMatch(null)}
+                className="flex-1 py-2.5 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-sm font-medium text-gray-600 dark:text-gray-400 active:scale-95 transition-all"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  navigate(`/admin/cricket/matches/${pendingMatch.publicId}/score`);
+                  setPendingMatch(null);
+                }}
+                className="flex-1 py-2.5 rounded-xl bg-green-600 text-white text-sm font-semibold active:scale-95 transition-all"
+              >
+                Open Scorer
               </button>
             </div>
           </div>
