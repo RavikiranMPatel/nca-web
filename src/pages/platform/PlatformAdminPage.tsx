@@ -182,6 +182,9 @@ export default function PlatformAdminPage() {
 
   const [openActionMenu, setOpenActionMenu] = useState<string | null>(null);
 
+  const [backendBuildNum, setBackendBuildNum] = useState<string>("…");
+  const frontendBuildNum = import.meta.env.VITE_FRONTEND_BUILD_NUMBER || "0";
+
   const authHeader = () => ({ Authorization: `Bearer ${token}` });
 
   const logout = (expired = false) => {
@@ -264,6 +267,13 @@ export default function PlatformAdminPage() {
   }, [token]);
 
   useEffect(() => { if (token) fetchAcademies(); }, [token, fetchAcademies]);
+  useEffect(() => {
+    if (!token) return;
+    fetch("/actuator/info")
+      .then((r) => r.json())
+      .then((d) => setBackendBuildNum(d?.app?.["build-number"] ?? "?"))
+      .catch(() => setBackendBuildNum("?"));
+  }, [token]);
   useEffect(() => {
     if (view === "dashboard" && token) { fetchStats(); fetchBilling(); fetchStorage(); }
   }, [view, token]);
@@ -824,7 +834,12 @@ export default function PlatformAdminPage() {
             ))}
           </div>
         </div>
-        <div className="flex gap-2">
+        <div className="flex items-center gap-2">
+          <div className="hidden sm:flex items-center gap-1 text-[11px] text-gray-400 bg-gray-50 border border-gray-200 rounded-lg px-2.5 py-1 font-mono leading-none select-none">
+            <span>BE&nbsp;#{backendBuildNum}</span>
+            <span className="text-gray-300 px-1">·</span>
+            <span>FE&nbsp;#{frontendBuildNum}</span>
+          </div>
           {view !== "create" && (
             <button onClick={() => { setView("create"); setError(""); }}
               className="px-4 py-2 bg-blue-600 text-white rounded-xl text-sm font-medium hover:bg-blue-700 transition">

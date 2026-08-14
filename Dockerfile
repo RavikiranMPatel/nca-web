@@ -13,6 +13,9 @@ RUN npm ci
 # Copy application source
 COPY . .
 
+ARG VITE_FRONTEND_BUILD_NUMBER=0
+ENV VITE_FRONTEND_BUILD_NUMBER=$VITE_FRONTEND_BUILD_NUMBER
+
 # Build Vite app
 RUN npm run build
 

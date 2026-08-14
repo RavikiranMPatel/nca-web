@@ -20,6 +20,10 @@ export default defineConfig({
           });
         },
       },
+      "/actuator": {
+        target: "http://localhost:8080",
+        changeOrigin: false,
+      },
       "/uploads": {
         target: "http://localhost:8080",
         changeOrigin: false,
