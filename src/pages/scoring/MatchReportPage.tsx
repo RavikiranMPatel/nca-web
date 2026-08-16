@@ -307,7 +307,7 @@ const PerformanceRow = ({
             : "bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-700"
         }`}
       >
-        {hasPerf ? "Edit" : "+ Log"}
+        {hasPerf ? "Edit" : "+ Log Performance"}
       </button>
     </div>
   );
@@ -441,7 +441,7 @@ export default function MatchReportPage() {
 
   // Live annotations (admin/coach only)
   const [annotations, setAnnotations] = useState<Record<string, unknown>[]>([]);
-  const [annotationsOpen, setAnnotationsOpen] = useState(false);
+  const [annotationsOpen, setAnnotationsOpen] = useState(true);
 
   // Team checklists — per discipline
   const [battingPositives, setBattingPositives] = useState<string[]>([]);
@@ -1475,7 +1475,7 @@ export default function MatchReportPage() {
           <>
             {/* Team A performances */}
             {teamAPlayers.length > 0 && (
-              <Section title={`${teamA?.name ?? "Team A"} — Performances`}>
+              <Section title={`${teamA?.name ?? "Team A"} — Playing XI`}>
                 <div>
                   {teamAPlayers
                     .filter((p) => !!p.playerPublicId)
@@ -1499,7 +1499,7 @@ export default function MatchReportPage() {
 
             {/* Team B performances */}
             {teamBPlayers.length > 0 && (
-              <Section title={`${teamB?.name ?? "Team B"} — Performances`}>
+              <Section title={`${teamB?.name ?? "Team B"} — Playing XI`}>
                 <div>
                   {teamBPlayers
                     .filter((p) => !!p.playerPublicId)
