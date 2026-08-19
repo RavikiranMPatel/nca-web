@@ -58,3 +58,13 @@ export const getBranchPlayers = () =>
 
 export const deleteMatch = (publicId: string) =>
   api.delete(`/admin/cricket/matches/${publicId}`);
+
+export const pauseMatch = (publicId: string, reason?: string) =>
+  api
+    .post<import("../../types/match").CricketMatch>(`${BASE}/${publicId}/pause`, { reason: reason ?? "" })
+    .then((r) => r.data);
+
+export const resumeMatch = (publicId: string) =>
+  api
+    .post<import("../../types/match").CricketMatch>(`${BASE}/${publicId}/resume`)
+    .then((r) => r.data);

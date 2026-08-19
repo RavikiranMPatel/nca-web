@@ -41,12 +41,47 @@ export interface BallDTO {
   displayClass: string;
 }
 
+export interface BatterStatDTO {
+  runs: number;
+  balls: number;
+  fours: number;
+  sixes: number;
+  isOut: boolean;
+  dismissalType?: string;
+}
+
+export interface BowlerStatDTO {
+  legalBalls: number;
+  runsConceded: number;
+  wickets: number;
+  maidens: number;
+  dots: number;
+  wides: number;
+  noBalls: number;
+}
+
 export interface BallResponse {
   inningsState: InningsState;
   lastBall?: BallDTO;
   overComplete: boolean;
   inningsComplete: boolean;
   lastDeliveryPublicId?: string;
+  // Server-persisted player state — same key space (player PLY-NCA-x publicId)
+  currentStrikerPublicId?: string | null;
+  currentNonStrikerPublicId?: string | null;
+  currentBowlerPublicId?: string | null;
+  lastBowlerPublicId?: string | null;
+  isFreeHit: boolean;
+  overJustEnded: boolean;
+  partnershipRuns: number;
+  partnershipBalls: number;
+  batterStats?: Record<string, BatterStatDTO>;
+  bowlerStats?: Record<string, BowlerStatDTO>;
+  dismissedMtpPublicIds?: string[];
+  runnerPublicId?: string | null;
+  runnerName?: string | null;
+  runnerForPublicId?: string | null;
+  runnerForName?: string | null;
 }
 
 export interface Delivery {

@@ -177,6 +177,7 @@ type LiveMatch = {
   matchDate?: string;
   totalOvers: number;
   tournamentName?: string;
+  pauseReason?: string | null;
 };
 
 function YoutubeGrid({
@@ -684,8 +685,14 @@ function Home() {
                   <a
                     key={match.matchPublicId}
                     href={`/match/${match.matchPublicId}/scorecard`}
-                    className="flex-shrink-0 bg-white border border-red-200 rounded-2xl p-3 min-w-[220px] max-w-[260px] shadow-sm hover:shadow-md transition-shadow active:scale-95"
+                    className={`flex-shrink-0 bg-white border rounded-2xl p-3 min-w-[220px] max-w-[260px] shadow-sm hover:shadow-md transition-shadow active:scale-95 ${match.pauseReason ? "border-amber-200" : "border-red-200"}`}
                   >
+                    {match.pauseReason && (
+                      <div className="text-xs text-amber-600 font-semibold mb-1 flex items-center gap-1">
+                        <span>⏸</span>
+                        <span className="truncate">Paused — {match.pauseReason}</span>
+                      </div>
+                    )}
                     {match.tournamentName && (
                       <div className="text-xs text-red-500 font-medium mb-1 truncate">
                         🏆 {match.tournamentName}

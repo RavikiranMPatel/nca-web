@@ -6,7 +6,7 @@ import { useParams, useNavigate } from "react-router-dom";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 interface BattingLine {
-  playerPublicId: string;
+  playerPublicId: string | null;
   playerName: string;
   battingOrder: number;
   runs: number;
@@ -22,7 +22,7 @@ interface BattingLine {
 }
 
 interface BowlingLine {
-  playerPublicId: string;
+  playerPublicId: string | null;
   playerName: string;
   overs: string;
   maidens: number;
@@ -340,7 +340,7 @@ const WagonWheelModal = ({
     const fetch = async () => {
       try {
         const res = await publicApi.get(
-          `/public/scorecard/${matchId}/shots/${batter.playerPublicId}?innings=${inningsNumber}`,
+          `/scorecard/${matchId}/shots/${batter.playerPublicId}?innings=${inningsNumber}`,
         );
         setShots(res.data ?? []);
       } catch {
@@ -686,7 +686,7 @@ const InningsCard = ({
         <tbody>
           {inn.battingCard.map((b) => (
             <tr
-              key={b.playerPublicId}
+              key={b.playerPublicId ?? b.playerName}
               onClick={() => onBatterClick(b)}
               className="border-b border-gray-50 dark:border-gray-800/50 hover:bg-blue-50 dark:hover:bg-blue-950/20 cursor-pointer active:bg-blue-100 transition-colors"
             >
@@ -830,7 +830,7 @@ const InningsCard = ({
         <tbody>
           {inn.bowlingCard.map((b) => (
             <tr
-              key={b.playerPublicId}
+              key={b.playerPublicId ?? b.playerName}
               className="border-b border-gray-50 dark:border-gray-800/50 hover:bg-gray-50 dark:hover:bg-gray-800/20"
             >
               <td className="py-2.5 px-4 font-medium text-gray-900 dark:text-gray-100">
@@ -932,6 +932,7 @@ export default function PublicScorecardPage() {
   };
 
   const handleBatterClick = (batter: BattingLine, inningsNumber: number) => {
+    if (!batter.playerPublicId) return; // external players have no publicId
     setSelectedBatter(batter);
     setSelectedBatterInnings(inningsNumber);
   };

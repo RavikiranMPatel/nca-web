@@ -34,6 +34,10 @@ export interface CricketMatch {
   resultType?: ResultType;
   resultDescription?: string;
   tournament?: { name: string; publicId: string };
+  pauseReason?: string | null;
+  pausedAt?: string | null;
+  playerOfMatch?: { publicId: string; displayName: string } | null;
+  playerOfMatchNote?: string | null;
 }
 
 export interface CricketTeam {

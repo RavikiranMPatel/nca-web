@@ -4,7 +4,10 @@ import { listMatches } from "../../api/scoring/matchApi";
 import type { CricketMatch } from "../../types/match";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
-const statusBadge = (status: string) => {
+const statusBadge = (status: string, paused?: boolean) => {
+  if (paused && (status === "IN_PROGRESS" || status === "SUPER_OVER")) {
+    return "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400";
+  }
   const map: Record<string, string> = {
     SETUP: "bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400",
     IN_PROGRESS:
@@ -20,7 +23,10 @@ const statusBadge = (status: string) => {
   return map[status] ?? "bg-gray-100 text-gray-500";
 };
 
-const statusLabel = (status: string) => {
+const statusLabel = (status: string, paused?: boolean) => {
+  if (paused && (status === "IN_PROGRESS" || status === "SUPER_OVER")) {
+    return "⏸ Paused";
+  }
   const map: Record<string, string> = {
     SETUP: "Setup",
     IN_PROGRESS: "🔴 Live",
@@ -147,9 +153,9 @@ const MatchCard = ({
         {/* Status + type */}
         <div className="flex items-center gap-2 mb-1.5">
           <span
-            className={`text-xs px-2 py-0.5 rounded-full font-medium ${statusBadge(match.status)}`}
+            className={`text-xs px-2 py-0.5 rounded-full font-medium ${statusBadge(match.status, !!match.pauseReason)}`}
           >
-            {statusLabel(match.status)}
+            {statusLabel(match.status, !!match.pauseReason)}
           </span>
           <span className="text-xs text-gray-400">
             {matchTypeLabel(match.matchType)} · {match.totalOvers} ov
@@ -207,15 +213,34 @@ const MatchCard = ({
     </div>
 
     {/* Action row */}
-    <div className="flex gap-2 mt-3 pt-3 border-t border-gray-50 dark:border-gray-800">
+    <div className="flex gap-2 mt-3 pt-3 border-t border-gray-50 dark:border-gray-800 flex-wrap">
       {match.status === "SETUP" && (
         <ActionChip label="Set Teams →" color="blue" />
       )}
-      {match.status === "IN_PROGRESS" && (
+      {match.status === "IN_PROGRESS" && !match.pauseReason && (
         <ActionChip label="🔴 Continue Scoring" color="green" />
+      )}
+      {match.status === "IN_PROGRESS" && match.pauseReason && (
+        <>
+          <ActionChip label="⏸ Resume Match" color="yellow" />
+          <span className="text-xs text-amber-600 dark:text-amber-400 self-center truncate max-w-[160px]">
+            {match.pauseReason}
+          </span>
+        </>
       )}
       {match.status === "INNINGS_BREAK" && (
         <ActionChip label="Start 2nd Innings" color="yellow" />
+      )}
+      {match.status === "SUPER_OVER" && !match.pauseReason && (
+        <ActionChip label="🔴 Continue Super Over" color="orange" />
+      )}
+      {match.status === "SUPER_OVER" && match.pauseReason && (
+        <>
+          <ActionChip label="⏸ Resume Match" color="yellow" />
+          <span className="text-xs text-amber-600 dark:text-amber-400 self-center truncate max-w-[160px]">
+            {match.pauseReason}
+          </span>
+        </>
       )}
       {match.status === "COMPLETED" && (
         <ActionChip label="View Scorecard" color="gray" />
@@ -237,6 +262,8 @@ const ActionChip = ({ label, color }: { label: string; color: string }) => {
     gray: "bg-gray-50 text-gray-500 dark:bg-gray-800 dark:text-gray-400",
     purple:
       "bg-purple-50 text-purple-600 dark:bg-purple-900/20 dark:text-purple-400",
+    orange:
+      "bg-orange-50 text-orange-700 dark:bg-orange-900/20 dark:text-orange-400",
   };
   return (
     <span

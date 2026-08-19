@@ -31,6 +31,18 @@ export const recordResult = (
 ) =>
   api.post(`/admin/cricket/matches/${matchId}/result`, req).then((r) => r.data);
 
+export const selectBatter = (
+  matchId: string,
+  batterPublicId: string,
+  position: "striker" | "nonstriker",
+) =>
+  api
+    .post<BallResponse>(`${BASE(matchId)}/select-batter`, {
+      batterPublicId,
+      position,
+    })
+    .then((r) => r.data);
+
 export const awardPenalty = async (
   matchId: string,
   awardedTo: "BATTING" | "FIELDING",
