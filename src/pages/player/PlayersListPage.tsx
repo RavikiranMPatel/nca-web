@@ -404,6 +404,7 @@ function PlayersListPage() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkReportModal, setBulkReportModal] = useState(false);
   const [bulkReportDownloading, setBulkReportDownloading] = useState(false);
+  const [sendingAdminWA, setSendingAdminWA] = useState(false);
 
   const [deleteConfirm, setDeleteConfirm] = useState<{
     open: boolean;
@@ -585,6 +586,25 @@ function PlayersListPage() {
 
   const getFilteredPublicIds = (): string[] =>
     filteredPlayers.map((p) => p.publicId);
+
+  const handleSendToAdminWA = async () => {
+    const ids = selectedIds.size > 0 ? [...selectedIds] : getFilteredPublicIds();
+    if (ids.length === 0) { toast.error("No players to send"); return; }
+    setSendingAdminWA(true);
+    try {
+      const res = await api.post("/admin/players/list-to-admin-wa", {
+        playerPublicIds: ids,
+        filterLabel: getFilterLabel(),
+      });
+      if (res.data.sent) {
+        toast.success(`Player list (${res.data.playerCount}) sent to ${res.data.sentTo}`);
+      }
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || "Failed to send — check WhatsApp config");
+    } finally {
+      setSendingAdminWA(false);
+    }
+  };
 
   const handleExportExcel = async () => {
     setExportingExcel(true);
@@ -815,6 +835,19 @@ function PlayersListPage() {
               ) : (
                 <span className="hidden sm:inline">WhatsApp</span>
               )}
+            </button>
+
+            {/* Player list → Admin WhatsApp */}
+            <button
+              onClick={handleSendToAdminWA}
+              disabled={sendingAdminWA}
+              title="Send player list to admin WhatsApp number"
+              className="flex items-center gap-1.5 px-2.5 py-2 text-xs font-medium text-white bg-teal-600 rounded-lg hover:bg-teal-700 transition shadow-sm disabled:opacity-60"
+            >
+              <MessageCircle size={15} />
+              <span className="hidden sm:inline">
+                {sendingAdminWA ? "Sending…" : "WA List"}
+              </span>
             </button>
 
             {/* Email */}

@@ -8,6 +8,7 @@ import {
   Trophy,
   Users,
   BarChart2,
+  LayoutGrid,
 } from "lucide-react";
 
 import {
@@ -23,6 +24,17 @@ import type {
 type Batch = {
   id: string;
   name: string;
+};
+
+type BatchSummary = {
+  batchPublicId: string;
+  batchName: string;
+  startTime: string;
+  endTime: string;
+  sessionsHeld: number;
+  totalPresent: number;
+  totalAbsent: number;
+  avgAttendanceRate: number;
 };
 
 // ── Pure-CSS mini bar chart ───────────────────────────────────────
@@ -87,6 +99,8 @@ const AttendanceStatsPage = () => {
   const [todayMap, setTodayMap] = useState<Record<string, string>>({});
   const [expandedPlayer, setExpandedPlayer] = useState<string | null>(null);
   const [monthDetails, setMonthDetails] = useState<any>(null);
+  const [viewMode, setViewMode] = useState<"players" | "batches">("players");
+  const [batchSummary, setBatchSummary] = useState<BatchSummary[]>([]);
 
   /* ===============================
      LOAD BATCHES (ONCE)
@@ -128,6 +142,16 @@ const AttendanceStatsPage = () => {
 
     loadData();
   }, [selectedBatchId, range, today]);
+
+  useEffect(() => {
+    if (viewMode !== "batches") return;
+    api
+      .get<BatchSummary[]>("/admin/attendance/stats/batch-summary", {
+        params: { range },
+      })
+      .then((r) => setBatchSummary(r.data))
+      .catch(() => setBatchSummary([]));
+  }, [viewMode, range]);
 
   const openPlayerHistory = (playerPublicId: string) => {
     navigate(`/admin/players/${playerPublicId}/attendance-history`);
@@ -204,8 +228,22 @@ const AttendanceStatsPage = () => {
           )}
         </div>
 
-        {/* ── RANGE SELECTOR ── */}
-        <div className="flex gap-2">
+        {/* ── VIEW MODE TOGGLE + RANGE SELECTOR ── */}
+        <div className="flex items-center gap-2 flex-wrap">
+          <div className="flex gap-1 bg-slate-100 rounded-full p-0.5">
+            <button
+              onClick={() => setViewMode("players")}
+              className={`flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-semibold transition-all ${viewMode === "players" ? "bg-white shadow text-slate-800" : "text-slate-500 hover:text-slate-700"}`}
+            >
+              <Users size={12} /> By Player
+            </button>
+            <button
+              onClick={() => setViewMode("batches")}
+              className={`flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-semibold transition-all ${viewMode === "batches" ? "bg-white shadow text-slate-800" : "text-slate-500 hover:text-slate-700"}`}
+            >
+              <LayoutGrid size={12} /> By Batch
+            </button>
+          </div>
           {(["LAST_7", "LAST_30", "YEAR"] as StatsRange[]).map((r) => (
             <button
               key={r}
@@ -220,6 +258,47 @@ const AttendanceStatsPage = () => {
             </button>
           ))}
         </div>
+
+        {/* ── BATCH SUMMARY VIEW ── */}
+        {viewMode === "batches" && (
+          <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+            <div className="px-4 py-3 border-b border-slate-100 flex items-center gap-2">
+              <LayoutGrid size={14} className="text-blue-600" />
+              <p className="text-sm font-semibold text-slate-700">All Batches — {range.replace("_", " ")}</p>
+            </div>
+            {batchSummary.length === 0 ? (
+              <p className="text-sm text-slate-400 p-6 text-center">No sessions found in this period.</p>
+            ) : (
+              <div className="divide-y divide-slate-100">
+                {batchSummary.map((b) => (
+                  <div key={b.batchPublicId} className="px-4 py-4 flex items-center gap-4">
+                    <div className="flex-1 min-w-0">
+                      <p className="font-semibold text-slate-800 text-sm">{b.batchName}</p>
+                      <p className="text-xs text-slate-500">{b.startTime?.slice(0,5)} – {b.endTime?.slice(0,5)} · {b.sessionsHeld} sessions</p>
+                    </div>
+                    <div className="text-right flex-shrink-0">
+                      <p className={`text-lg font-bold ${b.avgAttendanceRate >= 80 ? "text-emerald-600" : b.avgAttendanceRate >= 60 ? "text-amber-600" : "text-red-500"}`}>
+                        {b.avgAttendanceRate.toFixed(0)}%
+                      </p>
+                      <p className="text-xs text-slate-400">{b.totalPresent}P / {b.totalAbsent}A</p>
+                    </div>
+                    <div className="w-24 hidden sm:block">
+                      <div className="w-full bg-slate-100 rounded-full h-2">
+                        <div
+                          className={`h-2 rounded-full ${b.avgAttendanceRate >= 80 ? "bg-emerald-500" : b.avgAttendanceRate >= 60 ? "bg-amber-500" : "bg-red-500"}`}
+                          style={{ width: `${Math.min(b.avgAttendanceRate, 100)}%` }}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ── PER-PLAYER VIEW (hidden when batch mode is active) ── */}
+        {viewMode === "players" && <>
 
         {/* ── SUMMARY CARDS — always 3-col ── */}
         <div className="grid grid-cols-3 gap-2 md:gap-4">
@@ -559,6 +638,9 @@ const AttendanceStatsPage = () => {
             );
           })}
         </div>
+
+        </> /* end viewMode === "players" */}
+
       </div>
     </div>
   );

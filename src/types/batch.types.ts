@@ -14,6 +14,7 @@ export type Batch = {
   createdAt: string;
   updatedAt: string;
   branchId?: string;
+  daysOfWeek?: string; // comma-separated tokens e.g. "MON,WED,FRI"; null = every day
 };
 
 export type BatchCreateRequest = {
@@ -24,6 +25,7 @@ export type BatchCreateRequest = {
   color?: string;
   moduleType: string;
   branchId?: string;
+  daysOfWeek?: string;
 };
 
 export type BatchUpdateRequest = {
@@ -35,6 +37,7 @@ export type BatchUpdateRequest = {
   moduleType: string;
   active?: boolean;
   branchId?: string;
+  daysOfWeek?: string;
 };
 
 export type PlayerBatchAssignment = {

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useParams } from "react-router-dom";
 import {
   IndianRupee,
@@ -57,12 +57,31 @@ type FeePayment = {
   reversedPaymentPublicId?: string;
 };
 
+type InstPaymentSummary = {
+  publicId: string;
+  amount: number;
+  paidOn: string;
+  paymentMode: string;
+  referenceNumber?: string | null;
+};
+
+type InstallmentSummary = {
+  publicId: string;
+  installmentNumber: number;
+  dueDate: string;
+  dueAmount: number;
+  paidAmount: number;
+  status: string;
+  payments: InstPaymentSummary[];
+};
+
 type InstPlanSummary = {
   publicId: string;
   totalAmount: number;
   paidAmount: number;
   status: string;
-  installments: unknown[];
+  description?: string;
+  installments: InstallmentSummary[];
 };
 
 // ── NEW: Registration Fee type ──
@@ -502,18 +521,26 @@ function PlayerFeesTab() {
       account
         ? (instPlans.find(
             (p) =>
-              p.status === "COMPLETED" &&
-              p.paidAmount >= (account.feePlan?.finalAmount ?? Infinity),
+              p.paidAmount > 0 &&
+              (p.status === "COMPLETED" || p.status === "ACTIVE"),
           ) ?? null)
         : null,
     [instPlans, account],
   );
 
-  // Auto-resync: when a blocking plan is detected and account isn't PAID yet,
+  // Auto-resync: when a COMPLETED blocking plan is detected and account isn't PAID yet,
   // call the backend to anchor lastPaidOn to the actual first installment date.
+  // Not triggered for ACTIVE plans — those are in-progress and the account isn't
+  // expected to be PAID until all installments are collected.
   // Shows a toast on failure so the admin knows to use "Edit Last Paid" manually.
   useEffect(() => {
-    if (!blockingInstPlan || !account || account.status === "PAID" || syncingAccount)
+    if (
+      !blockingInstPlan ||
+      !account ||
+      account.status === "PAID" ||
+      syncingAccount ||
+      blockingInstPlan.status !== "COMPLETED"
+    )
       return;
     setSyncingAccount(true);
     api
@@ -703,10 +730,9 @@ function PlayerFeesTab() {
                 <CheckCircle2 size={16} /> Mark as Paid
               </button>
               <p className="text-xs text-emerald-700 bg-emerald-50 border border-emerald-100 rounded-lg px-3 py-2 text-center leading-relaxed">
-                Fully paid via installment plan — ₹
-                {blockingInstPlan.paidAmount.toLocaleString("en-IN")} collected
-                across {blockingInstPlan.installments.length} installment
-                {blockingInstPlan.installments.length !== 1 ? "s" : ""}
+                {blockingInstPlan.status === "COMPLETED"
+                  ? `Fully paid via installment plan — ₹${blockingInstPlan.paidAmount.toLocaleString("en-IN")} collected across ${blockingInstPlan.installments.length} installment${blockingInstPlan.installments.length !== 1 ? "s" : ""}`
+                  : `Installment plan in progress — ₹${blockingInstPlan.paidAmount.toLocaleString("en-IN")} of ₹${blockingInstPlan.totalAmount.toLocaleString("en-IN")} collected. Marking as paid would duplicate this revenue.`}
               </p>
             </div>
           ) : account.status !== "PAID" ? (
@@ -762,14 +788,47 @@ function PlayerFeesTab() {
       </div>
 
       {/* ── PAYMENT HISTORY ── */}
+      {(() => {
+        // Flatten installment payments into unified rows, sorted newest-first.
+        type InstRow = {
+          key: string;
+          paidOn: string;
+          label: string;
+          amount: number;
+          paymentMode: string;
+          referenceNumber?: string | null;
+        };
+        const instRows: InstRow[] = instPlans
+          .flatMap((p) =>
+            p.installments.flatMap((i) =>
+              (i.payments ?? []).map((pmt) => ({
+                key: `inst-${pmt.publicId}`,
+                paidOn: pmt.paidOn,
+                label: `Installment #${i.installmentNumber}`,
+                amount: pmt.amount,
+                paymentMode: pmt.paymentMode,
+                referenceNumber: pmt.referenceNumber,
+              })),
+            ),
+          )
+          .sort((a, b) => (b.paidOn > a.paidOn ? 1 : -1));
+
+        const directRows = payments
+          .filter((p) => p.type !== "REVERSAL")
+          .sort((a, b) => (b.paidOn > a.paidOn ? 1 : -1));
+
+        const totalCount = payments.length + instRows.length;
+        const hasAny = totalCount > 0;
+
+        return (
       <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
         <div className="flex items-center gap-2 px-4 py-3 border-b border-slate-100 bg-slate-50">
           <History size={17} className="text-slate-500" />
           <h3 className="font-bold text-slate-800 text-sm">Payment History</h3>
-          <span className="text-xs text-slate-400">({payments.length})</span>
+          <span className="text-xs text-slate-400">({totalCount})</span>
         </div>
 
-        {payments.length === 0 ? (
+        {!hasAny ? (
           <div className="text-center py-10">
             <History size={32} className="mx-auto text-slate-200 mb-3" />
             <p className="text-sm text-slate-500">No payments recorded yet</p>
@@ -782,7 +841,7 @@ function PlayerFeesTab() {
                 <thead>
                   <tr className="text-xs text-slate-500 uppercase tracking-wide border-b bg-slate-50/50">
                     <th className="text-left px-5 py-3">Date</th>
-                    <th className="text-left px-5 py3">Plan</th>
+                    <th className="text-left px-5 py-3">Plan / Instalment</th>
                     <th className="text-left px-5 py-3">Amount</th>
                     <th className="text-left px-5 py-3">Mode</th>
                     <th className="text-left px-5 py-3">Ref / Receipt</th>
@@ -794,19 +853,63 @@ function PlayerFeesTab() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {payments
-                    .filter((p) => p.type !== "REVERSAL")
+                  {/* Merge and sort direct + instalment rows by date */}
+                  {[
+                    ...directRows.map((p) => ({ type: "direct" as const, p, paidOn: p.paidOn })),
+                    ...instRows.map((r) => ({ type: "inst" as const, r, paidOn: r.paidOn })),
+                  ]
                     .sort((a, b) => (b.paidOn > a.paidOn ? 1 : -1))
-                    .map((p) => {
+                    .map((item) => {
+                      if (item.type === "inst") {
+                        const r = item.r;
+                        return (
+                          <tr key={r.key} className="hover:bg-violet-50/30 transition">
+                            <td className="px-5 py-3 text-sm text-slate-700">
+                              {formatDate(r.paidOn)}
+                            </td>
+                            <td className="px-5 py-3 text-sm">
+                              <span className="inline-flex items-center gap-1.5 text-violet-700 font-medium">
+                                <span className="text-[10px] bg-violet-100 text-violet-600 px-1.5 py-0.5 rounded font-semibold uppercase tracking-wide">
+                                  Inst
+                                </span>
+                                {r.label}
+                              </span>
+                            </td>
+                            <td className="px-5 py-3 text-sm font-semibold text-slate-800">
+                              ₹{r.amount?.toLocaleString("en-IN")}
+                            </td>
+                            <td className="px-5 py-3 text-sm text-slate-600">
+                              {formatPaymentMode(r.paymentMode)}
+                            </td>
+                            <td className="px-5 py-3">
+                              {r.referenceNumber ? (
+                                <span className="text-xs font-mono text-slate-600 bg-slate-100 px-2 py-0.5 rounded">
+                                  {r.referenceNumber}
+                                </span>
+                              ) : (
+                                <span className="text-xs text-slate-400">—</span>
+                              )}
+                            </td>
+                            <td className="px-5 py-3" />
+                            <td className="px-5 py-3">
+                              <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-violet-100 text-violet-700">
+                                Paid
+                              </span>
+                            </td>
+                            {isSuperAdmin && <td className="px-5 py-3" />}
+                          </tr>
+                        );
+                      }
+
+                      const p = item.p;
                       const reversal = payments.find(
                         (r) =>
                           r.type === "REVERSAL" &&
                           r.reversedPaymentPublicId === p.publicId,
                       );
                       return (
-                        <>
+                        <React.Fragment key={p.publicId}>
                           <tr
-                            key={p.publicId}
                             className={`hover:bg-slate-50 transition ${reversal ? "opacity-60" : ""}`}
                           >
                             <td className="px-5 py-3 text-sm text-slate-700">
@@ -932,10 +1035,7 @@ function PlayerFeesTab() {
                             )}
                           </tr>
                           {reversal && (
-                            <tr
-                              key={reversal.publicId}
-                              className="bg-red-50/60"
-                            >
+                            <tr className="bg-red-50/60">
                               <td
                                 colSpan={isSuperAdmin ? 8 : 7}
                                 className="px-5 py-2"
@@ -963,7 +1063,7 @@ function PlayerFeesTab() {
                               </td>
                             </tr>
                           )}
-                        </>
+                        </React.Fragment>
                       );
                     })}
                 </tbody>
@@ -972,10 +1072,50 @@ function PlayerFeesTab() {
 
             {/* Mobile Cards */}
             <div className="sm:hidden divide-y divide-slate-100">
-              {payments
-                .filter((p) => p.type !== "REVERSAL")
+              {[
+                ...directRows.map((p) => ({ type: "direct" as const, p, paidOn: p.paidOn })),
+                ...instRows.map((r) => ({ type: "inst" as const, r, paidOn: r.paidOn })),
+              ]
                 .sort((a, b) => (b.paidOn > a.paidOn ? 1 : -1))
-                .map((p) => {
+                .map((item) => {
+                  if (item.type === "inst") {
+                    const r = item.r;
+                    return (
+                      <div key={r.key} className="p-4">
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="text-sm font-medium text-slate-700">
+                            {formatDate(r.paidOn)}
+                          </span>
+                          <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-violet-100 text-violet-700">
+                            Paid
+                          </span>
+                        </div>
+                        <div className="flex items-center justify-between mb-1.5">
+                          <span className="text-lg font-bold text-slate-900">
+                            ₹{r.amount?.toLocaleString("en-IN")}
+                          </span>
+                          <span className="text-xs text-slate-500">
+                            {formatPaymentMode(r.paymentMode)}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-[10px] bg-violet-100 text-violet-600 px-1.5 py-0.5 rounded font-semibold uppercase tracking-wide">
+                            Inst
+                          </span>
+                          <span className="text-xs text-violet-700 font-medium">
+                            {r.label}
+                          </span>
+                        </div>
+                        {r.referenceNumber && (
+                          <span className="mt-1.5 inline-block text-[11px] font-mono text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded">
+                            Ref: {r.referenceNumber}
+                          </span>
+                        )}
+                      </div>
+                    );
+                  }
+
+                  const p = item.p;
                   const reversal = payments.find(
                     (r) =>
                       r.type === "REVERSAL" &&
@@ -1131,6 +1271,8 @@ function PlayerFeesTab() {
           </>
         )}
       </div>
+        );
+      })()}
 
       {/* ── INSTALLMENT PLANS ── */}
       <InstallmentSection playerPublicId={playerPublicId!} />
@@ -1895,6 +2037,12 @@ function InstallmentSection({ playerPublicId }: { playerPublicId: string }) {
   });
   const [savingPayInst, setSavingPayInst] = useState(false);
 
+  const [editInst, setEditInst] = useState<Installment | null>(null);
+  const [editInstForm, setEditInstForm] = useState({ dueDate: "", dueAmount: "", notes: "" });
+  const [savingEditInst, setSavingEditInst] = useState(false);
+  const [deletingInstId, setDeletingInstId] = useState<string | null>(null);
+  const [reversingPaymentId, setReversingPaymentId] = useState<string | null>(null);
+
   useEffect(() => {
     loadPlans();
   }, [playerPublicId]);
@@ -1974,6 +2122,53 @@ function InstallmentSection({ playerPublicId }: { playerPublicId: string }) {
       toast.error(err.response?.data?.message || "Failed to record payment");
     } finally {
       setSavingPayInst(false);
+    }
+  };
+
+  const handleEditInstallment = async () => {
+    if (!editInst) return;
+    setSavingEditInst(true);
+    try {
+      await api.patch(`/admin/fee-installments/installments/${editInst.publicId}`, {
+        ...(editInstForm.dueDate && { dueDate: editInstForm.dueDate }),
+        ...(editInstForm.dueAmount && { dueAmount: parseFloat(editInstForm.dueAmount) }),
+        ...(editInstForm.notes !== "" && { notes: editInstForm.notes }),
+      });
+      toast.success("Installment updated!");
+      setEditInst(null);
+      loadPlans();
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || "Failed to update installment");
+    } finally {
+      setSavingEditInst(false);
+    }
+  };
+
+  const handleDeleteInstallment = async (publicId: string) => {
+    if (!confirm("Delete this installment? This cannot be undone.")) return;
+    setDeletingInstId(publicId);
+    try {
+      await api.delete(`/admin/fee-installments/installments/${publicId}`);
+      toast.success("Installment deleted");
+      loadPlans();
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || "Failed to delete installment");
+    } finally {
+      setDeletingInstId(null);
+    }
+  };
+
+  const handleReversePayment = async (paymentPublicId: string) => {
+    if (!confirm("Reverse this payment? The installment balance will be restored.")) return;
+    setReversingPaymentId(paymentPublicId);
+    try {
+      await api.delete(`/admin/fee-installments/payments/${paymentPublicId}`);
+      toast.success("Payment reversed");
+      loadPlans();
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || "Failed to reverse payment");
+    } finally {
+      setReversingPaymentId(null);
     }
   };
 
@@ -2184,25 +2379,55 @@ function InstallmentSection({ playerPublicId }: { playerPublicId: string }) {
                                 ₹{inst.dueAmount.toLocaleString("en-IN")}
                               </p>
                               {inst.status !== "PAID" && (
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    setPayInstForm({
-                                      amount: String(
-                                        inst.balanceAmount ??
-                                          inst.dueAmount ??
-                                          "",
-                                      ),
-                                      paymentMode: "CASH",
-                                      referenceNumber: "",
-                                      paidOn: new Date().toISOString().split("T")[0],
-                                    });
-                                    setShowPayInstallment(inst);
-                                  }}
-                                  className="px-2 py-1 bg-emerald-500 text-white text-[10px] font-bold rounded-lg hover:bg-emerald-600 transition"
-                                >
-                                  Pay
-                                </button>
+                                <>
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setEditInst(inst);
+                                      setEditInstForm({
+                                        dueDate: inst.dueDate,
+                                        dueAmount: String(inst.dueAmount),
+                                        notes: inst.notes ?? "",
+                                      });
+                                    }}
+                                    className="px-2 py-1 bg-slate-100 text-slate-600 text-[10px] font-bold rounded-lg hover:bg-slate-200 transition"
+                                    title="Edit installment"
+                                  >
+                                    Edit
+                                  </button>
+                                  {inst.status === "PENDING" && (
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleDeleteInstallment(inst.publicId);
+                                      }}
+                                      disabled={deletingInstId === inst.publicId}
+                                      className="px-2 py-1 bg-red-50 text-red-500 text-[10px] font-bold rounded-lg hover:bg-red-100 transition"
+                                      title="Delete installment"
+                                    >
+                                      {deletingInstId === inst.publicId ? "…" : "Del"}
+                                    </button>
+                                  )}
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setPayInstForm({
+                                        amount: String(
+                                          inst.balanceAmount ??
+                                            inst.dueAmount ??
+                                            "",
+                                        ),
+                                        paymentMode: "CASH",
+                                        referenceNumber: "",
+                                        paidOn: new Date().toISOString().split("T")[0],
+                                      });
+                                      setShowPayInstallment(inst);
+                                    }}
+                                    className="px-2 py-1 bg-emerald-500 text-white text-[10px] font-bold rounded-lg hover:bg-emerald-600 transition"
+                                  >
+                                    Pay
+                                  </button>
+                                </>
                               )}
                             </div>
                           </div>
@@ -2245,7 +2470,7 @@ function InstallmentSection({ playerPublicId }: { playerPublicId: string }) {
       )}
 
       {showCreatePlan && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center">
+        <div className="fixed inset-0 bg-black/50 z-[60] flex items-end sm:items-center justify-center">
           <div className="bg-white rounded-t-2xl sm:rounded-xl shadow-xl w-full sm:max-w-sm max-h-[85dvh] overflow-y-auto">
             <div className="flex items-center justify-between px-5 py-4 border-b bg-slate-50 rounded-t-2xl sm:rounded-t-xl">
               <h3 className="font-bold text-slate-800">New Installment Plan</h3>
@@ -2304,7 +2529,7 @@ function InstallmentSection({ playerPublicId }: { playerPublicId: string }) {
       )}
 
       {showAddInstallment && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center">
+        <div className="fixed inset-0 bg-black/50 z-[60] flex items-end sm:items-center justify-center">
           <div className="bg-white rounded-t-2xl sm:rounded-xl shadow-xl w-full sm:max-w-sm max-h-[85dvh] overflow-y-auto">
             <div className="flex items-center justify-between px-5 py-4 border-b bg-slate-50 rounded-t-2xl sm:rounded-t-xl">
               <h3 className="font-bold text-slate-800">Add Installment</h3>
@@ -2378,7 +2603,7 @@ function InstallmentSection({ playerPublicId }: { playerPublicId: string }) {
       )}
 
       {showPayInstallment && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center">
+        <div className="fixed inset-0 bg-black/50 z-[60] flex items-end sm:items-center justify-center">
           <div className="bg-white rounded-t-2xl sm:rounded-xl shadow-xl w-full sm:max-w-sm max-h-[85dvh] overflow-y-auto">
             <div className="flex items-center justify-between px-5 py-4 border-b bg-slate-50 rounded-t-2xl sm:rounded-t-xl">
               <div>
@@ -2489,7 +2714,7 @@ function InstallmentSection({ playerPublicId }: { playerPublicId: string }) {
       )}
 
       {editAmountPlan && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center">
+        <div className="fixed inset-0 bg-black/50 z-[60] flex items-end sm:items-center justify-center">
           <div className="bg-white rounded-t-2xl sm:rounded-xl shadow-xl w-full sm:max-w-sm max-h-[85dvh] overflow-y-auto">
             <div className="flex items-center justify-between px-5 py-4 border-b bg-slate-50 rounded-t-2xl sm:rounded-t-xl">
               <div>
@@ -2534,6 +2759,65 @@ function InstallmentSection({ playerPublicId }: { playerPublicId: string }) {
                   {savingAmount ? "Saving…" : "Save Amount"}
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── EDIT INSTALLMENT MODAL ── */}
+      {editInst && (
+        <div className="fixed inset-0 bg-black/50 z-[60] flex items-end sm:items-center justify-center">
+          <div className="bg-white rounded-t-2xl sm:rounded-xl shadow-xl w-full sm:max-w-sm max-h-[85dvh] overflow-y-auto p-5">
+            <h3 className="font-bold text-slate-800 mb-4 text-sm">
+              Edit Installment #{editInst.installmentNumber}
+            </h3>
+            <div className="space-y-3">
+              <div>
+                <label className="text-xs font-semibold text-slate-600 mb-1 block">Due Date</label>
+                <input
+                  type="date"
+                  value={editInstForm.dueDate}
+                  onChange={(e) => setEditInstForm((f) => ({ ...f, dueDate: e.target.value }))}
+                  className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-slate-600 mb-1 block">
+                  Due Amount (₹) — paid ₹{editInst.paidAmount.toLocaleString("en-IN")} so far
+                </label>
+                <input
+                  type="number"
+                  value={editInstForm.dueAmount}
+                  onChange={(e) => setEditInstForm((f) => ({ ...f, dueAmount: e.target.value }))}
+                  className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm"
+                  min={editInst.paidAmount}
+                />
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-slate-600 mb-1 block">Notes</label>
+                <input
+                  type="text"
+                  value={editInstForm.notes}
+                  onChange={(e) => setEditInstForm((f) => ({ ...f, notes: e.target.value }))}
+                  className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm"
+                  placeholder="Optional"
+                />
+              </div>
+            </div>
+            <div className="flex gap-2 mt-4">
+              <button
+                onClick={() => setEditInst(null)}
+                className="flex-1 py-2 border border-slate-200 rounded-lg text-sm text-slate-600"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleEditInstallment}
+                disabled={savingEditInst}
+                className="flex-1 py-2 bg-blue-600 text-white rounded-lg text-sm font-semibold disabled:opacity-50"
+              >
+                {savingEditInst ? "Saving…" : "Save"}
+              </button>
             </div>
           </div>
         </div>

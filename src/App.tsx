@@ -18,6 +18,7 @@ import AdminUsers from "./pages/AdminUsers";
 import AttendancePage from "./pages/regular-camp-attendance/AttendancePage";
 import AttendanceDayHistoryPage from "./pages/regular-camp-attendance/AttendanceDayHistoryPage";
 import AttendanceStatsPage from "./pages/regular-camp-attendance/AttendanceStatsPage";
+import AttendanceExcludedDatesPage from "./pages/regular-camp-attendance/AttendanceExcludedDatesPage";
 import RegisterPlayer from "./pages/player/RegisterPlayer";
 import PlayersListPage from "./pages/player/PlayersListPage";
 import PlayerOverviewPage from "./pages/player/PlayerOverviewPage";
@@ -65,6 +66,7 @@ import UserProfilePage from "./pages/UserProfilePage";
 import AdminRevenueDashboard from "./pages/admin/AdminRevenueDashboard";
 import AdminExcelImportPage from "./pages/admin/AdminExcelImportPage";
 import FeesDuePage from "./pages/admin/FeesDuePage";
+import MonthSummaryPage from "./pages/admin/MonthSummaryPage";
 // import PlayerCoachingPage from "./pages/player/PlayerCoachingPage"; // disabled 2026-07-31 — Coaching tab hidden pending content strategy
 import CoachingDashboardPage from "./pages/coaching/CoachingDashboardPage";
 import PlayerCoachingViewPage from "./pages/player/PlayerCoachingViewPage";
@@ -278,6 +280,16 @@ function App() {
           <ProtectedRoute roles={["ROLE_ADMIN", "ROLE_SUPER_ADMIN"]}>
             <AppLayout>
               <AttendanceStatsPage />
+            </AppLayout>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/attendance/excluded-dates"
+        element={
+          <ProtectedRoute roles={["ROLE_ADMIN", "ROLE_SUPER_ADMIN"]}>
+            <AppLayout>
+              <AttendanceExcludedDatesPage />
             </AppLayout>
           </ProtectedRoute>
         }
@@ -500,6 +512,16 @@ function App() {
           <ProtectedRoute roles={["ROLE_ADMIN", "ROLE_SUPER_ADMIN"]}>
             <AppLayout>
               <FeesDuePage />
+            </AppLayout>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/month-summary"
+        element={
+          <ProtectedRoute roles={["ROLE_ADMIN", "ROLE_SUPER_ADMIN"]}>
+            <AppLayout>
+              <MonthSummaryPage />
             </AppLayout>
           </ProtectedRoute>
         }

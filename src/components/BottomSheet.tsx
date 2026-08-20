@@ -27,7 +27,7 @@ export function BottomSheet({
   shadow?: string;
 }) {
   return (
-    <div className="fixed inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center">
+    <div className="fixed inset-0 bg-black/50 z-[60] flex items-end sm:items-center justify-center">
       <div
         className={`bg-white rounded-t-2xl sm:rounded-xl ${shadow} w-full ${maxWidth} max-h-[85dvh] overflow-y-auto`}
       >

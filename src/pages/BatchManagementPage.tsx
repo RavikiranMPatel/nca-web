@@ -26,12 +26,18 @@ import {
 } from "../api/batchService";
 import type { Batch, BatchCreateRequest } from "../types/batch.types";
 
+const ALL_DAYS = ["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"] as const;
+const DAY_LABELS: Record<string, string> = {
+  MON: "Mon", TUE: "Tue", WED: "Wed", THU: "Thu", FRI: "Fri", SAT: "Sat", SUN: "Sun",
+};
+
 type BatchFormData = {
   name: string;
   startTime: string;
   endTime: string;
   description: string;
   color: string;
+  daysOfWeek: string[]; // selected day tokens
 };
 
 function BatchManagementPage() {
@@ -57,6 +63,7 @@ function BatchManagementPage() {
     endTime: "",
     description: "",
     color: "",
+    daysOfWeek: ["MON", "TUE", "WED", "THU", "FRI", "SAT"],
   });
 
   useEffect(() => {
@@ -123,6 +130,7 @@ function BatchManagementPage() {
       endTime: "",
       description: "",
       color: getDefaultBatchColor(batches.length),
+      daysOfWeek: ["MON", "TUE", "WED", "THU", "FRI", "SAT"],
     });
     setEditingId(null);
     setShowCreateForm(false);
@@ -150,6 +158,7 @@ function BatchManagementPage() {
         moduleType: selectedModule,
         branchId:
           isSuperAdmin && selectedBranchId ? selectedBranchId : undefined,
+        daysOfWeek: formData.daysOfWeek.length > 0 ? formData.daysOfWeek.join(",") : undefined,
       };
       await createBatch(request);
       toast.success("Batch created successfully");
@@ -185,6 +194,7 @@ function BatchManagementPage() {
         moduleType: selectedModule,
         branchId:
           isSuperAdmin && selectedBranchId ? selectedBranchId : undefined,
+        daysOfWeek: formData.daysOfWeek.join(","),
       });
       toast.success("Batch updated successfully");
       resetForm();
@@ -224,6 +234,9 @@ function BatchManagementPage() {
       endTime: batch.endTime,
       description: batch.description || "",
       color: batch.color || getDefaultBatchColor(0),
+      daysOfWeek: (batch as any).daysOfWeek
+        ? (batch as any).daysOfWeek.split(",").map((d: string) => d.trim())
+        : ["MON", "TUE", "WED", "THU", "FRI", "SAT"],
     });
     setSelectedModule(batch.moduleType);
     setEditingId(batch.id);
@@ -418,6 +431,44 @@ function BatchManagementPage() {
                     }
                     className="w-20 h-10 rounded-lg border border-slate-300 cursor-pointer"
                   />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-2">
+                    Training Days
+                    <span className="text-xs text-slate-400 ml-2 font-normal">
+                      (select all days this batch runs)
+                    </span>
+                  </label>
+                  <div className="flex flex-wrap gap-2">
+                    {ALL_DAYS.map((day) => {
+                      const selected = formData.daysOfWeek.includes(day);
+                      return (
+                        <button
+                          key={day}
+                          type="button"
+                          onClick={() =>
+                            setFormData((f) => ({
+                              ...f,
+                              daysOfWeek: selected
+                                ? f.daysOfWeek.filter((d) => d !== day)
+                                : [...f.daysOfWeek, day],
+                            }))
+                          }
+                          className={`px-3 py-1.5 rounded-lg text-sm font-semibold border transition-all ${
+                            selected
+                              ? "bg-blue-600 text-white border-blue-600"
+                              : "bg-white text-slate-600 border-slate-300 hover:border-blue-400"
+                          }`}
+                        >
+                          {DAY_LABELS[day]}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  {formData.daysOfWeek.length === 0 && (
+                    <p className="text-xs text-amber-600 mt-1">Select at least one day</p>
+                  )}
                 </div>
 
                 {/* Branch dropdown — super admin only */}

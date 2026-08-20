@@ -12,6 +12,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Calendar,
+  CalendarOff,
 } from "lucide-react";
 import AttendanceRow from "../../components/attendance-component/AttendanceRow";
 import Button from "../../components/Button";
@@ -340,6 +341,13 @@ function AttendancePage() {
               >
                 <Settings size={15} />
                 <span className="hidden sm:inline">Batches</span>
+              </button>
+              <button
+                onClick={() => navigate("/admin/attendance/excluded-dates")}
+                className="flex items-center gap-1.5 px-2.5 py-1.5 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition text-xs font-medium"
+              >
+                <CalendarOff size={15} />
+                <span className="hidden sm:inline">Holidays</span>
               </button>
               <button
                 onClick={() => navigate("/admin/attendance/stats")}
