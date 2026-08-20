@@ -71,6 +71,7 @@ type OtherExpense = {
   paidBy: string | null;
   notes: string | null;
   transactionType: "EXPENSE" | "INCOME";
+  paymentMode: string | null;
 };
 type CampPayment = {
   publicId: string;
@@ -103,6 +104,24 @@ type MonthlyPayment = {
   paidBy: string | null;
   notes: string | null;
   status: string;
+  paymentMode: string | null;
+};
+
+type BankSnapshot = {
+  publicId: string;
+  snapshotType: string;
+  snapshotDate: string;
+  balance: number;
+  notes: string | null;
+  recordedBy: string | null;
+};
+
+type BankPosition = {
+  latestOpening: BankSnapshot | null;
+  latestActual: BankSnapshot | null;
+  expectedBalance: number | null;
+  variance: number | null;
+  recentActuals: BankSnapshot[];
 };
 type Suggestions = {
   area: string[];
@@ -148,7 +167,8 @@ type Tab =
   | "expenses"
   | "income"
   | "installments"
-  | "commission";
+  | "commission"
+  | "bank";
 
 type CommissionRow = {
   memberName: string;
@@ -182,6 +202,15 @@ const MONTHS = [
   "Dec",
 ];
 
+const EXPENSE_PAYMENT_MODES = [
+  { value: "PHONE_PE", label: "PhonePe" },
+  { value: "BANK_TRANSFER", label: "Bank Transfer" },
+  { value: "GOOGLE_PAY", label: "Google Pay" },
+  { value: "ONLINE", label: "Online" },
+  { value: "CASH", label: "Cash" },
+  { value: "OTHER", label: "Other" },
+];
+
 const EMPTY_EXPENSE_FORM = {
   description: "",
   amount: "",
@@ -193,6 +222,7 @@ const EMPTY_EXPENSE_FORM = {
   budgetHead: "",
   paidBy: "",
   notes: "",
+  paymentMode: "",
   transactionType: "EXPENSE" as "EXPENSE" | "INCOME",
 };
 
@@ -429,8 +459,20 @@ export default function AdminRevenueDashboard() {
   const [expenseSaving, setExpenseSaving] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
   const [payModal, setPayModal] = useState<MonthlyPayment | null>(null);
-  const [payForm, setPayForm] = useState({ amount: "", paidBy: "", notes: "" });
+  const [payForm, setPayForm] = useState({ amount: "", paidBy: "", notes: "", paymentMode: "" });
   const [paySaving, setPaySaving] = useState(false);
+
+  // ── Bank Position state ──
+  const [bankPosition, setBankPosition] = useState<BankPosition | null>(null);
+  const [bankLoading, setBankLoading] = useState(false);
+  const [showSnapshotModal, setShowSnapshotModal] = useState(false);
+  const [snapshotForm, setSnapshotForm] = useState({
+    snapshotType: "ACTUAL",
+    snapshotDate: new Date().toISOString().split("T")[0],
+    balance: "",
+    notes: "",
+  });
+  const [snapshotSaving, setSnapshotSaving] = useState(false);
 
   type InstallmentPaymentRow = {
     publicId: string;
@@ -635,6 +677,9 @@ export default function AdminRevenueDashboard() {
   useEffect(() => {
     if (activeTab === "commission") {
       loadCommissionData(commissionMonth);
+    }
+    if (activeTab === "bank" && isSuperAdmin) {
+      loadBankPosition();
     }
   }, [activeTab]);
   useEffect(() => {
@@ -960,6 +1005,7 @@ export default function AdminRevenueDashboard() {
       budgetHead: e.budgetHead || "",
       paidBy: e.paidBy || "",
       notes: e.notes || "",
+      paymentMode: e.paymentMode || "",
       transactionType: e.transactionType || "EXPENSE",
     });
     setShowExpenseModal(true);
@@ -979,6 +1025,7 @@ export default function AdminRevenueDashboard() {
         budgetHead: expenseForm.budgetHead || null,
         paidBy: expenseForm.paidBy || null,
         notes: expenseForm.notes || null,
+        paymentMode: expenseForm.transactionType === "EXPENSE" ? (expenseForm.paymentMode || null) : null,
         transactionType: expenseForm.transactionType,
       };
       if (editingExpense)
@@ -1150,10 +1197,11 @@ export default function AdminRevenueDashboard() {
       amount: String(p.amount || p.item.defaultAmount || ""),
       paidBy: p.paidBy || "",
       notes: p.notes || "",
+      paymentMode: p.paymentMode || "",
     });
   };
   const submitPay = async () => {
-    if (!payModal || !payForm.amount) return;
+    if (!payModal || !payForm.amount || !payForm.paymentMode) return;
     setPaySaving(true);
     try {
       await api.post("/admin/expenses/monthly/pay", {
@@ -1163,6 +1211,7 @@ export default function AdminRevenueDashboard() {
         amount: parseFloat(payForm.amount),
         paidBy: payForm.paidBy || null,
         notes: payForm.notes || null,
+        paymentMode: payForm.paymentMode,
       });
       setPayModal(null);
       await loadMonthly(monthYear.year, monthYear.month);
@@ -1192,6 +1241,48 @@ export default function AdminRevenueDashboard() {
       await loadMonthly(monthYear.year, monthYear.month);
     } catch {
       alert("Failed to delete recurring item");
+    }
+  };
+
+  const loadBankPosition = async () => {
+    setBankLoading(true);
+    try {
+      const res = await api.get("/admin/bank-position");
+      setBankPosition(res.data);
+    } catch {
+      setBankPosition(null);
+    } finally {
+      setBankLoading(false);
+    }
+  };
+
+  const submitSnapshot = async () => {
+    if (!snapshotForm.balance) return;
+    setSnapshotSaving(true);
+    try {
+      await api.post("/admin/bank-position/snapshots", {
+        snapshotType: snapshotForm.snapshotType,
+        snapshotDate: snapshotForm.snapshotDate,
+        balance: snapshotForm.balance,
+        notes: snapshotForm.notes || null,
+      });
+      setShowSnapshotModal(false);
+      setSnapshotForm({ snapshotType: "ACTUAL", snapshotDate: new Date().toISOString().split("T")[0], balance: "", notes: "" });
+      await loadBankPosition();
+    } catch {
+      toast.error("Failed to save snapshot");
+    } finally {
+      setSnapshotSaving(false);
+    }
+  };
+
+  const setMonthlyPaymentMode = async (publicId: string, paymentMode: string) => {
+    try {
+      await api.patch(`/admin/expenses/monthly/${publicId}/payment-mode`, { paymentMode });
+      await loadMonthly(monthYear.year, monthYear.month);
+      if (activeTab === "bank") await loadBankPosition();
+    } catch {
+      toast.error("Failed to update payment mode");
     }
   };
 
@@ -1748,6 +1839,21 @@ export default function AdminRevenueDashboard() {
                       placeholder="e.g. Dhanush"
                     />
                   </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-600 mb-1.5 uppercase tracking-wide">
+                      Payment Mode
+                    </label>
+                    <select
+                      value={expenseForm.paymentMode}
+                      onChange={(e) => setF("paymentMode")(e.target.value)}
+                      className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-400 focus:outline-none bg-white"
+                    >
+                      <option value="">Select mode…</option>
+                      {EXPENSE_PAYMENT_MODES.map((m) => (
+                        <option key={m.value} value={m.value}>{m.label}</option>
+                      ))}
+                    </select>
+                  </div>
                 </>
               ) : (
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -1883,6 +1989,21 @@ export default function AdminRevenueDashboard() {
               </div>
               <div>
                 <label className="block text-xs font-semibold text-slate-600 mb-1.5 uppercase tracking-wide">
+                  Payment Mode *
+                </label>
+                <select
+                  value={payForm.paymentMode}
+                  onChange={(e) => setPayForm((f) => ({ ...f, paymentMode: e.target.value }))}
+                  className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-emerald-400 focus:outline-none bg-white"
+                >
+                  <option value="">Select mode…</option>
+                  {EXPENSE_PAYMENT_MODES.map((m) => (
+                    <option key={m.value} value={m.value}>{m.label}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 mb-1.5 uppercase tracking-wide">
                   Paid By
                 </label>
                 <input
@@ -1919,7 +2040,7 @@ export default function AdminRevenueDashboard() {
               </button>
               <button
                 onClick={submitPay}
-                disabled={paySaving || !payForm.amount}
+                disabled={paySaving || !payForm.amount || !payForm.paymentMode}
                 className="px-5 py-2 bg-emerald-600 text-white text-sm font-semibold rounded-lg hover:bg-emerald-700 disabled:opacity-50"
               >
                 {paySaving ? "Saving…" : "Confirm Paid"}
@@ -2429,6 +2550,7 @@ export default function AdminRevenueDashboard() {
             ? [
                 ["expenses", "Expenses", filteredExpenses.length + monthlyPayments.filter((p) => p.status === "PAID").length],
                 ["income", "Income", filteredIncomes.length],
+                ["bank", "Bank Position", 0],
                 ["commission", "Coach Commission", commTotalSessions],
               ]
             : [["commission", "Coach Commission", commTotalSessions]]),
@@ -3842,7 +3964,24 @@ export default function AdminRevenueDashboard() {
                                 <p className="text-xs text-emerald-600 truncate">
                                   {payment.paidBy ? `${payment.paidBy} · ` : ""}
                                   {fmtDateShort(payment.paidOn)}
+                                  {payment.paymentMode
+                                    ? ` · ${EXPENSE_PAYMENT_MODES.find(m => m.value === payment.paymentMode)?.label ?? payment.paymentMode}`
+                                    : <span className="text-amber-500"> · mode?</span>}
                                 </p>
+                              )}
+                              {isPaid && !payment.paymentMode && payment.publicId && (
+                                <select
+                                  defaultValue=""
+                                  onChange={(e) => {
+                                    if (e.target.value) setMonthlyPaymentMode(payment.publicId!, e.target.value);
+                                  }}
+                                  className="mt-1 text-xs border border-amber-300 rounded px-1.5 py-0.5 bg-amber-50 text-slate-700 focus:outline-none focus:ring-1 focus:ring-amber-400"
+                                >
+                                  <option value="">Set mode…</option>
+                                  {EXPENSE_PAYMENT_MODES.map((m) => (
+                                    <option key={m.value} value={m.value}>{m.label}</option>
+                                  ))}
+                                </select>
                               )}
                               {!isPaid && payment.item.budgetHead && (
                                 <p className="text-xs text-slate-400 truncate">
@@ -4475,6 +4614,207 @@ export default function AdminRevenueDashboard() {
           )}
         </div>
       )}
+      {/* ── BANK POSITION TAB ── */}
+      {activeTab === "bank" && isSuperAdmin && (
+        <div className="space-y-4">
+          {bankLoading && (
+            <div className="text-center py-10 text-sm text-slate-400">Loading…</div>
+          )}
+          {!bankLoading && (
+            <>
+              {/* Top metric cards */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4">
+                  <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Opening Balance</p>
+                  {bankPosition?.latestOpening ? (
+                    <>
+                      <p className="text-2xl font-bold text-slate-800 mt-1">{fmt(bankPosition.latestOpening.balance)}</p>
+                      <p className="text-xs text-slate-400 mt-0.5">Set {bankPosition.latestOpening.snapshotDate}</p>
+                    </>
+                  ) : (
+                    <p className="text-sm text-slate-400 mt-1">Not set — click below</p>
+                  )}
+                </div>
+
+                <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4">
+                  <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Expected Balance</p>
+                  {bankPosition?.expectedBalance != null ? (
+                    <>
+                      <p className="text-2xl font-bold text-blue-700 mt-1">{fmt(bankPosition.expectedBalance)}</p>
+                      <p className="text-xs text-slate-400 mt-0.5">Computed from recorded transactions</p>
+                    </>
+                  ) : (
+                    <p className="text-sm text-slate-400 mt-1">Set opening balance first</p>
+                  )}
+                </div>
+
+                <div className={`rounded-xl border shadow-sm p-4 ${
+                  bankPosition?.variance == null ? "bg-white border-slate-200"
+                    : bankPosition.variance >= 0 ? "bg-emerald-50 border-emerald-200"
+                    : "bg-red-50 border-red-200"
+                }`}>
+                  <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">
+                    {bankPosition?.latestActual ? "Last Actual vs Expected" : "Last Actual Balance"}
+                  </p>
+                  {bankPosition?.latestActual ? (
+                    <>
+                      <p className="text-2xl font-bold text-slate-800 mt-1">{fmt(bankPosition.latestActual.balance)}</p>
+                      <p className="text-xs text-slate-400 mt-0.5">Checked {bankPosition.latestActual.snapshotDate}</p>
+                      {bankPosition.variance != null && (
+                        <p className={`text-sm font-bold mt-1 ${bankPosition.variance >= 0 ? "text-emerald-600" : "text-red-600"}`}>
+                          {bankPosition.variance >= 0 ? "+" : ""}{fmt(bankPosition.variance)} vs expected
+                        </p>
+                      )}
+                    </>
+                  ) : (
+                    <p className="text-sm text-slate-400 mt-1">No balance check recorded yet</p>
+                  )}
+                </div>
+              </div>
+
+              {/* Variance explanation */}
+              {bankPosition?.variance != null && (
+                <div className={`rounded-xl border px-4 py-3 text-sm ${
+                  bankPosition.variance >= 0
+                    ? "bg-emerald-50 border-emerald-200 text-emerald-700"
+                    : "bg-red-50 border-red-200 text-red-700"
+                }`}>
+                  {bankPosition.variance >= 0
+                    ? `Bank has ${fmt(bankPosition.variance)} more than records predict. Possible: unrecorded income or over-stated expenses.`
+                    : `Bank has ${fmt(Math.abs(bankPosition.variance))} less than records predict. Possible: unrecorded expense, missing cash deposit, or data entry error.`}
+                </div>
+              )}
+
+              {/* Action buttons */}
+              <div className="flex flex-wrap gap-2">
+                <button
+                  onClick={() => { setSnapshotForm(f => ({ ...f, snapshotType: "ACTUAL", balance: "", notes: "" })); setShowSnapshotModal(true); }}
+                  className="flex items-center gap-1.5 px-4 py-2 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 transition"
+                >
+                  <Check size={14} />
+                  Record Actual Balance
+                </button>
+                <button
+                  onClick={() => { setSnapshotForm(f => ({ ...f, snapshotType: "OPENING", balance: "", notes: "" })); setShowSnapshotModal(true); }}
+                  className="flex items-center gap-1.5 px-4 py-2 bg-white border border-slate-300 text-slate-700 text-sm font-medium rounded-lg hover:bg-slate-50 transition"
+                >
+                  <Plus size={14} />
+                  {bankPosition?.latestOpening ? "Update Opening Balance" : "Set Opening Balance"}
+                </button>
+                <button onClick={loadBankPosition} className="p-2 hover:bg-slate-100 rounded-lg" title="Refresh">
+                  <RefreshCw size={14} className="text-slate-400" />
+                </button>
+              </div>
+
+              {/* History table */}
+              {bankPosition?.recentActuals && bankPosition.recentActuals.length > 0 && (
+                <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+                  <div className="px-4 py-3 border-b border-slate-100 bg-slate-50">
+                    <h3 className="font-bold text-slate-800 text-sm">Balance Check History</h3>
+                  </div>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead className="bg-slate-50 border-b border-slate-100">
+                        <tr>
+                          {["Date", "Actual Balance", "Notes", "Recorded By"].map((h) => (
+                            <th key={h} className="px-4 py-2.5 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide whitespace-nowrap">{h}</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {bankPosition.recentActuals.map((s) => (
+                          <tr key={s.publicId} className="hover:bg-slate-50">
+                            <td className="px-4 py-3 text-slate-700 whitespace-nowrap">{s.snapshotDate}</td>
+                            <td className="px-4 py-3 font-bold text-slate-800">{fmt(s.balance)}</td>
+                            <td className="px-4 py-3 text-slate-500 max-w-[200px] truncate">{s.notes || "—"}</td>
+                            <td className="px-4 py-3 text-slate-500">{s.recordedBy || "—"}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
+              {/* NULL payment_mode warning */}
+              {(() => {
+                const nullModeCount = monthlyPayments.filter(p => p.status === "PAID" && !p.paymentMode).length;
+                return nullModeCount > 0 ? (
+                  <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                    <strong>{nullModeCount} expense payment{nullModeCount > 1 ? "s" : ""}</strong> are missing payment mode — expected balance may be understated. Go to Expenses → Monthly to fill them in.
+                  </div>
+                ) : null;
+              })()}
+            </>
+          )}
+        </div>
+      )}
+
+      {/* ── Snapshot Modal ── */}
+      {showSnapshotModal && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40">
+          <div className="bg-white w-full sm:max-w-sm sm:rounded-2xl rounded-t-2xl shadow-2xl max-h-[85dvh] flex flex-col">
+            <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100">
+              <div>
+                <p className="font-bold text-slate-800">
+                  {snapshotForm.snapshotType === "OPENING" ? "Set Opening Balance" : "Record Actual Balance"}
+                </p>
+                <p className="text-xs text-slate-500">
+                  {snapshotForm.snapshotType === "OPENING"
+                    ? "Anchors the expected-balance calculation from this date"
+                    : "What does the bank statement / app show right now?"}
+                </p>
+              </div>
+              <button onClick={() => setShowSnapshotModal(false)} className="p-2 hover:bg-slate-100 rounded-lg">
+                <X size={18} className="text-slate-500" />
+              </button>
+            </div>
+            <div className="px-4 py-4 space-y-3 overflow-y-auto flex-1">
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 mb-1.5 uppercase tracking-wide">Date *</label>
+                <input
+                  type="date"
+                  value={snapshotForm.snapshotDate}
+                  onChange={(e) => setSnapshotForm(f => ({ ...f, snapshotDate: e.target.value }))}
+                  className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-400 focus:outline-none"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 mb-1.5 uppercase tracking-wide">Balance (₹) *</label>
+                <input
+                  type="number"
+                  inputMode="numeric"
+                  value={snapshotForm.balance}
+                  onChange={(e) => setSnapshotForm(f => ({ ...f, balance: e.target.value }))}
+                  placeholder="e.g. 925000"
+                  className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-400 focus:outline-none"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 mb-1.5 uppercase tracking-wide">Notes</label>
+                <input
+                  type="text"
+                  value={snapshotForm.notes}
+                  onChange={(e) => setSnapshotForm(f => ({ ...f, notes: e.target.value }))}
+                  placeholder="Optional"
+                  className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-400 focus:outline-none"
+                />
+              </div>
+            </div>
+            <div className="flex gap-3 justify-end px-4 py-3 border-t border-slate-100 bg-slate-50 rounded-b-2xl">
+              <button onClick={() => setShowSnapshotModal(false)} className="px-4 py-2 text-sm text-slate-600 hover:bg-slate-200 rounded-lg">Cancel</button>
+              <button
+                onClick={submitSnapshot}
+                disabled={snapshotSaving || !snapshotForm.balance || !snapshotForm.snapshotDate}
+                className="px-5 py-2 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 disabled:opacity-50"
+              >
+                {snapshotSaving ? "Saving…" : "Save"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ── COACH COMMISSION TAB ───────────────────────────────────────── */}
       {activeTab === "commission" && (
         <div className="space-y-4">

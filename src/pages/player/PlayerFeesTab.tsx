@@ -1372,7 +1372,7 @@ function PlayerFeesTab() {
       })()}
 
       {/* ── INSTALLMENT PLANS ── */}
-      <InstallmentSection playerPublicId={playerPublicId!} />
+      <InstallmentSection playerPublicId={playerPublicId!} playerSlug={playerSlug} />
 
       {/* ── MARK AS PAID MODAL ── */}
       {showPayModal && account && (
@@ -2100,7 +2100,7 @@ type Installment = {
   notes: string | null;
 };
 
-function InstallmentSection({ playerPublicId }: { playerPublicId: string }) {
+function InstallmentSection({ playerPublicId, playerSlug }: { playerPublicId: string; playerSlug: string }) {
   const [plans, setPlans] = useState<InstallmentPlan[]>([]);
   const [loading, setLoading] = useState(true);
   const [expandedPlan, setExpandedPlan] = useState<string | null>(null);
@@ -2301,6 +2301,34 @@ function InstallmentSection({ playerPublicId }: { playerPublicId: string }) {
       toast.error(err.response?.data?.message || "Failed to update amount");
     } finally {
       setSavingAmount(false);
+    }
+  };
+
+  const handleDownloadInstallmentPlan = async (
+    planPublicId: string,
+    slug: string,
+    status: string,
+  ) => {
+    try {
+      const response = await api.get(
+        `/admin/fee-installments/plans/${planPublicId}/receipt-pdf`,
+        { responseType: "blob" },
+      );
+      const url = window.URL.createObjectURL(
+        new Blob([response.data], { type: "application/pdf" }),
+      );
+      const a = document.createElement("a");
+      a.href = url;
+      a.download =
+        status === "COMPLETED"
+          ? `${slug}_plan_receipt.pdf`
+          : `${slug}_plan_statement.pdf`;
+      a.click();
+      window.URL.revokeObjectURL(url);
+    } catch (e: any) {
+      toast.error(
+        e?.response?.data?.message || "Failed to download plan document",
+      );
     }
   };
 
