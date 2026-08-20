@@ -253,6 +253,16 @@ function PlayerFeesTab() {
   const [account, setAccount] = useState<FeeAccount | null>(null);
   const [payments, setPayments] = useState<FeePayment[]>([]);
   const [plans, setPlans] = useState<FeePlan[]>([]);
+  const [playerDisplayName, setPlayerDisplayName] = useState("");
+
+  const playerSlug = useMemo(() => {
+    const raw =
+      playerDisplayName ||
+      payments.find((p) => p.player?.displayName)?.player?.displayName ||
+      playerPublicId ||
+      "player";
+    return raw.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "");
+  }, [playerDisplayName, payments, playerPublicId]);
   const [loading, setLoading] = useState(true);
   const [showPayModal, setShowPayModal] = useState(false);
   const [showAssignModal, setShowAssignModal] = useState(false);
@@ -281,7 +291,7 @@ function PlayerFeesTab() {
   const loadAll = async () => {
     setLoading(true);
     try {
-      const [accountRes, paymentsRes, plansRes, regFeeRes, instPlansRes] =
+      const [accountRes, paymentsRes, plansRes, regFeeRes, instPlansRes, playerRes] =
         await Promise.all([
           api.get(`/admin/fees/accounts/${playerPublicId}`).catch(() => null),
           api
@@ -294,6 +304,9 @@ function PlayerFeesTab() {
           api
             .get(`/admin/fee-installments/player/${playerPublicId}`)
             .catch(() => ({ data: [] })),
+          api
+            .get(`/admin/players/${playerPublicId}`)
+            .catch(() => ({ data: {} })),
         ]);
       if (accountRes && accountRes.status === 200 && accountRes.data) {
         setAccount(accountRes.data);
@@ -303,6 +316,7 @@ function PlayerFeesTab() {
       setPayments(paymentsRes.data || []);
       setPlans(plansRes.data || []);
       setInstPlans(instPlansRes.data || []);
+      setPlayerDisplayName(playerRes.data?.displayName || "");
       // ── NEW: find this player's reg fee ──
       const allRegFees: RegFeeStatus[] = regFeeRes.data || [];
       setRegFee(
@@ -414,7 +428,7 @@ function PlayerFeesTab() {
     }
   };
 
-  const handleDownloadReceipt = async (publicId: string) => {
+  const handleDownloadReceipt = async (publicId: string, slug: string) => {
     try {
       const response = await api.get(
         `/admin/fees/payments/${publicId}/receipt-pdf`,
@@ -425,11 +439,62 @@ function PlayerFeesTab() {
       );
       const a = document.createElement("a");
       a.href = url;
-      a.download = `receipt-${publicId}.pdf`;
+      a.download = `${slug}_receipt.pdf`;
       a.click();
       window.URL.revokeObjectURL(url);
     } catch (e: any) {
       toast.error(e?.response?.data?.message || "Failed to download receipt");
+    }
+  };
+
+  const handleDownloadInstallmentReceipt = async (
+    paymentPublicId: string,
+    slug: string,
+    installmentNumber: number,
+  ) => {
+    try {
+      const response = await api.get(
+        `/admin/fee-installments/payments/${paymentPublicId}/receipt-pdf`,
+        { responseType: "blob" },
+      );
+      const url = window.URL.createObjectURL(
+        new Blob([response.data], { type: "application/pdf" }),
+      );
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${slug}_installment_${installmentNumber}_receipt.pdf`;
+      a.click();
+      window.URL.revokeObjectURL(url);
+    } catch (e: any) {
+      toast.error(e?.response?.data?.message || "Failed to download receipt");
+    }
+  };
+
+  const handleDownloadInstallmentPlan = async (
+    planPublicId: string,
+    slug: string,
+    status: string,
+  ) => {
+    try {
+      const response = await api.get(
+        `/admin/fee-installments/plans/${planPublicId}/receipt-pdf`,
+        { responseType: "blob" },
+      );
+      const url = window.URL.createObjectURL(
+        new Blob([response.data], { type: "application/pdf" }),
+      );
+      const a = document.createElement("a");
+      a.href = url;
+      a.download =
+        status === "COMPLETED"
+          ? `${slug}_plan_receipt.pdf`
+          : `${slug}_plan_statement.pdf`;
+      a.click();
+      window.URL.revokeObjectURL(url);
+    } catch (e: any) {
+      toast.error(
+        e?.response?.data?.message || "Failed to download plan document",
+      );
     }
   };
 
@@ -792,8 +857,10 @@ function PlayerFeesTab() {
         // Flatten installment payments into unified rows, sorted newest-first.
         type InstRow = {
           key: string;
+          paymentPublicId: string;
           paidOn: string;
           label: string;
+          installmentNumber: number;
           amount: number;
           paymentMode: string;
           referenceNumber?: string | null;
@@ -803,8 +870,10 @@ function PlayerFeesTab() {
             p.installments.flatMap((i) =>
               (i.payments ?? []).map((pmt) => ({
                 key: `inst-${pmt.publicId}`,
+                paymentPublicId: pmt.publicId,
                 paidOn: pmt.paidOn,
                 label: `Installment #${i.installmentNumber}`,
+                installmentNumber: i.installmentNumber,
                 amount: pmt.amount,
                 paymentMode: pmt.paymentMode,
                 referenceNumber: pmt.referenceNumber,
@@ -890,7 +959,21 @@ function PlayerFeesTab() {
                                 <span className="text-xs text-slate-400">—</span>
                               )}
                             </td>
-                            <td className="px-5 py-3" />
+                            <td className="px-5 py-3">
+                              <button
+                                onClick={() =>
+                                  handleDownloadInstallmentReceipt(
+                                    r.paymentPublicId,
+                                    playerSlug,
+                                    r.installmentNumber,
+                                  )
+                                }
+                                className="inline-flex items-center gap-1.5 text-xs font-medium text-blue-600 hover:text-blue-800 hover:bg-blue-50 px-2.5 py-1.5 rounded-lg border border-blue-200 transition"
+                              >
+                                <FileText size={13} />
+                                PDF
+                              </button>
+                            </td>
                             <td className="px-5 py-3">
                               <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-violet-100 text-violet-700">
                                 Paid
@@ -978,7 +1061,7 @@ function PlayerFeesTab() {
                                   </button>
                                   <button
                                     onClick={() =>
-                                      handleDownloadReceipt(p.publicId)
+                                      handleDownloadReceipt(p.publicId, playerSlug)
                                     }
                                     className="inline-flex items-center gap-1.5 text-xs font-medium text-blue-600 hover:text-blue-800 hover:bg-blue-50 px-2.5 py-1.5 rounded-lg border border-blue-200 transition"
                                   >
@@ -1111,6 +1194,20 @@ function PlayerFeesTab() {
                             Ref: {r.referenceNumber}
                           </span>
                         )}
+                        <div className="mt-2">
+                          <button
+                            onClick={() =>
+                              handleDownloadInstallmentReceipt(
+                                r.paymentPublicId,
+                                playerSlug,
+                                r.installmentNumber,
+                              )
+                            }
+                            className="text-[11px] text-blue-600 font-medium flex items-center gap-1"
+                          >
+                            <FileText size={12} /> PDF
+                          </button>
+                        </div>
                       </div>
                     );
                   }
@@ -1204,7 +1301,7 @@ function PlayerFeesTab() {
                               </button>
                               <button
                                 onClick={() =>
-                                  handleDownloadReceipt(p.publicId)
+                                  handleDownloadReceipt(p.publicId, playerSlug)
                                 }
                                 className="text-[11px] text-blue-600 font-medium flex items-center gap-1"
                               >
@@ -2331,6 +2428,22 @@ function InstallmentSection({ playerPublicId }: { playerPublicId: string }) {
                       <p className="text-[10px] text-slate-400 mt-0.5">
                         {(plan.installments ?? []).length} installments
                       </p>
+                      {plan.status !== "CANCELLED" && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDownloadInstallmentPlan(
+                              plan.publicId,
+                              playerSlug,
+                              plan.status,
+                            );
+                          }}
+                          className="inline-flex items-center gap-1 text-[10px] font-medium text-violet-600 hover:text-violet-800 hover:bg-violet-50 px-2 py-1 rounded border border-violet-200 transition mt-1"
+                        >
+                          <FileText size={11} />
+                          {plan.status === "COMPLETED" ? "Receipt" : "Statement"}
+                        </button>
+                      )}
                       <ChevronDown
                         size={14}
                         className={`text-slate-400 mt-1 ml-auto transition-transform ${isExpanded ? "rotate-180" : ""}`}
