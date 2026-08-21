@@ -70,6 +70,7 @@ const DISMISSALS = [
   "Stumped",
   "Hit Wicket",
   "Retired Hurt",
+  "Retired Out",
   "Obstructing Field",
 ];
 
@@ -81,6 +82,7 @@ const PlayerSelector = ({
   searchValue,
   onSearchChange,
   onClose,
+  retiredHurtStats = {},
 }: {
   title: string;
   players: ScoringPlayer[];
@@ -89,6 +91,7 @@ const PlayerSelector = ({
   searchValue: string;
   onSearchChange: (v: string) => void;
   onClose: () => void;
+  retiredHurtStats?: Record<string, { runs: number; balls: number }>;
 }) => {
   const filtered = players
     .filter((p) => !exclude.includes(p.publicId))
@@ -113,7 +116,9 @@ const PlayerSelector = ({
           />
         </div>
         <div className="overflow-y-auto flex-1 p-3 space-y-2">
-          {filtered.map((p) => (
+          {filtered.map((p) => {
+            const rh = retiredHurtStats[p.publicId];
+            return (
             <button
               key={p.publicId}
               onClick={() => {
@@ -129,7 +134,11 @@ const PlayerSelector = ({
                 <div className="text-sm font-medium text-white">
                   {p.displayName}
                 </div>
-                {(p.battingStyle || p.playerRole) && (
+                {rh ? (
+                  <div className="text-xs text-amber-400 font-medium mt-0.5">
+                    retired hurt · {rh.runs}({rh.balls})
+                  </div>
+                ) : (p.battingStyle || p.playerRole) && (
                   <div className="text-xs text-gray-400">
                     {[
                       p.playerRole === "WK_BATSMAN"
@@ -149,7 +158,8 @@ const PlayerSelector = ({
                 )}
               </div>
             </button>
-          ))}
+            );
+          })}
           {filtered.length === 0 && (
             <div className="text-center py-8 text-sm text-gray-500">
               No players found
@@ -216,6 +226,7 @@ interface BatterStats {
   balls: number;
   fours: number;
   sixes: number;
+  dismissalType?: string;
 }
 const emptyStats = (): BatterStats => ({
   runs: 0,
@@ -389,6 +400,19 @@ export default function LiveScorerPage() {
     loadAll();
   }, [matchId]);
 
+  // bfcache restore: React effects don't re-fire when the browser restores a
+  // page from the back-forward cache. This listener catches that path and
+  // reloads fresh state so the scorer never shows stale players/score.
+  useEffect(() => {
+    if (!matchId) return;
+    const handlePageShow = (e: PageTransitionEvent) => {
+      if (e.persisted) loadAll();
+    };
+    window.addEventListener("pageshow", handlePageShow);
+    return () => window.removeEventListener("pageshow", handlePageShow);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [matchId]);
+
   const loadAll = async () => {
     if (!matchId || loadingRef.current) return;
     loadingRef.current = true;
@@ -453,7 +477,7 @@ export default function LiveScorerPage() {
 
       try {
         const state = await getScoringState(matchId);
-        applyState(state);
+        applyState(state, m.ballsPerOver);
         await refreshOver();
       } catch {
         /* no innings yet */
@@ -466,7 +490,7 @@ export default function LiveScorerPage() {
     }
   };
 
-  const applyState = (state: BallResponse) => {
+  const applyState = (state: BallResponse, ballsPerOverOverride?: number) => {
     setInnings(state.inningsState);
 
     // Players — resolved from server publicIds against the local roster
@@ -488,7 +512,13 @@ export default function LiveScorerPage() {
     // Batter stats map
     const statsMap: Record<string, BatterStats> = {};
     for (const [pid, dto] of Object.entries(state.batterStats ?? {})) {
-      statsMap[pid] = { runs: dto.runs, balls: dto.balls, fours: dto.fours, sixes: dto.sixes };
+      statsMap[pid] = {
+        runs: dto.runs,
+        balls: dto.balls,
+        fours: dto.fours,
+        sixes: dto.sixes,
+        dismissalType: dto.dismissalType,
+      };
     }
     setBatterStatsMap(statsMap);
 
@@ -497,7 +527,7 @@ export default function LiveScorerPage() {
     setServerBowlerStats(bStats);
 
     // Bowler quota map (completed overs per bowler)
-    const ballsPerOver = match?.ballsPerOver ?? 6;
+    const ballsPerOver = ballsPerOverOverride ?? match?.ballsPerOver ?? 6;
     const oversMap: Record<string, number> = {};
     for (const [pid, dto] of Object.entries(bStats)) {
       oversMap[pid] = Math.floor(dto.legalBalls / ballsPerOver);
@@ -1183,13 +1213,19 @@ export default function LiveScorerPage() {
           <span>
             CRR <b className="text-gray-700">{crr}</b>
           </span>
-          {innings?.target && (
+          {innings?.target && innings?.inningsNumber === 2 && (
             <>
               <span>
                 Target <b className="text-gray-700">{innings.target}</b>
               </span>
               <span className="text-orange-500 font-semibold">
-                Need {innings.requiredRuns}
+                Needs {innings.requiredRuns} from{" "}
+                {Math.max(
+                  0,
+                  (match?.totalOvers ?? 0) * (match?.ballsPerOver ?? 6) -
+                    totalBalls,
+                )}{" "}
+                balls
               </span>
             </>
           )}
@@ -1475,6 +1511,17 @@ export default function LiveScorerPage() {
               : (striker?.publicId ?? ""),
             ...Array.from(dismissedPlayerIds),
           ].filter(Boolean)}
+          retiredHurtStats={Object.fromEntries(
+            battingPlayers
+              .filter((p) => batterStatsMap[p.publicId]?.dismissalType === "RETIRED_HURT")
+              .map((p) => [
+                p.publicId,
+                {
+                  runs: batterStatsMap[p.publicId].runs,
+                  balls: batterStatsMap[p.publicId].balls,
+                },
+              ])
+          )}
           searchValue={showPlayerSearch}
           onSearchChange={setShowPlayerSearch}
           onClose={closeSelector}
@@ -1640,7 +1687,7 @@ export default function LiveScorerPage() {
         <PlayerSelector
           title="Select Fielder"
           players={bowlingPlayers}
-          exclude={[bowler?.publicId ?? ""].filter(Boolean)}
+          exclude={["Stumped"].includes(dismissalType) ? [bowler?.publicId ?? ""].filter(Boolean) : []}
           searchValue={showPlayerSearch}
           onSearchChange={setShowPlayerSearch}
           onClose={closeSelector}
@@ -1668,26 +1715,39 @@ export default function LiveScorerPage() {
                   Dismissal type
                 </div>
                 <div className="grid grid-cols-2 gap-2">
-                  {DISMISSALS.map((d) => (
-                    <button
-                      key={d}
-                      onClick={() => {
-                        setDismissalType(d);
-                        if (d === "Stumped") {
-                          const wk = bowlingPlayers.find(
-                            (p) => p.isWicketkeeper,
-                          );
-                          if (wk) setFielder(wk);
-                        } else if (dismissalType === "Stumped") {
-                          setFielder(null);
-                          setIsWideDelivery(false);
-                        }
-                      }}
-                      className={`py-2.5 px-3 rounded-xl text-sm font-medium border transition-all active:scale-95 ${dismissalType === d ? "bg-red-500 border-red-500 text-white" : "bg-gray-50 border-gray-200 text-gray-700"}`}
-                    >
-                      {d}
-                    </button>
-                  ))}
+                  {DISMISSALS.map((d) => {
+                    const blockedOnFreeHit =
+                      isFreeHit &&
+                      ["Bowled", "Caught", "LBW", "Stumped", "Hit Wicket"].includes(d);
+                    return (
+                      <button
+                        key={d}
+                        disabled={blockedOnFreeHit}
+                        onClick={() => {
+                          setDismissalType(d);
+                          if (d === "Stumped") {
+                            const wk = bowlingPlayers.find(
+                              (p) => p.isWicketkeeper,
+                            );
+                            if (wk) setFielder(wk);
+                          } else {
+                            if (dismissalType === "Stumped") setFielder(null);
+                            if (["Stumped", "Run Out"].includes(dismissalType))
+                              setIsWideDelivery(false);
+                          }
+                        }}
+                        className={`py-2.5 px-3 rounded-xl text-sm font-medium border transition-all active:scale-95 ${
+                          blockedOnFreeHit
+                            ? "opacity-30 cursor-not-allowed bg-gray-100 border-gray-200 text-gray-400"
+                            : dismissalType === d
+                              ? "bg-red-500 border-red-500 text-white"
+                              : "bg-gray-50 border-gray-200 text-gray-700"
+                        }`}
+                      >
+                        {d}
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
               <div>
@@ -1723,7 +1783,7 @@ export default function LiveScorerPage() {
                   >
                     {fielder?.displayName ?? "Tap to select fielder →"}
                   </button>
-                  {dismissalType === "Stumped" && (
+                  {["Stumped", "Run Out"].includes(dismissalType) && (
                     <button
                       onClick={() => setIsWideDelivery((prev) => !prev)}
                       className={`mt-2 w-full py-2.5 px-3 border rounded-xl text-sm text-left transition-all flex items-center gap-3 ${isWideDelivery ? "bg-amber-50 border-amber-300 text-amber-800" : "bg-gray-50 border-gray-200 text-gray-500"}`}
@@ -1735,7 +1795,9 @@ export default function LiveScorerPage() {
                           <span className="text-white text-xs">✓</span>
                         )}
                       </div>
-                      Wide ball (stumped off wide)
+                      {dismissalType === "Stumped"
+                        ? "Wide ball (stumped off wide)"
+                        : "Wide ball (run out off wide)"}
                     </button>
                   )}
                   {dismissalType === "Run Out" &&

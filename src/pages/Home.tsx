@@ -149,9 +149,23 @@ type InningsSummary = {
   target?: number;
 };
 
+type XIPlayer = {
+  playerPublicId: string | null;
+  playerName: string;
+  battingOrder: number;
+  isCaptain: boolean;
+  isWicketkeeper: boolean;
+};
+type PlayingXITeam = {
+  teamId: string;
+  teamName: string;
+  players: XIPlayer[];
+};
+
 type ScorecardSummary = {
   innings: InningsSummary[];
   resultDescription?: string;
+  playingXI?: PlayingXITeam[];
 };
 
 type RecentMatch = LiveMatch & {
@@ -176,6 +190,7 @@ type LiveMatch = {
   venue?: string;
   matchDate?: string;
   totalOvers: number;
+  ballsPerOver: number;
   tournamentName?: string;
   pauseReason?: string | null;
 };
@@ -407,6 +422,7 @@ function Home() {
     Record<string, ScorecardSummary>
   >({});
   const [liveMatches, setLiveMatches] = useState<LiveMatch[]>([]);
+  const [xiOpen, setXiOpen] = useState<Record<string, boolean>>({});
   const [recentMatches, setRecentMatches] = useState<RecentMatch[]>([]);
   const [recentScores, setRecentScores] = useState<
     Record<string, ScorecardSummary>
@@ -500,7 +516,7 @@ function Home() {
         for (const m of matches) {
           try {
             const sc = await publicApi.get(
-              `/matches/${m.matchPublicId}/scorecard`,
+              `/scorecard/${m.matchPublicId}`,
             );
 
             setLiveScores((prev) => ({ ...prev, [m.matchPublicId]: sc.data }));
@@ -681,6 +697,9 @@ function Home() {
               {liveMatches.map((match) => {
                 const sc = liveScores[match.matchPublicId];
                 const innings = sc?.innings ?? [];
+                const xi = sc?.playingXI ?? [];
+                const bpo = match.ballsPerOver || 6;
+                const xiExpanded = !!xiOpen[match.matchPublicId];
                 return (
                   <a
                     key={match.matchPublicId}
@@ -703,7 +722,10 @@ function Home() {
                     </div>
                     {innings.length > 0 ? (
                       <div className="space-y-1">
-                        {innings.map((inn) => (
+                        {innings.map((inn) => {
+                          const totalMatchBalls = match.totalOvers * bpo;
+                          const ballsRem = Math.max(0, totalMatchBalls - inn.totalBalls);
+                          return (
                           <div key={inn.inningsNumber}>
                             <div className="flex items-baseline justify-between">
                               <span
@@ -716,31 +738,78 @@ function Home() {
                               >
                                 {inn.totalRuns}/{inn.totalWickets}
                                 <span className="text-xs font-normal text-gray-400 ml-1">
-                                  ({Math.floor(inn.totalBalls / 6)}.
-                                  {inn.totalBalls % 6} ov)
+                                  ({Math.floor(inn.totalBalls / bpo)}.
+                                  {inn.totalBalls % bpo} ov)
                                 </span>
                               </span>
                             </div>
-                            {/* Target & required runs — only for live 2nd innings */}
+                            {/* Chase line — only for the live innings with a target */}
                             {inn.status === "IN_PROGRESS" && inn.target && (
                               <div className="flex items-center justify-between mt-0.5">
                                 <span className="text-xs text-gray-400">
-                                  Target:{" "}
+                                  Target{" "}
                                   <b className="text-gray-700">{inn.target}</b>
                                 </span>
                                 <span className="text-xs font-semibold text-orange-500">
-                                  Need {inn.target - inn.totalRuns} runs
+                                  Needs {inn.target - inn.totalRuns} from {ballsRem} balls
                                 </span>
                               </div>
                             )}
                           </div>
-                        ))}
+                          );
+                        })}
                       </div>
                     ) : (
                       <div className="text-xs text-gray-400">
                         Match in progress
                       </div>
                     )}
+
+                    {/* ── Playing XI accordion ── */}
+                    {xi.length > 0 && (
+                      <div className="mt-2 border-t border-gray-100 pt-2">
+                        <button
+                          className="w-full flex items-center justify-between text-xs text-gray-500 hover:text-gray-700 py-0.5"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            setXiOpen((prev) => ({
+                              ...prev,
+                              [match.matchPublicId]: !prev[match.matchPublicId],
+                            }));
+                          }}
+                        >
+                          <span className="font-medium">Playing XI</span>
+                          <span>{xiExpanded ? "▲" : "▼"}</span>
+                        </button>
+                        {xiExpanded && (
+                          <div className="mt-1.5 space-y-2">
+                            {xi.map((team) => (
+                              <div key={team.teamId}>
+                                <div className="text-xs font-semibold text-gray-700 mb-1 truncate">
+                                  {team.teamName}
+                                </div>
+                                <ol className="space-y-0.5">
+                                  {team.players.map((p, idx) => (
+                                    <li key={p.playerPublicId ?? idx} className="flex items-center gap-1 text-xs text-gray-600">
+                                      <span className="w-4 text-gray-400 flex-shrink-0 text-right">{idx + 1}.</span>
+                                      <span className="truncate flex-1">{p.playerName}</span>
+                                      {p.isCaptain && (
+                                        <span className="text-xs font-bold text-red-600 flex-shrink-0">C</span>
+                                      )}
+                                      {p.isWicketkeeper && (
+                                        <span className="text-xs font-bold text-blue-600 flex-shrink-0">WK</span>
+                                      )}
+                                    </li>
+                                  ))}
+                                </ol>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
+
                     <div className="mt-2 text-xs text-red-500 font-medium">
                       View Scorecard →
                     </div>
