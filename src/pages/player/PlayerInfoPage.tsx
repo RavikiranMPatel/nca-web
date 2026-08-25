@@ -17,6 +17,7 @@ type PlayerInfo = {
   address: string;
   phone: string;
   parentsPhone: string;
+  guardianEmail: string;
   email: string;
   aadharNumber: string;
   gender: string;
@@ -427,6 +428,7 @@ function PlayerInfoPage() {
         <Field label="Mother Name" value={player.motherName} />
         <Field label="Phone" value={player.phone} />
         <Field label="Parents Phone" value={player.parentsPhone} />
+        <Field label="Guardian Email" value={player.guardianEmail} />
         <Field label="Email" value={player.email} />
         <Field label="Address" value={player.address} full />
       </Section>

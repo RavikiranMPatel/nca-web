@@ -16,6 +16,13 @@ const RATING_ORDER: Record<string, number> = {
   EXCELLENT: 4,
 };
 
+// Labels where a lower numeric value indicates improvement (time-based tests)
+const LOWER_IS_BETTER = new Set([
+  "2km Run Time",
+  "30m Sprint Time",
+  "T-Test / Shuttle Run Time",
+]);
+
 const RATING_CONFIG: Record<
   string,
   { bg: string; text: string; border: string; dot: string; label: string }
@@ -102,7 +109,7 @@ function extractSkills(data: Record<string, any> | undefined, prefix: string) {
       skills as Record<string, any>,
     )) {
       if (typeof subVal !== "object" || subVal === null) continue;
-      if (subVal.rating || subVal.comment) {
+      if (subVal.rating || subVal.comment || subVal.value !== undefined) {
         // Fitness/diet/mental — 2 levels deep
         results.push({
           key: `${prefix}.${category}.${subKey}`,
@@ -117,7 +124,7 @@ function extractSkills(data: Record<string, any> | undefined, prefix: string) {
           if (
             typeof entry === "object" &&
             entry !== null &&
-            ((entry as any).rating || (entry as any).comment)
+            ((entry as any).rating || (entry as any).comment || (entry as any).value !== undefined)
           ) {
             results.push({
               key: `${prefix}.${category}.${subKey}.${skillName}`,
@@ -194,6 +201,7 @@ function SkillRow({
   isLast: boolean;
 }) {
   const rowBg = diff > 0 ? "bg-green-50/40" : diff < 0 ? "bg-red-50/30" : "";
+  const unit = left?.unit || right?.unit;
 
   return (
     <div className={`${rowBg} ${!isLast ? "border-b border-slate-100" : ""}`}>
@@ -205,18 +213,28 @@ function SkillRow({
 
       {/* Side-by-side: Before | After */}
       <div className="grid grid-cols-2 divide-x divide-slate-100 pb-3">
-        <div className="px-4">
+        <div className="px-4 space-y-1.5">
+          {left?.value !== undefined && (
+            <span className="inline-flex items-center gap-1 text-sm font-bold text-indigo-700 bg-indigo-50 border border-indigo-100 px-2 py-0.5 rounded-md">
+              {left.value} <span className="text-xs font-normal text-indigo-400">{unit}</span>
+            </span>
+          )}
           <RatingPill rating={left?.rating} />
           {left?.comment?.trim() && (
-            <p className="text-xs text-slate-500 mt-1.5 leading-relaxed italic">
+            <p className="text-xs text-slate-500 leading-relaxed italic">
               "{left.comment}"
             </p>
           )}
         </div>
-        <div className="px-4">
+        <div className="px-4 space-y-1.5">
+          {right?.value !== undefined && (
+            <span className="inline-flex items-center gap-1 text-sm font-bold text-indigo-700 bg-indigo-50 border border-indigo-100 px-2 py-0.5 rounded-md">
+              {right.value} <span className="text-xs font-normal text-indigo-400">{unit}</span>
+            </span>
+          )}
           <RatingPill rating={right?.rating} />
           {right?.comment?.trim() && (
-            <p className="text-xs text-slate-500 mt-1.5 leading-relaxed italic">
+            <p className="text-xs text-slate-500 leading-relaxed italic">
               "{right.comment}"
             </p>
           )}
@@ -335,15 +353,17 @@ export default function PlayerAssessmentComparison({
     return Array.from(allKeys.entries()).map(([key, label]) => {
       const l = lm.get(key);
       const r = rm.get(key);
-      return {
-        key,
-        label,
-        left: l,
-        right: r,
-        diff:
+      let diff: number;
+      if (l?.value !== undefined && r?.value !== undefined) {
+        // Numeric comparison — invert direction for time-based fields (lower is better)
+        const raw = r.value - l.value;
+        diff = LOWER_IS_BETTER.has(label) ? -raw : raw;
+      } else {
+        diff =
           (RATING_ORDER[r?.rating || ""] || 0) -
-          (RATING_ORDER[l?.rating || ""] || 0),
-      };
+          (RATING_ORDER[l?.rating || ""] || 0);
+      }
+      return { key, label, left: l, right: r, diff };
     });
   };
 

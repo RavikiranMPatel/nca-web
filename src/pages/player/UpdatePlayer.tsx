@@ -24,6 +24,7 @@ function UpdatePlayer() {
     address: "",
     phone: "",
     parentsPhone: "",
+    guardianEmail: "",
     email: "",
     aadharNumber: "",
     gender: "",
@@ -54,6 +55,7 @@ function UpdatePlayer() {
           address: res.data.address || "",
           phone: res.data.phone || "",
           parentsPhone: res.data.parentsPhone || "",
+          guardianEmail: res.data.guardianEmail || "",
           email: res.data.email || "",
           aadharNumber: res.data.aadharNumber || "",
           gender: res.data.gender || "",
@@ -267,6 +269,14 @@ export function validatePlayerForm(
     if (!emailRegex.test(formData.email)) {
       errors.push("Invalid email format");
       fieldErrors.email = true;
+    }
+  }
+
+  if (formData.guardianEmail?.trim()) {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(formData.guardianEmail)) {
+      errors.push("Invalid guardian email format");
+      fieldErrors.guardianEmail = true;
     }
   }
 

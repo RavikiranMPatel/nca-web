@@ -62,6 +62,7 @@ function RegisterPlayer() {
     address: "",
     phone: "",
     parentsPhone: "",
+    guardianEmail: "",
     email: "",
     aadharNumber: "",
     gender: "",
@@ -245,6 +246,13 @@ function RegisterPlayer() {
       errors.push("Invalid Parent Phone number");
       fieldErrors.parentsPhone = true;
     }
+    if (
+      formData.guardianEmail?.trim() &&
+      !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.guardianEmail)
+    ) {
+      errors.push("Invalid guardian email format");
+      fieldErrors.guardianEmail = true;
+    }
     if (batchIds.length === 0) {
       errors.push("At least one batch must be selected");
       fieldErrors.batchIds = true;
@@ -347,6 +355,7 @@ function RegisterPlayer() {
       address: "",
       phone: "",
       parentsPhone: "",
+      guardianEmail: "",
       email: "",
       aadharNumber: "",
       gender: "",

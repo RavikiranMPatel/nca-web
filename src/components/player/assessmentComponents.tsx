@@ -91,6 +91,7 @@ export function SkillRow({
   commentRows = 1,
   previousRating,
   compact = false,
+  measurement,
 }: {
   label: string;
   entry: SkillEntry;
@@ -98,61 +99,110 @@ export function SkillRow({
   commentRows?: number;
   previousRating?: RatingValue;
   compact?: boolean;
+  measurement?: { unit: string };
 }) {
-  const [open, setOpen] = useState(!compact && (!!entry.rating || !!entry.comment));
+  const [open, setOpen] = useState(
+    !compact && (!!entry.rating || !!entry.comment || entry.value !== undefined),
+  );
   const [showCompactComment, setShowCompactComment] = useState(false);
 
   const prevCfg = previousRating ? RATINGS.find((r) => r.value === previousRating) : null;
 
   // ── Compact mode ─────────────────────────────────────
   if (compact) {
+    // Measurement rows wrap to two lines below sm (640 px):
+    //   line 1 — full-width label
+    //   line 2 — number input + unit + rating buttons + comment button
+    // Rating-only rows stay single-line at all widths.
+    const controls = (
+      <div className="flex gap-0.5 items-center flex-shrink-0">
+        {measurement && (
+          <div className="flex items-center gap-1 flex-shrink-0 mr-1">
+            <input
+              type="number"
+              min={0}
+              step={0.01}
+              value={entry.value ?? ""}
+              data-testid={`measurement-input-${label}`}
+              onChange={(e) => {
+                const v = e.target.value === "" ? undefined : parseFloat(e.target.value);
+                onChange({ ...entry, value: v, unit: measurement.unit });
+              }}
+              placeholder="—"
+              className="w-14 px-1.5 py-0.5 border border-slate-200 rounded text-xs text-right focus:outline-none focus:ring-1 focus:ring-blue-500 bg-slate-50"
+            />
+            <span className="text-[10px] text-slate-400 w-5">{measurement.unit}</span>
+          </div>
+        )}
+        {RATINGS.map((r) => (
+          <button
+            key={r.value}
+            type="button"
+            title={r.label}
+            onClick={() =>
+              onChange({ ...entry, rating: entry.rating === r.value ? undefined : r.value })
+            }
+            className={`w-6 h-6 rounded text-[9px] font-black border transition-all ${
+              entry.rating === r.value
+                ? `${r.bg} ${r.color} ring-1 ring-current`
+                : `${r.bg} ${r.color} opacity-25 hover:opacity-60`
+            }`}
+          >
+            {r.label[0]}
+          </button>
+        ))}
+        <button
+          type="button"
+          title="Comment"
+          onClick={() => setShowCompactComment(!showCompactComment)}
+          className={`w-6 h-6 ml-0.5 rounded border text-[10px] transition-all ${
+            entry.comment
+              ? "bg-blue-50 border-blue-200 text-blue-600"
+              : "bg-slate-50 border-slate-200 text-slate-300 hover:text-slate-400"
+          }`}
+        >
+          ✎
+        </button>
+      </div>
+    );
+
     return (
       <div className="py-1.5 px-3 border-b border-slate-100 last:border-0">
-        <div className="flex items-center gap-2">
-          <div className="flex-1 min-w-0">
-            <span className="text-xs font-medium text-slate-700 truncate block">
-              {label}
-            </span>
-            {prevCfg && (
-              <span
-                className={`text-[9px] font-semibold px-1 py-0.5 rounded ${prevCfg.bg} ${prevCfg.color} opacity-70`}
-              >
-                Last: {prevCfg.label}
+        {measurement ? (
+          // Two-line on narrow screens, single-line at sm+
+          <div className="flex flex-wrap sm:flex-nowrap items-center gap-x-2 gap-y-1">
+            <div className="w-full sm:flex-1 sm:min-w-0">
+              <span className="text-xs font-medium text-slate-700 block sm:truncate">
+                {label}
               </span>
-            )}
+              {prevCfg && (
+                <span
+                  className={`text-[9px] font-semibold px-1 py-0.5 rounded ${prevCfg.bg} ${prevCfg.color} opacity-70`}
+                >
+                  Last: {prevCfg.label}
+                </span>
+              )}
+            </div>
+            {controls}
           </div>
-          <div className="flex gap-0.5 items-center flex-shrink-0">
-            {RATINGS.map((r) => (
-              <button
-                key={r.value}
-                type="button"
-                title={r.label}
-                onClick={() =>
-                  onChange({ ...entry, rating: entry.rating === r.value ? undefined : r.value })
-                }
-                className={`w-6 h-6 rounded text-[9px] font-black border transition-all ${
-                  entry.rating === r.value
-                    ? `${r.bg} ${r.color} ring-1 ring-current`
-                    : `${r.bg} ${r.color} opacity-25 hover:opacity-60`
-                }`}
-              >
-                {r.label[0]}
-              </button>
-            ))}
-            <button
-              type="button"
-              title="Comment"
-              onClick={() => setShowCompactComment(!showCompactComment)}
-              className={`w-6 h-6 ml-0.5 rounded border text-[10px] transition-all ${
-                entry.comment
-                  ? "bg-blue-50 border-blue-200 text-blue-600"
-                  : "bg-slate-50 border-slate-200 text-slate-300 hover:text-slate-400"
-              }`}
-            >
-              ✎
-            </button>
+        ) : (
+          // Rating-only: always single-line
+          <div className="flex items-center gap-2">
+            <div className="flex-1 min-w-0">
+              <span className="text-xs font-medium text-slate-700 truncate block">
+                {label}
+              </span>
+              {prevCfg && (
+                <span
+                  className={`text-[9px] font-semibold px-1 py-0.5 rounded ${prevCfg.bg} ${prevCfg.color} opacity-70`}
+                >
+                  Last: {prevCfg.label}
+                </span>
+              )}
+            </div>
+            {controls}
           </div>
-        </div>
+        )}
         {showCompactComment && (
           <input
             type="text"
@@ -180,6 +230,11 @@ export function SkillRow({
       >
         <span className="text-sm font-medium text-slate-700">{label}</span>
         <div className="flex items-center gap-2">
+          {measurement && entry.value !== undefined && !open && (
+            <span className="text-[10px] font-semibold px-2 py-0.5 rounded-md bg-indigo-50 border border-indigo-100 text-indigo-700">
+              {entry.value} {measurement.unit}
+            </span>
+          )}
           {entry.rating && !open && (
             <span
               className={`text-[10px] font-semibold px-2 py-0.5 rounded-md ${
@@ -189,7 +244,7 @@ export function SkillRow({
               {entry.rating.replace(/_/g, " ")}
             </span>
           )}
-          {prevCfg && !open && !entry.rating && (
+          {prevCfg && !open && !entry.rating && entry.value === undefined && (
             <span className={`text-[9px] px-1.5 py-0.5 rounded ${prevCfg.bg} ${prevCfg.color} opacity-50`}>
               Last: {prevCfg.label}
             </span>
@@ -209,6 +264,26 @@ export function SkillRow({
               <span className={`px-1.5 py-0.5 rounded font-semibold ${prevCfg.bg} ${prevCfg.color}`}>
                 {prevCfg.label}
               </span>
+            </div>
+          )}
+          {measurement && (
+            <div className="flex items-center gap-2">
+              <label className="text-xs text-slate-500 font-medium w-20 shrink-0">
+                Measurement
+              </label>
+              <input
+                type="number"
+                min={0}
+                step={0.01}
+                value={entry.value ?? ""}
+                onChange={(e) => {
+                  const v = e.target.value === "" ? undefined : parseFloat(e.target.value);
+                  onChange({ ...entry, value: v, unit: measurement.unit });
+                }}
+                placeholder="Enter value"
+                className="w-28 px-2.5 py-1.5 border border-slate-200 rounded-lg text-sm text-right focus:outline-none focus:ring-2 focus:ring-blue-500 bg-slate-50"
+              />
+              <span className="text-sm text-slate-500">{measurement.unit}</span>
             </div>
           )}
           <RatingPills

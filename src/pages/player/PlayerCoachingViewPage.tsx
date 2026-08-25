@@ -12,10 +12,16 @@ import {
   Circle,
   AlertCircle,
   TrendingUp,
+  BarChart3,
+  Plus,
+  X,
+  MapPin,
 } from "lucide-react";
 import { toast } from "react-hot-toast";
 import api from "../../api/axios";
 import { useAuth } from "../../auth/useAuth";
+import ModalOverlay from "../../components/ModalOverlay";
+import Button from "../../components/Button";
 import {
   type PracticeDayResponse,
   type PlayerGoalResponse,
@@ -31,6 +37,7 @@ const SUB_TABS = [
   { key: "drills", label: "Drills", icon: <Dumbbell size={15} /> },
   { key: "goals", label: "Goals", icon: <Target size={15} /> },
   { key: "matches", label: "Matches", icon: <Trophy size={15} /> },
+  { key: "stats", label: "My Stats", icon: <BarChart3 size={15} /> },
   { key: "progress", label: "Progress", icon: <TrendingUp size={15} /> },
 ] as const;
 
@@ -93,6 +100,52 @@ function formatDate(d: string) {
   });
 }
 
+// ── My Stats (self-submission) ───────────────────────────────────────
+
+/** Mirrors the backend PlayerStat entity — same shape as PendingCricketStats
+ * and PlayerStatsPage so the three pages agree on what a submission looks like. */
+type MyStatSubmission = {
+  publicId: string;
+  matchDate: string;
+  opponentName: string;
+  groundName?: string;
+  place?: string;
+  tournamentName?: string;
+  format?: string;
+  runs?: number;
+  ballsFaced?: number;
+  minutesFaced?: number;
+  fours?: number;
+  sixes?: number;
+  battingStrikeRate?: number;
+  oversBowled?: number;
+  maidens?: number;
+  runsConceded?: number;
+  wicketsTaken?: number;
+  bowlingEconomy?: number;
+  dotBallsBowled?: number;
+  foursConceded?: number;
+  sixesConceded?: number;
+  widesConceded?: number;
+  noBallsConceded?: number;
+  catchesTaken?: number;
+  status: "PENDING" | "APPROVED" | "REJECTED";
+  createdAt: string;
+};
+
+/** Same colors/labels as the PENDING/REJECTED badges on PlayerStatsPage —
+ * the two pages must visually agree on what each status means. */
+const STAT_STATUS_BADGE: Record<string, { label: string; className: string }> = {
+  PENDING: {
+    label: "Pending Review",
+    className: "bg-amber-400 text-amber-950",
+  },
+  REJECTED: {
+    label: "Rejected",
+    className: "bg-red-500 text-white",
+  },
+};
+
 // ── Main Page ──────────────────────────────────────────────────────
 
 export default function PlayerCoachingViewPage() {
@@ -104,6 +157,7 @@ export default function PlayerCoachingViewPage() {
   const [goals, setGoals] = useState<PlayerGoalResponse[]>([]);
   const [matches, setMatches] = useState<MatchPerformanceResponse[]>([]);
   const [drills, setDrills] = useState<DrillAssignmentResponse[]>([]);
+  const [myStats, setMyStats] = useState<MyStatSubmission[]>([]);
   const [loading, setLoading] = useState(true);
   const [notLinked, setNotLinked] = useState(false);
   const [progress, setProgress] = useState<any | null>(null);
@@ -115,20 +169,26 @@ export default function PlayerCoachingViewPage() {
   const loadAll = async () => {
     setLoading(true);
     try {
-      const [pdRes, gRes, mRes, dRes, prRes] = await Promise.all([
+      const [pdRes, gRes, mRes, dRes, prRes, statsRes] = await Promise.all([
         api.get("/player/coaching/practice-days"),
         api.get("/player/coaching/goals"),
         api.get("/player/coaching/matches"),
         api.get("/player/coaching/drills"),
         api.get("/player/coaching/progress"),
+        api.get("/player/cricket-stats/mine"),
       ]);
       setPracticeDays(pdRes.data);
       setGoals(gRes.data);
       setMatches(mRes.data);
       setDrills(dRes.data);
       setProgress(prRes.data);
+      setMyStats(statsRes.data);
     } catch (err: any) {
-      if (err?.response?.status === 404) {
+      // Coaching endpoints 404 when unlinked; the stats endpoint returns 422
+      // for the same condition (no player profile on the account) — both
+      // mean the same "not linked" screen below.
+      const status = err?.response?.status;
+      if (status === 404 || status === 422) {
         setNotLinked(true);
       } else {
         toast.error("Failed to load coaching data");
@@ -208,7 +268,9 @@ export default function PlayerCoachingViewPage() {
                     ? pendingDrills.length
                     : tab.key === "matches"
                       ? matches.length
-                      : 0;
+                      : tab.key === "stats"
+                        ? myStats.length
+                        : 0;
 
             return (
               <button
@@ -259,6 +321,9 @@ export default function PlayerCoachingViewPage() {
       {!loading && activeTab === "goals" && <GoalsSection goals={goals} />}
       {!loading && activeTab === "matches" && (
         <MatchesSection matches={matches} />
+      )}
+      {!loading && activeTab === "stats" && (
+        <StatsSection myStats={myStats} onSubmitted={loadAll} />
       )}
       {!loading && activeTab === "progress" && (
         <ProgressSection progress={progress} />
@@ -890,6 +955,475 @@ function MatchesSection({ matches }: { matches: MatchPerformanceResponse[] }) {
   );
 }
 
+// ── My Stats Section ──────────────────────────────────────────────
+
+function StatsSection({
+  myStats,
+  onSubmitted,
+}: {
+  myStats: MyStatSubmission[];
+  onSubmitted: () => void;
+}) {
+  const [showForm, setShowForm] = useState(false);
+  const sorted = [...myStats].sort((a, b) =>
+    a.matchDate < b.matchDate ? 1 : -1,
+  );
+
+  return (
+    <div className="space-y-3">
+      <button
+        onClick={() => setShowForm(true)}
+        className="w-full flex items-center justify-center gap-2 py-3 bg-blue-600 text-white rounded-2xl text-sm font-semibold hover:bg-blue-700 transition shadow-sm"
+      >
+        <Plus size={16} /> Submit Match Stat
+      </button>
+
+      {sorted.length === 0 ? (
+        <EmptyState
+          icon="🏏"
+          message="You haven't submitted any match stats yet."
+          subtitle="Submit one above — your coach will review it before it counts."
+        />
+      ) : (
+        <div className="space-y-3">
+          {sorted.map((stat) => (
+            <MyStatCard key={stat.publicId} stat={stat} />
+          ))}
+        </div>
+      )}
+
+      {showForm && (
+        <SubmitStatModal
+          onClose={() => setShowForm(false)}
+          onSubmitted={() => {
+            setShowForm(false);
+            onSubmitted();
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+function MyStatCard({ stat }: { stat: MyStatSubmission }) {
+  const badge = STAT_STATUS_BADGE[stat.status];
+  const isRejected = stat.status === "REJECTED";
+  const hasBatting = stat.runs !== null && stat.runs !== undefined;
+  const hasBowling = stat.oversBowled !== null && stat.oversBowled !== undefined;
+  const hasFielding =
+    stat.catchesTaken !== null && stat.catchesTaken !== undefined && stat.catchesTaken > 0;
+
+  return (
+    <div
+      className={`bg-white rounded-2xl border shadow-sm overflow-hidden ${
+        stat.status === "PENDING"
+          ? "border-amber-300"
+          : isRejected
+            ? "border-red-200 opacity-75"
+            : "border-gray-200"
+      }`}
+    >
+      <div className="p-4">
+        <div className="flex items-start justify-between gap-2">
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="font-bold text-gray-900 text-sm">
+                vs {stat.opponentName}
+              </span>
+              {stat.status === "APPROVED" && (
+                <CheckCircle2 size={14} className="text-green-600 flex-shrink-0" />
+              )}
+            </div>
+            <div className="flex items-center gap-2 mt-1 flex-wrap">
+              {(stat.groundName || stat.place) && (
+                <span className="flex items-center gap-1 text-xs text-gray-500">
+                  <MapPin size={10} />
+                  {[stat.groundName, stat.place].filter(Boolean).join(", ")}
+                </span>
+              )}
+              <span className="text-xs text-gray-400">
+                {formatDate(stat.matchDate)}
+              </span>
+            </div>
+          </div>
+          {badge && (
+            <span
+              className={`flex-shrink-0 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wide ${badge.className}`}
+            >
+              {badge.label}
+            </span>
+          )}
+        </div>
+
+        {isRejected && (
+          <div className="mt-2 bg-red-50 border border-red-100 rounded-lg px-3 py-2">
+            <p className="text-xs text-red-700">
+              Not approved by your coach — it won't count toward your career
+              stats.
+            </p>
+          </div>
+        )}
+
+        {(hasBatting || hasBowling || hasFielding) && (
+          <div className="flex items-center gap-1.5 mt-2 flex-wrap">
+            {hasBatting && (
+              <span className="text-[10px] font-semibold bg-blue-50 text-blue-700 px-2 py-0.5 rounded-full">
+                🏏 {stat.runs}R{stat.ballsFaced ? ` (${stat.ballsFaced}B)` : ""}
+              </span>
+            )}
+            {hasBowling && (
+              <span className="text-[10px] font-semibold bg-green-50 text-green-700 px-2 py-0.5 rounded-full">
+                🎯 {stat.wicketsTaken ?? 0}W/{stat.runsConceded ?? 0}R
+              </span>
+            )}
+            {hasFielding && (
+              <span className="text-[10px] font-semibold bg-teal-50 text-teal-700 px-2 py-0.5 rounded-full">
+                🥊 {stat.catchesTaken}C
+              </span>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── Submit Stat Modal ────────────────────────────────────────────────
+
+type StatFormState = {
+  matchDate: string;
+  opponentName: string;
+  groundName: string;
+  place: string;
+  tournamentName: string;
+  format: string;
+  runs: string;
+  ballsFaced: string;
+  minutesFaced: string;
+  fours: string;
+  sixes: string;
+  oversBowled: string;
+  maidens: string;
+  runsConceded: string;
+  wicketsTaken: string;
+  dotBallsBowled: string;
+  foursConceded: string;
+  sixesConceded: string;
+  widesConceded: string;
+  noBallsConceded: string;
+  catchesTaken: string;
+};
+
+const EMPTY_STAT_FORM: StatFormState = {
+  matchDate: new Date().toISOString().split("T")[0],
+  opponentName: "",
+  groundName: "",
+  place: "",
+  tournamentName: "",
+  format: "",
+  runs: "",
+  ballsFaced: "",
+  minutesFaced: "",
+  fours: "",
+  sixes: "",
+  oversBowled: "",
+  maidens: "",
+  runsConceded: "",
+  wicketsTaken: "",
+  dotBallsBowled: "",
+  foursConceded: "",
+  sixesConceded: "",
+  widesConceded: "",
+  noBallsConceded: "",
+  catchesTaken: "",
+};
+
+const inputClass =
+  "w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white";
+
+function SubmitStatModal({
+  onClose,
+  onSubmitted,
+}: {
+  onClose: () => void;
+  onSubmitted: () => void;
+}) {
+  const [form, setForm] = useState<StatFormState>(EMPTY_STAT_FORM);
+  const [saving, setSaving] = useState(false);
+  const todayStr = new Date().toISOString().split("T")[0];
+
+  const handleChange = (
+    e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>,
+  ) => {
+    setForm((prev) => ({ ...prev, [e.target.name]: e.target.value }));
+  };
+
+  const handleSubmit = async () => {
+    if (!form.matchDate) {
+      toast.error("Match date is required");
+      return;
+    }
+    if (!form.opponentName.trim()) {
+      toast.error("Opponent name is required");
+      return;
+    }
+
+    setSaving(true);
+    try {
+      // Everything past match date + opponent is optional — a player who
+      // only bowled shouldn't need to touch the batting fields, and vice
+      // versa. Blank inputs go through as null, not 0, so an empty batting
+      // section doesn't show up as "0 runs" anywhere downstream.
+      const payload = {
+        matchDate: form.matchDate,
+        opponentName: form.opponentName.trim(),
+        groundName: form.groundName || null,
+        place: form.place || null,
+        tournamentName: form.tournamentName || null,
+        format: form.format || null,
+
+        runs: form.runs ? parseInt(form.runs) : null,
+        ballsFaced: form.ballsFaced ? parseInt(form.ballsFaced) : null,
+        minutesFaced: form.minutesFaced ? parseInt(form.minutesFaced) : null,
+        fours: form.fours ? parseInt(form.fours) : null,
+        sixes: form.sixes ? parseInt(form.sixes) : null,
+
+        oversBowled: form.oversBowled ? parseFloat(form.oversBowled) : null,
+        maidens: form.maidens ? parseInt(form.maidens) : null,
+        runsConceded: form.runsConceded ? parseInt(form.runsConceded) : null,
+        wicketsTaken: form.wicketsTaken ? parseInt(form.wicketsTaken) : null,
+        dotBallsBowled: form.dotBallsBowled
+          ? parseInt(form.dotBallsBowled)
+          : null,
+        foursConceded: form.foursConceded ? parseInt(form.foursConceded) : null,
+        sixesConceded: form.sixesConceded ? parseInt(form.sixesConceded) : null,
+        widesConceded: form.widesConceded ? parseInt(form.widesConceded) : null,
+        noBallsConceded: form.noBallsConceded
+          ? parseInt(form.noBallsConceded)
+          : null,
+
+        catchesTaken: form.catchesTaken ? parseInt(form.catchesTaken) : null,
+      };
+
+      await api.post("/player/cricket-stats", payload);
+      toast.success("Stat submitted — your coach will review it soon");
+      onSubmitted();
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message || "Failed to submit stat");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <ModalOverlay className="bg-black/50 flex items-end sm:items-center justify-center sm:p-4">
+      <div className="bg-white w-full sm:max-w-lg sm:rounded-2xl rounded-t-2xl shadow-2xl max-h-[92vh] overflow-y-auto">
+        <div className="sticky top-0 bg-white border-b border-gray-100 px-4 py-3 flex items-center justify-between z-10">
+          <h2 className="font-bold text-gray-900">Submit Match Stat</h2>
+          <button
+            onClick={onClose}
+            className="p-1.5 hover:bg-gray-100 rounded-full transition"
+          >
+            <X size={18} className="text-gray-500" />
+          </button>
+        </div>
+
+        <div className="p-4 space-y-4">
+          {/* MATCH DETAILS */}
+          <div className="space-y-3">
+            <p className="text-xs font-bold text-gray-400 uppercase tracking-wider">
+              Match Details
+            </p>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="col-span-2 sm:col-span-1">
+                <label className="block text-xs font-medium text-gray-600 mb-1">
+                  Match Date <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="date"
+                  name="matchDate"
+                  value={form.matchDate}
+                  max={todayStr}
+                  onChange={handleChange}
+                  className={inputClass}
+                />
+              </div>
+              <div className="col-span-2 sm:col-span-1">
+                <label className="block text-xs font-medium text-gray-600 mb-1">
+                  Format
+                </label>
+                <select
+                  name="format"
+                  value={form.format}
+                  onChange={handleChange}
+                  className={inputClass}
+                >
+                  <option value="">Select format</option>
+                  <option value="T20">T20</option>
+                  <option value="ODI">ODI</option>
+                  <option value="TEST">Test</option>
+                </select>
+              </div>
+              <div className="col-span-2">
+                <label className="block text-xs font-medium text-gray-600 mb-1">
+                  Opponent <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  name="opponentName"
+                  value={form.opponentName}
+                  onChange={handleChange}
+                  placeholder="e.g., RBNCC"
+                  className={inputClass}
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">
+                  Ground
+                </label>
+                <input
+                  type="text"
+                  name="groundName"
+                  value={form.groundName}
+                  onChange={handleChange}
+                  placeholder="e.g., SJCE Grounds"
+                  className={inputClass}
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">
+                  Place
+                </label>
+                <input
+                  type="text"
+                  name="place"
+                  value={form.place}
+                  onChange={handleChange}
+                  placeholder="e.g., Mysore"
+                  className={inputClass}
+                />
+              </div>
+              <div className="col-span-2">
+                <label className="block text-xs font-medium text-gray-600 mb-1">
+                  Tournament
+                </label>
+                <input
+                  type="text"
+                  name="tournamentName"
+                  value={form.tournamentName}
+                  onChange={handleChange}
+                  placeholder="e.g., District League"
+                  className={inputClass}
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* BATTING */}
+          <div className="space-y-3 pt-2 border-t border-gray-100">
+            <p className="text-xs font-bold text-gray-400 uppercase tracking-wider">
+              Batting — leave blank if you didn't bat
+            </p>
+            <div className="grid grid-cols-3 gap-3">
+              {[
+                { name: "runs", label: "Runs" },
+                { name: "ballsFaced", label: "Balls" },
+                { name: "minutesFaced", label: "Minutes" },
+                { name: "fours", label: "4s" },
+                { name: "sixes", label: "6s" },
+              ].map((f) => (
+                <div key={f.name}>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">
+                    {f.label}
+                  </label>
+                  <input
+                    type="number"
+                    name={f.name}
+                    min="0"
+                    value={(form as any)[f.name]}
+                    onChange={handleChange}
+                    className={inputClass}
+                  />
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* BOWLING */}
+          <div className="space-y-3 pt-2 border-t border-gray-100">
+            <p className="text-xs font-bold text-gray-400 uppercase tracking-wider">
+              Bowling — leave blank if you didn't bowl
+            </p>
+            <div className="grid grid-cols-3 gap-3">
+              {[
+                { name: "oversBowled", label: "Overs", step: "0.1" },
+                { name: "maidens", label: "Maidens" },
+                { name: "runsConceded", label: "Runs" },
+                { name: "wicketsTaken", label: "Wickets" },
+                { name: "dotBallsBowled", label: "Dot Balls" },
+                { name: "foursConceded", label: "4s" },
+                { name: "sixesConceded", label: "6s" },
+                { name: "widesConceded", label: "Wides" },
+                { name: "noBallsConceded", label: "No Balls" },
+              ].map((f) => (
+                <div key={f.name}>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">
+                    {f.label}
+                  </label>
+                  <input
+                    type="number"
+                    name={f.name}
+                    min="0"
+                    step={f.step}
+                    value={(form as any)[f.name]}
+                    onChange={handleChange}
+                    className={inputClass}
+                  />
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* FIELDING */}
+          <div className="space-y-3 pt-2 border-t border-gray-100">
+            <p className="text-xs font-bold text-gray-400 uppercase tracking-wider">
+              Fielding
+            </p>
+            <div className="grid grid-cols-3 gap-3">
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">
+                  Catches
+                </label>
+                <input
+                  type="number"
+                  name="catchesTaken"
+                  min="0"
+                  value={form.catchesTaken}
+                  onChange={handleChange}
+                  className={inputClass}
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="sticky bottom-0 bg-white border-t border-gray-100 px-4 py-3 flex gap-2">
+          <Button variant="secondary" onClick={onClose} disabled={saving}>
+            Cancel
+          </Button>
+          <button
+            onClick={handleSubmit}
+            disabled={saving}
+            className="flex-1 py-2.5 bg-blue-600 text-white rounded-xl text-sm font-semibold hover:bg-blue-700 disabled:opacity-50 transition"
+          >
+            {saving ? "Submitting…" : "Submit for Review"}
+          </button>
+        </div>
+      </div>
+    </ModalOverlay>
+  );
+}
+
 // ── Progress Section ──────────────────────────────────────────────
 
 function ProgressSection({ progress }: { progress: any }) {
@@ -1137,14 +1671,20 @@ function ProgressSection({ progress }: { progress: any }) {
 
 // ── Empty State ───────────────────────────────────────────────────
 
-function EmptyState({ icon, message }: { icon: string; message: string }) {
+function EmptyState({
+  icon,
+  message,
+  subtitle = "Your coach will share updates here.",
+}: {
+  icon: string;
+  message: string;
+  subtitle?: string;
+}) {
   return (
     <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-10 text-center">
       <div className="text-4xl mb-3">{icon}</div>
       <p className="text-sm text-gray-500">{message}</p>
-      <p className="text-xs text-gray-400 mt-1">
-        Your coach will share updates here.
-      </p>
+      <p className="text-xs text-gray-400 mt-1">{subtitle}</p>
     </div>
   );
 }

@@ -130,6 +130,7 @@ const AttendanceStatsPage = () => {
 
   const [stats, setStats] = useState<PlayerAttendancePercentage[]>([]);
   const [todayMap, setTodayMap] = useState<Record<string, string>>({});
+  const [todayNoSession, setTodayNoSession] = useState(false);
   const [expandedPlayer, setExpandedPlayer] = useState<string | null>(null);
   const [monthDetails, setMonthDetails] = useState<any>(null);
   const [feeMap, setFeeMap] = useState<Record<string, FeeStatus>>({});
@@ -158,10 +159,13 @@ const AttendanceStatsPage = () => {
 
     const loadData = async () => {
       try {
-        const [data, records, feeRes] = await Promise.all([
+        const [data, records, feeRes, statusRes] = await Promise.all([
           fetchAttendanceStats(range, selectedBatchId),
           fetchTodayRecords(today, selectedBatchId),
           api.get("/admin/fees/collection-summary").catch(() => ({ data: [] })),
+          api
+            .get("/admin/attendance/status", { params: { date: today, batchId: selectedBatchId } })
+            .catch(() => ({ data: { sessionType: null } })),
         ]);
         setStats(data);
 
@@ -170,6 +174,7 @@ const AttendanceStatsPage = () => {
           map[r.playerId] = r.status;
         });
         setTodayMap(map);
+        setTodayNoSession(statusRes.data?.sessionType === "NO_SESSION");
 
         const fm: Record<string, FeeStatus> = {};
         (feeRes.data as FeeSummaryRow[]).forEach((row) => {
@@ -410,6 +415,10 @@ const AttendanceStatsPage = () => {
                           <span className="px-3 py-1 rounded-full bg-red-100 text-red-700 text-xs font-semibold">
                             Absent
                           </span>
+                        ) : todayNoSession ? (
+                          <span className="px-3 py-1 rounded-full bg-slate-100 text-slate-500 text-xs font-semibold">
+                            No session
+                          </span>
                         ) : (
                           <span className="text-slate-400 text-xs">—</span>
                         )}
@@ -523,6 +532,10 @@ const AttendanceStatsPage = () => {
                     ) : todayStatus === "ABSENT" ? (
                       <span className="flex-shrink-0 px-2 py-0.5 rounded-full bg-red-100 text-red-700 text-[10px] font-bold">
                         Absent
+                      </span>
+                    ) : todayNoSession ? (
+                      <span className="flex-shrink-0 px-2 py-0.5 rounded-full bg-slate-100 text-slate-500 text-[10px] font-bold">
+                        No session
                       </span>
                     ) : (
                       <span className="flex-shrink-0 text-slate-400 text-[10px]">

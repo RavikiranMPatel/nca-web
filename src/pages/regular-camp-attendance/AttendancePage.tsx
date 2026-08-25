@@ -11,11 +11,20 @@ import {
   ArrowLeft,
   Calendar,
   X,
+  Ban,
 } from "lucide-react";
 import AttendanceRow from "../../components/attendance-component/AttendanceRow";
 import Button from "../../components/Button";
 import api from "../../api/axios";
-import { submitBulkAttendance, overrideAttendance } from "../../api/attendance";
+import {
+  submitBulkAttendance,
+  overrideAttendance,
+  markNoSession,
+  unmarkNoSession,
+  NO_SESSION_REASON_LABELS,
+  type NoSessionReason,
+} from "../../api/attendance";
+import NoSessionModal from "../../components/attendance-component/NoSessionModal";
 import {
   fetchActiveBatches,
   formatBatchTimeRange,
@@ -67,6 +76,9 @@ type SessionStatus = {
   editable: boolean;
   sessionExists: boolean;
   attendanceMarked: boolean;
+  sessionType?: "HELD" | "NO_SESSION";
+  noSessionReason?: NoSessionReason | null;
+  noSessionNote?: string | null;
 };
 
 type AttendanceRecord = {
@@ -103,10 +115,13 @@ function AttendancePage() {
   const [showSuccessDialog, setShowSuccessDialog] = useState(false);
   const [attendanceFilter, setAttendanceFilter] = useState<"ALL" | "PRESENT" | "ABSENT">("ALL");
   const [lightbox, setLightbox] = useState<{ url: string; name: string } | null>(null);
+  const [showNoSessionModal, setShowNoSessionModal] = useState(false);
 
   const userRole = localStorage.getItem("userRole");
   const isSuperAdmin = userRole === "ROLE_SUPER_ADMIN";
-  const canEdit = isSuperAdmin || session.editable;
+  const isNoSession = session.sessionType === "NO_SESSION";
+  const hasEditPermission = isSuperAdmin || session.editable;
+  const canEdit = !isNoSession && hasEditPermission;
 
   const formatDate = (iso: string) =>
     new Date(iso).toLocaleDateString("en-GB", {
@@ -328,6 +343,29 @@ function AttendancePage() {
     }
   };
 
+  const handleMarkNoSession = async (reason: NoSessionReason, note: string) => {
+    if (!selectedBatchId) return;
+    try {
+      await markNoSession({ date: selectedDate, batchId: selectedBatchId, reason, note: note || undefined });
+      toast.success("Marked as no session");
+      setShowNoSessionModal(false);
+      await loadSessionStatus();
+    } catch (e: any) {
+      toast.error(e?.response?.data?.message || "Failed to mark no session");
+    }
+  };
+
+  const handleUndoNoSession = async () => {
+    if (!selectedBatchId) return;
+    try {
+      await unmarkNoSession({ date: selectedDate, batchId: selectedBatchId });
+      toast.success("No-session mark removed");
+      await loadSessionStatus();
+    } catch (e: any) {
+      toast.error(e?.response?.data?.message || "Failed to undo no session");
+    }
+  };
+
   const selectedBatch = batches.find((b) => b.id === selectedBatchId);
 
   /* ─────────────────── RENDER ─────────────────── */
@@ -417,7 +455,27 @@ function AttendancePage() {
           )}
 
           {/* Session status banners */}
-          {!session.attendanceMarked && selectedBatch && (
+          {isNoSession && selectedBatch && (
+            <div className="bg-slate-100 border border-slate-300 rounded-lg px-3 py-2 flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2 min-w-0">
+                <Ban size={14} className="text-slate-500 flex-shrink-0" />
+                <p className="text-xs text-slate-700 font-medium truncate">
+                  No session —{" "}
+                  {session.noSessionReason ? NO_SESSION_REASON_LABELS[session.noSessionReason] : "—"}
+                  {session.noSessionNote ? `: ${session.noSessionNote}` : ""}
+                </p>
+              </div>
+              {hasEditPermission && (
+                <button
+                  onClick={handleUndoNoSession}
+                  className="flex-shrink-0 text-[11px] font-semibold text-blue-600 hover:text-blue-700"
+                >
+                  Undo
+                </button>
+              )}
+            </div>
+          )}
+          {!isNoSession && !session.attendanceMarked && selectedBatch && (
             <div className="bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2 flex items-center gap-2">
               <Sparkles size={14} className="text-emerald-600 flex-shrink-0" />
               <p className="text-xs text-emerald-800 font-medium">
@@ -425,13 +483,21 @@ function AttendancePage() {
               </p>
             </div>
           )}
-          {session.attendanceMarked && !isSuperAdmin && (
+          {!isNoSession && !session.attendanceMarked && selectedBatch && (
+            <button
+              onClick={() => setShowNoSessionModal(true)}
+              className="mt-1.5 text-[11px] text-slate-500 hover:text-slate-700 underline underline-offset-2"
+            >
+              No session today? Mark as holiday / rain / etc.
+            </button>
+          )}
+          {!isNoSession && session.attendanceMarked && !isSuperAdmin && (
             <div className="bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 flex items-center gap-2">
               <Clock size={14} className="text-amber-600 flex-shrink-0" />
               <p className="text-xs text-amber-800 font-medium">Attendance taken — view only</p>
             </div>
           )}
-          {session.attendanceMarked && isSuperAdmin && (
+          {!isNoSession && session.attendanceMarked && isSuperAdmin && (
             <div className="bg-purple-50 border border-purple-200 rounded-lg px-3 py-2 flex items-center gap-2">
               <Sparkles size={14} className="text-purple-600 flex-shrink-0" />
               <p className="text-xs text-purple-800 font-medium">Super Admin — editing allowed</p>
@@ -581,9 +647,9 @@ function AttendancePage() {
                 }
                 disabled={!canEdit}
                 onChange={handleChange}
-                canOverride={isSuperAdmin && !canEdit}
+                canOverride={isSuperAdmin && !canEdit && session.attendanceMarked}
                 onOverride={
-                  isSuperAdmin && !canEdit
+                  isSuperAdmin && !canEdit && session.attendanceMarked
                     ? () => setOverrideTarget({ playerId: player.id, playerName: player.displayName })
                     : undefined
                 }
@@ -614,6 +680,12 @@ function AttendancePage() {
       )}
 
       {/* ── MODALS ── */}
+      <NoSessionModal
+        open={showNoSessionModal}
+        batchName={selectedBatch?.name || ""}
+        onClose={() => setShowNoSessionModal(false)}
+        onConfirm={handleMarkNoSession}
+      />
       <AttendanceOverrideModal
         open={!!overrideTarget}
         playerName={overrideTarget?.playerName || ""}

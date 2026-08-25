@@ -22,6 +22,8 @@ export type AssessmentStatus = "DRAFT" | "COMPLETED";
 export interface SkillEntry {
   rating?: RatingValue;
   comment?: string;
+  value?: number;
+  unit?: string;
 }
 
 export interface CricketSkillsData {

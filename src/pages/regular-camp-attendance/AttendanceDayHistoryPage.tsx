@@ -21,6 +21,7 @@ function AttendanceDayHistoryPage() {
   if (!data) return <div>Loading...</div>;
 
   const batchData = data.batches[activeBatch] || {};
+  const noSessionLabel: string | undefined = batchData.NO_SESSION?.[0];
 
   return (
     <div className="space-y-4">
@@ -49,33 +50,45 @@ function AttendanceDayHistoryPage() {
         ))}
       </div>
 
-      {/* PRESENT */}
-      <div>
-        <h3 className="font-medium text-green-700 mb-1">✓ Present</h3>
-        {batchData.PRESENT?.length ? (
-          <ul className="list-disc ml-5 text-sm">
-            {batchData.PRESENT.map((p: string) => (
-              <li key={p}>{p}</li>
-            ))}
-          </ul>
-        ) : (
-          <div className="text-sm text-gray-500">None</div>
-        )}
-      </div>
+      {noSessionLabel ? (
+        /* NO SESSION — holiday, rain, etc. Render distinctly instead of two
+           empty-looking Present/Absent lists. */
+        <div className="bg-slate-100 border border-slate-300 rounded-lg px-4 py-3">
+          <p className="text-sm font-medium text-slate-700">
+            No session ({noSessionLabel})
+          </p>
+        </div>
+      ) : (
+        <>
+          {/* PRESENT */}
+          <div>
+            <h3 className="font-medium text-green-700 mb-1">✓ Present</h3>
+            {batchData.PRESENT?.length ? (
+              <ul className="list-disc ml-5 text-sm">
+                {batchData.PRESENT.map((p: string) => (
+                  <li key={p}>{p}</li>
+                ))}
+              </ul>
+            ) : (
+              <div className="text-sm text-gray-500">None</div>
+            )}
+          </div>
 
-      {/* ABSENT */}
-      <div>
-        <h3 className="font-medium text-red-700 mb-1">✗ Absent</h3>
-        {batchData.ABSENT?.length ? (
-          <ul className="list-disc ml-5 text-sm">
-            {batchData.ABSENT.map((p: string) => (
-              <li key={p}>{p}</li>
-            ))}
-          </ul>
-        ) : (
-          <div className="text-sm text-gray-500">None</div>
-        )}
-      </div>
+          {/* ABSENT */}
+          <div>
+            <h3 className="font-medium text-red-700 mb-1">✗ Absent</h3>
+            {batchData.ABSENT?.length ? (
+              <ul className="list-disc ml-5 text-sm">
+                {batchData.ABSENT.map((p: string) => (
+                  <li key={p}>{p}</li>
+                ))}
+              </ul>
+            ) : (
+              <div className="text-sm text-gray-500">None</div>
+            )}
+          </div>
+        </>
+      )}
     </div>
   );
 }

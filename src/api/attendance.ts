@@ -2,6 +2,39 @@ import api from "./axios";
 
 export type AttendanceStatus = "PRESENT" | "ABSENT";
 
+export type SessionType = "HELD" | "NO_SESSION";
+
+export type NoSessionReason =
+  | "HOLIDAY"
+  | "RAIN"
+  | "GROUND_UNAVAILABLE"
+  | "FESTIVAL"
+  | "TOURNAMENT"
+  | "OTHER";
+
+export const NO_SESSION_REASON_LABELS: Record<NoSessionReason, string> = {
+  HOLIDAY: "Holiday",
+  RAIN: "Rain",
+  GROUND_UNAVAILABLE: "Ground unavailable",
+  FESTIVAL: "Festival",
+  TOURNAMENT: "Tournament",
+  OTHER: "Other",
+};
+
+export function markNoSession(params: {
+  date: string;
+  batchId: string;
+  reason: NoSessionReason;
+  note?: string;
+}) {
+  return api.post("/admin/attendance/no-session", params);
+}
+
+export function unmarkNoSession(params: { date: string; batchId: string }) {
+  const { date, batchId } = params;
+  return api.delete("/admin/attendance/no-session", { params: { date, batchId } });
+}
+
 export type BulkAttendanceItem = {
   playerId: string;
   status: AttendanceStatus;

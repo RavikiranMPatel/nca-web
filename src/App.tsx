@@ -19,6 +19,7 @@ import PlayerInfoPage from "./pages/player/PlayerInfoPage";
 import PlayerStatsPage from "./pages/player/PlayerStatsPage";
 import UpdatePlayer from "./pages/player/UpdatePlayer";
 import AddCricketStats from "./pages/player/AddCricketStats";
+import PendingCricketStats from "./pages/player/PendingCricketStats";
 import BatchManagementPage from "./pages/BatchManagementPage";
 import AcademySettings from "./pages/admin/AcademySettings";
 import EnquiryListPage from "./pages/enquiry/EnquiryListPage";
@@ -618,6 +619,16 @@ function App() {
           <ProtectedRoute roles={["ROLE_ADMIN", "ROLE_SUPER_ADMIN"]}>
             <AppLayout>
               <AddCricketStats />
+            </AppLayout>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/cricket-stats/pending"
+        element={
+          <ProtectedRoute roles={["ROLE_ADMIN", "ROLE_SUPER_ADMIN"]}>
+            <AppLayout>
+              <PendingCricketStats />
             </AppLayout>
           </ProtectedRoute>
         }

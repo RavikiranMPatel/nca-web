@@ -29,6 +29,7 @@ export interface Player {
   phone?: string;
   email?: string;
   parentsPhone?: string;
+  guardianEmail?: string;
   joiningDate?: string;
   active: boolean;
   status: string;
@@ -66,6 +67,7 @@ export interface PlayerFormData {
   address?: string;
   phone?: string;
   parentsPhone?: string;
+  guardianEmail?: string;
   email?: string;
   aadharNumber?: string;
   gender: string;

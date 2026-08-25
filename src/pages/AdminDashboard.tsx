@@ -29,6 +29,7 @@ import {
   BarChart,
   MessageCircle,
   ChevronDown,
+  ListChecks,
 } from "lucide-react";
 import StatCard from "../components/StatCard";
 import api from "../api/axios";
@@ -162,6 +163,7 @@ function AdminDashboard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [feesDue, setFeesDue] = useState<FeesDueRow[]>([]);
+  const [pendingStatsCount, setPendingStatsCount] = useState(0);
   const [flags, setFlags] = useState<Record<string, string>>({});
   const [showFeeList, setShowFeeList] = useState(false);
   const role = localStorage.getItem("userRole");
@@ -180,9 +182,11 @@ function AdminDashboard() {
     Promise.all([
       api.get("/admin/dashboard/summary"),
       api.get("/admin/fees/collection-summary").catch(() => ({ data: [] })),
+      api.get("/admin/cricket-stats/pending").catch(() => ({ data: [] })),
     ])
-      .then(([summaryRes, feeSummaryRes]) => {
+      .then(([summaryRes, feeSummaryRes, pendingStatsRes]) => {
         setSummary(summaryRes.data);
+        setPendingStatsCount((pendingStatsRes.data || []).length);
         const rows: FeesDueRow[] = (feeSummaryRes.data || [])
           .filter((r: any) => r.feeStatus === "OVERDUE" || r.feeStatus === "DUE")
           .map((r: any) => ({
@@ -353,6 +357,13 @@ function AdminDashboard() {
             icon={AlertTriangle}
             color="red"
           />
+          <StatCard
+            label="Pending Stats"
+            value={pendingStatsCount}
+            icon={ListChecks}
+            color="orange"
+            onClick={() => navigate("/admin/cricket-stats/pending")}
+          />
         </div>
       </section>
 
@@ -488,6 +499,14 @@ function AdminDashboard() {
             onClick={() => navigate("/admin/cricket-stats/add")}
             gradient="bg-gradient-to-br from-orange-500 to-orange-600"
             textLight="text-orange-100"
+          />
+          <ActionCard
+            icon={ListChecks}
+            title="Review Stats"
+            description="Approve or reject player-submitted match stats"
+            onClick={() => navigate("/admin/cricket-stats/pending")}
+            gradient="bg-gradient-to-br from-amber-500 to-amber-600"
+            textLight="text-amber-100"
           />
           <ActionCard
             icon={Clock}

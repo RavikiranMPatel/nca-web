@@ -43,6 +43,10 @@ type PlayerStat = {
   widesConceded?: number;
   noBallsConceded?: number;
   catchesTaken?: number;
+  /** "ADMIN" (staff-entered) or "PLAYER" (self-submitted) */
+  source?: string;
+  /** "APPROVED", "PENDING", or "REJECTED" — admin-entered stats are always APPROVED */
+  status?: string;
 };
 
 type PlayerInfo = {
@@ -496,7 +500,11 @@ function PlayerStatsPage() {
 
   const months = Object.keys(stats);
   const allStats = months.flatMap((m) => stats[m]);
-  const byFormat = groupByFormat(allStats);
+  // Career aggregates (totals, averages, format tables) must reflect only
+  // APPROVED stats — PENDING/REJECTED self-submissions still render as rows
+  // below (with a status badge) but must not count toward career numbers.
+  const approvedStats = allStats.filter((s) => s.status === "APPROVED");
+  const byFormat = groupByFormat(approvedStats);
   const selectedStats = selectedMonth ? (stats[selectedMonth] ?? []) : [];
 
   return (
@@ -524,7 +532,7 @@ function PlayerStatsPage() {
                 {player?.displayName ?? "—"}
               </p>
               <p className="text-xs text-gray-500">
-                {allStats.length} matches · tap to{" "}
+                {approvedStats.length} matches · tap to{" "}
                 {profileExpanded ? "hide" : "view"} profile
               </p>
             </div>
@@ -539,7 +547,7 @@ function PlayerStatsPage() {
             <div className="border-t border-gray-100 px-4 py-3 space-y-2">
               <ProfileInfoGrid
                 player={player}
-                allStats={allStats}
+                approvedStats={approvedStats}
                 byFormat={byFormat}
               />
             </div>
@@ -559,7 +567,7 @@ function PlayerStatsPage() {
         <aside className="w-72 flex-shrink-0 space-y-4">
           <PlayerProfileCard
             player={player}
-            allStats={allStats}
+            approvedStats={approvedStats}
             byFormat={byFormat}
           />
           {/* Career stats in sidebar on desktop */}
@@ -658,11 +666,11 @@ function StatsContent({
 
 function ProfileInfoGrid({
   player,
-  allStats,
+  approvedStats,
   byFormat,
 }: {
   player: PlayerInfo | null;
-  allStats: PlayerStat[];
+  approvedStats: PlayerStat[];
   byFormat: Record<string, PlayerStat[]>;
 }) {
   const age = getAge(player?.dob);
@@ -672,10 +680,10 @@ function ProfileInfoGrid({
     if (!formatOrder.includes(f) && byFormat[f].length > 0)
       presentFormats.push(f);
   });
-  const hasBatting = allStats.some(
+  const hasBatting = approvedStats.some(
     (s) => s.runs !== null && s.runs !== undefined,
   );
-  const hasBowling = allStats.some(
+  const hasBowling = approvedStats.some(
     (s) => s.oversBowled !== null && s.oversBowled !== undefined,
   );
 
@@ -738,7 +746,9 @@ function ProfileInfoGrid({
       )}
       <hr className="border-gray-100" />
       <div className="text-center py-1">
-        <p className="text-2xl font-bold text-blue-700">{allStats.length}</p>
+        <p className="text-2xl font-bold text-blue-700">
+          {approvedStats.length}
+        </p>
         <p className="text-[11px] text-gray-400 uppercase tracking-wide">
           Total Matches
         </p>
@@ -751,11 +761,11 @@ function ProfileInfoGrid({
 
 function PlayerProfileCard({
   player,
-  allStats,
+  approvedStats,
   byFormat,
 }: {
   player: PlayerInfo | null;
-  allStats: PlayerStat[];
+  approvedStats: PlayerStat[];
   byFormat: Record<string, PlayerStat[]>;
 }) {
   const photoSrc = player?.photoUrl ? getImageUrl(player.photoUrl) : null;
@@ -800,7 +810,7 @@ function PlayerProfileCard({
         <hr className="border-gray-100" />
         <ProfileInfoGrid
           player={player}
-          allStats={allStats}
+          approvedStats={approvedStats}
           byFormat={byFormat}
         />
       </div>
@@ -974,13 +984,35 @@ function MatchStatCard({ stat }: { stat: PlayerStat }) {
     stat.catchesTaken !== undefined &&
     stat.catchesTaken > 0;
   const formatLabel = normalizeFormat(stat.format);
+  const isPending = stat.status === "PENDING";
+  const isRejected = stat.status === "REJECTED";
 
   return (
-    <div className="bg-white rounded-xl border overflow-hidden shadow-sm">
+    <div
+      className={`rounded-xl border overflow-hidden shadow-sm ${
+        isPending
+          ? "bg-amber-50/40 border-amber-300"
+          : isRejected
+            ? "bg-red-50/40 border-red-200 opacity-75"
+            : "bg-white border-gray-200"
+      }`}
+    >
       <div className="bg-gradient-to-r from-[#1a3a5c] to-[#1e4d7b] text-white px-4 py-2.5">
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0">
-            <p className="font-bold text-sm truncate">vs {stat.opponentName}</p>
+            <div className="flex items-center gap-2 flex-wrap">
+              <p className="font-bold text-sm truncate">vs {stat.opponentName}</p>
+              {isPending && (
+                <span className="flex-shrink-0 text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-400 text-amber-950 uppercase tracking-wide">
+                  Pending Review
+                </span>
+              )}
+              {isRejected && (
+                <span className="flex-shrink-0 text-[10px] font-bold px-2 py-0.5 rounded-full bg-red-500 text-white uppercase tracking-wide">
+                  Rejected
+                </span>
+              )}
+            </div>
             <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 mt-0.5">
               {(stat.groundName || stat.place) && (
                 <span className="text-blue-200 text-xs flex items-center gap-1">
@@ -995,6 +1027,11 @@ function MatchStatCard({ stat }: { stat: PlayerStat }) {
                   year: "numeric",
                 })}
               </span>
+              {stat.source === "PLAYER" && (
+                <span className="text-blue-300 text-xs">
+                  · Self-submitted
+                </span>
+              )}
             </div>
           </div>
           <div className="flex items-center gap-1.5 flex-shrink-0 flex-wrap justify-end">

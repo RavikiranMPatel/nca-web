@@ -155,6 +155,17 @@ const FITNESS_PHYSICAL = {
   flexibility: ["Sit & Reach Test", "Shoulder Mobility"],
 };
 
+const MEASUREMENT_SKILLS: Record<string, { unit: string }> = {
+  "Yo-Yo Test / Beep Test Level": { unit: "level" },
+  "2km Run Time": { unit: "min" },
+  "30m Sprint Time": { unit: "sec" },
+  "T-Test / Shuttle Run Time": { unit: "sec" },
+  "Push-ups Count": { unit: "reps" },
+  "Plank Hold Duration": { unit: "sec" },
+  "Throwing Distance": { unit: "m" },
+  "Sit & Reach Test": { unit: "cm" },
+};
+
 const FITNESS_PERFORMANCE = {
   performanceFitness: ["Reaction Time", "Balance & Coordination", "Explosive Power"],
 };
@@ -830,6 +841,7 @@ function PlayerAssessmentForm({
             <div className="flex items-center rounded-lg border border-slate-200 overflow-hidden text-xs font-semibold">
               <button
                 type="button"
+                data-testid="view-mode-detailed"
                 onClick={() => setViewMode("detailed")}
                 className={`px-3 py-1.5 transition-all ${
                   viewMode === "detailed"
@@ -841,6 +853,7 @@ function PlayerAssessmentForm({
               </button>
               <button
                 type="button"
+                data-testid="view-mode-compact"
                 onClick={() => setViewMode("compact")}
                 className={`px-3 py-1.5 border-l border-slate-200 transition-all ${
                   viewMode === "compact"
@@ -937,6 +950,7 @@ function PlayerAssessmentForm({
             <button
               key={tab.key}
               type="button"
+              data-testid={`tab-${tab.key}`}
               onClick={() => setActiveTab(tab.key)}
               className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-md text-xs font-semibold transition-all whitespace-nowrap ${
                 activeTab === tab.key
@@ -1329,7 +1343,8 @@ function PlayerAssessmentForm({
                 entry={getSkill(fitness.endurance as Record<string, SkillEntry>, s)}
                 onChange={(e) => updateFitnessSkill("endurance", s, e)}
                 previousRating={previousAssessment?.fitness?.endurance?.[s]?.rating}
-                compact={isCompact} />
+                compact={isCompact}
+                measurement={MEASUREMENT_SKILLS[s]} />
             ))}
           </SectionCard>
 
@@ -1339,7 +1354,8 @@ function PlayerAssessmentForm({
                 entry={getSkill(fitness.speedAgility as Record<string, SkillEntry>, s)}
                 onChange={(e) => updateFitnessSkill("speedAgility", s, e)}
                 previousRating={previousAssessment?.fitness?.speedAgility?.[s]?.rating}
-                compact={isCompact} />
+                compact={isCompact}
+                measurement={MEASUREMENT_SKILLS[s]} />
             ))}
           </SectionCard>
 
@@ -1349,7 +1365,8 @@ function PlayerAssessmentForm({
                 entry={getSkill(fitness.strength as Record<string, SkillEntry>, s)}
                 onChange={(e) => updateFitnessSkill("strength", s, e)}
                 previousRating={previousAssessment?.fitness?.strength?.[s]?.rating}
-                compact={isCompact} />
+                compact={isCompact}
+                measurement={MEASUREMENT_SKILLS[s]} />
             ))}
           </SectionCard>
 
@@ -1359,7 +1376,8 @@ function PlayerAssessmentForm({
                 entry={getSkill(fitness.flexibility as Record<string, SkillEntry>, s)}
                 onChange={(e) => updateFitnessSkill("flexibility", s, e)}
                 previousRating={previousAssessment?.fitness?.flexibility?.[s]?.rating}
-                compact={isCompact} />
+                compact={isCompact}
+                measurement={MEASUREMENT_SKILLS[s]} />
             ))}
           </SectionCard>
 

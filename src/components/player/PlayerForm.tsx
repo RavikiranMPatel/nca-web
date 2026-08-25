@@ -322,6 +322,17 @@ function PlayerForm({
             />
           </Field>
 
+          <Field label="Guardian Email" error={invalidFields.guardianEmail}>
+            <input
+              type="email"
+              name="guardianEmail"
+              value={formData.guardianEmail}
+              onChange={onChange}
+              className={inputCls(invalidFields.guardianEmail)}
+              placeholder="parent@example.com"
+            />
+          </Field>
+
           <Field label="Email" error={invalidFields.email} colSpan2>
             <input
               type="email"
