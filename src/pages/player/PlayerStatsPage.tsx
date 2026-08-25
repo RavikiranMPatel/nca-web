@@ -19,7 +19,7 @@ import { toast } from "react-hot-toast";
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 type PlayerStat = {
-  id: string;
+  publicId: string;
   matchDate: string;
   opponentName: string;
   groundName?: string;
@@ -655,7 +655,7 @@ function StatsContent({
       </div>
       <div className="space-y-3">
         {selectedStats.map((stat) => (
-          <MatchStatCard key={stat.id} stat={stat} />
+          <MatchStatCard key={stat.publicId} stat={stat} />
         ))}
       </div>
     </div>
