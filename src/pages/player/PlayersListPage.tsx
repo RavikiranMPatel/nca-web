@@ -19,6 +19,8 @@ import {
   Trash2,
   Eye,
   EyeOff,
+  Check,
+  AlertTriangle,
 } from "lucide-react";
 import { getImageUrl } from "../../utils/imageUrl";
 import PlayerStatusToggleModal from "../../components/player/PlayerStatusToggleModal";
@@ -44,6 +46,7 @@ type Player = {
   feeStatus?: "PAID" | "DUE" | "OVERDUE" | null; // ← NEW
   nextDueOn?: string | null;
   excludeFromAttendance?: boolean;
+  hasGuardianEmail?: boolean;
 };
 
 const ITEMS_PER_PAGE = 10;
@@ -271,6 +274,7 @@ function PlayersListPage() {
   });
   const [professionFilter, setProfessionFilter] = useState<string>("all");
   const [ageGroupFilter, setAgeGroupFilter] = useState<string>("all");
+  const [guardianEmailFilter, setGuardianEmailFilter] = useState<"all" | "missing">("all");
   const [currentPage, setCurrentPage] = useState(1);
   const [showExportMenu, setShowExportMenu] = useState(false);
   const [exportingExcel, setExportingExcel] = useState(false);
@@ -388,12 +392,15 @@ function PlayersListPage() {
       ageGroupFilter === "all" || isEligibleForGroup(p.dob, ageGroupFilter);
     const matchesBranch =
       !isSuperAdmin || branchFilter === "all" || p.branchId === branchFilter;
+    const matchesGuardianEmail =
+      guardianEmailFilter === "all" || !p.hasGuardianEmail;
     return (
       matchesSearch &&
       matchesStatus &&
       matchesProfession &&
       matchesAgeGroup &&
-      matchesBranch
+      matchesBranch &&
+      matchesGuardianEmail
     );
   });
 
@@ -406,7 +413,7 @@ function PlayersListPage() {
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [search, statusFilter, professionFilter, ageGroupFilter, branchFilter]);
+  }, [search, statusFilter, professionFilter, ageGroupFilter, branchFilter, guardianEmailFilter]);
 
   const ageGroupCounts = AGE_GROUPS.map((g) => ({
     ...g,
@@ -491,6 +498,7 @@ function PlayersListPage() {
     statusFilter !== "all" ||
     professionFilter !== "all" ||
     ageGroupFilter !== "all" ||
+    guardianEmailFilter !== "all" ||
     (isSuperAdmin && branchFilter !== "all");
 
   const resetFilters = () => {
@@ -499,6 +507,7 @@ function PlayersListPage() {
     setProfessionFilter("all");
     setAgeGroupFilter("all");
     setBranchFilter("all");
+    setGuardianEmailFilter("all");
   };
 
   if (loading) {
@@ -628,8 +637,8 @@ function PlayersListPage() {
             />
           </div>
 
-          {/* Filters — 2-col on mobile, 4-col on desktop */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-2 md:gap-3">
+          {/* Filters — 2-col on mobile, 5-col on desktop */}
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-2 md:gap-3">
             {/* Branch — super admin only, spans 2 cols on mobile */}
             {isSuperAdmin && branches.length > 0 && (
               <div className="col-span-2 md:col-span-1">
@@ -754,6 +763,21 @@ function PlayersListPage() {
                 ))}
               </select>
             </div>
+
+            {/* Guardian Email */}
+            <div>
+              <label className="text-[10px] font-semibold text-slate-500 uppercase mb-1 block">
+                Guardian Email
+              </label>
+              <select
+                value={guardianEmailFilter}
+                onChange={(e) => setGuardianEmailFilter(e.target.value as any)}
+                className="w-full px-2.5 py-2 rounded-lg border border-slate-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-100 text-xs"
+              >
+                <option value="all">All Players</option>
+                <option value="missing">Missing Only</option>
+              </select>
+            </div>
           </div>
 
           {/* Reset */}
@@ -868,6 +892,12 @@ function PlayersListPage() {
                           Excl. Att.
                         </span>
                       )}
+                      {!p.hasGuardianEmail && (
+                        <span className="flex items-center gap-0.5 text-[10px] text-amber-600 font-medium">
+                          <AlertTriangle size={9} />
+                          No Guardian Email
+                        </span>
+                      )}
                     </div>
 
                     <div className="flex items-center gap-3 mt-1 text-xs text-slate-500 flex-wrap">
@@ -956,6 +986,9 @@ function PlayersListPage() {
                   </th>
                   <th className="px-6 py-4 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">
                     Phone
+                  </th>
+                  <th className="px-6 py-4 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">
+                    Guardian Email
                   </th>
                   <th className="px-6 py-4 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">
                     Joined
@@ -1071,6 +1104,17 @@ function PlayersListPage() {
                         <span className="text-sm text-slate-600">
                           {p.phone || "-"}
                         </span>
+                      </td>
+                      <td className="px-6 py-4">
+                        {p.hasGuardianEmail ? (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-100 text-emerald-700">
+                            <Check size={11} /> On file
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-100 text-amber-700">
+                            <AlertTriangle size={11} /> Missing
+                          </span>
+                        )}
                       </td>
                       <td className="px-6 py-4">
                         <span className="text-sm text-slate-600">

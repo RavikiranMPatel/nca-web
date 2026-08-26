@@ -1,9 +1,10 @@
 import { useNavigate, useParams, useLocation, Outlet } from "react-router-dom";
-import { ArrowLeft, ChevronRight, Lock, FileText } from "lucide-react";
+import { ArrowLeft, ChevronRight, Lock, FileText, Calendar } from "lucide-react";
 import { useEffect, useState } from "react";
 import Button from "../../components/Button";
 import api from "../../api/axios";
 import { toast } from "react-hot-toast";
+import ProgressReportModal from "../../components/player/ProgressReportModal";
 
 function PlayerOverviewPage() {
   const navigate = useNavigate();
@@ -17,6 +18,7 @@ function PlayerOverviewPage() {
   const [playerName, setPlayerName] = useState<string>("");
   const [showTooltip, setShowTooltip] = useState(false);
   const [downloadingPdf, setDownloadingPdf] = useState(false);
+  const [showProgressReport, setShowProgressReport] = useState(false);
 
   const isExternalPlayer = playerPublicId?.startsWith("EXT-") ?? false;
 
@@ -107,6 +109,18 @@ function PlayerOverviewPage() {
               <FileText size={15} />
               {downloadingPdf ? "Downloading…" : "Profile PDF"}
             </button>
+
+            {/* Progress report download */}
+            {!isExternalPlayer && (
+              <button
+                onClick={() => setShowProgressReport(true)}
+                className="flex items-center gap-1.5 px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-700 hover:bg-gray-50"
+                title="Download Progress Report"
+              >
+                <Calendar size={15} />
+                Progress Report
+              </button>
+            )}
 
             {/* Update button */}
             <div className="relative">
@@ -232,6 +246,13 @@ function PlayerOverviewPage() {
 
       {/* ================= CHILD CONTENT ================= */}
       <Outlet />
+
+      <ProgressReportModal
+        open={showProgressReport}
+        playerPublicId={playerPublicId}
+        playerName={playerName || playerPublicId}
+        onClose={() => setShowProgressReport(false)}
+      />
     </div>
   );
 }
