@@ -42,7 +42,7 @@ export default function AttendanceExcludedDatesPage() {
     try {
       const [datesRes, batchesData] = await Promise.all([
         api.get<ExcludedDate[]>("/admin/attendance/excluded-dates"),
-        fetchActiveBatches(),
+        fetchActiveBatches("REGULAR"),
       ]);
       setDates(datesRes.data);
       setBatches(batchesData);

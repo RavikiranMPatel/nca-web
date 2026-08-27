@@ -292,6 +292,8 @@ export default function LiveScorerPage() {
   const [lastBowlerPublicId, setLastBowlerPublicId] = useState<string | null>(
     null,
   );
+  const [prevSuperOverBowlerPublicId, setPrevSuperOverBowlerPublicId] =
+    useState<string | null>(null);
   const [serverBowlerStats, setServerBowlerStats] = useState<Record<string, BowlerStatDTO>>({});
   const [battingTeamId, setBattingTeamId] = useState<string | null>(null);
   const [bowlingTeamId, setBowlingTeamId] = useState<string | null>(null);
@@ -503,6 +505,7 @@ export default function LiveScorerPage() {
     setPartnershipBalls(state.partnershipBalls ?? 0);
     setOverJustEnded(state.overJustEnded ?? false);
     setLastBowlerPublicId(state.lastBowlerPublicId ?? null);
+    setPrevSuperOverBowlerPublicId(state.prevSuperOverBowlerPublicId ?? null);
     setActiveRunnerFor(state.runnerForPublicId ?? null);
     setActiveRunnerName(state.runnerName ?? null);
 
@@ -835,6 +838,7 @@ export default function LiveScorerPage() {
       setDismissedPlayerIds(new Set());
       setBowlerOversMap({});
       setLastBowlerPublicId(null);
+      setPrevSuperOverBowlerPublicId(null);
       setBatterStatsMap({});
       setPartnershipRuns(0);
       setPartnershipBalls(0);
@@ -1552,6 +1556,9 @@ export default function LiveScorerPage() {
             const oversUsed = bowlerOversMap[p.publicId] ?? 0;
             const hasQuota = maxOvers <= 0 || oversUsed < maxOvers;
             const isLastBowler = p.publicId === lastBowlerPublicId;
+            const isPrevSuperOverBowler =
+              !!prevSuperOverBowlerPublicId &&
+              p.publicId === prevSuperOverBowlerPublicId;
             const validForNextOver = bowlingPlayers.filter((other) => {
               if (other.publicId === p.publicId) return false;
               const otherOversUsed = bowlerOversMap[other.publicId] ?? 0;
@@ -1572,6 +1579,7 @@ export default function LiveScorerPage() {
               oversUsed,
               isMaxed: !hasQuota,
               isLastBowler,
+              isPrevSuperOverBowler,
               wouldDeadlock,
               wouldWarn,
             };
@@ -1605,18 +1613,26 @@ export default function LiveScorerPage() {
                     )
                     .map((p) => {
                       const hardDisabled =
-                        p.isMaxed || p.isLastBowler || p.wouldDeadlock;
+                        p.isMaxed ||
+                        p.isLastBowler ||
+                        p.wouldDeadlock ||
+                        p.isPrevSuperOverBowler;
                       const reason = p.isMaxed
                         ? `Quota full (${p.oversUsed}/${maxOvers} ov)`
                         : p.isLastBowler
                           ? "Bowled last over"
-                          : p.wouldDeadlock
-                            ? "⚠ No bowler left"
-                            : p.wouldWarn
-                              ? `⚠ Only 1 left after`
-                              : `${p.oversUsed}/${maxOvers} ov`;
+                          : p.isPrevSuperOverBowler
+                            ? "Bowled previous Super Over"
+                            : p.wouldDeadlock
+                              ? "⚠ No bowler left"
+                              : p.wouldWarn
+                                ? `⚠ Only 1 left after`
+                                : `${p.oversUsed}/${maxOvers} ov`;
                       const reasonColor =
-                        p.isMaxed || p.isLastBowler || p.wouldDeadlock
+                        p.isMaxed ||
+                        p.isLastBowler ||
+                        p.wouldDeadlock ||
+                        p.isPrevSuperOverBowler
                           ? "text-red-500"
                           : p.wouldWarn
                             ? "text-amber-500"
@@ -2632,33 +2648,42 @@ export default function LiveScorerPage() {
                     .filter((p) =>
                       p.displayName.toLowerCase().includes(moreSearch.toLowerCase()),
                     )
-                    .map((p) => (
-                      <button
-                        key={p.publicId}
-                        disabled={morePicking}
-                        onClick={() =>
-                          moreSubAction === "correct-bowler-pick"
-                            ? handleCorrectBowler(p)
-                            : handleInjuryReplace(p)
-                        }
-                        className="w-full flex items-center gap-3 px-3 py-3 bg-gray-50 hover:bg-gray-100 rounded-xl text-left active:scale-95 transition-all disabled:opacity-40"
-                      >
-                        <div className="w-8 h-8 bg-teal-100 text-teal-700 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0">
-                          {p.displayName.charAt(0).toUpperCase()}
-                        </div>
-                        <div className="flex-1">
-                          <div className="text-sm font-medium text-gray-900">
-                            {p.displayName}
+                    .map((p) => {
+                      const isSoRestricted =
+                        moreSubAction === "correct-bowler-pick" &&
+                        !!prevSuperOverBowlerPublicId &&
+                        p.publicId === prevSuperOverBowlerPublicId;
+                      return (
+                        <button
+                          key={p.publicId}
+                          disabled={morePicking || isSoRestricted}
+                          onClick={() =>
+                            moreSubAction === "correct-bowler-pick"
+                              ? handleCorrectBowler(p)
+                              : handleInjuryReplace(p)
+                          }
+                          className="w-full flex items-center gap-3 px-3 py-3 bg-gray-50 hover:bg-gray-100 rounded-xl text-left active:scale-95 transition-all disabled:opacity-40"
+                        >
+                          <div className="w-8 h-8 bg-teal-100 text-teal-700 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0">
+                            {p.displayName.charAt(0).toUpperCase()}
                           </div>
-                          {p.bowlingStyle && (
-                            <div className="text-xs text-gray-400">{p.bowlingStyle}</div>
+                          <div className="flex-1">
+                            <div className="text-sm font-medium text-gray-900">
+                              {p.displayName}
+                            </div>
+                            {p.bowlingStyle && (
+                              <div className="text-xs text-gray-400">{p.bowlingStyle}</div>
+                            )}
+                            {isSoRestricted && (
+                              <div className="text-xs text-red-500">Bowled previous Super Over</div>
+                            )}
+                          </div>
+                          {bowler?.publicId === p.publicId && !isSoRestricted && (
+                            <span className="text-xs text-teal-500 flex-shrink-0">current</span>
                           )}
-                        </div>
-                        {bowler?.publicId === p.publicId && (
-                          <span className="text-xs text-teal-500 flex-shrink-0">current</span>
-                        )}
-                      </button>
-                    ))}
+                        </button>
+                      );
+                    })}
                 </div>
               </div>
             )}

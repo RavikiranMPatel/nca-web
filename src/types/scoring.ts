@@ -71,6 +71,7 @@ export interface BallResponse {
   currentNonStrikerPublicId?: string | null;
   currentBowlerPublicId?: string | null;
   lastBowlerPublicId?: string | null;
+  prevSuperOverBowlerPublicId?: string | null;
   isFreeHit: boolean;
   overJustEnded: boolean;
   partnershipRuns: number;
