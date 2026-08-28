@@ -26,6 +26,7 @@ import {
   Trophy,
   BarChart,
   MessageCircle,
+  Shirt,
 } from "lucide-react";
 import StatCard from "../components/StatCard";
 import BroadcastModal from "../components/BroadcastModal";
@@ -163,6 +164,7 @@ function AdminDashboard() {
   const showHomeSlider = useFlag("MODULE_HOME_SLIDER_ENABLED");
   const showCamps = useFlag("SUMMER_CAMP_ENABLED");
   const showRevenue = useFlag("MODULE_REVENUE_ENABLED");
+  const showMerchandise = useFlag("MODULE_MERCHANDISE_ENABLED");
 
   useEffect(() => {
     setLoading(true);
@@ -545,6 +547,16 @@ function AdminDashboard() {
               description="Configure academy info, branding, and home page"
               onClick={() => navigate("/admin/settings")}
               iconColor="text-indigo-600"
+            />
+          )}
+          {showMerchandise && (
+            <ActionCard
+              icon={Shirt}
+              title="Merchandise"
+              description="Track cap & t-shirt stock and what each player received"
+              onClick={() => navigate("/admin/merchandise")}
+              gradient="bg-gradient-to-br from-rose-500 to-rose-600"
+              textLight="text-rose-100"
             />
           )}
           {isSuperAdmin && showRevenue && (

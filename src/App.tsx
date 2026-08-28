@@ -66,6 +66,7 @@ import UserProfilePage from "./pages/UserProfilePage";
 import AdminRevenueDashboard from "./pages/admin/AdminRevenueDashboard";
 import AdminExcelImportPage from "./pages/admin/AdminExcelImportPage";
 import FeesDuePage from "./pages/admin/FeesDuePage";
+import MerchandisePage from "./pages/admin/MerchandisePage";
 import MonthSummaryPage from "./pages/admin/MonthSummaryPage";
 // import PlayerCoachingPage from "./pages/player/PlayerCoachingPage"; // disabled 2026-07-31 — Coaching tab hidden pending content strategy
 import CoachingDashboardPage from "./pages/coaching/CoachingDashboardPage";
@@ -502,6 +503,16 @@ function App() {
           <ProtectedRoute roles={["ROLE_SUPER_ADMIN"]}>
             <AppLayout>
               <AdminExcelImportPage />
+            </AppLayout>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/merchandise"
+        element={
+          <ProtectedRoute roles={["ROLE_ADMIN", "ROLE_SUPER_ADMIN"]}>
+            <AppLayout>
+              <MerchandisePage />
             </AppLayout>
           </ProtectedRoute>
         }

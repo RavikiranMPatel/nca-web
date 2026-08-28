@@ -107,6 +107,11 @@ const MODULE_GROUPS: ModuleGroup[] = [
         label: "Umpire Assist",
         description: "Cricket laws AI assistant & rain/NRR calculators",
       },
+      {
+        key: "MODULE_MERCHANDISE_ENABLED",
+        label: "Merchandise",
+        description: "Cap & t-shirt stock and issue history",
+      },
     ],
   },
 ];
