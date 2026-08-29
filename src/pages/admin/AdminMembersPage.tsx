@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import PresenceBanner from "../../components/PresenceBanner";
 import { useAuth } from "../../auth/useAuth";
+import { formatDateOrDash } from "../../utils/date";
 
 // ── Types ─────────────────────────────────────────────────────────────────
 
@@ -41,6 +42,11 @@ type ActiveSubscriber = {
   status: string;
   userPublicId: string;
   isHistorical?: boolean;
+  originalExpiresOn?: string;
+  extensionReason?: string;
+  extendedBy?: string;
+  extendedAt?: string;
+  extensionCount?: number;
 };
 
 type NonSubscriber = {
@@ -123,6 +129,18 @@ type HistoricalSubscription = {
   cancelledAt: string;
   cancelledBy: string;
   notes: string;
+  originalExpiresOn?: string;
+  extensionReason?: string;
+  extendedBy?: string;
+  extendedAt?: string;
+  extensionCount?: number;
+};
+
+type ExtendModalState = {
+  publicId: string;
+  userName: string;
+  currentExpiry: string;
+  sessionsRemaining: number;
 };
 
 const PAYMENT_MODES = [
@@ -194,6 +212,9 @@ function AdminMembersPage() {
   const [loadingUsage, setLoadingUsage] = useState(false);
 
   const [showImportModal, setShowImportModal] = useState<ImportModalConfig | null>(null);
+
+  // ── Extend expiry (goodwill grant) ────────────────────────────────────
+  const [extendModal, setExtendModal] = useState<ExtendModalState | null>(null);
 
   useEffect(() => {
     fetchActive();
@@ -615,8 +636,15 @@ function AdminMembersPage() {
                         <div className="text-right hidden md:block">
                           <p className="text-xs text-slate-500">Expires</p>
                           <p className="text-sm font-medium text-slate-700">
-                            {sub.expiresOn}
+                            {formatDateOrDash(sub.expiresOn)}
                           </p>
+                          {sub.originalExpiresOn && (
+                            <p className="text-[11px] text-amber-600 flex items-center justify-end gap-0.5 mt-0.5">
+                              <Clock size={10} />
+                              Extended from{" "}
+                              {formatDateOrDash(sub.originalExpiresOn)}
+                            </p>
+                          )}
                         </div>
                         {isExpanded ? (
                           <ChevronUp size={16} className="text-slate-400" />
@@ -647,7 +675,7 @@ function AdminMembersPage() {
                           <InfoTile
                             icon={<Calendar size={13} />}
                             label="Started"
-                            value={sub.startsOn}
+                            value={formatDateOrDash(sub.startsOn)}
                           />
                         </div>
                         {sub.isHistorical && (
@@ -659,6 +687,15 @@ function AdminMembersPage() {
                           <p className="text-xs text-slate-400">
                             Activated by: {sub.activatedBy}
                           </p>
+                        )}
+                        {sub.extensionReason && (
+                          <ExtensionNote
+                            expiresOn={sub.expiresOn}
+                            extendedBy={sub.extendedBy}
+                            extendedAt={sub.extendedAt}
+                            reason={sub.extensionReason}
+                            count={sub.extensionCount}
+                          />
                         )}
                         {sub.notes && (
                           <p className="text-xs text-slate-500 italic">
@@ -703,6 +740,20 @@ function AdminMembersPage() {
                             className="text-xs px-3 py-1.5 border border-green-300 text-green-700 rounded-lg hover:bg-green-50 transition text-center"
                           >
                             + Restore Session
+                          </button>
+                          <button
+                            onClick={() =>
+                              setExtendModal({
+                                publicId: sub.publicId,
+                                userName: sub.userName,
+                                currentExpiry: sub.expiresOn,
+                                sessionsRemaining: sub.sessionsRemaining,
+                              })
+                            }
+                            className="text-xs px-3 py-1.5 border border-amber-300 text-amber-700 rounded-lg hover:bg-amber-50 transition text-center flex items-center justify-center gap-1"
+                          >
+                            <Clock size={12} />
+                            Extend Expiry
                           </button>
                           <button
                             onClick={() =>
@@ -1027,15 +1078,20 @@ function AdminMembersPage() {
                       <InfoTile
                         icon={<Calendar size={13} />}
                         label="Started"
-                        value={sub.startsOn || "—"}
+                        value={formatDateOrDash(sub.startsOn)}
                       />
                       <InfoTile
                         icon={<Calendar size={13} />}
                         label={sub.status === "CANCELLED" ? "Cancelled" : "Expired"}
-                        value={
+                        value={formatDateOrDash(
                           sub.status === "CANCELLED"
-                            ? sub.cancelledAt || sub.expiresOn || "—"
-                            : sub.expiresOn || "—"
+                            ? sub.cancelledAt || sub.expiresOn
+                            : sub.expiresOn,
+                        )}
+                        hint={
+                          sub.originalExpiresOn
+                            ? `Extended from ${formatDateOrDash(sub.originalExpiresOn)}`
+                            : undefined
                         }
                       />
                     </div>
@@ -1059,6 +1115,39 @@ function AdminMembersPage() {
                       <p className="mt-2 text-xs text-slate-400">
                         Cancelled by: {sub.cancelledBy}
                       </p>
+                    )}
+
+                    {sub.extensionReason && (
+                      <div className="mt-2">
+                        <ExtensionNote
+                          expiresOn={sub.expiresOn}
+                          extendedBy={sub.extendedBy}
+                          extendedAt={sub.extendedAt}
+                          reason={sub.extensionReason}
+                          count={sub.extensionCount}
+                        />
+                      </div>
+                    )}
+
+                    {/* A lapsed member lives here, not on the ACTIVE tab —
+                        so this is the main entry point for a goodwill grant. */}
+                    {sub.status !== "CANCELLED" && (
+                      <div className="mt-3 pt-3 border-t border-slate-100">
+                        <button
+                          onClick={() =>
+                            setExtendModal({
+                              publicId: sub.publicId,
+                              userName: sub.userName,
+                              currentExpiry: sub.expiresOn,
+                              sessionsRemaining: sub.sessionsRemaining,
+                            })
+                          }
+                          className="text-xs px-3 py-1.5 border border-amber-300 text-amber-700 rounded-lg hover:bg-amber-50 transition flex items-center gap-1"
+                        >
+                          <Clock size={12} />
+                          Extend Expiry
+                        </button>
+                      </div>
                     )}
                   </div>
                 );
@@ -1378,6 +1467,218 @@ function AdminMembersPage() {
           defaultStatus={showImportModal.defaultStatus}
         />
       )}
+
+      {/* ── EXTEND EXPIRY MODAL ───────────────────────────────── */}
+      {extendModal && (
+        <ExtendExpiryModal
+          modal={extendModal}
+          onClose={() => setExtendModal(null)}
+          onSuccess={() => {
+            fetchActive();
+            fetchQueued();
+            fetchHistory();
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+// ── ExtensionNote ─────────────────────────────────────────────────────────
+// Persistent, on-card explanation of a goodwill extension. Mirrors the
+// "Cancelled by:" treatment so an unusual expiry date is self-explanatory.
+function ExtensionNote({
+  expiresOn,
+  extendedBy,
+  extendedAt,
+  reason,
+  count,
+}: {
+  expiresOn?: string;
+  extendedBy?: string;
+  extendedAt?: string;
+  reason: string;
+  count?: number;
+}) {
+  return (
+    <div className="text-xs text-slate-400">
+      <p className="flex items-center gap-1 flex-wrap">
+        <Clock size={11} className="text-amber-600" />
+        <span>
+          Extended to{" "}
+          <span className="font-medium text-slate-500">
+            {formatDateOrDash(expiresOn)}
+          </span>
+          {extendedBy ? ` by ${extendedBy}` : ""}
+          {extendedAt ? ` on ${formatDateOrDash(extendedAt)}` : ""}
+        </span>
+        {typeof count === "number" && count > 1 && (
+          <span className="text-amber-600 font-medium">
+            ({count} extensions)
+          </span>
+        )}
+      </p>
+      <p className="italic text-slate-500 mt-0.5">"{reason}"</p>
+    </div>
+  );
+}
+
+// ── ExtendExpiryModal ─────────────────────────────────────────────────────
+// Goodwill grant: a later end date and a required reason. No payment is
+// taken and no sessions are added — the backend leaves the session counts
+// alone, so a plan with none left cannot be helped by this action.
+function ExtendExpiryModal({
+  modal,
+  onClose,
+  onSuccess,
+}: {
+  modal: ExtendModalState;
+  onClose: () => void;
+  onSuccess: () => void;
+}) {
+  const [newExpiresOn, setNewExpiresOn] = useState("");
+  const [reason, setReason] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  const noSessionsLeft = modal.sessionsRemaining <= 0;
+
+  // The new date must be strictly later than the current expiry.
+  const minDate = modal.currentExpiry
+    ? new Date(new Date(modal.currentExpiry).getTime() + 86400000)
+        .toISOString()
+        .substring(0, 10)
+    : new Date().toISOString().substring(0, 10);
+
+  const canSubmit =
+    !!newExpiresOn && reason.trim().length >= 5 && !noSessionsLeft && !saving;
+
+  const handleExtend = async () => {
+    if (!newExpiresOn) {
+      toast.error("Pick a new expiry date");
+      return;
+    }
+    if (reason.trim().length < 5) {
+      toast.error("A reason is required (at least 5 characters)");
+      return;
+    }
+    setSaving(true);
+    try {
+      await api.post(`/admin/subscriptions/${modal.publicId}/extend`, {
+        newExpiresOn,
+        reason: reason.trim(),
+      });
+      toast.success(
+        `Expiry extended to ${formatDateOrDash(newExpiresOn)} for ${modal.userName}`,
+      );
+      onSuccess();
+      onClose();
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message || "Failed to extend expiry");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
+      <div className="bg-white w-full sm:max-w-sm sm:rounded-2xl rounded-t-2xl shadow-xl flex flex-col max-h-[85dvh]">
+        {/* Header */}
+        <div className="shrink-0 flex items-center justify-between px-5 py-4 border-b bg-slate-50">
+          <div>
+            <h3 className="font-bold text-lg flex items-center gap-1.5">
+              <Clock size={18} className="text-amber-600" />
+              Extend Expiry
+            </h3>
+            <p className="text-xs text-slate-500 mt-0.5">{modal.userName}</p>
+          </div>
+          <button
+            onClick={onClose}
+            className="text-slate-400 hover:text-slate-600 p-1"
+          >
+            <X size={20} />
+          </button>
+        </div>
+
+        {/* Body */}
+        <div className="flex-1 overflow-y-auto min-h-0 px-5 py-4 space-y-4">
+          <div className="bg-slate-50 border border-slate-200 rounded-xl px-4 py-3">
+            <p className="text-xs text-slate-500">Current expiry</p>
+            <p className="text-sm font-semibold text-slate-800">
+              {formatDateOrDash(modal.currentExpiry)}
+            </p>
+            <p className="text-xs text-slate-400 mt-1">
+              Goodwill only — no payment is taken and no sessions are added.
+            </p>
+          </div>
+
+          {noSessionsLeft && (
+            <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">
+              <p className="text-xs text-amber-700 font-medium">
+                ⚠️ This plan has no sessions left. Extending the date alone will
+                not let the member book — restore sessions instead.
+              </p>
+            </div>
+          )}
+
+          <div>
+            <label className="block text-sm font-semibold text-slate-700 mb-1">
+              New expiry date *
+            </label>
+            <input
+              type="date"
+              value={newExpiresOn}
+              min={minDate}
+              disabled={noSessionsLeft}
+              onChange={(e) => setNewExpiresOn(e.target.value)}
+              className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500 disabled:bg-slate-100 disabled:text-slate-400"
+            />
+            <p className="text-xs text-slate-400 mt-1">
+              Must be later than the current expiry
+            </p>
+          </div>
+
+          <div>
+            <label className="block text-sm font-semibold text-slate-700 mb-1">
+              Reason *
+            </label>
+            <textarea
+              value={reason}
+              maxLength={500}
+              rows={3}
+              disabled={noSessionsLeft}
+              onChange={(e) => setReason(e.target.value)}
+              placeholder="Goodwill — machine unavailable 12–26 Aug"
+              className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500 resize-none disabled:bg-slate-100"
+            />
+            <div className="flex justify-between mt-1">
+              <p className="text-xs text-slate-400">
+                Shown on the member's card so this reads as deliberate later
+              </p>
+              <p className="text-xs text-slate-400 shrink-0">
+                {reason.length}/500
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div className="shrink-0 px-5 py-4 border-t bg-slate-50 flex gap-2">
+          <button
+            onClick={onClose}
+            disabled={saving}
+            className="flex-1 py-2.5 text-sm font-medium text-slate-600 bg-slate-100 rounded-xl hover:bg-slate-200 transition"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleExtend}
+            disabled={!canSubmit}
+            className="flex-1 py-2.5 text-sm font-semibold text-white bg-amber-600 rounded-xl hover:bg-amber-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {saving ? "Extending…" : "Extend"}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
@@ -2189,10 +2490,12 @@ function InfoTile({
   icon,
   label,
   value,
+  hint,
 }: {
   icon: React.ReactNode;
   label: string;
   value: string;
+  hint?: string;
 }) {
   return (
     <div className="bg-white rounded-xl p-3 border border-slate-200 shadow-sm">
@@ -2201,6 +2504,9 @@ function InfoTile({
         <span className="text-xs font-medium">{label}</span>
       </div>
       <p className="text-sm font-semibold text-slate-800 truncate">{value}</p>
+      {hint && (
+        <p className="text-[11px] text-amber-600 truncate mt-0.5">{hint}</p>
+      )}
     </div>
   );
 }
