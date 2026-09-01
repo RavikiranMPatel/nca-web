@@ -185,7 +185,13 @@ type CommissionRow = {
 type CommissionRateMode = "10" | "15" | "custom";
 type UsageEntry = { id: string; usedAt: string; sessionsUsed: number };
 type ExpenseSubTab = "summary" | "monthly" | "all";
-type DateRange = "all" | "today" | "this_week" | "this_month" | "custom";
+type DateRange =
+  | "all"
+  | "today"
+  | "this_week"
+  | "this_month"
+  | "last_month"
+  | "custom";
 
 const MONTHS = [
   "Jan",
@@ -284,6 +290,18 @@ function getDateBounds(range: DateRange, cf: string, ct: string) {
       from: `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`,
       to: today,
     };
+  if (range === "last_month") {
+    // A whole calendar month, unlike this_month which runs month-to-date.
+    // Day 0 of the current month is the last day of the previous one, which also
+    // handles year rollover and month lengths without a lookup table.
+    const first = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const last = new Date(now.getFullYear(), now.getMonth(), 0);
+    // Built from local parts, not toISOString(): toISOString() converts to UTC and
+    // in IST that shifts the 1st back into the previous month.
+    const iso = (d: Date) =>
+      `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+    return { from: iso(first), to: iso(last) };
+  }
   if (range === "custom") return { from: cf, to: ct };
   return { from: "", to: "" };
 }
@@ -977,11 +995,64 @@ export default function AdminRevenueDashboard() {
     installmentPaymentsTotal;
   const netRevenue = grossRevenue - expensesTotal;
 
+  /**
+   * Selecting a range point the month-scoped panels at the same period, so the whole
+   * page describes one month rather than mixing periods.
+   *
+   * Only "last_month" and "this_month" carry a single unambiguous month. "Today" and
+   * "This Week" sit inside the current month, so they leave the pickers alone rather
+   * than pretending to be month-scoped; "All Time" and "Custom Range" have no single
+   * month to point at.
+   *
+   * This is a one-shot sync on selection, not a binding. The Expenses and Coach
+   * Commission month pickers stay editable afterwards — monthYear is not merely a
+   * filter, it drives the mark-as-paid workflow for recurring expenses, so taking it
+   * over would break an operational control. When a picker is moved away from the
+   * selected range the page says so, via rangeMonthMismatch below.
+   */
+  const applyRange = (val: DateRange) => {
+    setDateRange(val);
+    const now = new Date();
+    if (val === "last_month") {
+      const prev = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+      setMonthYear({ year: prev.getFullYear(), month: prev.getMonth() + 1 });
+      setCommissionMonth(
+        `${prev.getFullYear()}-${String(prev.getMonth() + 1).padStart(2, "0")}`,
+      );
+    } else if (val === "this_month") {
+      setMonthYear({ year: now.getFullYear(), month: now.getMonth() + 1 });
+      setCommissionMonth(
+        `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`,
+      );
+    }
+  };
+
+  /**
+   * The month the selected range describes, or null when it does not describe exactly
+   * one month. Used to flag a month picker that has been moved away from it.
+   */
+  const rangeMonth: string | null = (() => {
+    const now = new Date();
+    if (dateRange === "this_month")
+      return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+    if (dateRange === "last_month") {
+      const prev = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+      return `${prev.getFullYear()}-${String(prev.getMonth() + 1).padStart(2, "0")}`;
+    }
+    return null;
+  })();
+
+  const monthYearIso = `${monthYear.year}-${String(monthYear.month).padStart(2, "0")}`;
+  const expenseMonthMismatch = rangeMonth != null && monthYearIso !== rangeMonth;
+  const commissionMonthMismatch =
+    rangeMonth != null && commissionMonth !== rangeMonth;
+
   const rangeLabels: Record<DateRange, string> = {
     all: "All Time",
     today: "Today",
     this_week: "This Week",
     this_month: "This Month",
+    last_month: "Last Month",
     custom: customFrom && customTo ? `${customFrom} → ${customTo}` : "Custom",
   };
 
@@ -2158,13 +2229,14 @@ export default function AdminRevenueDashboard() {
                   ["today", "Today"],
                   ["this_week", "This Week"],
                   ["this_month", "This Month"],
+                  ["last_month", "Last Month"],
                   ["custom", "Custom Range"],
                 ] as [DateRange, string][]
               ).map(([val, label]) => (
                 <button
                   key={val}
                   onClick={() => {
-                    setDateRange(val);
+                    applyRange(val);
                     if (val !== "custom") {
                       setShowFilterSheet(false);
                     }
@@ -2248,13 +2320,14 @@ export default function AdminRevenueDashboard() {
                     ["today", "Today"],
                     ["this_week", "This Week"],
                     ["this_month", "This Month"],
+                    ["last_month", "Last Month"],
                     ["custom", "Custom Range"],
                   ] as [DateRange, string][]
                 ).map(([val, label]) => (
                   <button
                     key={val}
                     onClick={() => {
-                      setDateRange(val);
+                      applyRange(val);
                       setShowRangeMenu(false);
                     }}
                     className={`w-full text-left px-4 py-2 text-sm hover:bg-slate-50 ${dateRange === val ? "text-emerald-600 font-semibold" : "text-slate-700"}`}
@@ -2490,7 +2563,7 @@ export default function AdminRevenueDashboard() {
           label="Coach Commission"
           value={fmt(commTotalDue)}
           onClick={() => setActiveTab("commission")}
-          sub={`${commTotalSessions} session${commTotalSessions !== 1 ? "s" : ""} · ${effectiveRate}% rate · ${commissionMonth}`}
+          sub={`${commTotalSessions} session${commTotalSessions !== 1 ? "s" : ""} · ${effectiveRate}% rate · ${commissionMonth}${commissionMonthMismatch ? " — differs from range" : ""}`}
           icon={<Award size={15} className="text-amber-600" />}
           bg="bg-gradient-to-br from-amber-50 to-orange-50"
           border="border-amber-200"
@@ -2512,7 +2585,7 @@ export default function AdminRevenueDashboard() {
           <SummaryCard
             label="Expenses"
             value={fmt(expensesTotal)}
-            sub={`${filteredExpenses.length} entries · ${monthlyPayments.filter((p) => p.status === "PAID").length} monthly paid`}
+            sub={`${filteredExpenses.length} entries · ${monthlyPayments.filter((p) => p.status === "PAID").length} monthly paid (${monthYearIso})${expenseMonthMismatch ? " — differs from range" : ""}`}
             icon={<TrendingDown size={15} className="text-red-500" />}
             bg="bg-gradient-to-br from-red-50 to-rose-50"
             onClick={() => setActiveTab("expenses")}
@@ -2550,7 +2623,7 @@ export default function AdminRevenueDashboard() {
             ? [
                 ["expenses", "Expenses", filteredExpenses.length + monthlyPayments.filter((p) => p.status === "PAID").length],
                 ["income", "Income", filteredIncomes.length],
-                ["bank", "Bank Position", 0],
+                ["bank", "Bank Position", bankPosition?.recentActuals?.length ?? 0],
                 ["commission", "Coach Commission", commTotalSessions],
               ]
             : [["commission", "Coach Commission", commTotalSessions]]),
