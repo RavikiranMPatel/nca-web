@@ -52,57 +52,53 @@ const ITEMS_PER_PAGE = 10;
 
 // ─── AGE GROUP CALCULATION ───────────────────────────────
 
-const AGE_GROUPS = [
-  { label: "Under 12", value: "U-12", age: 12 },
-  { label: "Under 14", value: "U-14", age: 14 },
-  { label: "Under 16", value: "U-16", age: 16 },
-  { label: "Under 19", value: "U-19", age: 19 },
-  { label: "Under 23", value: "U-23", age: 23 },
-];
+// Age-group eligibility is defined once, in the backend AgeGroupService, and served by
+// GET /api/admin/age-groups as cutoff dates. Nothing here recomputes the rule: the
+// 1 September boundary, the season rollover and the group list all live server-side,
+// and this file does a plain dob >= cutoff comparison against what it is given.
+//
+// The four functions that used to live here (AGE_GROUPS, getSeasonYear,
+// getPlayerAgeGroup, isEligibleForGroup) computed the cutoff as seasonYear - age + 1,
+// a year later than the BCCI rule, and isEligibleForGroup additionally capped each
+// group at the next-younger group's cutoff. That made it a band, not eligibility —
+// "Under 16" returned 9 players where 57 were eligible.
+type AgeGroupDef = { value: string; label: string; cutoff: string };
 
-function getSeasonYear(): number {
-  const now = new Date();
-  return now.getMonth() >= 8 ? now.getFullYear() : now.getFullYear() - 1;
-}
+type AgeGroupsResponse = {
+  seasonYear: number;
+  seasonLabel: string;
+  groups: AgeGroupDef[];
+};
 
-function getPlayerAgeGroup(dob?: string): string | null {
-  if (!dob) return null;
-  const dobDate = new Date(dob);
-  if (isNaN(dobDate.getTime())) return null;
-  const seasonYear = getSeasonYear();
-  for (const group of AGE_GROUPS) {
-    const cutoff = new Date(seasonYear - group.age + 1, 8, 1);
-    if (dobDate >= cutoff) return group.value;
-  }
-  return "Senior";
-}
-
+/**
+ * Cumulative: eligible for a group means born on or after its cutoff, with no upper
+ * bound, so a U-12 player is also eligible for U-14 and every older group. Counts
+ * therefore overlap and can exceed the roster — that is expected, and the dropdown
+ * says "eligible" for exactly that reason.
+ */
 function isEligibleForGroup(
   dob: string | undefined,
   groupValue: string,
+  groups: AgeGroupDef[],
 ): boolean {
   if (!dob) return false;
-  const dobDate = new Date(dob);
-  if (isNaN(dobDate.getTime())) return false;
-  const seasonYear = getSeasonYear();
-  const groupIndex = AGE_GROUPS.findIndex((g) => g.value === groupValue);
-  if (groupIndex === -1) return false;
+  const g = groups.find((x) => x.value === groupValue);
+  if (!g) return false;
+  // Both sides are ISO yyyy-MM-dd, so a lexicographic compare is exact and avoids
+  // the timezone shifts new Date("yyyy-MM-dd") introduces.
+  return dob.slice(0, 10) >= g.cutoff;
+}
 
-  const group = AGE_GROUPS[groupIndex];
-  // Lower bound: born on/after this → eligible for this group
-
-  const lowerCutoff = new Date(seasonYear - group.age + 1, 8, 1);
-
-  // Upper bound: born before the next smaller group's cutoff
-  // e.g. U-19 upper = 1 Sep (seasonYear - 16) → too old for U-16
-  const prevGroup = AGE_GROUPS[groupIndex - 1];
-  const upperCutoff = prevGroup
-    ? new Date(seasonYear - prevGroup.age + 1, 8, 1)
-    : null;
-
-  return (
-    dobDate >= lowerCutoff && (upperCutoff === null || dobDate < upperCutoff)
-  );
+/** The youngest group a player is eligible for — a label over the same cumulative rule. */
+function getPlayerAgeGroup(
+  dob: string | undefined,
+  groups: AgeGroupDef[],
+): string | null {
+  if (!dob || groups.length === 0) return null;
+  for (const g of groups) {
+    if (isEligibleForGroup(dob, g.value, groups)) return g.value;
+  }
+  return "Senior";
 }
 
 // ─── SHARE MODAL ────────────────────────────────────────
@@ -383,6 +379,10 @@ function PlayersListPage() {
   >((searchParams.get("status") as "active" | "inactive") ?? "all");
   const [professionFilter, setProfessionFilter] = useState<string>("all");
   const [ageGroupFilter, setAgeGroupFilter] = useState<string>("all");
+  // Served by GET /api/admin/age-groups. Empty until it resolves, which makes every
+  // age filter a no-op for that moment rather than silently applying a stale rule.
+  const [ageGroups, setAgeGroups] = useState<AgeGroupDef[]>([]);
+  const [seasonYear, setSeasonYear] = useState<number>(0);
   const [branchFilter, setBranchFilter] = useState<string>("all");
   const [genderFilter, setGenderFilter] = useState<string>(
     searchParams.get("gender") ?? "all",
@@ -494,6 +494,18 @@ function PlayersListPage() {
     }
   };
 
+  const loadAgeGroups = async () => {
+    try {
+      const res = await api.get<AgeGroupsResponse>("/admin/age-groups");
+      setAgeGroups(res.data.groups || []);
+      setSeasonYear(res.data.seasonYear);
+    } catch {
+      // Leave the list empty: an age filter then matches nobody, which is visibly wrong
+      // and recoverable, rather than quietly reverting to a hardcoded rule.
+      setAgeGroups([]);
+    }
+  };
+
   const loadPlayers = async (showLoadingSpinner = false) => {
     if (showLoadingSpinner) setLoading(true);
     try {
@@ -508,6 +520,7 @@ function PlayersListPage() {
 
   useEffect(() => {
     loadPlayers();
+    loadAgeGroups();
     if (isSuperAdmin) {
       getAdminBranches()
         .then(setBranches)
@@ -531,7 +544,8 @@ function PlayersListPage() {
     const matchesProfession =
       professionFilter === "all" || p.profession === professionFilter;
     const matchesAgeGroup =
-      ageGroupFilter === "all" || isEligibleForGroup(p.dob, ageGroupFilter);
+      ageGroupFilter === "all" ||
+      isEligibleForGroup(p.dob, ageGroupFilter, ageGroups);
     const matchesBranch =
       !isSuperAdmin || branchFilter === "all" || p.branchId === branchFilter;
 
@@ -562,9 +576,12 @@ function PlayersListPage() {
     setCurrentPage(1);
   }, [search, statusFilter, professionFilter, ageGroupFilter, branchFilter]);
 
-  const ageGroupCounts = AGE_GROUPS.map((g) => ({
+  // Cumulative by design: each group counts everyone eligible for it, so U-23 includes
+  // every younger player and the totals overlap. The dropdown labels them "eligible"
+  // rather than showing a band, which is what these numbers are not.
+  const ageGroupCounts = ageGroups.map((g) => ({
     ...g,
-    count: players.filter((p) => isEligibleForGroup(p.dob, g.value)).length,
+    count: players.filter((p) => isEligibleForGroup(p.dob, g.value, ageGroups)).length,
   }));
 
   const getFilterLabel = (): string => {
@@ -574,7 +591,7 @@ function PlayersListPage() {
       if (b) parts.push(b.name);
     }
     if (ageGroupFilter !== "all") {
-      const g = AGE_GROUPS.find((g) => g.value === ageGroupFilter);
+      const g = ageGroups.find((g) => g.value === ageGroupFilter);
       if (g) parts.push(g.label);
     }
     if (statusFilter !== "all")
@@ -704,7 +721,6 @@ function PlayersListPage() {
     });
   };
 
-  const seasonYear = getSeasonYear();
   const hasActiveFilters =
     search ||
     statusFilter !== "all" ||
@@ -939,7 +955,7 @@ function PlayersListPage() {
             <div>
               <div className="flex items-center gap-1 mb-1">
                 <label className="text-[10px] font-semibold text-slate-500 uppercase">
-                  Age Group
+                  Eligible For
                 </label>
                 <div className="relative">
                   <button
@@ -971,15 +987,25 @@ function PlayersListPage() {
                         <p className="leading-relaxed mb-2">
                           Current season:{" "}
                           <span className="font-semibold text-blue-300">
-                            {seasonYear}-{seasonYear + 1}
+                            {seasonYear ? `${seasonYear}-${seasonYear + 1}` : "…"}
                           </span>
                         </p>
+                        <p className="leading-relaxed mb-2 text-slate-300">
+                          Counts are cumulative — a U-12 player is eligible for every
+                          older group, so totals overlap and will exceed the roster.
+                        </p>
+                        {/* Cutoffs come from the server, so this cannot drift from the
+                            rule the filter applies. */}
                         <div className="space-y-1 border-t border-slate-600 pt-2 mt-2">
-                          {AGE_GROUPS.map((g) => (
+                          {ageGroups.map((g) => (
                             <p key={g.value} className="flex justify-between">
                               <span className="font-medium">{g.label}:</span>
                               <span className="text-slate-300">
-                                Born on/after 1 Sep {seasonYear - g.age}
+                                Born on/after{" "}
+                                {new Date(g.cutoff + "T00:00:00").toLocaleDateString(
+                                  "en-IN",
+                                  { day: "numeric", month: "short", year: "numeric" },
+                                )}
                               </span>
                             </p>
                           ))}
@@ -998,7 +1024,7 @@ function PlayersListPage() {
                 <option value="all">All Groups</option>
                 {ageGroupCounts.map((g) => (
                   <option key={g.value} value={g.value}>
-                    {g.label} ({g.count})
+                    {g.label} — {g.count} eligible
                   </option>
                 ))}
               </select>
@@ -1019,7 +1045,7 @@ function PlayersListPage() {
         {/* ── MOBILE CARDS ── */}
         <div className="md:hidden space-y-2">
           {paginatedPlayers.map((p) => {
-            const ageGroup = getPlayerAgeGroup(p.dob);
+            const ageGroup = getPlayerAgeGroup(p.dob, ageGroups);
             return (
               <div
                 key={p.publicId}
@@ -1227,7 +1253,7 @@ function PlayersListPage() {
               </thead>
               <tbody className="divide-y divide-slate-200">
                 {paginatedPlayers.map((p) => {
-                  const ageGroup = getPlayerAgeGroup(p.dob);
+                  const ageGroup = getPlayerAgeGroup(p.dob, ageGroups);
                   return (
                     <tr
                       key={p.publicId}
