@@ -1,11 +1,15 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { MessageCircle, Send, Loader2, AlertTriangle, Check, CheckCheck } from "lucide-react";
+import { MessageCircle, Send, Loader2, AlertTriangle, Check, CheckCheck, ArrowLeft } from "lucide-react";
 import { toast } from "react-hot-toast";
 import api from "../../api/axios";
 
-// Two-pane shell borrowed from ContactInbox.tsx — list collapses to md:w-2/5 when a
-// thread is selected. What ContactInbox does not have, and this needs, is a compose box:
-// its reply is a mailto: link.
+// Two-pane on desktop, single-pane on mobile: below md this shows the list OR the
+// conversation, never both, with a back control.
+//
+// This deliberately no longer follows ContactInbox's shell. That was built for a
+// read-only view whose detail pane is short, so stacking both panes and letting the page
+// scroll was survivable there. Here the compose box must stay reachable, which needs a
+// bounded height and an internally scrolling timeline.
 
 type Thread = {
   publicId: string;
@@ -162,12 +166,18 @@ export default function AdminWhatsAppInbox() {
           No conversations yet.
         </div>
       ) : (
-        <div className="flex flex-col md:flex-row gap-4 md:h-[600px]">
-          {/* ── List panel ── */}
+        // Height on EVERY breakpoint, not just md. Without a bounded parent the
+        // timeline's flex-1 overflow-y-auto expands to full content height, the pane
+        // never scrolls internally, and the compose box drifts to the bottom of the
+        // page — further away with every message. 100dvh minus the chrome above.
+        <div className="flex flex-col md:flex-row gap-4 h-[calc(100dvh-13rem)] md:h-[600px]">
+          {/* ── List panel ──
+              Below md this is list OR detail, never both. The previous version only
+              changed the md width, so on a phone the detail was appended under a 360px
+              list and could open below the fold — tapping a thread looked like nothing
+              happened. */}
           <div
-            className={`flex flex-col gap-1 overflow-y-auto max-h-[360px] md:max-h-none ${
-              selected ? "md:w-2/5" : "w-full"
-            } transition-all`}
+            className={`${selected ? "hidden md:flex md:w-2/5" : "flex w-full"} flex-col gap-1 overflow-y-auto min-h-0`}
           >
             {threads.map((t) => {
               const isSel = selected?.publicId === t.publicId;
@@ -205,22 +215,34 @@ export default function AdminWhatsAppInbox() {
 
           {/* ── Detail panel ── */}
           {selected && (
-            <div className="flex-1 flex flex-col bg-white rounded-xl border border-gray-200 overflow-hidden">
-              <div className="px-4 py-3 border-b">
-                <p className="font-semibold text-sm text-gray-900">
-                  {selected.profileName?.trim() || `+91 ${selected.tenDigit}`}
-                </p>
-                <p className="text-xs text-gray-500">+91 {selected.tenDigit}</p>
+            <div className="flex-1 min-h-0 flex flex-col bg-white rounded-xl border border-gray-200 overflow-hidden">
+              <div className="px-4 py-3 border-b flex items-center gap-2">
+                {/* Back to the list. Only needed below md, where the list is hidden —
+                    without it a phone has no way to reach another conversation. */}
+                <button
+                  type="button"
+                  onClick={() => setSelected(null)}
+                  aria-label="Back to conversations"
+                  className="md:hidden -ml-1 p-1 rounded-lg text-gray-500 hover:bg-gray-100 shrink-0"
+                >
+                  <ArrowLeft size={18} />
+                </button>
+                <div className="min-w-0">
+                  <p className="font-semibold text-sm text-gray-900 truncate">
+                    {selected.profileName?.trim() || `+91 ${selected.tenDigit}`}
+                  </p>
+                  <p className="text-xs text-gray-500">+91 {selected.tenDigit}</p>
+                </div>
               </div>
 
-              <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-gray-50">
+              <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-3 bg-gray-50">
                 {selected.messages.map((m, i) => (
                   <div
                     key={i}
                     className={`flex ${m.direction === "OUTBOUND" ? "justify-end" : "justify-start"}`}
                   >
                     <div
-                      className={`max-w-[75%] rounded-xl px-3 py-2 text-sm ${
+                      className={`max-w-[85%] sm:max-w-[75%] min-w-0 break-words rounded-xl px-3 py-2 text-sm ${
                         m.direction === "OUTBOUND"
                           ? m.status === "FAILED" || m.status === "UNDELIVERED"
                             ? "bg-red-50 border border-red-200 text-red-900"
@@ -247,7 +269,7 @@ export default function AdminWhatsAppInbox() {
                                 href={u}
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                className="text-xs text-blue-600 underline"
+                                className="text-xs text-blue-600 underline break-all"
                               >
                                 View media {j + 1}
                               </a>
@@ -283,18 +305,20 @@ export default function AdminWhatsAppInbox() {
                 >
                   {windowNote(selected)}
                 </p>
-                <div className="flex gap-2">
+                <div className="flex gap-2 items-end">
+                  {/* min-w-0: a flex child will not shrink below its intrinsic width
+                      without it, which squeezes the Send button off at 380px. */}
                   <textarea
                     value={draft}
                     onChange={(e) => setDraft(e.target.value)}
                     rows={2}
                     placeholder="Type a reply…"
-                    className="flex-1 resize-none border border-gray-300 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+                    className="flex-1 min-w-0 resize-none border border-gray-300 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
                   />
                   <button
                     onClick={send}
                     disabled={sending || !draft.trim()}
-                    className="px-4 rounded-xl bg-green-600 text-white text-sm font-semibold hover:bg-green-700 transition disabled:opacity-50 flex items-center gap-1.5"
+                    className="shrink-0 px-3 sm:px-4 py-2 rounded-xl bg-green-600 text-white text-sm font-semibold hover:bg-green-700 transition disabled:opacity-50 flex items-center gap-1.5"
                   >
                     {sending ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
                     Send
