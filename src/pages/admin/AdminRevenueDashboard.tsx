@@ -509,8 +509,13 @@ export default function AdminRevenueDashboard() {
   >([]);
 
   // ── Commission state ──
-  const nowIso = new Date().toISOString();
-  const [commissionMonth, setCommissionMonth] = useState(nowIso.substring(0, 7));
+  // Built from local date parts, not toISOString(): that converts to UTC, so before
+  // 05:30 IST on the 1st of a month it yields the PREVIOUS month and the panel would
+  // open on the wrong one. Same construction as getDateBounds and applyRange.
+  const [commissionMonth, setCommissionMonth] = useState(() => {
+    const n = new Date();
+    return `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, "0")}`;
+  });
   const [commissionData, setCommissionData] = useState<CommissionRow[]>([]);
   const [commissionLoading, setCommissionLoading] = useState(false);
   const [commissionRateMode, setCommissionRateMode] = useState<CommissionRateMode>("10");
@@ -686,12 +691,17 @@ export default function AdminRevenueDashboard() {
         else { setCommissionRateMode("custom"); setCommissionRateCustom(String(rate)); }
       })
       .catch(() => {/* keep default 10 */});
-    // Eagerly fetch commission data so the tab badge shows a real count on first render
-    loadCommissionData(new Date().toISOString().substring(0, 7));
+    // Eagerly fetch so the tab badge shows a real count on first render. Uses
+    // commissionMonth, not a hardcoded current month: the panel's heading and its data
+    // must agree from the very first render, and applyRange may already have moved it.
+    loadCommissionData(commissionMonth);
   }, []);
   useEffect(() => {
     loadMonthly(monthYear.year, monthYear.month);
   }, [monthYear, isSuperAdmin]);
+  // commissionMonth IS a dependency: the date-range selector moves it via applyRange,
+  // and without it here the panel kept rendering the previously fetched month under the
+  // new month's heading — label and data disagreeing with nothing to show for it.
   useEffect(() => {
     if (activeTab === "commission") {
       loadCommissionData(commissionMonth);
@@ -699,7 +709,7 @@ export default function AdminRevenueDashboard() {
     if (activeTab === "bank" && isSuperAdmin) {
       loadBankPosition();
     }
-  }, [activeTab]);
+  }, [activeTab, commissionMonth, isSuperAdmin]);
   useEffect(() => {
     if (activeTab !== "feesummary" || feeSummaryLoaded) return;
     setFeeSummaryLoading(true);
@@ -1013,16 +1023,28 @@ export default function AdminRevenueDashboard() {
   const applyRange = (val: DateRange) => {
     setDateRange(val);
     const now = new Date();
-    if (val === "last_month") {
-      const prev = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-      setMonthYear({ year: prev.getFullYear(), month: prev.getMonth() + 1 });
+
+    // The month the two month-scoped panels should point at, or null when the range
+    // does not imply one.
+    //
+    // "Today" and "This Week" both sit inside the current month, so the current month
+    // is the honest answer for them. Leaving them alone — as this did originally — meant
+    // the panels silently retained whatever month a previous selection had set, so
+    // picking Today after Last Month left August commission on screen.
+    //
+    // "All Time" and "Custom Range" have no single month to point at, so they leave the
+    // panels where they are; the summary cards flag the divergence instead.
+    const target: Date | null =
+      val === "last_month"
+        ? new Date(now.getFullYear(), now.getMonth() - 1, 1)
+        : val === "this_month" || val === "today" || val === "this_week"
+          ? now
+          : null;
+
+    if (target) {
+      setMonthYear({ year: target.getFullYear(), month: target.getMonth() + 1 });
       setCommissionMonth(
-        `${prev.getFullYear()}-${String(prev.getMonth() + 1).padStart(2, "0")}`,
-      );
-    } else if (val === "this_month") {
-      setMonthYear({ year: now.getFullYear(), month: now.getMonth() + 1 });
-      setCommissionMonth(
-        `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`,
+        `${target.getFullYear()}-${String(target.getMonth() + 1).padStart(2, "0")}`,
       );
     }
   };
@@ -1033,12 +1055,14 @@ export default function AdminRevenueDashboard() {
    */
   const rangeMonth: string | null = (() => {
     const now = new Date();
-    if (dateRange === "this_month")
-      return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
-    if (dateRange === "last_month") {
-      const prev = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-      return `${prev.getFullYear()}-${String(prev.getMonth() + 1).padStart(2, "0")}`;
-    }
+    const iso = (d: Date) =>
+      `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+    // Must match applyRange's `target` exactly, or a picker it just set would be
+    // flagged as diverging from the range that set it.
+    if (dateRange === "last_month")
+      return iso(new Date(now.getFullYear(), now.getMonth() - 1, 1));
+    if (dateRange === "this_month" || dateRange === "today" || dateRange === "this_week")
+      return iso(now);
     return null;
   })();
 
