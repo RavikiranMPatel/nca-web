@@ -1,7 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { MessageCircle, Send, Loader2, AlertTriangle, Check, CheckCheck, ArrowLeft } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import {
+  MessageCircle, Send, Loader2, AlertTriangle, Check, CheckCheck, ArrowLeft, User,
+} from "lucide-react";
 import { toast } from "react-hot-toast";
 import api from "../../api/axios";
+import { getImageUrl } from "../../utils/imageUrl";
 
 // Two-pane on desktop, single-pane on mobile: below md this shows the list OR the
 // conversation, never both, with a back control.
@@ -10,6 +14,21 @@ import api from "../../api/axios";
 // read-only view whose detail pane is short, so stacking both panes and letting the page
 // scroll was survivable there. Here the compose box must stay reachable, which needs a
 // bounded height and an internally scrolling timeline.
+
+/**
+ * A player on a thread or on a message.
+ *
+ * `name` is the ONLY field guaranteed to be present. publicId and photoUrl are both null
+ * for a player who has since been hard-deleted — the link column is ON DELETE SET NULL
+ * and only player_name_snapshot survives — so neither the photo nor the link may gate
+ * rendering the name.
+ */
+type InboxPlayer = {
+  publicId: string | null;
+  name: string;
+  photoUrl?: string | null;
+  active: boolean;
+};
 
 type Thread = {
   publicId: string;
@@ -21,6 +40,8 @@ type Thread = {
   unreadCount: number;
   windowClosesAt?: string | null;
   windowLikelyOpen: boolean;
+  /** LIVE match on the number — whoever holds it today, which is who a reply reaches. */
+  players: InboxPlayer[];
 };
 
 type Message = {
@@ -30,7 +51,8 @@ type Message = {
   numMedia?: number;
   mediaUrls?: string[];
   matchStatus?: "MATCHED" | "UNMATCHED" | "AMBIGUOUS";
-  players?: string[];
+  /** SNAPSHOT — who this number matched when the message arrived. */
+  players?: InboxPlayer[];
   status?: string;
   errorCode?: number | null;
   errorMessage?: string | null;
@@ -53,13 +75,136 @@ function DeliveryTick({ status }: { status?: string }) {
   return null;
 }
 
+/**
+ * Photo with an initials fallback — the pattern from PlayersListPage.tsx:1074-1091,
+ * onError handler included: the <img> hides itself and reveals its sibling when the file
+ * is missing. The fallback is the normal path, not an edge case: 9 of the 82 reachable
+ * players have no photo at all, and a deleted player never has one.
+ */
+function PlayerAvatar({ p, size }: { p: InboxPlayer; size: number }) {
+  const url = getImageUrl(p.photoUrl);
+  const box = { width: size, height: size };
+  return (
+    <span className="inline-flex shrink-0" style={box}>
+      {url && (
+        <img
+          src={url}
+          alt={p.name}
+          style={box}
+          className="rounded-full object-cover border-2 border-white bg-gray-100"
+          onError={(e) => {
+            e.currentTarget.style.display = "none";
+            e.currentTarget.nextElementSibling?.classList.remove("hidden");
+          }}
+        />
+      )}
+      <span
+        style={box}
+        className={`rounded-full border-2 border-white bg-gradient-to-br from-blue-100 to-blue-200 flex items-center justify-center ${url ? "hidden" : ""}`}
+      >
+        <span className="font-bold text-blue-600" style={{ fontSize: Math.round(size * 0.42) }}>
+          {p.name.trim().charAt(0).toUpperCase()}
+        </span>
+      </span>
+    </span>
+  );
+}
+
+/**
+ * An unmatched number. Deliberately NOT an initial from the WhatsApp profile name: that
+ * is sender-supplied and unverified, and rendering it as an avatar letter would present
+ * it as identity we do not have.
+ */
+function UnknownAvatar({ size }: { size: number }) {
+  return (
+    <span
+      style={{ width: size, height: size }}
+      className="inline-flex shrink-0 items-center justify-center rounded-full border-2 border-white bg-gray-100"
+    >
+      <User size={Math.round(size * 0.5)} className="text-gray-400" />
+    </span>
+  );
+}
+
+/** Overlapping, because a list row at 380px has no width for two side by side. */
+function AvatarStack({ players, size }: { players: InboxPlayer[]; size: number }) {
+  if (players.length === 0) return <UnknownAvatar size={size} />;
+  return (
+    <span className="flex shrink-0">
+      {players.slice(0, 3).map((p, i) => (
+        <span
+          key={p.publicId ?? `${p.name}-${i}`}
+          style={{ marginLeft: i === 0 ? 0 : -Math.round(size / 3), zIndex: 3 - i }}
+        >
+          <PlayerAvatar p={p} size={size} />
+        </span>
+      ))}
+    </span>
+  );
+}
+
+function InactiveChip() {
+  return (
+    <span className="shrink-0 text-[10px] font-medium text-gray-500 bg-gray-100 rounded px-1 py-px">
+      inactive
+    </span>
+  );
+}
+
+/**
+ * One player in the conversation header.
+ *
+ * A hard-deleted player has no detail screen to open, so this degrades to plain text —
+ * the name is the record of who the message was about and still renders. Only the link
+ * is lost, never the name.
+ */
+function PlayerRow({ p, onOpen }: { p: InboxPlayer; onOpen: (publicId: string) => void }) {
+  const inner = (
+    <>
+      <PlayerAvatar p={p} size={28} />
+      <span className="text-sm font-semibold text-gray-900 truncate">{p.name}</span>
+      {!p.active && <InactiveChip />}
+    </>
+  );
+  if (!p.publicId) {
+    return (
+      <span className="flex items-center gap-2 min-w-0">
+        {inner}
+        <span className="shrink-0 text-[10px] text-gray-400">no longer on file</span>
+      </span>
+    );
+  }
+  return (
+    <button
+      type="button"
+      onClick={() => onOpen(p.publicId!)}
+      className="flex items-center gap-2 min-w-0 text-left rounded hover:underline"
+    >
+      {inner}
+    </button>
+  );
+}
+
+/**
+ * Identity only: the publicId when there is one, the snapshot name otherwise. Active
+ * state is deliberately excluded — "was active then, inactive now" is the same person and
+ * must not read as a change of who holds the number.
+ */
+const identityKey = (ps?: InboxPlayer[]) =>
+  (ps ?? []).map((p) => p.publicId ?? `name:${p.name}`).sort().join("|");
+
 export default function AdminWhatsAppInbox() {
+  const navigate = useNavigate();
   const [threads, setThreads] = useState<Thread[]>([]);
   const [selected, setSelected] = useState<ThreadDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
   const endRef = useRef<HTMLDivElement>(null);
+
+  // The existing admin player screen — the same target PlayersListPage.tsx:1052 uses.
+  // The route (App.tsx:564) redirects its index to /info.
+  const openPlayer = (publicId: string) => navigate(`/admin/players/${publicId}`);
 
   const loadThreads = useCallback(async () => {
     try {
@@ -142,6 +287,10 @@ export default function AdminWhatsAppInbox() {
       : `The free-reply window closed ${fmtTime(t.windowClosesAt)}. A template is needed.`;
   };
 
+  // What the header currently says. A message whose snapshot differs from this is the
+  // only case worth repeating names for — see the timeline below.
+  const headerIdentity = identityKey(selected?.players);
+
   return (
     <div className="px-3 sm:px-6 py-4 sm:py-6 max-w-6xl mx-auto space-y-5">
       <div className="bg-white rounded-xl border border-gray-200 shadow-sm px-4 py-4">
@@ -181,6 +330,7 @@ export default function AdminWhatsAppInbox() {
           >
             {threads.map((t) => {
               const isSel = selected?.publicId === t.publicId;
+              const named = t.players.length > 0;
               return (
                 <button
                   key={t.publicId}
@@ -193,21 +343,36 @@ export default function AdminWhatsAppInbox() {
                         : "border-gray-200 bg-white hover:bg-gray-50"
                   }`}
                 >
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="text-sm text-gray-900 truncate">
-                      {t.profileName?.trim() || `+91 ${t.tenDigit}`}
-                    </span>
-                    {t.unreadCount > 0 && (
-                      <span className="bg-green-600 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full shrink-0">
-                        {t.unreadCount}
-                      </span>
-                    )}
+                  <div className="flex items-start gap-2.5">
+                    <AvatarStack players={t.players} size={32} />
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-sm text-gray-900 truncate">
+                          {named
+                            ? t.players.map((p) => p.name).join(" & ")
+                            : t.profileName?.trim() || `+91 ${t.tenDigit}`}
+                        </span>
+                        <span className="flex items-center gap-1 shrink-0">
+                          {t.players.length === 1 && !t.players[0].active && <InactiveChip />}
+                          {t.unreadCount > 0 && (
+                            <span className="bg-green-600 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full">
+                              {t.unreadCount}
+                            </span>
+                          )}
+                        </span>
+                      </div>
+                      {!named && (
+                        <p className="text-[11px] text-gray-400 truncate">Not a registered player</p>
+                      )}
+                      <p className="text-xs text-gray-500 truncate mt-0.5">
+                        {t.lastDirection === "OUTBOUND" ? "You: " : ""}
+                        {t.lastPreview}
+                      </p>
+                      <p className="text-[10px] text-gray-400 mt-0.5 truncate">
+                        +91 {t.tenDigit} · {fmtTime(t.lastMessageAt)}
+                      </p>
+                    </div>
                   </div>
-                  <p className="text-xs text-gray-500 truncate mt-0.5">
-                    {t.lastDirection === "OUTBOUND" ? "You: " : ""}
-                    {t.lastPreview}
-                  </p>
-                  <p className="text-[10px] text-gray-400 mt-0.5">{fmtTime(t.lastMessageAt)}</p>
                 </button>
               );
             })}
@@ -216,22 +381,50 @@ export default function AdminWhatsAppInbox() {
           {/* ── Detail panel ── */}
           {selected && (
             <div className="flex-1 min-h-0 flex flex-col bg-white rounded-xl border border-gray-200 overflow-hidden">
-              <div className="px-4 py-3 border-b flex items-center gap-2">
+              <div className="px-4 py-3 border-b flex items-start gap-2">
                 {/* Back to the list. Only needed below md, where the list is hidden —
                     without it a phone has no way to reach another conversation. */}
                 <button
                   type="button"
                   onClick={() => setSelected(null)}
                   aria-label="Back to conversations"
-                  className="md:hidden -ml-1 p-1 rounded-lg text-gray-500 hover:bg-gray-100 shrink-0"
+                  className="md:hidden -ml-1 p-1 mt-0.5 rounded-lg text-gray-500 hover:bg-gray-100 shrink-0"
                 >
                   <ArrowLeft size={18} />
                 </button>
-                <div className="min-w-0">
-                  <p className="font-semibold text-sm text-gray-900 truncate">
-                    {selected.profileName?.trim() || `+91 ${selected.tenDigit}`}
-                  </p>
-                  <p className="text-xs text-gray-500">+91 {selected.tenDigit}</p>
+                <div className="min-w-0 flex-1">
+                  {selected.players.length > 0 ? (
+                    // Stacked, one per row: the header has the width the list row does
+                    // not, and two overlapping avatars would hide a name here.
+                    <div className="space-y-1">
+                      {selected.players.map((p, i) => (
+                        <PlayerRow key={p.publicId ?? `${p.name}-${i}`} p={p} onOpen={openPlayer} />
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-2 min-w-0">
+                      <UnknownAvatar size={28} />
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold text-gray-900 truncate">
+                          {selected.profileName?.trim() || `+91 ${selected.tenDigit}`}
+                        </p>
+                        <p className="text-[11px] text-gray-400">Not a registered player</p>
+                      </div>
+                    </div>
+                  )}
+                  {/* Skipped when the title above IS the number — an unmatched thread
+                      with no profile name would otherwise print it twice. */}
+                  {(selected.players.length > 0 || !!selected.profileName?.trim()) && (
+                    <p className="text-xs text-gray-500 mt-1">+91 {selected.tenDigit}</p>
+                  )}
+                  {/* A property of the NUMBER, not of any one message — which is why it
+                      lives here and no longer on every inbound bubble. */}
+                  {selected.players.length > 1 && (
+                    <p className="text-[11px] text-amber-700 mt-1 flex items-start gap-1">
+                      <AlertTriangle size={11} className="mt-px shrink-0" />
+                      Shared number — {selected.players.length} players are reachable on it.
+                    </p>
+                  )}
                 </div>
               </div>
 
@@ -250,13 +443,40 @@ export default function AdminWhatsAppInbox() {
                           : "bg-white border border-gray-200 text-gray-900"
                       }`}
                     >
-                      {m.direction === "INBOUND" && m.matchStatus === "AMBIGUOUS" && (
-                        <p className="text-[10px] text-amber-700 mb-1">
-                          Shared number — {m.players?.join(", ")}
-                        </p>
-                      )}
-                      {m.direction === "INBOUND" && m.matchStatus === "UNMATCHED" && (
-                        <p className="text-[10px] text-gray-500 mb-1">No matching player</p>
+                      {/* The snapshot is shown ONLY where it disagrees with the header.
+                          Repeating the same names on every bubble is noise; a difference
+                          is the number having changed hands, a player having been removed,
+                          or a message that predates the registration — all worth saying. */}
+                      {m.direction === "INBOUND" && identityKey(m.players) !== headerIdentity && (
+                        <div className="mb-1 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-[10px] text-amber-700">
+                          {m.players?.length ? (
+                            <>
+                              <span>At the time:</span>
+                              {m.players.map((p, j) =>
+                                p.publicId ? (
+                                  <button
+                                    key={j}
+                                    type="button"
+                                    onClick={() => openPlayer(p.publicId!)}
+                                    className="inline-flex items-center gap-1 text-gray-700 hover:underline"
+                                  >
+                                    <PlayerAvatar p={p} size={16} />
+                                    {p.name}
+                                    {!p.active && <span className="text-gray-400">(inactive)</span>}
+                                  </button>
+                                ) : (
+                                  <span key={j} className="inline-flex items-center gap-1 text-gray-700">
+                                    <PlayerAvatar p={p} size={16} />
+                                    {p.name}
+                                    <span className="text-gray-400">(no longer on file)</span>
+                                  </span>
+                                ),
+                              )}
+                            </>
+                          ) : (
+                            <span>No player matched this number when this arrived.</span>
+                          )}
+                        </div>
                       )}
                       <p className="whitespace-pre-wrap break-words">
                         {m.body || <em className="text-gray-500">(media only)</em>}
