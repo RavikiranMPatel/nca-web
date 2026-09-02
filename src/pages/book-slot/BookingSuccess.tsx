@@ -33,6 +33,7 @@ function BookingSuccess() {
     };
   };
 
+  const [downloadingReceipt, setDownloadingReceipt] = useState(false);
   const [booking, setBooking] = useState<BookingStatusResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -110,6 +111,35 @@ function BookingSuccess() {
       cancelled = true;
     };
   }, [navigate, state?.bookingPublicId, isGuest, isMemberBooking]);
+
+  // GET /api/bookings/{publicId}/receipt is @PreAuthorize("isAuthenticated()"), so the
+  // request must carry the Bearer token the axios interceptor attaches. A plain <a href>
+  // sends no Authorization header and would 401 even with the correct path — which is why
+  // this is a blob download, matching ViewAllBookings.downloadReceipt.
+  //
+  // The previous href interpolated import.meta.env.VITE_API_BASE_URL, which was defined
+  // nowhere; Vite inlined the literal "undefined", so the link resolved to
+  // /undefined/bookings/<id>/receipt and had never worked.
+  const downloadReceipt = async (publicId: string) => {
+    setDownloadingReceipt(true);
+    try {
+      const response = await api.get(`/bookings/${publicId}/receipt`, {
+        responseType: "blob",
+      });
+      const url = window.URL.createObjectURL(
+        new Blob([response.data], { type: "application/pdf" }),
+      );
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `receipt-${publicId}.pdf`;
+      a.click();
+      window.URL.revokeObjectURL(url);
+    } catch (e: any) {
+      alert(e?.response?.data?.message || "Failed to download receipt");
+    } finally {
+      setDownloadingReceipt(false);
+    }
+  };
 
   // Format date
   const formatDate = (dateStr: string) => {
@@ -364,17 +394,16 @@ function BookingSuccess() {
             {!booking.isGuest &&
               !isMemberBooking &&
               booking.status === "CONFIRMED" && (
-                <a
-                  href={`${import.meta.env.VITE_API_BASE_URL}/bookings/${booking.bookingPublicId}/receipt`}
-                  target="_blank"
-                  rel="noopener noreferrer"
+                <button
+                  onClick={() => downloadReceipt(booking.bookingPublicId)}
+                  disabled={downloadingReceipt}
                   className="flex items-center justify-center gap-2 border-2 border-green-300
                text-green-700 py-3 rounded-xl font-semibold hover:bg-green-50
-               transition-colors text-sm"
+               transition-colors text-sm disabled:opacity-50"
                 >
                   <Download className="w-4 h-4" />
-                  Download Receipt (PDF)
-                </a>
+                  {downloadingReceipt ? "Preparing…" : "Download Receipt (PDF)"}
+                </button>
               )}
 
             {/* Info Box */}
