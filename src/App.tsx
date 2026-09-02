@@ -61,6 +61,7 @@ import ManageUsersPage from "./pages/ManageUsersPage";
 import ManageBranchesPage from "./pages/ManageBranchesPage";
 import AdminManualBooking from "./pages/book-slot/AdminManualBooking";
 import AdminMembersPage from "./pages/admin/AdminMembersPage";
+import AdminWhatsAppInbox from "./pages/admin/AdminWhatsAppInbox";
 import MySubscription from "./pages/book-slot/MySubscription";
 import UserProfilePage from "./pages/UserProfilePage";
 import AdminRevenueDashboard from "./pages/admin/AdminRevenueDashboard";
@@ -473,6 +474,16 @@ function App() {
           <ProtectedRoute roles={["ROLE_ADMIN", "ROLE_SUPER_ADMIN"]}>
             <AppLayout>
               <AdminManualBooking />
+            </AppLayout>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/whatsapp"
+        element={
+          <ProtectedRoute roles={["ROLE_ADMIN", "ROLE_SUPER_ADMIN"]}>
+            <AppLayout>
+              <AdminWhatsAppInbox />
             </AppLayout>
           </ProtectedRoute>
         }

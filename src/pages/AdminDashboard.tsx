@@ -159,6 +159,9 @@ function AdminDashboard() {
   const showSlotTemplates = useFlag("MODULE_SLOT_TEMPLATES_ENABLED");
   const showBookings = useFlag("MODULE_BOOKINGS_ENABLED");
   const showBmMembers = useFlag("MODULE_BM_MEMBERS_ENABLED");
+  // useFlag defaults a missing key to true, so this tile is visible without any
+  // setting being added — it can only be hidden by explicitly setting it false.
+  const showWhatsAppInbox = useFlag("MODULE_WHATSAPP_INBOX_ENABLED");
   const showCalendar = useFlag("MODULE_CALENDAR_OVERRIDES_ENABLED");
   const showResources = useFlag("MODULE_RESOURCES_ENABLED");
   const showHomeSlider = useFlag("MODULE_HOME_SLIDER_ENABLED");
@@ -456,6 +459,16 @@ function AdminDashboard() {
               description="See all user bookings and payments"
               onClick={() => navigate("/admin/bookings")}
               gradient="bg-gradient-to-br from-green-500 to-green-600"
+              textLight="text-green-100"
+            />
+          )}
+          {showWhatsAppInbox && (
+            <ActionCard
+              icon={MessageCircle}
+              title="WhatsApp Inbox"
+              description="Read replies from parents and reply back"
+              onClick={() => navigate("/admin/whatsapp")}
+              gradient="bg-gradient-to-br from-green-500 to-emerald-600"
               textLight="text-green-100"
             />
           )}
