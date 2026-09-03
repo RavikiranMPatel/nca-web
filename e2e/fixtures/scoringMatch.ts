@@ -139,6 +139,13 @@ export async function createScoringMatch(
         for (const [k, v] of Object.entries(seed)) {
           window.localStorage.setItem(k, v as string);
         }
+        // Turn off the shot-zone (wagon wheel) prompt. It is a real user
+        // preference the app already reads (LiveScorerPage.tsx:343), and it opens
+        // a full-screen `fixed inset-0 z-[60]` modal after ANY delivery with runs
+        // > 0 (needsWagonWheel, L298-302), which covers the scoring pad and blocks
+        // the next tap. Scenarios that are about shot zones (T20-387) re-enable it
+        // explicitly; nothing else in the workbook involves shot tagging.
+        window.localStorage.setItem("nca_ww_enabled", "false");
       }, api.storageSeed());
       await page.goto(`/admin/cricket/matches/${matchPublicId}/score`);
     },

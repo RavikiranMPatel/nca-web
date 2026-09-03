@@ -209,6 +209,16 @@ timeout still produces a real field-level message rather than a bare poll error.
 `extras_penalty` cannot be asserted anywhere: it exists on the `Innings` row but
 is absent from `InningsStateDTO` (BUG-04).
 
+### The wagon-wheel prompt is off in tests
+
+`scoringMatch.open()` seeds `nca_ww_enabled=false`. That is the app's own
+preference key (`LiveScorerPage.tsx:343`), not a test-only hack. With it on —
+the default — any delivery with runs > 0 opens a full-screen
+`fixed inset-0 z-[60]` shot-zone modal (`needsWagonWheel`, L298-302) that covers
+the scoring pad and blocks the next tap, so no multi-delivery scenario can be
+driven through the UI. Scenarios that are actually about shot zones (T20-387)
+re-enable it explicitly.
+
 ### Cross-tenant safety
 
 `tenant-isolation.spec.ts` runs in every project and gates the suite. It checks
