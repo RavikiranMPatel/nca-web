@@ -4,11 +4,14 @@ import { expectState } from "../fixtures/expectState";
 /**
  * Workbook section 3 — Extras: Wide / No Ball / Bye / Leg Bye (T20-020 … T20-039).
  *
- * This section is where the app and the workbook disagree most. Three logged
- * bugs bite here:
- *   BUG-01  a plain wide rotates strike
+ * This section is where the app and the workbook disagree most. Two logged bugs
+ * still bite here:
  *   BUG-02  byes and leg-byes are charged to the bowler
  *   BUG-03  NB+bye and NB+leg-bye post an identical payload
+ *
+ * BUG-01 (strike inverted on every wide and no ball) is FIXED — T20-020, T20-021
+ * and T20-027 now assert the Laws directly, with no annotation. The dedicated
+ * regression lives in e2e/specs/bug-01-strike-rotation.spec.ts.
  *
  * Pattern, per the slice instructions:
  *   - Where a logged bug makes the workbook's expectation fail, the test asserts
@@ -22,14 +25,13 @@ test.describe("§3 Extras — Wide / No Ball / Bye / Leg Bye", () => {
 
   // ── Wides ────────────────────────────────────────────────────────────────
   test("T20-020 wide — +1, no legal ball, striker unchanged", async ({ scoringMatch, page }) => {
-    test.fail(true, "BUG-01: a plain wide rotates strike");
     await scoringMatch.open(page);
     await page.getByTestId("extra-wide").click();
     await page.getByTestId("wide-plus-0").click();
 
     // Workbook: "Team +1; batter +0; bowler +1; legal ball unchanged."
-    // A wide with no runs run is not a completed run, so the batters do not
-    // cross and Virat keeps strike.
+    // Nothing was run off the wide, so the batters do not cross: Virat keeps
+    // strike. (Was BUG-01, fixed.)
     await expectState(scoringMatch, {
       runs: 1, wickets: 0, balls: 0, over: 1, ballInOver: 0,
       striker: "Virat Kohli", nonStriker: "KL Rahul",
@@ -39,31 +41,14 @@ test.describe("§3 Extras — Wide / No Ball / Bye / Leg Bye", () => {
     }, page);
   });
 
-  test("T20-020 @ambiguous wide — what the app does today (BUG-01)", async ({ scoringMatch, page }) => {
-    await scoringMatch.open(page);
-    await page.getByTestId("extra-wide").click();
-    await page.getByTestId("wide-plus-0").click();
-
-    // Pinned current behaviour: everything matches the workbook EXCEPT strike,
-    // which rotates because applyBall:1103 keys off (runsBatsman + runsExtras)
-    // being odd and the wide penalty run counts toward that total.
-    await expectState(scoringMatch, {
-      runs: 1, balls: 0, extras: { wide: 1 },
-      striker: "KL Rahul", nonStriker: "Virat Kohli",
-      bowlers: { Bumrah: { legalBalls: 0, runsConceded: 1, wides: 1 } },
-    }, page);
-  });
-
   test("T20-021 wide + 1 run — team +2, wides +2, illegal delivery", async ({ scoringMatch, page }) => {
-    test.fail(true, "BUG-01: strike is inverted on every wide");
     await scoringMatch.open(page);
     await page.getByTestId("extra-wide").click();
     await page.getByTestId("wide-plus-1").click();
 
     // Workbook: "Team +2; wide +2; batter 0; bowler +2; illegal delivery."
-    // This scenario's Verify line is "extras • strike", so strike is asserted:
-    // one run was completed off the wide, so the batters crossed and KL is on
-    // strike.
+    // This scenario's Verify line is "extras • strike": one run was completed off
+    // the wide, so the batters crossed and KL is on strike. (Was BUG-01, fixed.)
     await expectState(scoringMatch, {
       runs: 2, balls: 0, extras: { wide: 2 },
       striker: "KL Rahul", nonStriker: "Virat Kohli",
@@ -160,7 +145,6 @@ test.describe("§3 Extras — Wide / No Ball / Bye / Leg Bye", () => {
 
   // ── No balls ─────────────────────────────────────────────────────────────
   test("T20-027 no ball — +1, no legal ball, free hit armed", async ({ scoringMatch, page }) => {
-    test.fail(true, "BUG-01: strike is inverted on every no ball too");
     await scoringMatch.open(page);
     await page.getByTestId("extra-no-ball").click();
     await page.getByTestId("nb-plus-0").click();
@@ -275,67 +259,6 @@ test.describe("§3 Extras — Wide / No Ball / Bye / Leg Bye", () => {
       runs: 6, balls: 0,
       extras: { noBall: 6, bye: 0, legBye: 0 },
     }, page);
-  });
-
-  test("@ambiguous BUG-01 strike is inverted on every wide and no ball", async ({ scoringMatch }) => {
-    // Pins the full shape of BUG-01, measured against what the Laws require.
-    // applyBall:1103 rotates strike when (runsBatsman + runsExtras) is odd. For a
-    // wide or a no ball, runsExtras includes the one-run PENALTY, which nobody
-    // ran — so the parity is flipped on every such delivery. Byes and leg-byes
-    // are unaffected, because there every extra run is a run actually completed.
-    const m = scoringMatch;
-
-    // Score one dot first so the innings always has a delivery to replay back to.
-    // Undoing to ZERO deliveries nulls striker/non-striker/bowler (BUG-12), which
-    // would break the loop; a dot is parity-neutral so it does not disturb strike.
-    {
-      const s0 = await m.api.state(m.matchPublicId);
-      await m.api.postBall(m.matchPublicId, {
-        bowlerPublicId: s0.currentBowlerPublicId!,
-        batsmanPublicId: s0.currentStrikerPublicId!,
-        nonStrikerPublicId: s0.currentNonStrikerPublicId!,
-        runsBatsman: 0,
-      });
-    }
-
-    const cases: Array<[string, any, "Virat Kohli" | "KL Rahul"]> = [
-      ["plain wide",          { runsBatsman: 0, runsExtras: 1, extraType: "WIDE" },    "Virat Kohli"],
-      ["wide + 1 run",        { runsBatsman: 0, runsExtras: 2, extraType: "WIDE" },    "KL Rahul"],
-      ["wide + 2 runs",       { runsBatsman: 0, runsExtras: 3, extraType: "WIDE" },    "Virat Kohli"],
-      ["plain no ball",       { runsBatsman: 0, runsExtras: 1, extraType: "NO_BALL" }, "Virat Kohli"],
-      ["no ball + 1 off bat", { runsBatsman: 1, runsExtras: 1, extraType: "NO_BALL" }, "KL Rahul"],
-      ["no ball + 2 off bat", { runsBatsman: 2, runsExtras: 1, extraType: "NO_BALL" }, "Virat Kohli"],
-      ["no ball + 4 off bat", { runsBatsman: 4, runsExtras: 1, extraType: "NO_BALL" }, "Virat Kohli"],
-    ];
-    const inverted: string[] = [];
-    for (const [label, ball, lawful] of cases) {
-      const s0 = await m.api.state(m.matchPublicId);
-      const before = s0.currentStrikerPublicId;
-      const resp = await m.api.postBall(m.matchPublicId, {
-        bowlerPublicId: s0.currentBowlerPublicId!,
-        batsmanPublicId: s0.currentStrikerPublicId!,
-        nonStrikerPublicId: s0.currentNonStrikerPublicId!,
-        ...ball,
-      });
-      const rotated = resp.currentStrikerPublicId !== before;
-      const lawSaysRotate = lawful === "KL Rahul";
-      if (rotated !== lawSaysRotate) inverted.push(label);
-      await m.api.undo(m.matchPublicId);   // replay-based undo restores strike
-    }
-    // Every one of the seven is wrong, in both directions.
-    expect(inverted, "wide/no-ball deliveries whose strike outcome is wrong")
-      .toEqual(cases.map(([l]) => l));
-
-    // Control: byes rotate correctly, so this is specific to the penalty run.
-    const s1 = await m.api.state(m.matchPublicId);
-    const b1 = s1.currentStrikerPublicId;
-    const r1 = await m.api.postBall(m.matchPublicId, {
-      bowlerPublicId: s1.currentBowlerPublicId!,
-      batsmanPublicId: s1.currentStrikerPublicId!,
-      nonStrikerPublicId: s1.currentNonStrikerPublicId!,
-      runsBatsman: 0, runsExtras: 1, extraType: "BYE",
-    });
-    expect(r1.currentStrikerPublicId, "a single bye must rotate strike").not.toBe(b1);
   });
 
   // ── Byes and leg byes ────────────────────────────────────────────────────

@@ -18,7 +18,7 @@ Severity scale: **critical** (data loss, cross-tenant, silent corruption) ·
 
 | ID | Title | Severity | Status |
 |----|-------|----------|--------|
-| BUG-01 | Strike inverted on EVERY wide and no ball | critical | open — reproduced by the suite |
+| BUG-01 | Strike inverted on EVERY wide and no ball | critical | **FIXED** — `e748bec` |
 | BUG-02 | Byes and leg-byes charged to the bowler | high | open — code evidence |
 | BUG-03 | NB+bye and NB+leg-bye send an identical payload | high | open — code evidence |
 | BUG-04 | `extras_penalty` missing from `InningsStateDTO` | medium | open — code evidence |
@@ -35,14 +35,11 @@ Severity scale: **critical** (data loss, cross-tenant, silent corruption) ·
 
 ## BUG-01 — Strike is inverted on EVERY wide and no ball
 
-**Severity: critical** (raised from high after measurement) · **Scenarios:**
-T20-020, T20-021, T20-027, and every wide/no-ball elsewhere in the workbook
+**Severity:** critical · **Status: FIXED** in `e748bec`
+(`nextgen-cricket-academy`, branch `feature/multi-tenant`)
 
-**Originally logged as** "a plain wide rotates strike". Measuring it across all
-delivery shapes shows that was understated: the strike outcome is wrong on
-**every** wide and **every** no ball, in both directions.
-
-**Cause.** `ScoringService.java:1103` rotates strike on the parity of the total:
+**Defect as found.** `ScoringService.applyBall` decided strike from the parity of
+the delivery total:
 
 ```java
 // Odd total runs = batters crossed mid-ball.
@@ -51,44 +48,71 @@ if (totalRuns % 2 != 0) { /* swap */ }
 ```
 
 For a wide or a no ball, `runsExtras` includes the one-run **penalty**, which
-nobody ran. That single phantom run flips the parity of every such delivery.
+nobody ran. That phantom run flipped the parity of every such delivery.
 
-**Measured, on the running app** (each row a fresh delivery from the baseline,
-Virat on strike):
+Originally logged as "a plain wide rotates strike"; measuring every delivery
+shape showed it was wrong on all wides and all no balls, in both directions.
 
-| delivery | app leaves on strike | Laws require | |
+**Measured on the running app** — nine rows, each a fresh delivery from the
+baseline with Virat on strike:
+
+| delivery | before fix | after fix | Laws require |
 |---|---|---|---|
-| plain wide (extras 1) | KL | **Virat** — no run was completed | WRONG |
-| wide + 1 run (extras 2) | Virat | **KL** — they crossed once | WRONG |
-| wide + 2 runs (extras 3) | KL | **Virat** — crossed twice | WRONG |
-| plain no ball (extras 1) | KL | **Virat** — no run completed | WRONG |
-| no ball + 1 off bat | Virat | **KL** — crossed once | WRONG |
-| no ball + 2 off bat | KL | **Virat** — crossed twice | WRONG |
-| no ball + 4 off bat | KL | **Virat** — boundary | WRONG |
-| bye 1 (extras 1) | KL | KL | ok |
-| bye 2 (extras 2) | Virat | Virat | ok |
+| plain wide (extras 1) | KL ✗ | Virat ✓ | Virat — nothing was run |
+| wide + 1 run (extras 2) | Virat ✗ | KL ✓ | KL — one run completed |
+| wide + 2 runs (extras 3) | KL ✗ | Virat ✓ | Virat — two runs completed |
+| plain no ball (extras 1) | KL ✗ | Virat ✓ | Virat — nothing was run |
+| no ball + 1 off bat | Virat ✗ | KL ✓ | KL — one run completed |
+| no ball + 2 off bat | KL ✗ | Virat ✓ | Virat — two runs completed |
+| no ball + 4 off bat | KL ✗ | Virat ✓ | Virat — boundary, no running |
+| bye 1 (extras 1) | KL ✓ | KL ✓ | KL — control |
+| bye 2 (extras 2) | Virat ✓ | Virat ✓ | Virat — control |
 
-Byes and leg-byes are correct, which confirms the diagnosis: there every extra
-run is a run actually completed, so the parity rule holds. It is only the
-wide/no-ball penalty run that corrupts it.
+The byes controls were correct throughout and stay correct. They are what
+isolates the penalty run as the cause.
 
-**Why critical.** This is not an edge case. A T20 innings typically has ten or
-more wides and no-balls, and each one leaves the wrong batter facing. Every
-subsequent delivery is then attributed to the wrong batter, so batter runs, balls
-faced, strike rates and the bowler-vs-batter matchup are all wrong from the first
-wide onward — silently, with a scorecard that still adds up at team level.
+**Fix.** Rotate on the runs physically run between the wickets:
 
-**Repro.** Fresh match, Virat on strike. Extras → Wide → `WD+0`. Expected striker
-Virat; app returns KL Rahul.
+```java
+int penaltyRun = extraType != null && ILLEGAL_BALL_EXTRAS.contains(extraType) ? 1 : 0;
+int runsRun = Math.max(0, runsBatsman + runsExtras - penaltyRun);
+if (runsRun % 2 != 0) { /* swap */ }
+```
 
-**Coverage.** `e2e/specs/section-03.spec.ts` — T20-020, T20-021 and T20-027 assert
-the lawful outcome and are marked `test.fail()`; the
-`@ambiguous BUG-01 strike is inverted on every wide and no ball` test pins the
-whole table above, including the byes control.
+`ILLEGAL_BALL_EXTRAS` is the existing `Set.of("WIDE", "NO_BALL")`, so the
+deduction applies to exactly the two types that carry a penalty. Per extra type:
 
-**Fix sketch (not applied).** Rotate on the number of runs actually *run*: the
-batsman runs plus the extras minus the one-run penalty for a wide or no ball.
-Byes and leg-byes keep their full extras count.
+| type | runsBatsman | runsExtras | runs run |
+|---|---|---|---|
+| plain / overthrow | r | 0 | r |
+| `WIDE` + n | 0 | n+1 | n |
+| `NO_BALL` plain | 0 | 1 | 0 |
+| `NO_BALL` + n off bat | n | 1 | n |
+| `NO_BALL` + n bye/leg-bye | 0 | n+1 | n |
+| `BYE` / `LEG_BYE` n | 0 | n | n |
+| `PENALTY` | 0 | 5 | 5 (unchanged) |
+
+**Nothing else changed.** Team total, wickets, legal-ball count, over and
+ball-in-over, all four extras buckets, every bowler stat and the `deliveries`
+rows were compared before and after across a fixed fourteen-delivery mixed
+sequence and are byte-identical. Only strike, and the batter attribution that
+follows from it, moved.
+
+**Replay path covered.** The fix is in `applyBall`, which `replayInnings` re-runs
+per delivery, so undo and edit inherit it. Asserted directly: score a mixed over
+including wides and no balls, add a delivery, undo it, and confirm the restored
+striker, non-striker, score, extras, partnership and both stat maps match exactly
+what they were before.
+
+**Regression coverage.** `e2e/specs/bug-01-strike-rotation.spec.ts` — the nine
+rows above plus the replay test, on all three projects. The `test.fail()` markers
+and `@ambiguous` companions on T20-020, T20-021 and T20-027 were removed; those
+scenarios now assert the Laws directly and pass.
+
+**Not addressed here.** BUG-02 and BUG-03 are adjacent — they also concern wides,
+no balls and byes — but were deliberately left alone. Their scenarios (T20-031,
+T20-032, T20-033, T20-034, T20-036, T20-037, T20-039) still report as expected
+failures.
 
 ## BUG-02 — Byes and leg-byes charged to the bowler
 
@@ -543,5 +567,5 @@ any innings and after any correction that empties the delivery list. The workboo
 expects undo to restore "batter/bowler/strike/partnership" (T20-310); at this
 boundary it restores the score but silently drops the players.
 
-**Suite handling.** The BUG-01 table test scores one parity-neutral dot ball
-before its loop so it never undoes to zero. Section 13 will assert this directly.
+**Suite handling.** `e2e/specs/bug-01-strike-rotation.spec.ts` scores a delivery
+before undoing, so it never undoes to zero. Section 13 will assert this directly.
