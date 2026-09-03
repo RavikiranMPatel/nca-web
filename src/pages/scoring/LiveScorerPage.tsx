@@ -1740,6 +1740,7 @@ export default function LiveScorerPage() {
         </div>
         <div className="grid grid-cols-3 gap-2 mb-4">
           <button
+            data-testid="extra-wide"
             disabled={posting}
             onClick={() => {
               if (!striker || !nonStriker || !bowler) {
@@ -1757,6 +1758,7 @@ export default function LiveScorerPage() {
             Wide
           </button>
           <button
+            data-testid="extra-no-ball"
             disabled={posting}
             onClick={() => {
               if (!striker || !nonStriker || !bowler) {
@@ -1774,6 +1776,7 @@ export default function LiveScorerPage() {
             No Ball
           </button>
           <button
+            data-testid="extra-leg-bye"
             disabled={posting}
             onClick={() => {
               if (!striker || !nonStriker || !bowler) {
@@ -1791,6 +1794,7 @@ export default function LiveScorerPage() {
             Leg Bye
           </button>
           <button
+            data-testid="extra-bye"
             disabled={posting}
             onClick={() => {
               if (!striker || !nonStriker || !bowler) {
@@ -1808,6 +1812,7 @@ export default function LiveScorerPage() {
             Bye
           </button>
           <button
+            data-testid="extra-five-seven"
             disabled={posting}
             onClick={() => {
               if (!striker || !nonStriker || !bowler) {
@@ -1825,6 +1830,7 @@ export default function LiveScorerPage() {
             5, 7
           </button>
           <button
+            data-testid="extra-penalty"
             disabled={posting}
             onClick={() => setShowPenalty(true)}
             className="h-11 rounded-xl text-xs font-semibold bg-gray-900 border text-gray-400 border-gray-700 transition-all active:scale-90 disabled:opacity-40"
@@ -1874,6 +1880,7 @@ export default function LiveScorerPage() {
               {[0, 1, 2, 3, 4, 5, 6].map((r) => (
                 <button
                   key={r}
+                  data-testid={`wide-plus-${r}`}
                   disabled={posting}
                   onClick={() => {
                     score(0, "WIDE", r + 1);
@@ -1908,6 +1915,7 @@ export default function LiveScorerPage() {
               {[0, 1, 2, 3, 4, 5, 6].map((r) => (
                 <button
                   key={r}
+                  data-testid={`nb-plus-${r}`}
                   disabled={posting}
                   onClick={() => {
                     if (r === 0) {
@@ -1948,6 +1956,7 @@ export default function LiveScorerPage() {
             </h3>
             <div className="grid grid-cols-3 gap-3 mb-4 mt-4">
               <button
+                data-testid="nb-source-batsman"
                 disabled={posting}
                 onClick={() => {
                   score(nbPickerRuns, "NO_BALL", 1);
@@ -1960,6 +1969,7 @@ export default function LiveScorerPage() {
                 🏏<div className="text-xs mt-1 font-normal">Batsman</div>
               </button>
               <button
+                data-testid="nb-source-bye"
                 disabled={posting}
                 onClick={() => {
                   score(0, "NO_BALL", nbPickerRuns + 1);
@@ -1972,6 +1982,7 @@ export default function LiveScorerPage() {
                 B<div className="text-xs mt-1 font-normal">Bye</div>
               </button>
               <button
+                data-testid="nb-source-leg-bye"
                 disabled={posting}
                 onClick={() => {
                   score(0, "NO_BALL", nbPickerRuns + 1);
@@ -2011,6 +2022,7 @@ export default function LiveScorerPage() {
                 <button
                   key={r}
                   disabled={posting}
+                  data-testid={`bye-${r}`}
                   onClick={() => {
                     score(0, "BYE", r);
                     setPendingExtra(null);
@@ -2044,6 +2056,7 @@ export default function LiveScorerPage() {
                 <button
                   key={r}
                   disabled={posting}
+                  data-testid={`leg-bye-${r}`}
                   onClick={() => {
                     score(0, "LEG_BYE", r);
                     setPendingExtra(null);
@@ -2077,6 +2090,7 @@ export default function LiveScorerPage() {
                 <button
                   key={r}
                   disabled={posting}
+                  data-testid={`overthrow-${r}`}
                   onClick={() => {
                     score(r);
                     setShowFiveSevenPicker(false);

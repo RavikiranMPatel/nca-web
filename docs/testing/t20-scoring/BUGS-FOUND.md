@@ -18,7 +18,7 @@ Severity scale: **critical** (data loss, cross-tenant, silent corruption) ·
 
 | ID | Title | Severity | Status |
 |----|-------|----------|--------|
-| BUG-01 | Plain wide rotates strike | high | open — code evidence |
+| BUG-01 | Strike inverted on EVERY wide and no ball | critical | open — reproduced by the suite |
 | BUG-02 | Byes and leg-byes charged to the bowler | high | open — code evidence |
 | BUG-03 | NB+bye and NB+leg-bye send an identical payload | high | open — code evidence |
 | BUG-04 | `extras_penalty` missing from `InningsStateDTO` | medium | open — code evidence |
@@ -29,51 +29,66 @@ Severity scale: **critical** (data loss, cross-tenant, silent corruption) ·
 | BUG-09 | `docker-compose.yml` DB does not match reality | low | open — docs/infra |
 | BUG-10 | A started match can never be deleted (FK violation) | high | open — reproduced by the suite |
 | BUG-11 | Match public id collides under concurrent creation | medium | open — reproduced by the suite |
+| BUG-12 | Undo of the last remaining delivery loses the batters and bowler | medium | open — reproduced by the suite |
 
 ---
 
-## BUG-01 — Plain wide rotates strike
+## BUG-01 — Strike is inverted on EVERY wide and no ball
 
-**Severity:** high · **Scenarios:** T20-020, T20-021, and every wide in section 5
+**Severity: critical** (raised from high after measurement) · **Scenarios:**
+T20-020, T20-021, T20-027, and every wide/no-ball elsewhere in the workbook
 
-**Workbook expects.** T20-020: "Team +1; batter +0; bowler +1; legal ball
-unchanged." A wide with no runs run is not a completed run, so the batters do
-not cross and the striker is unchanged.
+**Originally logged as** "a plain wide rotates strike". Measuring it across all
+delivery shapes shows that was understated: the strike outcome is wrong on
+**every** wide and **every** no ball, in both directions.
 
-**What the app does.** Strike rotation keys off the *total* of batsman runs plus
-extras, with no exclusion for the one-run wide penalty:
-
-`nextgen-cricket-academy/src/main/java/com/nca/cricket/service/scoring/ScoringService.java:1103`
+**Cause.** `ScoringService.java:1103` rotates strike on the parity of the total:
 
 ```java
 // Odd total runs = batters crossed mid-ball.
 int totalRuns = runsBatsman + runsExtras;
-if (totalRuns % 2 != 0) {
-    MatchTeamPlayer tmp = nextStriker;
-    nextStriker    = nextNonStriker;
-    nextNonStriker = tmp;
-}
+if (totalRuns % 2 != 0) { /* swap */ }
 ```
 
-The wide picker sends `runsExtras = r + 1`, so a plain wide (`WD+0`) is
-`runsExtras = 1` — `nca-web/nca-web/src/pages/scoring/LiveScorerPage.tsx:1861`:
+For a wide or a no ball, `runsExtras` includes the one-run **penalty**, which
+nobody ran. That single phantom run flips the parity of every such delivery.
 
-```js
-onClick={() => { score(0, "WIDE", r + 1); setPendingExtra(null); }}
-```
+**Measured, on the running app** (each row a fresh delivery from the baseline,
+Virat on strike):
 
-`totalRuns = 1`, odd, so the striker swaps. The same fault inverts the rest of
-the wide ladder: `WD+1` (two runs total, batters *did* cross once) is even, so
-strike does not rotate when it should.
+| delivery | app leaves on strike | Laws require | |
+|---|---|---|---|
+| plain wide (extras 1) | KL | **Virat** — no run was completed | WRONG |
+| wide + 1 run (extras 2) | Virat | **KL** — they crossed once | WRONG |
+| wide + 2 runs (extras 3) | KL | **Virat** — crossed twice | WRONG |
+| plain no ball (extras 1) | KL | **Virat** — no run completed | WRONG |
+| no ball + 1 off bat | Virat | **KL** — crossed once | WRONG |
+| no ball + 2 off bat | KL | **Virat** — crossed twice | WRONG |
+| no ball + 4 off bat | KL | **Virat** — boundary | WRONG |
+| bye 1 (extras 1) | KL | KL | ok |
+| bye 2 (extras 2) | Virat | Virat | ok |
 
-**Repro.** Fresh match, Virat on strike. Tap Wide → `WD+0`. Expected striker
-Virat; app returns KL Rahul in `currentStrikerPublicId`.
+Byes and leg-byes are correct, which confirms the diagnosis: there every extra
+run is a run actually completed, so the parity rule holds. It is only the
+wide/no-ball penalty run that corrupts it.
 
-**Note.** The same expression is correct for byes and leg-byes, where every
-extra run *is* a completed run. The fix is to exclude the wide/no-ball penalty
-run from the crossing calculation, not to change the parity rule.
+**Why critical.** This is not an edge case. A T20 innings typically has ten or
+more wides and no-balls, and each one leaves the wrong batter facing. Every
+subsequent delivery is then attributed to the wrong batter, so batter runs, balls
+faced, strike rates and the bowler-vs-batter matchup are all wrong from the first
+wide onward — silently, with a scorecard that still adds up at team level.
 
----
+**Repro.** Fresh match, Virat on strike. Extras → Wide → `WD+0`. Expected striker
+Virat; app returns KL Rahul.
+
+**Coverage.** `e2e/specs/section-03.spec.ts` — T20-020, T20-021 and T20-027 assert
+the lawful outcome and are marked `test.fail()`; the
+`@ambiguous BUG-01 strike is inverted on every wide and no ball` test pins the
+whole table above, including the byes control.
+
+**Fix sketch (not applied).** Rotate on the number of runs actually *run*: the
+batsman runs plus the extras minus the one-run penalty for a wide or no ball.
+Byes and leg-byes keep their full extras count.
 
 ## BUG-02 — Byes and leg-byes charged to the bowler
 
@@ -487,3 +502,46 @@ is no retry, so the second admin sees a 400 with a raw constraint name.
 constraint, with a comment pointing here. Retried rather than serialised on
 purpose — running the suite single-worker would hide the defect instead of
 recording it.
+
+---
+
+## BUG-12 — Undo of the last remaining delivery loses the batters and bowler
+
+**Severity:** medium · **Found by:** section 3 work · **Relevant to T20-310, EDGE-23**
+
+**What happens.** Undoing back to zero deliveries clears
+`currentStriker`, `currentNonStriker` and `currentBowler`. The scorer must
+re-select both openers and the bowler before scoring can continue, with no
+message explaining why.
+
+**Measured:**
+
+```
+after openers selected             balls=0 runs=0 striker=set  nonStriker=set  bowler=NULL
+after 1 delivery (2 runs)          balls=1 runs=2 striker=set  nonStriker=set  bowler=set
+after undo of that delivery        balls=0 runs=0 striker=NULL nonStriker=NULL bowler=NULL   <-- lost
+after 2 deliveries                 balls=2 runs=4 striker=set  nonStriker=set  bowler=set
+after undo (1 delivery remains)    balls=1 runs=2 striker=set  nonStriker=set  bowler=set    <-- fine
+```
+
+**Cause.** `undoLastBall` delegates to `replayInnings`
+(`ScoringService.java:870`), which unconditionally clears the live state:
+
+```java
+innings.setCurrentStriker(null);
+innings.setCurrentNonStriker(null);
+innings.setCurrentBowler(null);
+```
+
+and then rebuilds it by replaying deliveries. With one delivery left the replay
+restores everything. With none left there is nothing to replay from, and the
+selection made by `selectBatter` / `correctBowler` — which is not a delivery and
+so is not part of the replay stream — is gone.
+
+**Why it matters beyond the first ball.** The same hole applies at the start of
+any innings and after any correction that empties the delivery list. The workbook
+expects undo to restore "batter/bowler/strike/partnership" (T20-310); at this
+boundary it restores the score but silently drops the players.
+
+**Suite handling.** The BUG-01 table test scores one parity-neutral dot ball
+before its loop so it never undoes to zero. Section 13 will assert this directly.
