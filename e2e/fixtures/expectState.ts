@@ -27,15 +27,36 @@ export interface ExpectedState {
   freeHit?: boolean;
 }
 
+/**
+ * Waits until the server reflects every cheap scalar the scenario pins, so the
+ * detailed assertions below never read a pre-write state.
+ *
+ * It must cover strike as well as the score. A scenario like T20-080 asserts only
+ * that strike rotated; with the predicate keyed on runs/balls alone there would be
+ * nothing to wait for, and the assertion would race the in-flight POST.
+ *
+ * On timeout it returns the last read anyway and lets the individual assertions
+ * report the real field-level mismatch, which is a far better message than a bare
+ * poll timeout.
+ */
 async function settle(m: ScoringMatch, want: ExpectedState, timeoutMs = 5000) {
-  const headline = (st: any) =>
-    (want.runs === undefined || st.totalRuns === want.runs) &&
-    (want.wickets === undefined || st.totalWickets === want.wickets) &&
-    (want.balls === undefined || st.totalBalls === want.balls);
+  const settled = (s: any) => {
+    const st = s.inningsState;
+    return (
+      (want.runs === undefined || st.totalRuns === want.runs) &&
+      (want.wickets === undefined || st.totalWickets === want.wickets) &&
+      (want.balls === undefined || st.totalBalls === want.balls) &&
+      (want.over === undefined || st.overNumber === want.over) &&
+      (want.ballInOver === undefined || st.ballInOver === want.ballInOver) &&
+      (want.freeHit === undefined || !!s.isFreeHit === want.freeHit) &&
+      (want.striker === undefined || nameOf(m, s.currentStrikerPublicId) === want.striker) &&
+      (want.nonStriker === undefined || nameOf(m, s.currentNonStrikerPublicId) === want.nonStriker)
+    );
+  };
 
   const deadline = Date.now() + timeoutMs;
   let last = await m.api.state(m.matchPublicId);
-  while (!headline(last.inningsState) && Date.now() < deadline) {
+  while (!settled(last) && Date.now() < deadline) {
     await new Promise((r) => setTimeout(r, 100));
     last = await m.api.state(m.matchPublicId);
   }
@@ -123,36 +144,62 @@ export async function expectState(
       if (want_[k] !== undefined) expect(got[k], `${name} ${k}`).toBe(want_[k]);
   }
 
-  if (page) await expectUiMatchesServer(page, m, s);
+  if (page) await expectUiMatchesServer(page, m);
   return s;
 }
 
 /**
- * Compares what the browser is showing against the same server response.
- * Anything the UI renders and the API also reports must agree.
+ * Compares what the browser is showing against the server, polling BOTH sides
+ * together until they agree.
+ *
+ * Re-reading the server on every attempt is the point. A UI-driven delivery is an
+ * async POST, and a scenario that pins only strike (T20-080/081) gives `settle()`
+ * no runs/balls change to wait on — so a single up-front server read can be taken
+ * before the write lands and then compared against an already-updated DOM,
+ * producing a mismatch that is pure test timing. Polling both sides removes that
+ * class of false failure while still failing on a real, persistent divergence,
+ * which is a genuine bug: the backend is authoritative.
  */
-export async function expectUiMatchesServer(page: Page, m: ScoringMatch, s: any) {
-  const st = s.inningsState;
-
-  await expect(page.getByTestId("team-score"), "UI score vs server")
-    .toHaveText(`${st.totalRuns}/${st.totalWickets}`);
-
-  // The header renders overs as floor(balls/6).(balls%6) — note this is the
-  // workbook's "0.6" convention only until the over completes; the API's
-  // overNumber is 1-indexed. Derive from the same totalBalls to compare like
-  // with like.
+export async function expectUiMatchesServer(page: Page, m: ScoringMatch) {
   const perOver = 6;
-  await expect(page.getByTestId("over-count"), "UI overs vs server")
-    .toHaveText(`${Math.floor(st.totalBalls / perOver)}.${st.totalBalls % perOver} ov`);
+  const textOf = async (testId: string) => {
+    const loc = page.getByTestId(testId);
+    return (await loc.count()) ? ((await loc.first().textContent()) ?? "").trim() : null;
+  };
 
-  const striker = nameOf(m, s.currentStrikerPublicId);
-  const nonStriker = nameOf(m, s.currentNonStrikerPublicId);
-  if (striker) await expect(page.getByTestId("striker-name"), "UI striker vs server").toHaveText(striker);
-  if (nonStriker) await expect(page.getByTestId("nonstriker-name"), "UI non-striker vs server").toHaveText(nonStriker);
+  await expect
+    .poll(
+      async () => {
+        const s = await m.api.state(m.matchPublicId);
+        const st = s.inningsState;
+        const server: Record<string, unknown> = {
+          score: `${st.totalRuns}/${st.totalWickets}`,
+          overs: `${Math.floor(st.totalBalls / perOver)}.${st.totalBalls % perOver} ov`,
+          freeHit: !!s.isFreeHit,
+        };
+        const ui: Record<string, unknown> = {
+          score: await textOf("team-score"),
+          overs: await textOf("over-count"),
+          freeHit: (await page.getByTestId("free-hit-indicator").count()) > 0,
+        };
+        for (const [key, id, pid] of [
+          ["striker", "striker-name", s.currentStrikerPublicId],
+          ["nonStriker", "nonstriker-name", s.currentNonStrikerPublicId],
+          ["bowler", "bowler-name", s.currentBowlerPublicId],
+        ] as const) {
+          const name = nameOf(m, pid);
+          if (!name) continue;   // nothing selected server-side; the UI shows a placeholder
+          server[key] = name;
+          ui[key] = await textOf(id);
+        }
 
-  const bowler = nameOf(m, s.currentBowlerPublicId);
-  if (bowler) await expect(page.getByTestId("bowler-name"), "UI bowler vs server").toHaveText(bowler);
-
-  await expect(page.getByTestId("free-hit-indicator"), "UI free-hit vs server")
-    .toHaveCount(s.isFreeHit ? 1 : 0);
+        const mismatches: Record<string, { ui: unknown; server: unknown }> = {};
+        for (const k of Object.keys(server)) {
+          if (ui[k] !== server[k]) mismatches[k] = { ui: ui[k], server: server[k] };
+        }
+        return mismatches;
+      },
+      { timeout: 10_000, message: "UI and server disagree (backend is authoritative)" },
+    )
+    .toEqual({});
 }

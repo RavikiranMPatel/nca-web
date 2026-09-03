@@ -196,9 +196,22 @@ The backend is authoritative, so every expectation is asserted against
 read from the DOM and compared to that same response — a UI/API divergence fails
 the test, because it is itself a bug.
 
-Because a UI-driven delivery is an async POST, `expectState` polls the state
-endpoint until the headline numbers settle (5s) before asserting in detail, so a
-timeout still produces a real field-level message rather than a bare poll error.
+Because a UI-driven delivery is an async POST, `expectState` guards against
+reading a pre-write state in two places:
+
+- `settle()` waits until the server reflects **every cheap scalar the scenario
+  pins** — runs, wickets, balls, over, ballInOver, freeHit, striker and
+  non-striker. Keying only on the score is not enough: a scenario like T20-080
+  asserts nothing but strike, so there would be nothing to wait on. On timeout it
+  returns the last read anyway, so the failure message is a real field mismatch
+  rather than a bare poll error.
+- `expectUiMatchesServer()` re-reads the server on **every** poll attempt and
+  compares against the DOM, so transient skew resolves while a persistent
+  divergence still fails.
+
+When writing a spec, pin `runs` and `balls` even when the scenario is about
+something else. They are the cheapest unambiguous discriminator that a delivery
+actually landed.
 
 **API-only, by necessity** — the live scorer renders none of these:
 

@@ -2469,7 +2469,7 @@ export default function LiveScorerPage() {
           });
 
           return (
-            <div className="fixed inset-0 z-[60] bg-black/70 flex items-end">
+            <div data-testid="bowler-select" className="fixed inset-0 z-[60] bg-black/70 flex items-end">
               <div className="w-full bg-gray-900 rounded-t-2xl max-h-[80vh] overflow-hidden flex flex-col">
                 <div className="p-4 border-b border-gray-800">
                   <div className="w-10 h-1 bg-gray-600 rounded-full mx-auto mb-3" />
@@ -2516,6 +2516,7 @@ export default function LiveScorerPage() {
                       return (
                         <button
                           key={p.publicId}
+                          data-testid={`bowler-option-${p.publicId}`}
                           disabled={hardDisabled}
                           onClick={() => {
                             if (hardDisabled) return;
@@ -2755,7 +2756,7 @@ export default function LiveScorerPage() {
 
       {/* Over summary */}
       {showOverSummary && (
-        <div className="fixed inset-0 z-[60] bg-black/80 flex items-center justify-center p-6">
+        <div data-testid="over-summary" className="fixed inset-0 z-[60] bg-black/80 flex items-center justify-center p-6">
           <div className="w-full max-w-sm bg-gray-900 rounded-2xl border border-gray-700 p-5 max-h-[90vh] overflow-y-auto">
             <div className="text-center mb-4">
               <div className="text-3xl mb-1">🏏</div>
@@ -2775,6 +2776,7 @@ export default function LiveScorerPage() {
               ))}
             </div>
             <button
+              data-testid="over-summary-continue"
               onClick={() => setShowOverSummary(false)}
               className="w-full py-3 bg-blue-600 text-white rounded-xl font-semibold text-sm active:scale-95"
             >
