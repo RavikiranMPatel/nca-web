@@ -62,9 +62,14 @@ function walk(suite, trail) {
       const ids = [...new Set(label.match(ID_RE) ?? [])];
       const entry = { status, spec: spec.file ?? suite.file, test: spec.title };
       if (!ids.length) { harness.push({ ...entry, project, label }); continue; }
+      // A scenario can be claimed by more than one test — typically a workbook
+      // assertion marked test.fail() alongside an @ambiguous test pinning current
+      // behaviour. Collect them all; combineStatus() decides what the cell says.
+      // Last-wins here would let the passing companion mask the failing one.
       for (const id of ids) {
         if (!results.has(id)) results.set(id, {});
-        results.get(id)[project] = entry;
+        const byProject = results.get(id);
+        (byProject[project] ??= []).push(entry);
       }
     }
   }
@@ -74,9 +79,24 @@ for (const s of report.suites ?? []) walk(s, []);
 
 // ── render ──────────────────────────────────────────────────────────────────
 const PROJECTS = ["desktop", "mobile", "mobile-chrome"];
+
+// Worst-first: a red or known-broken result must never be hidden by a green one
+// claiming the same scenario.
+const PRIORITY = [
+  "FAIL",
+  "UNEXPECTED-PASS — bug may be fixed",
+  "EXPECTED-FAIL (app bug)",
+  "SKIPPED",
+  "PASS",
+];
+const combineStatus = (entries) => {
+  for (const p of PRIORITY) if (entries.some((e) => e.status === p)) return p;
+  return entries[0]?.status ?? "—";
+};
+
 const cellFor = (id, project) => {
   const got = results.get(id)?.[project];
-  if (got) return got.status;
+  if (got?.length) return combineStatus(got);
   const cls = scenarios.get(id)?.cls;
   if (cls === "NOT-IMPLEMENTED") return "SKIPPED-NOT-IMPLEMENTED";
   if (cls === "AMBIGUOUS") return "AMBIGUOUS";
@@ -122,8 +142,10 @@ L.push("| ID | Title | Classification | desktop | mobile | mobile-chrome | Evide
 L.push("|----|-------|----------------|---------|--------|---------------|----------|-------|");
 for (const [id, meta] of scenarios) {
   const any = results.get(id);
-  const ev = any
-    ? `\`${Object.values(any)[0].spec}\` › ${Object.values(any)[0].test}`
+  const entries = any ? Object.values(any)[0] : null;
+  const ev = entries
+    ? `\`${entries[0].spec}\`<br>` +
+      entries.map((e) => `${e.status === "PASS" ? "" : "**"}${e.test}${e.status === "PASS" ? "" : "**"}`).join("<br>")
     : "";
   L.push(
     `| \`${id}\` | ${meta.title} | ${meta.cls} | ` +
