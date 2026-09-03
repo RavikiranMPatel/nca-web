@@ -26,3 +26,8 @@ dist-ssr
 .env.*
 env
 .claude/
+
+# Playwright (T20 scoring suite)
+e2e/report
+e2e/.artifacts
+playwright-report

@@ -1329,17 +1329,20 @@ export default function LiveScorerPage() {
               {match?.title} · {match?.totalOvers} Ov
             </div>
             <div className="flex items-baseline gap-2">
-              <span className="text-4xl font-bold tracking-tight text-white">
+              <span
+                data-testid="team-score"
+                className="text-4xl font-bold tracking-tight text-white"
+              >
                 {totalRuns}/{totalWickets}
               </span>
-              <span className="text-lg text-gray-400">
+              <span data-testid="over-count" className="text-lg text-gray-400">
                 {Math.floor(totalBalls / (match?.ballsPerOver ?? 6))}.
                 {totalBalls % (match?.ballsPerOver ?? 6)} ov
               </span>
             </div>
             <div className="flex gap-4 mt-1 text-xs text-gray-500">
               <span>
-                CRR <b className="text-gray-300">{crr}</b>
+                CRR <b data-testid="crr" className="text-gray-300">{crr}</b>
               </span>
               {innings?.target && (
                 <>
@@ -1352,7 +1355,10 @@ export default function LiveScorerPage() {
                 </>
               )}
               {isFreeHit && (
-                <span className="text-orange-400 font-semibold animate-pulse">
+                <span
+                  data-testid="free-hit-indicator"
+                  className="text-orange-400 font-semibold animate-pulse"
+                >
                   FREE HIT
                 </span>
               )}
@@ -1524,6 +1530,7 @@ export default function LiveScorerPage() {
                   }`}
                 />
                 <span
+                  data-testid={isStriker ? "striker-name" : "nonstriker-name"}
                   className={`text-sm ${player ? "text-gray-100" : "text-gray-600"}`}
                 >
                   {player?.displayName ??
@@ -1531,7 +1538,10 @@ export default function LiveScorerPage() {
                 </span>
               </div>
               {player && (
-                <span className="text-xs text-gray-400">
+                <span
+                  data-testid={isStriker ? "striker-figures" : "nonstriker-figures"}
+                  className="text-xs text-gray-400"
+                >
                   <b className="text-white">{stats.runs}</b>({stats.balls})
                   {stats.fours > 0 && (
                     <span className="ml-1 text-green-400">4s:{stats.fours}</span>
@@ -1613,11 +1623,11 @@ export default function LiveScorerPage() {
         >
           <span className="text-xs text-gray-600">
             BOWLING &nbsp;
-            <b className="text-gray-300">
+            <b data-testid="bowler-name" className="text-gray-300">
               {bowler?.displayName ?? "Select bowler"}
             </b>
           </span>
-          <span className="text-xs text-gray-500">
+          <span data-testid="bowler-figures" className="text-xs text-gray-500">
             {fmtOvers(curBowlerStats?.legalBalls ?? 0, bpo)}-{curBowlerStats?.maidens ?? 0}-{curBowlerStats?.runsConceded ?? 0}-{curBowlerStats?.wickets ?? 0}
           </span>
         </button>
@@ -1677,7 +1687,10 @@ export default function LiveScorerPage() {
       )}
 
       {/* Scoring pad */}
-      <div className={`flex-1 px-3 pt-4 pb-2 ${matchPauseReason ? "opacity-40 pointer-events-none" : ""}`}>
+      <div
+        data-testid="scoring-pad"
+        className={`flex-1 px-3 pt-4 pb-2 ${matchPauseReason ? "opacity-40 pointer-events-none" : ""}`}
+      >
         <div className="text-xs text-gray-600 uppercase tracking-wider mb-2">
           Runs
         </div>
@@ -1685,6 +1698,7 @@ export default function LiveScorerPage() {
           {[0, 1, 2, 3].map((r) => (
             <button
               key={r}
+              data-testid={`run-${r}`}
               disabled={posting}
               onClick={() => score(r)}
               className={`h-16 rounded-2xl text-2xl font-bold transition-all active:scale-90 disabled:opacity-40 ${
@@ -1697,6 +1711,7 @@ export default function LiveScorerPage() {
             </button>
           ))}
           <button
+            data-testid="run-4"
             disabled={posting}
             onClick={() => score(4)}
             className="h-16 rounded-2xl text-2xl font-bold bg-green-950 text-green-300 border border-green-800 transition-all active:scale-90 disabled:opacity-40"
@@ -1704,6 +1719,7 @@ export default function LiveScorerPage() {
             4
           </button>
           <button
+            data-testid="run-6"
             disabled={posting}
             onClick={() => score(6)}
             className="h-16 rounded-2xl text-2xl font-bold bg-purple-950 text-purple-300 border border-purple-800 transition-all active:scale-90 disabled:opacity-40"
@@ -1711,6 +1727,7 @@ export default function LiveScorerPage() {
             6
           </button>
           <button
+            data-testid="btn-wicket"
             disabled={posting}
             onClick={() => openWicket(0)}
             className="h-16 rounded-2xl col-span-2 text-base font-bold bg-red-950 text-red-300 border border-red-800 transition-all active:scale-90 disabled:opacity-40"
