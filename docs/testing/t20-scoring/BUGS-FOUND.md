@@ -30,6 +30,7 @@ Severity scale: **critical** (data loss, cross-tenant, silent corruption) ·
 | BUG-10 | A started match can never be deleted (FK violation) | high | **FIXED** — `b9a58a5` |
 | BUG-11 | Match public id collides under concurrent creation | medium | open — reproduced by the suite |
 | BUG-12 | Undo of the last remaining delivery loses the batters and bowler | medium | open — reproduced by the suite |
+| BUG-13 | Undo omits a crease batter from `batterStats` | low | open — reproduced by the suite |
 
 ---
 
@@ -728,3 +729,53 @@ boundary it restores the score but silently drops the players.
 
 **Suite handling.** `e2e/specs/bug-01-strike-rotation.spec.ts` scores a delivery
 before undoing, so it never undoes to zero. Section 13 will assert this directly.
+
+---
+
+## BUG-13 — Undo omits a crease batter from `batterStats`
+
+**Severity:** low · **Found by:** section 6 (EDGE-23 work) · **Relevant to T20-310, EDGE-23**
+
+**What happens.** After an undo, a batter who is at the crease and has a persisted
+`innings_batting_stats` row is missing from the `batterStats` map in the response.
+The database and the API disagree:
+
+```
+after 3 balls  striker=KL
+  API batterStats: {'KL': (0, 0), 'Virat': (7, 3)}
+  DB rows        : {'KL': (0, 0), 'Virat': (7, 3)}
+
+after undo of the wicket
+  API batterStats: {'Virat': (7, 3)}          <-- KL missing
+  DB rows        : {'KL': (0, 0), 'Virat': (7, 3)}
+  striker: KL   nonStriker: Virat
+```
+
+**Cause.** `replayInnings` rebuilds `battingStats` by replaying deliveries, so it
+only contains batters who faced one. It then restores crease timestamps and, for
+batters who have timestamps but faced no replayed ball, saves a stub row:
+
+```java
+matchTeamPlayerRepository.findById(mtpId).ifPresent(mtp -> {
+    InningsBattingStat stub = newBattingStat(innings, mtp);
+    ...
+    battingStatRepo.save(stub);
+});
+```
+
+The stub is written to the database but never added to the `battingStats` map that
+`buildBallResponse` renders from, so it is absent from the response.
+
+**Why low.** The stub path only applies to a batter who has faced no delivery in
+the replayed innings, so the missing figures are always 0(0), and the scorer UI
+falls back to zeros for an absent entry — it currently looks correct by
+coincidence. It is still a real API/DB inconsistency, and any consumer that treats
+`batterStats` as the full set of batters at the crease is wrong after an undo.
+
+**Repro.** Score one single so strike rotates, dismiss the new striker (who has
+faced nothing), undo. The batter is restored as striker but is absent from
+`batterStats`; the row is present in `innings_batting_stats`.
+
+**Suite handling.** Covered by a `test.fail()` in `section-06.spec.ts`. EDGE-23
+itself dismisses a batter who has faced deliveries, which is what that scenario is
+actually about, and passes.
