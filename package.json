@@ -11,7 +11,9 @@
     "e2e": "playwright test",
     "e2e:desktop": "playwright test --project=desktop",
     "e2e:mobile": "playwright test --project=mobile",
-    "e2e:report": "playwright show-report e2e/report"
+    "e2e:report": "playwright show-report e2e/report",
+    "e2e:smoke": "playwright test --project=desktop e2e/specs/section-02.spec.ts e2e/specs/section-03.spec.ts e2e/specs/section-05.spec.ts e2e/specs/section-17-golden.spec.ts",
+    "e2e:golden": "playwright test --project=desktop e2e/specs/section-17-golden.spec.ts"
   },
   "dependencies": {
     "axios": "^1.13.2",
