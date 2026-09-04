@@ -32,7 +32,7 @@ Severity scale: **critical** (data loss, cross-tenant, silent corruption) ·
 | BUG-12 | Undo of the last remaining delivery loses the batters and bowler | medium | **FIXED** — `ab34118` |
 | BUG-13 | Undo omits a crease batter from `batterStats` | low | **FIXED** — `ab34118` |
 | BUG-14 | Consecutive-over rule enforced only in the UI | medium | **FIXED** — `c8c05a8` |
-| BUG-15 | Obstructing the field credited to the bowler | medium | open — reproduced by the suite |
+| BUG-15 | Obstructing the field credited to the bowler | medium | **FIXED** — `8cb9fcd` |
 | BUG-16 | Undone dismissal leaves a stale `crease_exited_at` | medium | **FIXED** — `ab34118` |
 
 ---
@@ -850,42 +850,81 @@ exercises all three entry points plus the control, and asserts no delivery is
 written by a refused call. The `test.fail()` in `section-08.spec.ts` is removed;
 that assertion now stands on its own.
 
-## BUG-15 — Obstructing the field is credited to the bowler
+## BUG-15 — Dismissals the bowler did not earn were credited to them
 
-**Severity:** medium · **Found by:** section 4 (T20-065, after BUG-05) · **Relevant to T20-383, T20-123**
+**Severity:** medium · **Status: FIXED** in `8cb9fcd`
 
-**What happens.** A batter given out obstructing the field adds a wicket to the
-bowler's figures. It should not: the bowler did nothing to earn it. The same
-applies to handling the ball, hitting the ball twice and timed out.
+**Defect as found.** Obstructing the field, handling the ball, hitting the ball
+twice and timed out all added a wicket to the bowler's figures. Measured with one
+of each dismissal type in a single innings, the bowler was credited **9 of the 10**:
 
-**Cause.** `ScoringService.applyBall` excludes only three dismissal types:
+| dismissal | team wickets | bowler wickets before | after |
+|---|---|---|---|
+| BOWLED | 1 | 1 | 1 |
+| CAUGHT | 2 | 2 | 2 |
+| LBW | 3 | 3 | 3 |
+| STUMPED | 4 | 4 | 4 |
+| HIT_WICKET | 5 | 5 | 5 |
+| RUN_OUT | 6 | 5 | 5 |
+| OBSTRUCTING_FIELD | 7 | **6** | **5** |
+| HANDLED_BALL | 8 | **7** | **5** |
+| HIT_TWICE | 9 | **8** | **5** |
+| TIMED_OUT | 10 | **9** | **5** |
+
+**Three deny-lists, none of which agreed.**
 
 ```java
-boolean isBowlerWicket = isWicket
-        && !"RUN_OUT".equals(d.getDismissalType())
-        && !"RETIRED_HURT".equals(d.getDismissalType())
-        && !"RETIRED_OUT".equals(d.getDismissalType());
+// applyBall, getBowlingStatsForInnings, findRecentMatchStatsForPlayer
+NOT IN ('RUN_OUT','RETIRED_HURT','RETIRED_OUT')
+
+// CareerStatsService, TournamentStatsService
+d.isWicket() && !"RUN_OUT".equals(d.getDismissalType())
 ```
 
-The recomputing paths mirror the same list, so they agree with each other and are
-all wrong together — the same shape as BUG-02:
+So a **retirement counted as a bowler's wicket in career and tournament figures
+while not counting in the innings figures** — a discrepancy that predates this
+change and disappears with it.
 
-- `DeliveryRepository.getBowlingStatsForInnings` — `dismissal_type NOT IN ('RUN_OUT','RETIRED_HURT','RETIRED_OUT')`
-- `PlayerCareerStatRepository.findRecentMatchStatsForPlayer` — same list
+**Fix — `BowlerCredit`,** beside `BowlingAttribution`, with a matching SQL form.
+Credited: `BOWLED`, `CAUGHT`, `LBW`, `STUMPED`, `HIT_WICKET`. Nothing else.
 
-**Not specific to a free hit.** It surfaced while allowing obstruction on a free
-hit (T20-065), but an obstruction on any delivery is credited the same way. It was
-simply unreachable before, because the app refused the dismissal on a free hit and
-nothing else tested obstruction against the bowler's figures.
+Deliberately an **allow-list**. `dismissal_type` is a free `VARCHAR(30)` with no
+enum and no check constraint, so a deny-list credits every string it has not heard
+of — which is precisely how `TIMED_OUT` and `HANDLED_BALL` were being counted
+despite never having been implemented.
 
-**Fix sketch (not applied).** Extend the exclusion to the dismissals that are not
-the bowler's — obstructing the field, handled the ball, hit the ball twice, timed
-out — in `applyBall` and in both SQL paths together, exactly as BUG-02 was done.
+**Nine call sites now share one rule:** `applyBall`; the two native queries
+(`getBowlingStatsForInnings`, `findRecentMatchStatsForPlayer`); three in
+`CareerStatsService` (wickets, best figures, season wickets); three in
+`TournamentStatsService` (MVP points, per-player wickets, best figures).
 
-**Suite handling.** `test.fail()` in `section-04.spec.ts`. T20-065 itself passes:
-it asserts the dismissal is allowed, which is what that scenario is about.
+Fielding stats are untouched — the catch, stumping and run-out counters key on the
+dismissal type for the *fielder's* credit, not the bowler's.
 
----
+**Consumers.** Best figures and the three- and five-wicket counters derive from the
+same predicate and follow automatically; `PlayerCareerStat` and everything reading
+it (the PDF, `PublicStatsController`, the public profile) inherit. Hat-trick and
+wicket-maiden logic does not exist, so nothing else consumes bowler wicket counts.
+
+**Byte-identical otherwise.** Over the sequence above: the `deliveries` rows, team
+wickets, balls, runs and every batter stat are unchanged. Only bowler wickets moved.
+
+**All four paths agree afterwards**, for the same match:
+
+```
+team wickets (all dismissals)              10
+getBowlingStatsForInnings predicate         5
+findRecentMatchStatsForPlayer predicate     5
+innings_bowling_stats.wickets (live path)   5
+old deny-list (for contrast)                9
+```
+
+**Regression coverage.** `e2e/specs/bug-15-bowler-wickets.spec.ts` — each credited
+and each non-credited type, an unrecognised string (the allow-list's whole point),
+`RETIRED_HURT` being neither a team wicket nor the bowler's, a cross-path agreement
+check across live state / scorecard / SQL / `innings_bowling_stats`, and a replay
+check. `HANDLED_BALL`, `HIT_TWICE` and `TIMED_OUT` are driven via the API, since the
+UI does not offer them but the column accepts them.
 
 ## BUG-16 — An undone dismissal leaves a stale `crease_exited_at`
 

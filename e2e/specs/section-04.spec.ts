@@ -167,7 +167,6 @@ test.describe("§4 No-Ball / Wide Types & Free Hit", () => {
   });
 
   test("obstructing the field is not credited to the bowler", async ({ scoringMatch }) => {
-    test.fail(true, "BUG-15: isBowlerWicket excludes only run outs and retirements");
     // Not specific to a free hit — the same is true of an obstruction on any
     // delivery. Surfaced while allowing obstruction on a free hit (T20-065).
     // Workbook T20-383: "Only bowler-credit dismissals counted."
