@@ -18,14 +18,16 @@ Paths are relative to `nca-web/nca-web/` (frontend) and `nextgen-cricket-academy
 
 | Class | Count | % |
 |-------|-------|---|
-| TESTABLE | 91 | 36% |
+| TESTABLE | 99 | 39% |
 | TESTABLE-BACKEND-ONLY | 13 | 5% |
 | NEEDS-FIXTURE | 51 | 20% |
-| AMBIGUOUS | 25 | 10% |
+| AMBIGUOUS | 17 | 6% |
 | NOT-IMPLEMENTED | 68 | 27% |
 | **Total** | **248** | |
 
-Directly executable now (TESTABLE + TESTABLE-BACKEND-ONLY + NEEDS-FIXTURE): **155 of 248**. Not executable against the app as built (NOT-IMPLEMENTED + AMBIGUOUS): **93**.
+Directly executable now (TESTABLE + TESTABLE-BACKEND-ONLY + NEEDS-FIXTURE): **163 of 248**. Not executable against the app as built (NOT-IMPLEMENTED + AMBIGUOUS): **85**.
+
+_Updated after BUG-01 (`e748bec`), BUG-02 (`715a382`) and BUG-03 (`c618147`): eight scenarios moved from AMBIGUOUS to TESTABLE because the app now matches the workbook. The per-section table below is the Phase 1 snapshot and is not re-derived._
 
 ## Per-section breakdown
 
@@ -299,15 +301,15 @@ Directly executable now (TESTABLE + TESTABLE-BACKEND-ONLY + NEEDS-FIXTURE): **15
 | `T20-028` | No ball + 1 bat run | TESTABLE | NB sub-picker 'Batsman' -> `score(n,'NO_BALL',1)`. |
 | `T20-029` | No ball + four | TESTABLE |  |
 | `T20-030` | No ball + six | TESTABLE |  |
-| `T20-031` | No ball + 2 byes | AMBIGUOUS | Workbook: 'bowler +1 only; byes +2'. App records `extraType=NO_BALL, runsExtras=3`, so `extras_bye` stays 0 and the bowler is charged all 3 (`applyBall` L1092). Also the NB 'Bye' and 'Leg Bye' buttons (`LiveScorerPage.tsx:1946`/`1958`) emit an identical request. |
-| `T20-032` | No ball + leg byes | AMBIGUOUS | Same as T20-031 — NB+leg-bye is indistinguishable from NB+bye. |
-| `T20-033` | Bye 1/2/3/4 | AMBIGUOUS | Workbook: 'bowler 0'. `applyBall` L1092 charges the bowler `runsBatsman + runsExtras` for every extra type including BYE. |
-| `T20-034` | Leg bye 1/2/3/4 | AMBIGUOUS | Same as T20-033 for LEG_BYE. |
+| `T20-031` | No ball + 2 byes | TESTABLE | Workbook satisfied since BUG-03 (`c618147`): the NB penalty goes to `extras_no_ball` and the 2 byes to `extras_bye`; the bowler is charged +1 only (BUG-02, `715a382`).|
+| `T20-032` | No ball + leg byes | TESTABLE | As T20-031, to `extras_leg_bye`. The NB Bye and Leg Bye buttons now post distinct deliveries.|
+| `T20-033` | Bye 1/2/3/4 | TESTABLE | Workbook satisfied since BUG-02 (`715a382`): byes are no longer charged to the bowler.|
+| `T20-034` | Leg bye 1/2/3/4 | TESTABLE | As T20-033 for leg-byes.|
 | `T20-035` | Overthrow on bat | TESTABLE | '5, 7' overthrow picker -> `score(5)` / `score(7)` as batsman runs. |
-| `T20-036` | Overthrow on bye | AMBIGUOUS | Bye picker maxes at 5. Bowler attribution as T20-033. |
-| `T20-037` | Overthrow on leg bye | AMBIGUOUS | Leg-bye picker maxes at 5. Bowler attribution as T20-033. |
+| `T20-036` | Overthrow on bye | TESTABLE | As T20-033 — overthrow runs on a bye are all byes, bowler 0.|
+| `T20-037` | Overthrow on leg bye | TESTABLE | As T20-033 for leg-byes.|
 | `T20-038` | Overthrow on wide | TESTABLE | Wide picker goes to WD+6 -> 7 wides. |
-| `T20-039` | Overthrow on no ball | AMBIGUOUS | 'byes/leg-byes excluded from bowler' is not implemented — see T20-031. |
+| `T20-039` | Overthrow on no ball | TESTABLE | Workbook satisfied since BUG-02 + BUG-03: NB penalty to the bowler and to `extras_no_ball`, the byes/leg-byes to their own bucket and not charged.|
 
 ### 4. No-Ball / Wide Types & Free Hit
 
@@ -539,11 +541,11 @@ Directly executable now (TESTABLE + TESTABLE-BACKEND-ONLY + NEEDS-FIXTURE): **15
 | `T20-379` | 4s/6s | TESTABLE | `applyBall` L1051-1052. |
 | `T20-380` | Strike rate | TESTABLE | Computed in `ScorecardService`; `balls == 0` handling to be confirmed by test. |
 | `T20-381` | Bowling overs | TESTABLE | `bos.legalBalls` L1094; `fmtOvers` divides by ballsPerOver. |
-| `T20-382` | Bowling runs | AMBIGUOUS | `applyBall` L1092 charges the bowler for byes, leg-byes and penalty runs — see T20-033. |
+| `T20-382` | Bowling runs | TESTABLE | Workbook satisfied since BUG-02 (`715a382`): the bowler is charged batsman runs, all runs off a wide, and the no-ball penalty only.|
 | `T20-383` | Bowling wickets | TESTABLE | `isBowlerWicket` excludes RUN_OUT / RETIRED_HURT / RETIRED_OUT (L1086-1089). |
 | `T20-384` | Economy | TESTABLE | Derived from runsConceded / overs; inherits the T20-382 attribution question. |
 | `T20-385` | Dot balls | TESTABLE | `isDot = isLegal && runsBatsman == 0 && extraType == null` (L1084) — a leg-bye ball is correctly not a dot. |
-| `T20-386` | Extras summary | AMBIGUOUS | Wides / no-balls / byes / leg-byes reconcile, but penalties are missing from the DTO and NB-byes are folded into the no-ball bucket — see T20-031 and T20-149. |
+| `T20-386` | Extras summary | AMBIGUOUS | Wides, no-balls, byes and leg-byes now reconcile (BUG-03 fixed, `c618147`). Still ambiguous only because penalties are absent from `InningsStateDTO` — see BUG-04. |
 | `T20-387` | Wagon wheel/scoring area | TESTABLE | `WagonWheelModal.tsx` + `PATCH .../deliveries/{id}/shot-zone` (ScoringController L93). |
 
 ### 16. Critical Combination / Edge-Case Matrix

@@ -4,22 +4,16 @@ import { expectState } from "../fixtures/expectState";
 /**
  * Workbook section 3 — Extras: Wide / No Ball / Bye / Leg Bye (T20-020 … T20-039).
  *
- * One logged bug still bites here:
- *   BUG-03  NB+bye and NB+leg-bye post an identical payload, so byes run off a
- *           no ball land in the no-ball bucket and extras_bye stays 0
+ * Every scenario in this section now asserts the Laws directly, with no
+ * annotations and no @ambiguous companions left: BUG-01 (strike inverted on every
+ * wide and no ball), BUG-02 (byes and leg-byes charged to the bowler) and BUG-03
+ * (NB+bye and NB+leg-bye posting an identical payload) are all fixed. Dedicated
+ * regressions live in e2e/specs/bug-0{1,2,3}-*.spec.ts.
  *
- * BUG-01 (strike inverted on every wide and no ball) and BUG-02 (byes and
- * leg-byes charged to the bowler) are both FIXED. Those scenarios now assert the
- * Laws directly, with no annotation. Dedicated regressions live in
- * e2e/specs/bug-01-strike-rotation.spec.ts and bug-02-bowler-runs.spec.ts.
- *
- * Pattern, per the slice instructions:
- *   - Where a logged bug makes the workbook's expectation fail, the test asserts
- *     what the WORKBOOK says and is marked test.fail() with the bug id. It must
- *     flip to "expected to fail but passed" when the bug is fixed. The assertion
- *     is never weakened to make it green.
- *   - A companion @ambiguous test pins what the app actually does today, so the
- *     current behaviour is visible and reviewable alongside the failing one.
+ * This section carried all three of those bugs while they were open, using
+ * test.fail() on the workbook's own assertion plus an @ambiguous companion
+ * pinning current behaviour. Both are gone now that the assertions pass on their
+ * own; the pattern is documented in TEST-PLAN.md for the next one.
  */
 test.describe("§3 Extras — Wide / No Ball / Bye / Leg Bye", () => {
 
@@ -205,11 +199,6 @@ test.describe("§3 Extras — Wide / No Ball / Bye / Leg Bye", () => {
   });
 
   test("T20-031 no ball + 2 byes — bowler +1 only, byes +2", async ({ scoringMatch, page }) => {
-    // The bowler half of this scenario now passes (BUG-02 fixed): the bowler is
-    // charged the one-run NB penalty only. It still fails on the extras split —
-    // the byes land in the no-ball bucket because the NB "Bye" button posts a
-    // plain NO_BALL delivery.
-    test.fail(true, "BUG-03: NB byes are bucketed as no-ball, so extras_bye stays 0");
     await scoringMatch.open(page);
     await page.getByTestId("extra-no-ball").click();
     await page.getByTestId("nb-plus-2").click();
@@ -225,8 +214,6 @@ test.describe("§3 Extras — Wide / No Ball / Bye / Leg Bye", () => {
   });
 
   test("T20-032 no ball + leg byes — bowler gets the NB penalty only", async ({ scoringMatch, page }) => {
-    // As T20-031: the bowler figure is now correct; only the extras split is wrong.
-    test.fail(true, "BUG-03: NB leg-byes are bucketed as no-ball, so extras_leg_bye stays 0");
     await scoringMatch.open(page);
     await page.getByTestId("extra-no-ball").click();
     await page.getByTestId("nb-plus-2").click();
@@ -237,34 +224,6 @@ test.describe("§3 Extras — Wide / No Ball / Bye / Leg Bye", () => {
       runs: 3, balls: 0,
       extras: { noBall: 1, legBye: 2 },
       bowlers: { Bumrah: { runsConceded: 1, noBalls: 1 } },
-    }, page);
-  });
-
-  test("T20-031/T20-032 @ambiguous NB+bye and NB+leg-bye are the same delivery (BUG-03)", async ({ scoringMatch, page }) => {
-    await scoringMatch.open(page);
-    await page.getByTestId("extra-no-ball").click();
-    await page.getByTestId("nb-plus-2").click();
-    await page.getByTestId("nb-source-bye").click();
-
-    // Pinned: everything lands in extras_no_ball and the byes bucket stays empty.
-    // The bowler is now correctly charged the one-run NB penalty only (BUG-02
-    // fixed) — what remains wrong here is purely the extras split.
-    await expectState(scoringMatch, {
-      runs: 3, balls: 0,
-      extras: { noBall: 3, bye: 0, legBye: 0 },
-      bowlers: { Bumrah: { runsConceded: 1, noBalls: 1 } },
-    }, page);
-
-    // And the Leg Bye button produces a byte-identical delivery — the two
-    // controls differ only in their label (LiveScorerPage.tsx:1947 vs :1959).
-    await page.getByTestId("extra-no-ball").click();
-    await page.getByTestId("nb-plus-2").click();
-    await page.getByTestId("nb-source-leg-bye").click();
-
-    await expectState(scoringMatch, {
-      runs: 6, balls: 0,
-      extras: { noBall: 6, bye: 0, legBye: 0 },
-      bowlers: { Bumrah: { runsConceded: 2, noBalls: 2 } },
     }, page);
   });
 
@@ -352,9 +311,6 @@ test.describe("§3 Extras — Wide / No Ball / Bye / Leg Bye", () => {
   });
 
   test("T20-039 overthrow on a no ball — byes and leg-byes excluded from the bowler", async ({ scoringMatch, page }) => {
-    // As T20-031: the bowler is charged the NB penalty only, which is correct.
-    // The byes still land in the no-ball bucket.
-    test.fail(true, "BUG-03: NB byes are bucketed as no-ball, so extras_bye stays 0");
     await scoringMatch.open(page);
     await page.getByTestId("extra-no-ball").click();
     await page.getByTestId("nb-plus-4").click();

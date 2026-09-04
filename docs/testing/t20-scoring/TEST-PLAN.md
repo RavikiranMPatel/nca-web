@@ -315,9 +315,12 @@ Decide **test bug or app bug** before touching anything, with evidence from the
 API response or a DB row — not from reading the code.
 
 - Test bug → fix the test.
-- App bug → log it in `BUGS-FOUND.md` with file:line, repro and severity. Do not
-  fix scoring bugs in this work. Mark the spec `test.fail()` with the bug id so it
-  keeps running and reports "expected to fail but passed" once the app is fixed.
+- App bug → log it in `BUGS-FOUND.md` with file:line, repro and severity. Mark the
+  spec `test.fail()` with the bug id so it keeps running and reports "expected to
+  fail but passed" once the app is fixed, and add an `@ambiguous` companion pinning
+  what the app does today so the deviation is visible rather than just red. When
+  the bug is fixed, drop both: the assertion then stands on its own. BUG-01, BUG-02
+  and BUG-03 all went through this cycle — section 3 currently has neither.
 - **Tenant-scoping bug → stop-work.** That one is fixed immediately, with a
   cross-tenant test proving it, under CLAUDE.md hard rule 2.
 

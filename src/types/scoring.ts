@@ -11,6 +11,8 @@ export interface BallRequest {
   fielderPublicId?: string;
   fielder2PublicId?: string;
   isFreeHit?: boolean;
+  /** NO_BALL only: how the runs beyond the one-run penalty were made. */
+  noBallRunsType?: "BAT" | "BYE" | "LEG_BYE";
 }
 
 export interface InningsState {

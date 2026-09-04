@@ -20,7 +20,7 @@ Severity scale: **critical** (data loss, cross-tenant, silent corruption) ·
 |----|-------|----------|--------|
 | BUG-01 | Strike inverted on EVERY wide and no ball | critical | **FIXED** — `e748bec` |
 | BUG-02 | Byes and leg-byes charged to the bowler | high | **FIXED** — `715a382` |
-| BUG-03 | NB+bye and NB+leg-bye send an identical payload | high | open — code evidence |
+| BUG-03 | NB+bye and NB+leg-bye send an identical payload | high | **FIXED** — `c618147` |
 | BUG-04 | `extras_penalty` missing from `InningsStateDTO` | medium | open — code evidence |
 | BUG-05 | Free hit cleared by a wide | high | open — code evidence (unnumbered in workbook) |
 | BUG-06 | `ScoringService.findMTP()` unscoped by academy | critical | FIXED + proven this session |
@@ -211,39 +211,88 @@ remains wrong is the extras split.
 
 ## BUG-03 — NB+bye and NB+leg-bye send an identical payload
 
-**Severity:** high · **Scenarios:** T20-031, T20-032, T20-039, EDGE-08
+**Severity:** high · **Status: FIXED** in `c618147`
+(`nextgen-cricket-academy`, branch `feature/multi-tenant`)
 
-**Workbook expects.** T20-031: "Team +3; batter 0; **bowler +1 only; byes +2**;
-illegal." The no-ball penalty is charged to the bowler; the byes are not, and
-they land in the byes bucket.
-
-**What the app does.** The no-ball sub-picker offers three buttons — Batsman,
-Bye, Leg Bye. The Bye and Leg Bye handlers are byte-identical:
-
-`nca-web/nca-web/src/pages/scoring/LiveScorerPage.tsx:1947` (Bye)
+**Defect as found.** The no-ball sub-picker offers three sources, and two of them
+were byte-identical — `LiveScorerPage.tsx`, Bye and Leg Bye:
 
 ```js
-onClick={() => {
-  score(0, "NO_BALL", nbPickerRuns + 1);
+onClick={() => { score(0, "NO_BALL", nbPickerRuns + 1); ... }}
 ```
 
-`nca-web/nca-web/src/pages/scoring/LiveScorerPage.tsx:1959` (Leg Bye)
+Both posted a plain `NO_BALL` delivery, so every run landed in `extras_no_ball`
+and `extras_bye` / `extras_leg_bye` stayed 0. Two visually distinct controls with
+no behavioural difference — a scorer could not record the distinction the
+scorecard is meant to show.
 
-```js
-onClick={() => {
-  score(0, "NO_BALL", nbPickerRuns + 1);
+**Root cause was structural, not a typo.** `deliveries.extra_type` is a single
+`VARCHAR(15)` already holding `'NO_BALL'`, and nothing else on the row could carry
+a secondary type — `runs_batsman` holds bat runs, `runs_extras` holds the penalty
+plus the runs. Nothing was reserved for it in V22 or any later migration, so a new
+column was required.
+
+**Fix.** `V97__no_ball_runs_type.sql` adds:
+
+```sql
+ALTER TABLE deliveries ADD COLUMN IF NOT EXISTS no_ball_runs_type VARCHAR(10);
+ALTER TABLE deliveries ADD CONSTRAINT chk_no_ball_runs_type
+    CHECK (no_ball_runs_type IS NULL OR no_ball_runs_type IN ('BAT', 'BYE', 'LEG_BYE'));
 ```
 
-Both post `extraType = "NO_BALL"` with the byes folded into `runsExtras`. The
-consequences: `extras_bye` and `extras_leg_bye` both stay 0, the whole amount
-lands in `extras_no_ball` (`ScoringService.java:1035`), and the bowler is charged
-all of it via BUG-02. Two visually distinct controls with no behavioural
-difference — a scorer cannot record the distinction the workbook asks for.
+`ScoringService.applyNoBallExtras` splits the extras: the one-run penalty stays in
+`extras_no_ball`, anything run beyond it goes to byes or leg-byes by sub-type.
+Runs off the bat were already on `runs_batsman` and are unaffected. The three UI
+buttons now send `BAT`, `BYE` and `LEG_BYE`.
 
-**Repro.** Tap No Ball → `NB+2` → "Bye". Expected `extrasBye 2`, `extrasNoBall 1`.
-App returns `extrasBye 0`, `extrasNoBall 3`. (Bowler runs are now correct at +1.)
+| delivery | extras_no_ball | extras_bye | extras_leg_bye | team | bowler |
+|---|---|---|---|---|---|
+| no ball, nothing else | 1 | 0 | 0 | +1 | +1 |
+| no ball + 2 off the bat | 1 | 0 | 0 | +3 | +3 |
+| no ball + 2 byes | 1 | **2** | 0 | +3 | +1 |
+| no ball + 4 byes | 1 | **4** | 0 | +5 | +1 |
+| no ball + 2 leg byes | 1 | 0 | **2** | +3 | +1 |
 
----
+Matches T20-031 ("bowler +1 only; byes +2"), T20-032, T20-039 and EDGE-08
+("Team +5; batter 0; bowler +1 only; byes +4").
+
+**`BowlingAttribution` needed no change.** A no ball already charges the bowler
+`runsBatsman + 1`, never the byes, so bowler figures are identical before and
+after — asserted in the regression spec so the two cannot drift apart.
+
+**Historical rows cannot be reclassified — and deliberately are not.** Every
+no-ball row written before V97 has `no_ball_runs_type = NULL`, because the
+information was never captured. There is no way to recover, for a past delivery,
+whether its runs were byes or leg-byes. `applyNoBallExtras` therefore keeps the
+old behaviour for null: the whole extras amount stays in `extras_no_ball`. **No
+data migration was attempted.** Inventing a split would fabricate a scorecard
+detail that was never recorded, and leaving it means a historical match replays to
+exactly what it always showed.
+
+The practical consequence: matches scored before V97 keep slightly overstated
+`extras_no_ball` and understated byes/leg-byes. The team total, the extras total
+and the bowler figures are unaffected, since the runs were only ever in the wrong
+bucket, never miscounted.
+
+**Verified byte-identical** over a fixed ten-delivery mixed sequence: the
+`deliveries` rows, team total, legal-ball count, the wides bucket, bowler runs,
+maidens, strike and batter stats. Only the no-ball / bye / leg-bye split moved, and
+`extrasTotal` stayed at 21 throughout.
+
+Reconciliation on the running app: batter runs + all four buckets = team total
+(7 + 3 + 5 + 9 + 4 = 28), and the scorecard endpoint agrees bucket for bucket with
+the live BallResponse.
+
+**Regression coverage.** `e2e/specs/bug-03-no-ball-extras.spec.ts` — the six
+attribution cases, the reconciliation and scorecard-vs-live check, a replay check,
+a UI round trip proving the three sub-buttons now post three different deliveries,
+and a mobile tap-target check that the three visually adjacent buttons have ≥44px
+targets, do not overlap, and each is the element at its own centre — a mis-tap
+there would silently record the wrong extra type, which is exactly the distinction
+this fix introduces.
+
+T20-031, T20-032 and T20-039 lost their annotations and assert the Laws directly.
+The last `@ambiguous` companion in section 3 is deleted; that file now has none.
 
 ## BUG-04 — `extras_penalty` missing from `InningsStateDTO`
 

@@ -752,7 +752,12 @@ export default function LiveScorerPage() {
     }
   }, [matchId]);
 
-  const score = async (runs: number, extra?: string, extraRuns = 1) => {
+  const score = async (
+    runs: number,
+    extra?: string,
+    extraRuns = 1,
+    noBallRunsType?: "BAT" | "BYE" | "LEG_BYE",
+  ) => {
     if (!matchId || !striker || !nonStriker || !bowler) {
       setError(
         overJustEnded
@@ -817,6 +822,7 @@ export default function LiveScorerPage() {
           | undefined,
         isWicket: false,
         isFreeHit,
+        noBallRunsType,
       });
 
       // Over-strip: capture before clearing, then update or reset.
@@ -1959,7 +1965,7 @@ export default function LiveScorerPage() {
                 data-testid="nb-source-batsman"
                 disabled={posting}
                 onClick={() => {
-                  score(nbPickerRuns, "NO_BALL", 1);
+                  score(nbPickerRuns, "NO_BALL", 1, "BAT");
                   setPendingExtra(null);
                   setNbPickerRuns(null);
                   setShowNbSubPicker(false);
@@ -1972,7 +1978,7 @@ export default function LiveScorerPage() {
                 data-testid="nb-source-bye"
                 disabled={posting}
                 onClick={() => {
-                  score(0, "NO_BALL", nbPickerRuns + 1);
+                  score(0, "NO_BALL", nbPickerRuns + 1, "BYE");
                   setPendingExtra(null);
                   setNbPickerRuns(null);
                   setShowNbSubPicker(false);
@@ -1985,7 +1991,7 @@ export default function LiveScorerPage() {
                 data-testid="nb-source-leg-bye"
                 disabled={posting}
                 onClick={() => {
-                  score(0, "NO_BALL", nbPickerRuns + 1);
+                  score(0, "NO_BALL", nbPickerRuns + 1, "LEG_BYE");
                   setPendingExtra(null);
                   setNbPickerRuns(null);
                   setShowNbSubPicker(false);
