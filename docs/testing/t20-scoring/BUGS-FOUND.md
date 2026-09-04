@@ -36,6 +36,7 @@ Severity scale: **critical** (data loss, cross-tenant, silent corruption) ·
 | BUG-16 | Undone dismissal leaves a stale `crease_exited_at` | medium | **FIXED** — `ab34118` |
 | BUG-17 | A replay erases penalty runs | high | **FIXED** — `8549c47` |
 | BUG-18 | `postBall` has no idempotency key, so a retry double-scores | high | open — reproduced by the suite |
+| BUG-19 | `extra_type` is unvalidated, so unknown values silently lose runs | high | open — reproduced by the suite |
 
 ---
 
@@ -1054,3 +1055,57 @@ primitive it needs.
 **Suite handling.** `test.fail()` in `section-14.spec.ts` asserting the workbook's
 expectation ("Idempotency prevents duplicate"). The serialisation half is asserted
 positively in the same file.
+
+---
+
+## BUG-19 — `extra_type` is unvalidated, so unknown values silently lose runs
+
+**Severity:** high · **Found by:** section 16 (EDGE-04, EDGE-36)
+
+**What happens.** `postBall` stores whatever `extraType` string it is given:
+
+```java
+delivery.setExtraType(req.getExtraType() != null ? req.getExtraType().toUpperCase() : null);
+```
+
+There is no allow-list in the service, no enum, and no check constraint on
+`deliveries.extra_type` — it is a bare `VARCHAR(15)`. So an unrecognised value is
+accepted with 200 and stored.
+
+**The runs then disappear.** `applyBall` adds the delivery to `totalRuns`
+unconditionally, but routes the extras through a `switch (extraType)` with cases
+for only the five known types. An unknown type matches none of them, so the runs
+land in the total and in no bucket at all:
+
+```
+POST extraType=WIDE_BYE -> 200
+  totalRuns=3 totalBalls=1 buckets=0 batterRuns=0
+  reconciliation batters+buckets=0 vs total=3  -> BROKEN, 3 runs unaccounted
+  bowler charged=0 legalBalls=1
+```
+
+The scorecard then shows a total that its own extras breakdown cannot account for
+— the exact failure the reconciliation tests in section 15 exist to catch, reached
+through a door those tests do not open.
+
+**It is also counted as a legal ball,** because `isLegal` is computed as "not in
+`{WIDE, NO_BALL}`", so an unknown type advances the over as well.
+
+**Why it is the same shape as BUG-15.** That bug was a deny-list on
+`dismissal_type` that credited anything it had not heard of; this is no list at all
+on `extra_type`. Both stem from enum-like columns held as free text. `dismissal_type`
+now has `BowlerCredit` as an allow-list in front of it; `extra_type` has nothing.
+
+**Reachability.** The UI only ever sends the five valid values, so a scorer cannot
+trigger this today. It is reachable by any direct API caller, by a future screen,
+and by `editDelivery`, which sets `extraType` with the same absence of validation.
+
+**Fix sketch (not applied).** Validate `extraType` against the known set in
+`postBall` and `editDelivery` — the same shape as the `noBallRunsType` check added
+in `c618147` — and add a check constraint to the column, as V97 did for
+`no_ball_runs_type`.
+
+**Suite handling.** `test.fail()` in `section-16.spec.ts` asserting the workbook's
+expectation that an impossible classification is prevented. The structural half —
+that a *valid* delivery carries exactly one classification and cannot be both a
+wide and a bye — is asserted positively alongside it.
