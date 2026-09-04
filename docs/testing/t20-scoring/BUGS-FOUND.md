@@ -19,7 +19,7 @@ Severity scale: **critical** (data loss, cross-tenant, silent corruption) ·
 | ID | Title | Severity | Status |
 |----|-------|----------|--------|
 | BUG-01 | Strike inverted on EVERY wide and no ball | critical | **FIXED** — `e748bec` |
-| BUG-02 | Byes and leg-byes charged to the bowler | high | open — code evidence |
+| BUG-02 | Byes and leg-byes charged to the bowler | high | **FIXED** — `715a382` |
 | BUG-03 | NB+bye and NB+leg-bye send an identical payload | high | open — code evidence |
 | BUG-04 | `extras_penalty` missing from `InningsStateDTO` | medium | open — code evidence |
 | BUG-05 | Free hit cleared by a wide | high | open — code evidence (unnumbered in workbook) |
@@ -116,30 +116,98 @@ failures.
 
 ## BUG-02 — Byes and leg-byes charged to the bowler
 
-**Severity:** high · **Scenarios:** T20-033, T20-034, T20-036, T20-037, T20-382, T20-384
+**Severity:** high · **Status: FIXED** in `715a382`
+(`nextgen-cricket-academy`, branch `feature/multi-tenant`)
 
-**Workbook expects.** T20-033: "Team +N; batter 0; **bowler 0**; legal ball +1."
-T20-034 the same for leg-byes. Byes and leg-byes are not charged to the bowler
-in any standard scoring convention.
-
-**What the app does.** Runs conceded adds all extras unconditionally, whatever
-the extra type:
-
-`ScoringService.java:1092`
+**Defect as found.** Every path credited the bowler `runsBatsman + runsExtras`,
+whatever the extra type — `ScoringService.applyBall`:
 
 ```java
+// Runs conceded matches ScorecardService convention: batsman + all extras.
 bos.setRunsConceded(bos.getRunsConceded() + runsBatsman + runsExtras);
 ```
 
-The comment above it (L1081) states the intent — "Runs conceded matches
-ScorecardService convention: batsman + all extras" — so this is deliberate, but
-it disagrees with the workbook and with standard scoring. Knock-on effects:
-bowling economy (T20-384) and the extras reconciliation (T20-386) both inherit
-it.
+That comment was accurate, and it was the problem: `ScorecardService` recomputed
+the same figure from the deliveries table with the same wrong rule, so the two
+agreed with each other while both disagreed with the workbook and with standard
+scoring. Fixing one alone would have introduced a divergence that did not exist
+before, which is why all eight sites moved in one commit.
 
-**Repro.** Fresh match. Tap Bye → 4. Expected bowler runsConceded 0; app returns 4.
+**Fix — `BowlingAttribution`,** now the single definition of the rule, with a
+matching SQL form for the native queries:
 
----
+| type | runsBatsman | runsExtras | charged to the bowler |
+|---|---|---|---|
+| legal delivery | r | 0 | r |
+| `WIDE` + n | 0 | n+1 | n+1 |
+| `NO_BALL` plain | 0 | 1 | 1 |
+| `NO_BALL` + n off bat | n | 1 | n+1 |
+| `NO_BALL` + n bye / leg-bye | 0 | n+1 | **1** |
+| `BYE` / `LEG_BYE` n | 0 | n | **0** |
+| `PENALTY` | 0 | 5 | 0 |
+
+Matches the workbook: T20-031 "bowler +1 only", T20-033/T20-034 "bowler 0",
+T20-039 "byes/leg-byes excluded from bowler".
+
+**The eight call sites, all changed together:**
+
+| path | how it computed | consumers |
+|---|---|---|
+| `ScoringService.applyBall` | live, writes `innings_bowling_stats` | live BallResponse, scorer UI |
+| `ScoringService.postBall` maiden | summed the over | maiden counter |
+| `ScoringService.replayInnings` maiden | summed the over | undo / edit |
+| `DeliveryRepository.getBowlingStatsForInnings` | SQL over `deliveries` | `ScorecardService`, `PublicScoringService` |
+| `DeliveryRepository.getCareerBowlingStats` | SQL over `deliveries` | none today — fixed so it cannot be picked up wrong |
+| `PlayerCareerStatRepository.findRecentMatchStatsForPlayer` | SQL over `deliveries` | public player profile |
+| `CareerStatsService` | Java stream | `PlayerCareerStat`, and through it the PDF, `PublicStatsController`, public profile |
+| `TournamentStatsService` | Java stream ×4 | leaderboard, fantasy points, per-player figures |
+
+`DeliveryRepository.getOverBreakdownForInnings` was deliberately **not** changed —
+it reports runs scored in an over for the team, not a bowler's figures.
+
+**Maidens changed, correctly.** A maiden is an over with no runs off the bat and
+no extras charged to the bowler, so byes do not spoil one and a wide does. Both
+were wrong before. Measured after the fix:
+
+```
+6 dots                       bowlerRuns=0  maidens=1  ok
+6 byes                       bowlerRuns=0  maidens=1  ok
+5 dots + 1 leg bye           bowlerRuns=0  maidens=1  ok
+6 dots + a wide              bowlerRuns=1  maidens=0  ok
+5 dots + a single            bowlerRuns=1  maidens=0  ok
+```
+
+**Measured before and after** over a fixed twelve-delivery mixed sequence:
+
+| delivery | bowler runs before | after |
+|---|---|---|
+| dot | 0 | 0 |
+| single | 1 | 1 |
+| bye 4 | 5 | **1** |
+| leg bye 2 | 7 | **1** |
+| wide+0 | 8 | **2** |
+| wide+4 | 13 | **7** |
+| nb+0 | 14 | **8** |
+| nb+4 off bat | 19 | **13** |
+| nb+2 byes | 22 | **14** |
+| four | 26 | **18** |
+| six | 32 | **24** |
+| dot | 32 | **24** |
+
+Everything else is byte-identical: the `deliveries` rows, team total, legal-ball
+count, all four extras buckets, strike, and batter runs and balls.
+
+**Both paths still agree.** For the same match, before: live `32` / scorecard
+`32`. After: live `24` / scorecard `24`, economy `27.43` → `20.57`.
+
+**Regression coverage.** `e2e/specs/bug-02-bowler-runs.spec.ts` — ten attribution
+cases, the maiden rule, an explicit live-vs-scorecard equality check, and a replay
+check. T20-033, T20-034, T20-036 and T20-037 lost their annotations and now assert
+the Laws directly.
+
+**Still failing, on BUG-03 alone.** T20-031, T20-032 and T20-039 keep their
+`test.fail()`, now naming only BUG-03: their bowler assertions pass, and what
+remains wrong is the extras split.
 
 ## BUG-03 — NB+bye and NB+leg-bye send an identical payload
 
@@ -172,8 +240,8 @@ lands in `extras_no_ball` (`ScoringService.java:1035`), and the bowler is charge
 all of it via BUG-02. Two visually distinct controls with no behavioural
 difference — a scorer cannot record the distinction the workbook asks for.
 
-**Repro.** Tap No Ball → `NB+2` → "Bye". Expected `extrasBye 2`, `extrasNoBall 1`,
-bowler +1. App returns `extrasBye 0`, `extrasNoBall 3`, bowler +3.
+**Repro.** Tap No Ball → `NB+2` → "Bye". Expected `extrasBye 2`, `extrasNoBall 1`.
+App returns `extrasBye 0`, `extrasNoBall 3`. (Bowler runs are now correct at +1.)
 
 ---
 
