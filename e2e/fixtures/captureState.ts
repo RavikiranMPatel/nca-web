@@ -79,4 +79,22 @@ export function derivedOnly(s: ReturnType<typeof captureState>) {
   return { innings: s.innings, batting: s.batting, bowling: s.bowling };
 }
 
+/**
+ * Strips identity so two different matches can be compared on their derived state
+ * alone. Player UUIDs and wall-clock timestamps necessarily differ between matches;
+ * everything else — runs, balls, buckets, flags, who is where — must not. UUIDs are
+ * numbered in order of first appearance, so a swap still shows up as a difference.
+ */
+export function normalise(s: ReturnType<typeof captureState>) {
+  const ids = new Map<string, string>();
+  const scrub = (text: string) =>
+    text
+      .replace(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/g, (u) => {
+        if (!ids.has(u)) ids.set(u, `P${ids.size + 1}`);
+        return ids.get(u)!;
+      })
+      .replace(/\b\d{17}\b/g, "<ts>");
+  return { innings: scrub(s.innings), batting: scrub(s.batting), bowling: scrub(s.bowling) };
+}
+
 export const rawSql = q;
