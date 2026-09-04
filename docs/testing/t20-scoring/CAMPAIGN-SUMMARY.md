@@ -154,9 +154,86 @@ decision, not just a deploy. BUG-01, BUG-02 and BUG-15 changed how
 - The stored rows keep the old, wrong figures until that innings is replayed.
 
 So an existing match can read inconsistently between its scorecard and its stored
-bowling figures. A replay of every innings (an undo plus a re-post of the last
-delivery triggers one) reconciles them. Decide deliberately whether to run that
-sweep, and note that a replay also recomputes maidens, which changed with BUG-02.
+bowling figures. Re-deriving each innings from its own delivery stream reconciles
+them. Note that a replay also recomputes maidens, which changed with BUG-02: an
+over of byes that was never a maiden becomes one.
+
+There is a one-off action for this: **`POST /api/platform/scoring/replay-all`**,
+PLATFORM_ADMIN only. It walks every academy — one tenant at a time, `academyId`
+passed explicitly to every query — replays each innings, and reports what moved.
+`dryRun` **defaults to true**: the replay runs, the diff is computed from the
+database either side of it, and the transaction is rolled back, so the call
+answers "what would change?" without changing anything. Matches that are
+IN_PROGRESS or in a Super Over are reported and left alone rather than rewritten
+under a live scorer.
+
+### Runbook
+
+Run this **after** the deploy, in this order, and do not skip the review.
+
+**1. Deploy** the backend normally, via `/opt/rkmpcrease/deploy.sh`. V97 applies
+with it.
+
+**2. Dry run.** Sign in as PLATFORM_ADMIN from the platform root domain — not an
+academy subdomain; `AuthController` refuses a platform admin arriving on a
+tenant host — and call:
+
+```bash
+curl -sX POST "https://rkmpcrease.com/api/platform/scoring/replay-all" \
+     -H "Authorization: Bearer $TOKEN" | tee replay-dryrun.json
+```
+
+`dryRun` defaults to true, so this writes nothing. Keep the file.
+
+**3. Review it.** This is the step that matters, and it is a human decision, not
+a formality. Read the summary line first:
+
+```json
+{ "dryRun": true, "academiesScanned": 2, "inningsExamined": 5,
+  "inningsReplayed": 4, "inningsSkipped": 1, "inningsChanged": 0,
+  "inningsFailed": 0, "durationMs": 50 }
+```
+
+- `inningsFailed` **must be 0.** Anything else is a real problem — read the
+  `note` on those entries and stop; do not apply over the top of it.
+- `inningsSkipped` counts live matches. Each is listed with its match id. Note
+  them; they need a second pass once those matches finish.
+- Then read the per-innings diffs. Every change should be one of the three
+  corrections, and nothing else:
+  - `innings.current_striker_id` / `current_non_striker_id` swapping (BUG-01 —
+    rendered as player names, so this reads `KL Rahul -> Virat Kohli`)
+  - `bowling[...].runs_conceded` falling, and `maidens` possibly rising (BUG-02)
+  - `bowling[...].wickets` falling (BUG-15)
+
+  A change to a batting stat, a team total, or an extras bucket is **not**
+  expected. If one appears, stop and investigate before applying.
+
+**4. Apply.**
+
+```bash
+curl -sX POST "https://rkmpcrease.com/api/platform/scoring/replay-all?dryRun=false" \
+     -H "Authorization: Bearer $TOKEN" | tee replay-applied.json
+```
+
+This writes one `audit_logs` row per corrected innings, action
+`SCORING_REPLAY_CORRECTION`, carrying the same diff and attributed to the
+academy whose data moved — not to the platform admin, who has no academy.
+
+**5. Dry run again. It must report `inningsChanged: 0`.** That is the proof the
+sweep converged: replaying already-correct data produces no further change. If
+it is not zero, something is still deriving differently on each pass and needs
+investigating before the matter is closed.
+
+**6. Re-run for the skipped matches** once they have finished, repeating steps
+2-5. The action is idempotent, so re-running it costs nothing but time.
+
+Verified locally end to end on `nca_scoring_test`: three matches scored by the
+pre-fix backend (checked out at `e849f60` in a worktree) reproduced exactly the
+BUG-01, BUG-02 and BUG-15 drift; the dry run reported those corrections and
+nothing else and left the database byte-identical; the apply corrected them and
+wrote three audit rows; the second dry run reported zero changes. A fourth match
+left IN_PROGRESS was skipped and its wrong figures deliberately left alone. An
+ADMIN of either academy gets 403; an unauthenticated call gets 401.
 
 **3 — Historical no-ball extras cannot be reclassified.** Pre-V97 no-ball rows have
 `no_ball_runs_type = NULL`, and `applyNoBallExtras` deliberately keeps the old
