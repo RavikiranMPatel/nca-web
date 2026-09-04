@@ -31,7 +31,7 @@ Severity scale: **critical** (data loss, cross-tenant, silent corruption) ·
 | BUG-11 | Match public id collides under concurrent creation | medium | open — reproduced by the suite |
 | BUG-12 | Undo of the last remaining delivery loses the batters and bowler | medium | open — reproduced by the suite |
 | BUG-13 | Undo omits a crease batter from `batterStats` | low | open — reproduced by the suite |
-| BUG-14 | Consecutive-over rule enforced only in the UI | medium | open — reproduced by the suite |
+| BUG-14 | Consecutive-over rule enforced only in the UI | medium | **FIXED** — `c8c05a8` |
 | BUG-15 | Obstructing the field credited to the bowler | medium | open — reproduced by the suite |
 
 ---
@@ -832,49 +832,59 @@ actually about, and passes.
 
 ---
 
-## BUG-14 — The consecutive-over rule is enforced only in the UI
+## BUG-14 — The consecutive-over rule was enforced only in the UI
 
-**Severity:** medium · **Found by:** section 8 (T20-160) · **Relevant to T20-094, T20-160**
+**Severity:** medium · **Status: FIXED** in `c8c05a8`
+(`nextgen-cricket-academy`, branch `feature/multi-tenant`)
 
-**What happens.** A bowler can bowl two overs in a row through the API. The Laws
-forbid it, and the scorer UI blocks it, but the server does not.
+**Defect as found.** A bowler could bowl two overs in a row through the API. The
+Laws forbid it and the scorer UI blocked it, but the server did not.
+`Innings.lastBowler` was maintained correctly — `applyBall` sets it at over end —
+but nothing read it for validation.
 
-```
-over complete: balls=6  currentBowler=None  lastBowler==Bumrah? True
-correct-bowler with the SAME bowler for the next over -> HTTP 200
-  currentBowler is now Bumrah again? True
-  and a ball from him -> HTTP 200
-  balls now: 7 -> he bowled consecutive overs
-```
+**Every entry point was open.** Probed before the change:
 
-**Cause.** `Innings.lastBowler` is maintained correctly — `applyBall` sets it at
-over end — but nothing reads it for validation. `ScoringService.correctBowler`
-checks only that no ball has been bowled this over:
+| entry point | before | delivery written |
+|---|---|---|
+| `correct-bowler` naming the preceding over's bowler | **200** | n/a |
+| `postBall` passing him directly | **200** | **yes** |
+| `bowler-injury-replace` naming him | **200** | n/a — and he could then bowl |
 
-```java
-int ballInOver = innings.getTotalBalls() % match.getBallsPerOver();
-if (ballInOver != 0) { throw ... }
-```
+`postBall` is the one that mattered most: it takes a `bowlerPublicId` directly, so
+guarding only the selection endpoints would have left the hole open to any caller.
 
-and `postBall` checks the per-bowler over quota but not who bowled last. The only
-enforcement is in the scorer's bowler picker, which marks the previous bowler
-"Bowled last over" and hard-disables the option (`LiveScorerPage.tsx`).
+**Fix.** One rule, `validateNotPrecedingOverBowler`, called from `postBall`,
+`correctBowler` and `bowlerInjuryReplace`. The selection endpoints get it so the
+scorer is told at the point of the mistake; `postBall` gets it because it is the
+authoritative gate.
 
-**Why it matters.** This is the pattern `.claude/rules/roles.md` warns about for
-authorisation — a rule that lives only in the client. Any API consumer, a
-mis-ordered request, or a future screen that does not replicate the picker's logic
-produces a scorecard that is invalid under the Laws, silently. The quota rule
-sitting right next to it in `postBall` shows the intended shape: this one should be
-enforced server-side too.
+**Super Over reconciled into the same rule.** It had been a separate block in
+`postBall` with its own message ("bowled in the previous Super Over"). A Super Over
+is a single over, so the preceding over for that bowling team is the over of the
+most recent prior Super Over innings — the same rule reached a different way.
+`bowledPrecedingOver` picks the right lookup; there is now one message and one call
+per entry point, not two rules.
 
-**Not fixed in this slice** (no engine fixes here). The suite covers it with a
-`test.fail()` in `section-08.spec.ts`; T20-094 in section 5 still passes, because
-it asserts the UI behaviour, which is correct.
+**After the fix:**
 
-**Note on scope.** `bowler-injury-replace` was not probed for the same hole and may
-share it — worth checking when this is fixed.
+| entry point | after | delivery written |
+|---|---|---|
+| `correct-bowler` = preceding over's bowler | **400** | n/a |
+| `postBall` = preceding over's bowler | **400** | **no** |
+| `postBall` = a different bowler (control) | 200 | yes |
+| `bowler-injury-replace` = preceding over's bowler | **400** | n/a |
 
----
+UI picker behaviour is unchanged — it already disabled the option, and T20-094's UI
+assertion still passes.
+
+**Not covered.** `editDelivery` can change a past delivery's bowler and could in
+principle create a violation. It is a correction path and validating it risks
+blocking legitimate fixes, so it is deliberately left alone.
+
+**Regression coverage.** `section-05.spec.ts` — a companion to T20-094 that
+exercises all three entry points plus the control, and asserts no delivery is
+written by a refused call. The `test.fail()` in `section-08.spec.ts` is removed;
+that assertion now stands on its own.
 
 ## BUG-15 — Obstructing the field is credited to the bowler
 

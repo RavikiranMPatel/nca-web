@@ -189,6 +189,64 @@ test.describe("§5 Striker / Non-Striker / Over Completion", () => {
     await expectState(scoringMatch, { balls: 7, over: 2, ballInOver: 1 }, page);
   });
 
+  test("T20-094 the consecutive-over rule is enforced on every entry point, not just the picker", async ({ scoringMatch }) => {
+    // The picker check above is the UI half. This is the server half: a bowler can
+    // be put on through three different paths, and the rule has to hold on all of
+    // them or it is a UI convention rather than a rule of the game (BUG-14).
+    const m = scoringMatch;
+    const cummins = m.bowlers.find((b) => b.displayName === "Pat Cummins")!;
+
+    await m.advanceTo({ legalBalls: 6 });               // Bumrah bowls over 1
+    const s = await m.api.state(m.matchPublicId);
+    expect(s.lastBowlerPublicId, "Bumrah bowled the completed over").toBe(m.bowler.mtpPublicId);
+
+    const deliveriesBefore = (await m.api.raw("get",
+      `/api/admin/cricket/matches/${m.matchPublicId}/scoring/deliveries`)).body.length;
+
+    // 1 — correct-bowler naming the bowler who just finished
+    const correct = await m.api.raw("post",
+      `/api/admin/cricket/matches/${m.matchPublicId}/scoring/correct-bowler`,
+      { bowlerPublicId: m.bowler.mtpPublicId });
+    expect(correct.status, "correct-bowler must refuse the preceding over's bowler").toBe(400);
+    expect(String(correct.body?.message)).toContain("preceding over");
+
+    // 2 — postBall passing him directly, bypassing the picker entirely
+    const direct = await m.api.raw("post",
+      `/api/admin/cricket/matches/${m.matchPublicId}/scoring/ball`, {
+        bowlerPublicId: m.bowler.mtpPublicId,
+        batsmanPublicId: s.currentStrikerPublicId,
+        nonStrikerPublicId: s.currentNonStrikerPublicId,
+        runsBatsman: 1,
+      });
+    expect(direct.status, "postBall must refuse him too — it takes a bowler id directly").toBe(400);
+
+    const deliveriesAfter = (await m.api.raw("get",
+      `/api/admin/cricket/matches/${m.matchPublicId}/scoring/deliveries`)).body.length;
+    expect(deliveriesAfter, "no delivery may be written by a refused call").toBe(deliveriesBefore);
+
+    // 3 — control: a different bowler is accepted and the ball lands
+    const ok = await m.api.raw("post",
+      `/api/admin/cricket/matches/${m.matchPublicId}/scoring/correct-bowler`,
+      { bowlerPublicId: cummins.mtpPublicId });
+    expect(ok.status).toBe(200);
+    await m.advanceTo({ runs: [1] });
+    await expectState(m, { balls: 7, over: 2, ballInOver: 1 });
+
+    // 4 — mid-over injury replacement cannot bring the preceding over's bowler back
+    const replace = await m.api.raw("post",
+      `/api/admin/cricket/matches/${m.matchPublicId}/scoring/bowler-injury-replace`,
+      { replacementBowlerPublicId: m.bowler.mtpPublicId });
+    expect(replace.status, "a mid-over replacement is subject to the same rule").toBe(400);
+    expect(String(replace.body?.message)).toContain("preceding over");
+
+    // and an eligible replacement is accepted
+    const zampa = m.bowlers.find((b) => b.displayName === "Adam Zampa")!;
+    const okReplace = await m.api.raw("post",
+      `/api/admin/cricket/matches/${m.matchPublicId}/scoring/bowler-injury-replace`,
+      { replacementBowlerPublicId: zampa.mtpPublicId });
+    expect(okReplace.status).toBe(200);
+  });
+
   test("T20-095 a bowler at their over quota is blocked", async () => {
     // Quota is totalOvers / 5 (ScoringService.postBall:98), so a 5-over match
     // gives one over per bowler — reachable without bowling 20 overs.

@@ -37,11 +37,9 @@ test.describe("§8 Bowler Change / Incomplete Over", () => {
   });
 
   test("T20-160 eligibility — the bowler who finished the over cannot bowl the next", async ({ scoringMatch }) => {
-    test.fail(true, "BUG-14: the consecutive-over rule is enforced only in the UI picker");
-    // Workbook T20-160 also requires "eligibility enforced", and T20-094 requires
-    // "previous bowler not consecutive". The scorer UI does block it — the picker
-    // hard-disables the last bowler — but the API does not, so the rule is a UI
-    // convention rather than a rule of the game as far as the server is concerned.
+    // Workbook T20-160 requires "eligibility enforced", and T20-094 "previous bowler
+    // not consecutive". Both the UI picker and the server enforce it now; the
+    // per-entry-point API coverage sits alongside T20-094 in section 5.
     const m = scoringMatch;
     await m.advanceTo({ legalBalls: 6 });
     const s = await m.api.state(m.matchPublicId);

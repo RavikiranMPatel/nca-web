@@ -162,8 +162,18 @@ export async function createScoringMatch(
       const seq = spec.runs ?? Array(spec.legalBalls ?? 0).fill(0);
       for (const r of seq) {
         const s = await api.state(matchPublicId);
+        // After an over completes the server clears currentBowler, and the bowler
+        // who just finished may not bowl the next one, so falling back to the
+        // fixture's opening bowler would now be rejected. Pick the first bowler
+        // who is not the preceding over's.
+        let bowlerId = s.currentBowlerPublicId;
+        if (!bowlerId) {
+          bowlerId = (bowlers.find((b) => b.mtpPublicId !== s.lastBowlerPublicId)
+            ?? bowlers[0]).mtpPublicId;
+          await api.correctBowler(matchPublicId, bowlerId);
+        }
         await api.postBall(matchPublicId, {
-          bowlerPublicId: s.currentBowlerPublicId ?? bowler.mtpPublicId,
+          bowlerPublicId: bowlerId,
           batsmanPublicId: s.currentStrikerPublicId!,
           nonStrikerPublicId: s.currentNonStrikerPublicId!,
           runsBatsman: r,
