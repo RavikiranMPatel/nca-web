@@ -206,6 +206,7 @@ const PlayerSelector = ({
           {filtered.map((p) => (
             <button
               key={p.publicId}
+              data-testid={`player-option-${p.publicId}`}
               onClick={() => {
                 onSelect(p);
                 onSearchChange("");
@@ -1486,10 +1487,11 @@ export default function LiveScorerPage() {
           <div className="flex items-center gap-2 min-w-0">
             <span className="text-lg flex-shrink-0">⏸</span>
             <span className="text-sm font-semibold text-amber-300 truncate">
-              Match Paused — {matchPauseReason}
+              <span data-testid="pause-banner">Match Paused — {matchPauseReason}</span>
             </span>
           </div>
           <button
+            data-testid="btn-resume"
             onClick={handleResumeMatch}
             disabled={posting}
             className="flex-shrink-0 text-xs px-3 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-500 active:scale-95 text-white font-semibold transition-all disabled:opacity-40"
@@ -1850,6 +1852,7 @@ export default function LiveScorerPage() {
       <div className="px-3 pb-6 flex gap-2">
         <button
           disabled={posting || !!matchPauseReason}
+          data-testid="btn-undo"
           onClick={handleUndo}
           className="flex-1 h-11 rounded-xl bg-gray-900 border border-red-900 text-red-400 text-sm font-semibold active:scale-95 transition-all disabled:opacity-40 flex items-center justify-center gap-2"
         >
@@ -1858,6 +1861,7 @@ export default function LiveScorerPage() {
         {!matchPauseReason ? (
           <button
             disabled={posting}
+            data-testid="btn-pause"
             onClick={() => setShowPauseModal(true)}
             className="w-11 h-11 rounded-xl bg-gray-900 border border-amber-800 text-amber-500 flex items-center justify-center text-lg active:scale-95 transition-all disabled:opacity-40"
             title="Pause match"
@@ -2593,7 +2597,7 @@ export default function LiveScorerPage() {
 
       {/* Wicket modal */}
       {showWicket && (
-        <div className="fixed inset-0 z-[60] bg-black/80 flex items-end">
+        <div data-testid="wicket-modal" className="fixed inset-0 z-[60] bg-black/80 flex items-end">
           <div className="w-full bg-gray-900 rounded-t-2xl max-h-[90vh] overflow-y-auto">
             <div className="p-4 border-b border-gray-800">
               <div className="w-10 h-1 bg-gray-700 rounded-full mx-auto mb-3" />
@@ -2610,6 +2614,7 @@ export default function LiveScorerPage() {
                   {DISMISSALS.map((d) => (
                     <button
                       key={d}
+                      data-testid={`dismissal-${d.toLowerCase().replace(/ /g, "-")}`}
                       onClick={() => {
                         setDismissalType(d);
                         if (d === "Stumped") {
@@ -2641,6 +2646,7 @@ export default function LiveScorerPage() {
                   {[striker, nonStriker].filter(Boolean).map((p) => (
                     <button
                       key={p!.publicId}
+                      data-testid={`batter-out-${p!.publicId}`}
                       onClick={() => setDismissedPlayer(p!)}
                       className={`flex-1 py-2.5 px-3 rounded-xl text-sm border transition-all active:scale-95 ${
                         dismissedPlayer?.publicId === p!.publicId
@@ -2665,6 +2671,7 @@ export default function LiveScorerPage() {
                     )}
                   </div>
                   <button
+                    data-testid="wicket-fielder"
                     onClick={() => setShowFielderSelect(true)}
                     className={`w-full py-2.5 px-3 border rounded-xl text-sm text-left transition-all ${
                       fielder
@@ -2678,6 +2685,7 @@ export default function LiveScorerPage() {
                   </button>
                   {dismissalType === "Stumped" && (
                     <button
+                      data-testid="wicket-wide-toggle"
                       onClick={() => setIsWideDelivery((prev) => !prev)}
                       className={`mt-2 w-full py-2.5 px-3 border rounded-xl text-sm text-left transition-all flex items-center gap-3 ${isWideDelivery ? "bg-amber-900/30 border-amber-700 text-amber-300" : "bg-gray-800 border-gray-700 text-gray-500"}`}
                     >
@@ -2701,6 +2709,7 @@ export default function LiveScorerPage() {
                           {["striker", "nonstriker"].map((end) => (
                             <button
                               key={end}
+                              data-testid={`run-out-end-${end}`}
                               onClick={() =>
                                 setRunOutEnd(end as "striker" | "nonstriker")
                               }
@@ -2724,6 +2733,7 @@ export default function LiveScorerPage() {
                   {[0, 1, 2, 3, 4].map((r) => (
                     <button
                       key={r}
+                      data-testid={`wicket-runs-${r}`}
                       onClick={() => setPendingRuns(r)}
                       className={`flex-1 py-2.5 rounded-xl text-sm font-bold border transition-all active:scale-95 ${
                         pendingRuns === r
@@ -2737,6 +2747,7 @@ export default function LiveScorerPage() {
                 </div>
               </div>
               <button
+                data-testid="confirm-wicket"
                 disabled={!dismissalType || !dismissedPlayer || posting}
                 onClick={confirmWicket}
                 className="w-full py-3.5 bg-red-700 text-white rounded-xl font-bold text-sm disabled:opacity-40 active:scale-95 transition-all"
@@ -3309,6 +3320,7 @@ export default function LiveScorerPage() {
               {PAUSE_REASONS.map((r) => (
                 <button
                   key={r}
+                  data-testid={`pause-reason-${r.toLowerCase().replace(/ /g, "-")}`}
                   onClick={() => setPauseReasonInput(r)}
                   className={`py-2.5 px-3 rounded-xl text-sm font-medium border transition-all active:scale-95 ${
                     pauseReasonInput === r
@@ -3339,6 +3351,7 @@ export default function LiveScorerPage() {
               </button>
               <button
                 disabled={posting}
+                data-testid="confirm-pause"
                 onClick={handlePauseMatch}
                 className="flex-1 h-11 rounded-xl bg-amber-600 text-white text-sm font-semibold active:scale-95 transition-all disabled:opacity-40"
               >
