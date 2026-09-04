@@ -27,7 +27,7 @@ Severity scale: **critical** (data loss, cross-tenant, silent corruption) ·
 | BUG-07 | `ROLE_SCORER` cannot reach any scoring endpoint | medium | open — not fixed by instruction |
 | BUG-08 | `ROLE_COACH` cannot load the live scorer page | medium | open — not fixed by instruction |
 | BUG-09 | `docker-compose.yml` DB does not match reality | low | open — docs/infra |
-| BUG-10 | A started match can never be deleted (FK violation) | high | open — reproduced by the suite |
+| BUG-10 | A started match can never be deleted (FK violation) | high | **FIXED** — `b9a58a5` |
 | BUG-11 | Match public id collides under concurrent creation | medium | open — reproduced by the suite |
 | BUG-12 | Undo of the last remaining delivery loses the batters and bowler | medium | open — reproduced by the suite |
 
@@ -544,61 +544,97 @@ which CLAUDE.md hard rule 3 says is a different project (Umpire Assist).
 
 ## BUG-10 — A started match can never be deleted (FK violation)
 
-**Severity:** high · **Found by:** `e2e/specs/fixture.spec.ts` "teardown deletes
-the match" · **Reproduced on every run, all three projects**
+**Severity:** high · **Status: FIXED** in `b9a58a5`
+(`nextgen-cricket-academy`, branch `feature/multi-tenant`)
 
-**What happens.** `DELETE /api/admin/cricket/matches/{publicId}` returns **400**
-with a raw Postgres error leaked to the client:
+**Defect as found.** `DELETE /api/admin/cricket/matches/{publicId}` returned 400
+for any started match, carrying the raw Postgres error:
 
 ```
 update or delete on table "innings" violates foreign key constraint
 "innings_batting_stats_innings_id_fkey" on table "innings_batting_stats"
 ```
 
-**Cause — confirmed against the live schema.** `MatchService.deleteMatch`
-(`MatchService.java:970-975`) deletes deliveries, then innings:
+Selecting an opener creates a batting stat row, so every started match was
+affected, and no API path could clear those rows: `undoLastBall` refuses when no
+ball has been bowled, and `replayInnings` rebuilds what it deletes.
 
-```java
-// Delete deliveries then innings (FK order matters)
-List<Innings> inningsList = inningsRepo.findAllByMatchId(match.getId());
-for (Innings innings : inningsList) {
-    deliveryRepo.deleteAllByInningsIdNative(innings.getId(), innings.getAcademyId());
-}
-inningsRepo.deleteAllByMatchIdNative(match.getId());
+**Full FK audit, read from the live database rather than the migrations.**
+
+Into `cricket_matches`:
+
+| child | on delete | handled by |
+|---|---|---|
+| `cricket_teams` | CASCADE | database |
+| `innings` | CASCADE | database |
+| `match_live_annotations` | CASCADE | database |
+| `match_officials` | CASCADE | database |
+| `wicketkeeper_changes` | CASCADE | database |
+| `fixtures` | NO ACTION | `deleteMatch` unlinks it |
+| `match_performances` | NO ACTION | `deleteMatch` deletes it |
+
+Into `innings`:
+
+| child | on delete | handled by |
+|---|---|---|
+| `deliveries` | CASCADE | also deleted explicitly |
+| `manual_batting_rows` | CASCADE | database |
+| `manual_bowling_rows` | CASCADE | database |
+| `wicketkeeper_changes` | CASCADE | database |
+| `innings_batting_stats` | **NO ACTION** | **nothing — the bug** |
+| `innings_bowling_stats` | **NO ACTION** | **nothing — the bug** |
+
+Following the graph further out, `match_team_players` cascades from
+`cricket_teams`, and the many NO ACTION references pointing at it (six columns on
+`deliveries`, six on `innings`, plus `match_live_annotations` and
+`wicketkeeper_changes`), along with `cricket_matches.toss_winner_team_id` and
+`innings.batting_team_id` / `bowling_team_id`, all resolve without help: NO ACTION
+is checked at end of statement, not immediately, so rows deleted within the same
+cascade satisfy it. Nothing references `deliveries`, the two stat tables,
+`match_live_annotations`, `match_officials` or `wicketkeeper_changes` at all.
+
+**So exactly two tables were neither cascaded nor explicitly deleted**, and both
+are now removed per innings, before the innings themselves.
+
+**Design choice: explicit deletes, not `ON DELETE CASCADE`.** Only two tables
+needed it, so the explicit form stays small and reviewable in the service, and it
+does not widen cascade behaviour for any other code path that touches these
+tables. No migration was needed.
+
+**Verified by deleting a match at every stage**, with row counts across all
+thirteen child tables taken before the match was built and again after deletion:
+
+```
+stage                status  match status    orphan rows after delete
+SETUP                 200    SETUP           clean
+TEAMS_SET             200    SETUP           clean
+AFTER_TOSS            200    SETUP           clean
+OPENERS_SELECTED      200    IN_PROGRESS     clean
+OVER_WITH_WICKET      200    IN_PROGRESS     clean
+INNINGS_BREAK         200    IN_PROGRESS     clean
+COMPLETED             200    COMPLETED       clean
+SUPER_OVER            200    SUPER_OVER      clean
 ```
 
-It never touches `innings_batting_stats` or `innings_bowling_stats`. Four of the
-six FKs pointing at `innings` cascade; those two do not:
+The `OVER_WITH_WICKET` stage also carries a live annotation and a wicketkeeper
+change, so those tables are exercised too. Cross-tenant behaviour is unchanged:
+Academy B deleting Academy A's match returns **404** with nothing removed, and the
+owner can still delete it afterwards.
 
-```
-         child         |                conname                | on_delete
------------------------+---------------------------------------+-----------
- deliveries            | deliveries_innings_id_fkey            | c
- manual_batting_rows   | manual_batting_rows_innings_id_fkey   | c
- manual_bowling_rows   | manual_bowling_rows_innings_id_fkey   | c
- innings_batting_stats | innings_batting_stats_innings_id_fkey | a   <-- NO ACTION
- innings_bowling_stats | innings_bowling_stats_innings_id_fkey | a   <-- NO ACTION
- wicketkeeper_changes  | wicketkeeper_changes_innings_id_fkey  | c
-```
+**The raw-message leak is closed separately.**
+`GlobalExceptionHandler.simplifyMessage` returned the Postgres text verbatim after
+trimming only the `Detail:` and `ERROR:` prefixes, so table and constraint names
+reached any API client — on every endpoint, not just this one. Foreign key, unique,
+check and not-null violations now return a stable generic message, with the
+specific cause logged at warn. Confirmed against a live unique-constraint
+violation: the body is `"A record with these details already exists."` and
+contains no schema detail.
 
-**Blast radius is wider than it looks.** A batting stat row is created by
-`selectBatter`, not only by a delivery — so simply picking the openers is enough.
-Every match that has been started is therefore undeletable. There is also no API
-path that clears those rows: `undoLastBall` refuses when no ball has been bowled,
-and `replayInnings` rebuilds the rows it deletes.
-
-**Repro.** Create a match, set teams, toss, start, select two openers, then
-`DELETE /api/admin/cricket/matches/{id}` → 400.
-
-**Suite handling.** The assertion is kept and marked `test.fail()` so it keeps
-running and will report "expected to fail but passed" once this is fixed. Test
-rows are still cleaned up: `destroyScoringMatch` falls back to a direct delete
-against the local test database and logs loudly when it does.
-
-**Secondary issue.** The raw Postgres constraint message reaches the API client.
-Internal schema detail should not be in a 400 body.
-
----
+**Suite impact.** `destroyScoringMatch` no longer has a direct-to-database
+fallback; teardown goes through the real endpoint and throws if it fails, so a
+regression here fails tests rather than quietly cleaning up behind the app. The
+`test.fail()` on "teardown deletes the match" is removed. No test in the suite is
+marked expected-fail any more.
 
 ## BUG-11 — Match public id collides under concurrent creation
 
@@ -639,10 +675,16 @@ so the match generator looks like an oversight rather than a decision.
 with two Playwright workers; a real pair of admins would hit it rarely, and there
 is no retry, so the second admin sees a 400 with a raw constraint name.
 
-**Suite handling.** `createScoringMatch` retries up to five times on this exact
-constraint, with a comment pointing here. Retried rather than serialised on
-purpose — running the suite single-worker would hide the defect instead of
-recording it.
+**Suite handling.** `createScoringMatch` retries up to five times, with a comment
+pointing here. Retried rather than serialised on purpose — running the suite
+single-worker would hide the defect instead of recording it.
+
+**Note since `b9a58a5`:** the API no longer returns the constraint name, so the
+retry matches on the generic "already exists" message instead. Match creation has
+only one unique constraint a caller can trip, so that is unambiguous here — but it
+does mean **a client can no longer tell which constraint failed**. If callers ever
+need to branch on that, the right answer is a stable machine-readable error code,
+not putting schema detail back in the message.
 
 ---
 

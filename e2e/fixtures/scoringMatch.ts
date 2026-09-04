@@ -1,4 +1,3 @@
-import { execFileSync } from "node:child_process";
 import { test as base, expect, type Page } from "@playwright/test";
 import { Api } from "./api";
 import { config, type Tenant } from "./env";
@@ -73,6 +72,12 @@ export async function createScoringMatch(
   // constraint. Two Playwright workers hit this routinely; two real admins would
   // hit it rarely. Retried here rather than serialising the suite, because
   // serialising would hide a real defect behind a slower test run.
+  //
+  // Matched on the generic message, not a constraint name: since b9a58a5 the API
+  // no longer returns raw schema detail. Match creation has exactly one unique
+  // constraint that a caller can trip, so "already exists" here is unambiguous —
+  // but it does mean a client can no longer tell which constraint failed. Noted
+  // against BUG-11.
   let match: any = null;
   for (let attempt = 0; attempt < 5; attempt++) {
     try {
@@ -86,7 +91,10 @@ export async function createScoringMatch(
       break;
     } catch (e) {
       const msg = String(e);
-      if (!msg.includes("cricket_matches_public_id_key")) throw e;
+      const isCollision =
+        msg.includes("cricket_matches_public_id_key") ||        // pre-b9a58a5 wording
+        (msg.includes("400") && msg.includes("already exists")); // current wording
+      if (!isCollision) throw e;
       await new Promise((r) => setTimeout(r, 15 + attempt * 10));
     }
   }
@@ -168,59 +176,23 @@ export async function createScoringMatch(
 /**
  * Deletes the match and closes the API context.
  *
- * The API delete currently fails for any match that has started — see
- * BUGS-FOUND.md BUG-10: `MatchService.deleteMatch` removes deliveries and
- * innings but never the `innings_batting_stats` / `innings_bowling_stats` rows,
- * whose FKs are NO ACTION rather than CASCADE. Selecting an opener is enough to
- * create one, so every fixture match hits it.
- *
- * We do not fix app bugs here, but we must not leak test rows either
- * ("verification cleans up after itself"). So: try the real endpoint, and if it
- * fails with that known FK error, fall back to a direct delete against the local
- * test database. The fallback is loud, and is only reachable because the config
- * gate has already proven the target is localhost.
+ * This goes through the real endpoint and nothing else. There used to be a
+ * direct-to-database fallback here because no started match could be deleted
+ * (BUG-10: deleteMatch left orphan innings_batting_stats / innings_bowling_stats
+ * rows, whose FKs are NO ACTION). That is fixed, so the suite depends only on the
+ * API — if teardown ever regresses, tests must fail rather than quietly clean up
+ * behind the app's back.
  */
 export async function destroyScoringMatch(m: ScoringMatch) {
   const res = await m.api.deleteMatch(m.matchPublicId);
   if (res.status >= 300) {
-    dbCleanupMatch(m.matchPublicId, res.status, res.body);
+    throw new Error(
+      `Teardown failed: DELETE ${m.matchPublicId} returned ${res.status} ` +
+        `${JSON.stringify(res.body)}. The match has been left in the database.`,
+    );
   }
   await m.api.dispose();
   return res;
-}
-
-function dbCleanupMatch(matchPublicId: string, status: number, body: unknown) {
-  const { db } = config();
-  const sql = `
-    BEGIN;
-    DELETE FROM innings_batting_stats WHERE innings_id IN
-      (SELECT i.id FROM innings i JOIN cricket_matches m ON i.match_id=m.id
-        WHERE m.public_id='${matchPublicId}');
-    DELETE FROM innings_bowling_stats WHERE innings_id IN
-      (SELECT i.id FROM innings i JOIN cricket_matches m ON i.match_id=m.id
-        WHERE m.public_id='${matchPublicId}');
-    DELETE FROM deliveries WHERE innings_id IN
-      (SELECT i.id FROM innings i JOIN cricket_matches m ON i.match_id=m.id
-        WHERE m.public_id='${matchPublicId}');
-    DELETE FROM innings WHERE match_id IN
-      (SELECT id FROM cricket_matches WHERE public_id='${matchPublicId}');
-    UPDATE cricket_matches SET toss_winner_team_id=NULL WHERE public_id='${matchPublicId}';
-    DELETE FROM match_team_players WHERE team_id IN
-      (SELECT id FROM cricket_teams WHERE match_id IN
-        (SELECT id FROM cricket_matches WHERE public_id='${matchPublicId}'));
-    DELETE FROM cricket_teams WHERE match_id IN
-      (SELECT id FROM cricket_matches WHERE public_id='${matchPublicId}');
-    DELETE FROM cricket_matches WHERE public_id='${matchPublicId}';
-    COMMIT;`;
-  execFileSync(
-    "psql",
-    ["-q", "-h", db.host, "-p", db.port, "-U", db.user, "-d", db.name, "-v", "ON_ERROR_STOP=1", "-c", sql],
-    { stdio: "pipe" },
-  );
-  console.warn(
-    `[teardown] DELETE ${matchPublicId} returned ${status} ` +
-      `(${JSON.stringify(body)}); cleaned up directly in the DB instead — see BUG-10.`,
-  );
 }
 
 export const test = base.extend<{ scoringMatch: ScoringMatch }>({

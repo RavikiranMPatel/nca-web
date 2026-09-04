@@ -61,15 +61,7 @@ test.describe("harness — scoringMatch fixture", () => {
     expect(s.inningsState.overNumber).toBe(1);
   });
 
-  // KNOWN APP BUG — BUGS-FOUND.md BUG-10. `MatchService.deleteMatch` never
-  // removes innings_batting_stats / innings_bowling_stats, whose FKs are NO
-  // ACTION, so deleting any started match returns 400 with a raw Postgres FK
-  // error. Marked test.fail() rather than deleted or weakened: it keeps running,
-  // and Playwright will report "expected to fail but passed" the day the app is
-  // fixed. Rows are still cleaned up — destroyScoringMatch falls back to a direct
-  // DB delete.
   test("teardown deletes the match", async () => {
-    test.fail(true, "BUG-10: deleteMatch leaves orphan innings stat rows");
     const m = await createScoringMatch();
     const id = m.matchPublicId;
     const res = await destroyScoringMatch(m);

@@ -348,12 +348,15 @@ Result values in `TEST-RESULTS.md`: `PASS` · `FAIL` · `BLOCKED` ·
 
 - **Tests run as ADMIN.** `ROLE_COACH` cannot load the scorer page and
   `ROLE_SCORER` cannot reach any scoring endpoint — BUG-07 and BUG-08.
-- **Teardown has a documented fallback.** No started match can be deleted through
-  the API (BUG-10), so `destroyScoringMatch` falls back to a direct DB delete and
-  logs loudly. Verified: a full run leaves zero rows behind.
+- **Teardown uses the real endpoint only.** It used to fall back to a direct DB
+  delete because no started match could be deleted (BUG-10, fixed in `b9a58a5`).
+  The fallback is gone: `destroyScoringMatch` throws if the API delete fails, so a
+  teardown regression fails tests instead of being cleaned up behind the app's
+  back. Verified: a full run leaves zero rows behind.
 - **Match creation retries.** Match public ids collide under concurrency
-  (BUG-11); `createScoringMatch` retries up to five times on that exact
-  constraint rather than serialising the suite, which would hide the defect.
+  (BUG-11); `createScoringMatch` retries up to five times rather than serialising
+  the suite, which would hide the defect. It matches on the generic "already
+  exists" message, since the API no longer returns constraint names.
 - **`retries: 0`.** A flaky scoring assertion is a finding, not something to
   paper over with a re-run.
 
