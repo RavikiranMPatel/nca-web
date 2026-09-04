@@ -35,6 +35,7 @@ Severity scale: **critical** (data loss, cross-tenant, silent corruption) ·
 | BUG-15 | Obstructing the field credited to the bowler | medium | **FIXED** — `8cb9fcd` |
 | BUG-16 | Undone dismissal leaves a stale `crease_exited_at` | medium | **FIXED** — `ab34118` |
 | BUG-17 | A replay erases penalty runs | high | **FIXED** — `8549c47` |
+| BUG-18 | `postBall` has no idempotency key, so a retry double-scores | high | open — reproduced by the suite |
 
 ---
 
@@ -1003,3 +1004,53 @@ for one that has been undone.
 a dismissal that survives a replay keeps its original timestamp rather than being
 re-stamped with `now()` — both asserted in
 `e2e/specs/bug-12-13-replay-crease.spec.ts`.
+
+---
+
+## BUG-18 — `postBall` has no idempotency key, so a retry double-scores
+
+**Severity:** high · **Found by:** section 14 (T20-348, EDGE-27)
+
+**What happens.** Posting the identical delivery payload twice records it twice:
+
+```
+identical payload twice -> 200, 200; deliveries=2 runs=8 balls=2
+```
+
+One four became eight. There is no idempotency key on `BallRequest`, no
+deduplication in `postBall`, and no unique constraint that would catch it.
+
+**Why it matters more than it looks.** This is not only a double-tap problem. Any
+retry of an in-flight request scores the ball again: a flaky connection where the
+response is lost but the write succeeded, a proxy or client retry, a scorer tapping
+again because the first tap appeared to do nothing. The scorer has no way to tell
+the difference afterwards — both deliveries are well-formed and legitimate-looking,
+and the only remedy is to notice the score is wrong and undo.
+
+It is also the mechanism the workbook's offline story depends on: T20-347 and
+T20-348 both assume replayed events are idempotent, so this has to be solved before
+any offline queue can be built (T20-346, deferred by design).
+
+**What is NOT wrong.** Concurrency is handled properly. Two clients posting for the
+same ball position at once are serialised by the pessimistic lock on the innings
+row, producing two well-formed consecutive deliveries and a consistent innings row
+— no lost update, no duplicated ball position:
+
+```
+two concurrent posts -> [200, 200]; deliveries=2 runs=2 balls=2
+  delivery rows (over|ball|seq): 0|1|22523  0|2|22524
+```
+
+So the state cannot be corrupted; it is specifically the *identity* of a delivery
+that is missing. The workbook's separate ask for "version/conflict handling"
+(T20-349) is still absent — the second client's ball is appended rather than
+flagged.
+
+**Fix sketch (not applied).** Accept a client-generated idempotency key on
+`BallRequest`, store it on `deliveries` with a unique index per innings, and return
+the existing delivery when a key repeats. That also gives the offline queue the
+primitive it needs.
+
+**Suite handling.** `test.fail()` in `section-14.spec.ts` asserting the workbook's
+expectation ("Idempotency prevents duplicate"). The serialisation half is asserted
+positively in the same file.
