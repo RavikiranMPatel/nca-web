@@ -37,6 +37,8 @@ Severity scale: **critical** (data loss, cross-tenant, silent corruption) ·
 | BUG-17 | A replay erases penalty runs | high | **FIXED** — `8549c47` |
 | BUG-18 | `postBall` has no idempotency key, so a retry double-scores | high | open — reproduced by the suite |
 | BUG-19 | `extra_type` is unvalidated, so unknown values silently lose runs | high | open — reproduced by the suite |
+| BUG-20 | Production cannot reach `smtp.gmail.com:587` — app mail is dead | high | open — found during the 2026-09-04 deploy |
+| BUG-21 | The mail health indicator has no timeout, so `/actuator/health` takes ~2 minutes | medium | open — found during the 2026-09-04 deploy |
 
 ---
 
@@ -1109,3 +1111,77 @@ in `c618147` — and add a check constraint to the column, as V97 did for
 expectation that an impossible classification is prevented. The structural half —
 that a *valid* delivery carries exactly one classification and cannot be both a
 wide and a bye — is asserted positively alongside it.
+
+---
+
+## BUG-20 — Production cannot reach `smtp.gmail.com:587`, so app mail is dead
+
+**Severity:** high · **Status:** open — logged by instruction, not fixed.
+
+Found while verifying the 2026-09-04 production deploy (build BE#12 / FE#5). The
+backend's own `JavaMailSender` cannot open a connection to Gmail's SMTP port:
+
+```
+"mail":{"status":"DOWN","details":{"location":"smtp.gmail.com:587",
+ "error":"org.eclipse.angus.mail.util.MailConnectException:
+          Couldn't connect to host, port: smtp.gmail.com, 587; timeout -1"}}
+```
+
+Read from `rkmpcrease-prod` (DigitalOcean BLR1, 168.144.79.220) with:
+
+```
+docker exec rkmpcrease-backend curl -s http://localhost:8080/actuator/health
+```
+
+This is **not** the Brevo problem. There are two separate mail paths and both are
+currently broken:
+
+- `deploy.sh` posts to the Brevo HTTP API for deploy notifications. It returns
+  `HTTP 401 {"message":"Key not found","code":"unauthorized"}` — a stale key,
+  already recorded in CLAUDE.md.
+- The application itself uses SMTP to `smtp.gmail.com:587` for whatever it sends
+  through `JavaMailSender`. That is what this bug is about, and it fails at the
+  TCP layer, not on credentials.
+
+The connection error rather than an auth error points at egress: DigitalOcean
+blocks outbound SMTP on new droplets by default, and port 587 leaving this
+droplet looks blocked. Worth confirming with a direct connect test from the host
+before assuming it is application configuration.
+
+**Impact.** Anything the backend sends through `JavaMailSender` is silently not
+delivered. It also drags the aggregate `/actuator/health` to `DOWN` (`db`,
+`ping` and `diskSpace` are all `UP`), so the aggregate is useless as a liveness
+signal — anything watching it sees a permanent red that predates this deploy.
+
+**Not caused by this deploy.** The same DOWN state was observed on build #11
+before the deploy ran.
+
+---
+
+## BUG-21 — The mail health indicator has no timeout, so `/actuator/health` takes ~2 minutes
+
+**Severity:** medium · **Status:** open — logged by instruction, not fixed.
+
+The same health check reports `"timeout -1"` on the mail component. With
+`smtp.gmail.com:587` unreachable (BUG-20), the indicator sits on a connect with
+no timeout, and the whole endpoint blocks behind it. Measured on production: a
+request that normally returns in milliseconds took roughly two minutes, and an
+earlier 120-second attempt timed out entirely with no response.
+
+Through nginx it is worse — `curl https://rkmpcrease.com/actuator/health` and
+the same on `rbncc.` both returned `HTTP 000`, i.e. the proxy gave up before the
+endpoint answered. `/actuator/info` on the same host returns instantly, so the
+route is fine; it is this one indicator holding the response open.
+
+**Impact.** `/actuator/health` cannot be used by anything with a sane timeout —
+a load balancer probe, an uptime monitor, or a deploy readiness gate. Today
+`deploy.sh` is unaffected because it waits on the startup log line
+(`deploy.sh:235`, grepping `docker logs` for
+`Started NextgenCricketAcademyApplication`) rather than polling health. If that
+is ever changed to a health poll, it will hang.
+
+**Fix direction** (not applied): set `spring.mail.properties.mail.smtp.timeout`
+and `mail.smtp.connectiontimeout`, or exclude the mail indicator from the health
+group with `management.health.mail.enabled=false`. Fixing BUG-20 removes the
+symptom but not the missing timeout, which would bite again on the next
+unreachable mail host.
