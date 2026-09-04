@@ -198,7 +198,7 @@ test.describe("§9 Milestones / Partnerships / Timing / Live Notes", () => {
     expect(after.inningsState.totalWickets, "but it is not a wicket").toBe(0);
   });
 
-  test("T20-193/194/195 partnership history and milestones", async () => {
+  test("T20-193 / T20-194 / T20-195 partnership history and milestones", async () => {
     test.skip(true,
       "NOT-IMPLEMENTED: no partnership is ever persisted. Innings carries only the " +
       "CURRENT partnership_runs/partnership_balls, which applyBall zeroes on a " +
@@ -207,7 +207,7 @@ test.describe("§9 Milestones / Partnerships / Timing / Live Notes", () => {
   });
 
   // ── Batter timestamps ────────────────────────────────────────────────────
-  test("T20-196/197 crease timestamps for a plain dismissal", async ({ scoringMatch }) => {
+  test("T20-196 / T20-197 crease timestamps for a plain dismissal", async ({ scoringMatch }) => {
     const m = scoringMatch;
     const virat = m.striker.mtpPublicId;
 

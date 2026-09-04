@@ -155,7 +155,7 @@ test.describe("§14 Crash / Logout / Refresh / Sync", () => {
     expect(seen.currentStrikerPublicId).toBe(expected.currentStrikerPublicId);
   });
 
-  test("T20-348/EDGE-27 an identical delivery posted twice is scored twice", async ({ scoringMatch }) => {
+  test("T20-348 / EDGE-27 an identical delivery posted twice is scored twice", async ({ scoringMatch }) => {
     test.fail(true, "BUG-18: postBall has no idempotency key, so a retried request double-scores");
     const m = scoringMatch;
     const s = await m.api.state(m.matchPublicId);
@@ -174,7 +174,7 @@ test.describe("§14 Crash / Logout / Refresh / Sync", () => {
     expect(after.inningsState.totalRuns, "and must not be scored twice").toBe(4);
   });
 
-  test("T20-349/EDGE-28 two clients scoring at once are serialised, not interleaved", async ({ scoringMatch }) => {
+  test("T20-349 / EDGE-28 two clients scoring at once are serialised, not interleaved", async ({ scoringMatch }) => {
     const m = scoringMatch;
     const s = await m.api.state(m.matchPublicId);
     const payload = {

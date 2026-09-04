@@ -102,7 +102,7 @@ test.describe("§12 Super Over / Powerplay / Field Restrictions", () => {
       "the two main innings rows are untouched by Super Over deliveries").toBe(mainBefore);
   });
 
-  test("T20-281/T20-287 a batter dismissed in a prior Super Over cannot bat again", async ({ scoringMatch }) => {
+  test("T20-281 / T20-287 a batter dismissed in a prior Super Over cannot bat again", async ({ scoringMatch }) => {
     const m = scoringMatch;
     await reachSuperOver(m);
     const { bat } = await openSuperOverInnings(m, [0, 1], 7);
@@ -138,7 +138,7 @@ test.describe("§12 Super Over / Powerplay / Field Restrictions", () => {
     expect(ok.status).toBe(200);
   });
 
-  test("T20-282/T20-283 a Super Over innings ends at two wickets", async ({ scoringMatch }) => {
+  test("T20-282 / T20-283 a Super Over innings ends at two wickets", async ({ scoringMatch }) => {
     const m = scoringMatch;
     await reachSuperOver(m);
     await openSuperOverInnings(m, [0, 1], 7);
@@ -190,7 +190,7 @@ test.describe("§12 Super Over / Powerplay / Field Restrictions", () => {
     expect(resp.inningsComplete, "six legal balls ends it").toBe(true);
   });
 
-  test("T20-285/T20-286 a tied Super Over opens another and the previous is retained", async ({ scoringMatch }) => {
+  test("T20-285 / T20-286 a tied Super Over opens another and the previous is retained", async ({ scoringMatch }) => {
     const m = scoringMatch;
     await reachSuperOver(m);
 

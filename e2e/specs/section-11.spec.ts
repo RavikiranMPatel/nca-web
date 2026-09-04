@@ -156,8 +156,8 @@ test.describe("§11 Innings End / Target / Results", () => {
   });
 
   for (const [id, ball, label] of [
-    ["T20-254a", { runsBatsman: 0, runsExtras: 1, extraType: "WIDE" }, "a wide"],
-    ["T20-254b", { runsBatsman: 0, runsExtras: 1, extraType: "NO_BALL", noBallRunsType: "BAT" }, "a no ball"],
+    ["T20-254 (wide)", { runsBatsman: 0, runsExtras: 1, extraType: "WIDE" }, "a wide"],
+    ["T20-254 (no ball)", { runsBatsman: 0, runsExtras: 1, extraType: "NO_BALL", noBallRunsType: "BAT" }, "a no ball"],
   ] as const) {
     test(`${id} target reached by ${label} ends the innings`, async ({ scoringMatch }) => {
       const m = scoringMatch;
@@ -215,7 +215,7 @@ test.describe("§11 Innings End / Target / Results", () => {
     expect(so.inningsState.totalRuns).toBe(0);
   });
 
-  test("T20-257/T20-258 no result and abandoned are recordable", async ({ scoringMatch }) => {
+  test("T20-257 / T20-258 no result and abandoned are recordable", async ({ scoringMatch }) => {
     const m = scoringMatch;
     for (const resultType of ["NO_RESULT", "ABANDONED"]) {
       const res = await m.api.raw("post", `/api/admin/cricket/matches/${m.matchPublicId}/result`,

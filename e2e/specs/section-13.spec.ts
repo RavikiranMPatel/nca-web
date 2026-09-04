@@ -71,7 +71,7 @@ test.describe("§13 Corrections / Undo / Redo / Replay", () => {
       "which is the closest the app allows.");
   });
 
-  test("T20-312/T20-324 undoing an entire over ball by ball returns to the start of it", async ({ scoringMatch }) => {
+  test("T20-312 / T20-324 undoing an entire over ball by ball returns to the start of it", async ({ scoringMatch }) => {
     const m = scoringMatch;
     await bowlAll(m, [{ runsBatsman: 2 }, { runsBatsman: 4 }]);
     const beforeOver = captureState(m.matchPublicId);
@@ -185,7 +185,7 @@ test.describe("§13 Corrections / Undo / Redo / Replay", () => {
     }
   });
 
-  test("T20-316/T20-163 edit the bowler — figures move, score unchanged", async ({ scoringMatch }) => {
+  test("T20-316 / T20-163 edit the bowler — figures move, score unchanged", async ({ scoringMatch }) => {
     const m = scoringMatch;
     const cummins = m.bowlers.find((b) => b.displayName === "Pat Cummins")!;
     await bowlAll(m, [{ runsBatsman: 4 }, { runsBatsman: 2 }]);

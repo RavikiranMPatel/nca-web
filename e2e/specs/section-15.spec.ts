@@ -82,7 +82,7 @@ async function scoreVariedInnings(m: any) {
 
 test.describe("§15 Fielding / Batting / Bowling Statistics", () => {
 
-  test("T20-377/T20-386 batter runs plus all five extras buckets equal the team total", async ({ scoringMatch }) => {
+  test("T20-377 / T20-386 batter runs plus all five extras buckets equal the team total", async ({ scoringMatch }) => {
     const m = scoringMatch;
     await scoreVariedInnings(m);
 
@@ -102,7 +102,7 @@ test.describe("§15 Fielding / Batting / Bowling Statistics", () => {
     expect(st.extrasPenalty).toBe(5);
   });
 
-  test("T20-378/T20-379 balls faced, fours and sixes match the deliveries", async ({ scoringMatch }) => {
+  test("T20-378 / T20-379 balls faced, fours and sixes match the deliveries", async ({ scoringMatch }) => {
     const m = scoringMatch;
     await scoreVariedInnings(m);
     const s = await m.api.state(m.matchPublicId);
@@ -144,7 +144,7 @@ test.describe("§15 Fielding / Batting / Bowling Statistics", () => {
     }
   });
 
-  test("T20-381/T20-384 bowler overs come from legal balls, and economy follows", async ({ scoringMatch }) => {
+  test("T20-381 / T20-384 bowler overs come from legal balls, and economy follows", async ({ scoringMatch }) => {
     const m = scoringMatch;
     await scoreVariedInnings(m);
     const s = await m.api.state(m.matchPublicId);
@@ -248,7 +248,7 @@ test.describe("§15 Fielding / Batting / Bowling Statistics", () => {
   });
 
   // ── Fielding ─────────────────────────────────────────────────────────────
-  test("T20-370/T20-371/T20-372 catches, stumpings and run-outs are attributable", async ({ scoringMatch }) => {
+  test("T20-370 / T20-371 / T20-372 catches, stumpings and run-outs are attributable", async ({ scoringMatch }) => {
     const m = scoringMatch;
     const { keeper, fielder } = await scoreVariedInnings(m);
 

@@ -53,7 +53,7 @@ test.describe("§16 Edge-Case Matrix", () => {
   }
 
   // ── Genuinely uncovered combinations ─────────────────────────────────────
-  test("EDGE-04/EDGE-36 a delivery cannot be both a wide and a bye", async ({ scoringMatch }) => {
+  test("EDGE-04 / EDGE-36 a delivery cannot be both a wide and a bye", async ({ scoringMatch }) => {
     const m = scoringMatch;
     // Workbook EDGE-04: "UI/backend prevents invalid double classification."
     // EDGE-36: "Validation prevents impossible combined classification."
@@ -78,7 +78,7 @@ test.describe("§16 Edge-Case Matrix", () => {
 
   });
 
-  test("EDGE-04/EDGE-36 an invented combined extra type is rejected", async ({ scoringMatch }) => {
+  test("EDGE-04 / EDGE-36 an invented combined extra type is rejected", async ({ scoringMatch }) => {
     test.fail(true, "BUG-19: extra_type is unvalidated, so an unknown value is stored and its runs vanish");
     // The structural argument above only holds for the five known types. Nothing
     // validates the string, so a caller can invent one — which is exactly the
