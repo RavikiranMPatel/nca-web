@@ -1307,6 +1307,10 @@ export default function LiveScorerPage() {
       </div>
     );
 
+  const extrasTotal =
+    (innings?.extrasWide ?? 0) + (innings?.extrasNoBall ?? 0) +
+    (innings?.extrasBye ?? 0) + (innings?.extrasLegBye ?? 0) +
+    (innings?.extrasPenalty ?? 0);
   const totalRuns = innings?.totalRuns ?? 0;
   const totalWickets = innings?.totalWickets ?? 0;
   const totalBalls = innings?.totalBalls ?? 0;
@@ -1350,6 +1354,20 @@ export default function LiveScorerPage() {
             <div className="flex gap-4 mt-1 text-xs text-gray-500">
               <span>
                 CRR <b data-testid="crr" className="text-gray-300">{crr}</b>
+              </span>
+              {/* Extras readout. The scorer had no way to see the breakdown at all,
+                  so penalty runs in particular were invisible — they reach the team
+                  total without appearing anywhere else (BUG-04). Sits on the existing
+                  flex-wrap row so it wraps rather than overflowing on a narrow phone. */}
+              <span data-testid="extras-summary">
+                Ex <b data-testid="extras-total" className="text-gray-300">{extrasTotal}</b>
+                <span className="ml-1 text-gray-600">
+                  (<span data-testid="ex-wd">{innings?.extrasWide ?? 0}</span>w{" "}
+                  <span data-testid="ex-nb">{innings?.extrasNoBall ?? 0}</span>nb{" "}
+                  <span data-testid="ex-b">{innings?.extrasBye ?? 0}</span>b{" "}
+                  <span data-testid="ex-lb">{innings?.extrasLegBye ?? 0}</span>lb{" "}
+                  <span data-testid="ex-p">{innings?.extrasPenalty ?? 0}</span>p)
+                </span>
               </span>
               {innings?.target && (
                 <>
@@ -2134,6 +2152,7 @@ export default function LiveScorerPage() {
             </p>
             <div className="space-y-2 mb-3">
               <button
+                data-testid="penalty-to-batting"
                 disabled={posting}
                 onClick={async () => {
                   if (!matchId) return;
@@ -2157,6 +2176,7 @@ export default function LiveScorerPage() {
                 </div>
               </button>
               <button
+                data-testid="penalty-to-bowling"
                 disabled={posting}
                 onClick={async () => {
                   if (!matchId) return;

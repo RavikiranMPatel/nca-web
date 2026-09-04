@@ -21,7 +21,7 @@ Severity scale: **critical** (data loss, cross-tenant, silent corruption) ·
 | BUG-01 | Strike inverted on EVERY wide and no ball | critical | **FIXED** — `e748bec` |
 | BUG-02 | Byes and leg-byes charged to the bowler | high | **FIXED** — `715a382` |
 | BUG-03 | NB+bye and NB+leg-bye send an identical payload | high | **FIXED** — `c618147` |
-| BUG-04 | `extras_penalty` missing from `InningsStateDTO` | medium | open — code evidence |
+| BUG-04 | `extras_penalty` missing from `InningsStateDTO` | medium | **FIXED** — `8549c47` |
 | BUG-05 | Free hit cleared by a wide | high | **FIXED** — `6e2ced0` |
 | BUG-06 | `ScoringService.findMTP()` unscoped by academy | critical | FIXED + proven this session |
 | BUG-07 | `ROLE_SCORER` cannot reach any scoring endpoint | medium | open — not fixed by instruction |
@@ -34,6 +34,7 @@ Severity scale: **critical** (data loss, cross-tenant, silent corruption) ·
 | BUG-14 | Consecutive-over rule enforced only in the UI | medium | **FIXED** — `c8c05a8` |
 | BUG-15 | Obstructing the field credited to the bowler | medium | **FIXED** — `8cb9fcd` |
 | BUG-16 | Undone dismissal leaves a stale `crease_exited_at` | medium | **FIXED** — `ab34118` |
+| BUG-17 | A replay erases penalty runs | high | **FIXED** — `8549c47` |
 
 ---
 
@@ -300,34 +301,79 @@ The last `@ambiguous` companion in section 3 is deleted; that file now has none.
 
 ## BUG-04 — `extras_penalty` missing from `InningsStateDTO`
 
-**Severity:** medium · **Scenarios:** T20-149, T20-317, T20-377, T20-386, EDGE-29
+**Severity:** medium · **Status: FIXED** in `8549c47`
 
-**Workbook expects.** T20-149: "Penalty runs separately represented."
-T20-386: "Wides/NBs/byes/LBs/**penalties** reconcile."
-
-**What the app does.** The column exists and is written —
-`entity/Innings.java:77`:
+**Defect as found.** The column existed on `Innings` and `awardPenalty` wrote it,
+and both scorecard services already summed **five** buckets into `extrasTotal` —
+but `InningsStateDTO` stopped at `extrasLegBye`:
 
 ```java
-@Column(name = "extras_penalty", nullable = false)
-private int extrasPenalty = 0;
+private int extrasWide;
+private int extrasNoBall;
+private int extrasBye;
+private int extrasLegBye;
+// no extrasPenalty
 ```
 
-`ScoringService.java:1036` increments it on a `PENALTY` extra, and
-`awardPenalty` (L836) writes it. But the state DTO the live scorer renders from
-stops one field short — `dto/scoring/BallResponseDTO.java:64-68` declares
-`extrasWide`, `extrasNoBall`, `extrasBye`, `extrasLegBye` and no
-`extrasPenalty` (`grep -c extrasPenalty` on the file returns 0, as it does on
-`nca-web/nca-web/src/types/scoring.ts`).
+So the live scorer never received it. Five runs reached the team total with nothing
+anywhere to account for them, and `batters + extras = total` could not close.
 
-Penalty runs therefore land in `totalRuns` but are invisible in the extras
-breakdown, so no UI-side reconciliation of "batter runs + extras = team total"
-can ever close once a penalty has been awarded.
+Worse on the public scorecard, which listed four buckets in the parenthetical
+beside a total built from five, so `(lb, w, nb, b)` visibly failed to add up to the
+number printed next to it once a penalty was awarded.
 
-**Repro.** Extras → Penalty → "Batting side gets 5 runs". `totalRuns` +5; every
-`extras*` field in the response unchanged.
+**Fix.** `extrasPenalty` added to `InningsStateDTO` and `PublicScorecardDTO`, set by
+`buildBallResponse`, `PublicScoringService` and `ScorecardService`, and surfaced in
+both frontends.
+
+The live scorer had **no extras readout at all**, which is why a penalty was
+invisible there rather than merely mis-totalled. It now shows
+`Ex <total> (Nw Nnb Nb Nlb Np)` on the existing wrap row in the header, so it
+reflows rather than overflowing on a narrow phone. That is a real UI addition, not
+an attribute-only change.
+
+**Regression coverage.** `e2e/specs/bug-04-penalty-extras.spec.ts` — awarding a
+penalty through the UI and asserting the bucket and total on all three projects,
+a full reconciliation with wides, byes, NB leg-byes and a penalty in play, and the
+scorecard agreeing bucket for bucket. T20-149 lost its `test.fail()`.
 
 ---
+
+## BUG-17 — A replay erases penalty runs
+
+**Severity:** high · **Status: FIXED** in `8549c47`
+**Found while verifying BUG-04**, and fixed with it because "undo/replay preserves
+the penalty" cannot hold otherwise.
+
+**What happened.** `awardPenalty` adds five runs straight to the innings and writes
+no `Delivery`. `replayInnings` zeroes every aggregate and rebuilds from the delivery
+stream, so it had nothing to reconstruct a penalty from and silently dropped it —
+together with the five runs it had contributed to the team total:
+
+```
+after a four                 teamRuns=4   extras_penalty=0
+after a 5-run penalty        teamRuns=9   extras_penalty=5
+after another delivery       teamRuns=11  extras_penalty=5
+after undo (triggers replay) teamRuns=4   extras_penalty=0   <-- both gone
+```
+
+Note the total went to 4, not 9: undoing one 2-run delivery removed seven runs.
+This is data loss, not a display problem, and it applies to `editDelivery` as well
+since both go through `replayInnings`.
+
+**Fix.** Awarded penalties are carried across the replay, the same way the batter
+selection is (BUG-12): snapshot before the reset, then add back only the portion no
+delivery accounts for, correcting the team total by the same amount. Anything a
+`PENALTY` delivery contributed has already been rebuilt by `applyBall` and is
+subtracted, so it cannot be double counted.
+
+**Known edge, currently unreachable.** If a `PENALTY` *delivery* were undone, its
+amount would be treated as awarded and retained. `awardPenalty` creates no delivery
+and the UI never posts `extraType=PENALTY`, so no such delivery exists; recorded
+rather than guarded against speculatively.
+
+**After the fix** the same sequence gives `teamRuns=9  extras_penalty=5` after the
+undo, and the reconciliation still closes.
 
 ## BUG-05 — Free hit cleared by a wide
 

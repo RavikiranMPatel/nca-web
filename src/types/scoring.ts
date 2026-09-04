@@ -25,6 +25,7 @@ export interface InningsState {
   extrasNoBall: number;
   extrasBye: number;
   extrasLegBye: number;
+  extrasPenalty: number;
   currentRunRate: number;
   target?: number;
   requiredRuns?: number;

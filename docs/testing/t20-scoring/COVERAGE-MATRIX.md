@@ -18,14 +18,14 @@ Paths are relative to `nca-web/nca-web/` (frontend) and `nextgen-cricket-academy
 
 | Class | Count | % |
 |-------|-------|---|
-| TESTABLE | 100 | 40% |
+| TESTABLE | 101 | 40% |
 | TESTABLE-BACKEND-ONLY | 13 | 5% |
 | NEEDS-FIXTURE | 51 | 20% |
-| AMBIGUOUS | 16 | 6% |
+| AMBIGUOUS | 15 | 6% |
 | NOT-IMPLEMENTED | 68 | 27% |
 | **Total** | **248** | |
 
-Directly executable now (TESTABLE + TESTABLE-BACKEND-ONLY + NEEDS-FIXTURE): **164 of 248**. Not executable against the app as built (NOT-IMPLEMENTED + AMBIGUOUS): **84**.
+Directly executable now (TESTABLE + TESTABLE-BACKEND-ONLY + NEEDS-FIXTURE): **165 of 248**. Not executable against the app as built (NOT-IMPLEMENTED + AMBIGUOUS): **83**.
 
 _Updated after BUG-01 (`e748bec`), BUG-02 (`715a382`) and BUG-03 (`c618147`): eight scenarios moved from AMBIGUOUS to TESTABLE because the app now matches the workbook. The per-section table below is the Phase 1 snapshot and is not re-derived._
 
@@ -545,7 +545,7 @@ _Updated after BUG-01 (`e748bec`), BUG-02 (`715a382`) and BUG-03 (`c618147`): ei
 | `T20-383` | Bowling wickets | TESTABLE | `isBowlerWicket` excludes RUN_OUT / RETIRED_HURT / RETIRED_OUT (L1086-1089). |
 | `T20-384` | Economy | TESTABLE | Derived from runsConceded / overs; inherits the T20-382 attribution question. |
 | `T20-385` | Dot balls | TESTABLE | `isDot = isLegal && runsBatsman == 0 && extraType == null` (L1084) — a leg-bye ball is correctly not a dot. |
-| `T20-386` | Extras summary | AMBIGUOUS | Wides, no-balls, byes and leg-byes now reconcile (BUG-03 fixed, `c618147`). Still ambiguous only because penalties are absent from `InningsStateDTO` — see BUG-04. |
+| `T20-386` | Extras summary | TESTABLE | Workbook satisfied since BUG-04 (`8549c47`): `extrasPenalty` is on `InningsStateDTO` and both scorecard DTOs, so wides, no-balls, byes, leg-byes and penalties all reconcile against the team total.|
 | `T20-387` | Wagon wheel/scoring area | TESTABLE | `WagonWheelModal.tsx` + `PATCH .../deliveries/{id}/shot-zone` (ScoringController L93). |
 
 ### 16. Critical Combination / Edge-Case Matrix

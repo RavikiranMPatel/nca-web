@@ -61,12 +61,10 @@ test.describe("§7 Dead Ball / Special Events", () => {
   });
 
   test("T20-149 helmet on the ground — penalty runs separately represented", async ({ scoringMatch }) => {
-    test.fail(true, "BUG-04: extras_penalty is not exposed in InningsStateDTO");
     // Workbook: "Penalty runs separately represented."
-    // awardPenalty adds 5 to the team total and to innings.extras_penalty, which
-    // is the right model for a helmet penalty. But the live state DTO stops at
-    // extrasLegBye, so the runs are invisible in the extras breakdown and no
-    // client-side reconciliation can close.
+    // awardPenalty adds 5 to the team total and to innings.extras_penalty, which is
+    // the right model for a helmet penalty, and the live state now carries the
+    // bucket so the breakdown reconciles.
     const m = scoringMatch;
     const before = await m.api.state(m.matchPublicId);
     const res = await m.api.raw("post", `/api/admin/cricket/matches/${m.matchPublicId}/scoring/penalty`,
@@ -80,7 +78,7 @@ test.describe("§7 Dead Ball / Special Events", () => {
     // The buckets must account for every run in the total.
     const st = after.inningsState;
     const buckets = st.extrasWide + st.extrasNoBall + st.extrasBye + st.extrasLegBye
-      + ((st as unknown as { extrasPenalty?: number }).extrasPenalty ?? 0);
+      + st.extrasPenalty;
     const batterRuns = Object.values(after.batterStats as Record<string, { runs: number }>)
       .reduce((sum, b) => sum + b.runs, 0);
     expect(batterRuns + buckets, "penalty runs must be visible in the extras breakdown")

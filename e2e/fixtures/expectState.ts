@@ -22,7 +22,7 @@ export interface ExpectedState {
     legalBalls?: number; runsConceded?: number; wickets?: number;
     maidens?: number; dots?: number; wides?: number; noBalls?: number;
   }>;
-  extras?: { wide?: number; noBall?: number; bye?: number; legBye?: number };
+  extras?: { wide?: number; noBall?: number; bye?: number; legBye?: number; penalty?: number };
   partnership?: { runs?: number; balls?: number };
   freeHit?: boolean;
 }
@@ -126,8 +126,7 @@ export async function expectState(
     if (e.noBall !== undefined) expect(st.extrasNoBall, "extras: no ball").toBe(e.noBall);
     if (e.bye !== undefined) expect(st.extrasBye, "extras: bye").toBe(e.bye);
     if (e.legBye !== undefined) expect(st.extrasLegBye, "extras: leg bye").toBe(e.legBye);
-    // NOTE: extras_penalty exists on the Innings row but is absent from
-    // InningsStateDTO, so it cannot be asserted here — BUGS-FOUND.md BUG-04.
+    if (e.penalty !== undefined) expect(st.extrasPenalty, "extras: penalty").toBe(e.penalty);
   }
 
   for (const [name, want_] of Object.entries(want.batters ?? {})) {
