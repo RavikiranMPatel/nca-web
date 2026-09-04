@@ -347,7 +347,6 @@ test.describe("§6 Wickets & Dismissals", () => {
   });
 
   test("undo returns every batter at the crease in batterStats", async ({ scoringMatch }) => {
-    test.fail(true, "BUG-13: replayInnings persists the stub row but omits it from the response");
     const m = scoringMatch;
     // Rotate strike so the non-striker has faced nothing, then dismiss them and
     // undo. Their stat row is rebuilt in the database as a stub but is left out of

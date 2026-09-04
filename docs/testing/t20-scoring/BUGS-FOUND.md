@@ -29,10 +29,11 @@ Severity scale: **critical** (data loss, cross-tenant, silent corruption) ·
 | BUG-09 | `docker-compose.yml` DB does not match reality | low | open — docs/infra |
 | BUG-10 | A started match can never be deleted (FK violation) | high | **FIXED** — `b9a58a5` |
 | BUG-11 | Match public id collides under concurrent creation | medium | open — reproduced by the suite |
-| BUG-12 | Undo of the last remaining delivery loses the batters and bowler | medium | open — reproduced by the suite |
-| BUG-13 | Undo omits a crease batter from `batterStats` | low | open — reproduced by the suite |
+| BUG-12 | Undo of the last remaining delivery loses the batters and bowler | medium | **FIXED** — `ab34118` |
+| BUG-13 | Undo omits a crease batter from `batterStats` | low | **FIXED** — `ab34118` |
 | BUG-14 | Consecutive-over rule enforced only in the UI | medium | **FIXED** — `c8c05a8` |
 | BUG-15 | Obstructing the field credited to the bowler | medium | open — reproduced by the suite |
+| BUG-16 | Undone dismissal leaves a stale `crease_exited_at` | medium | **FIXED** — `ab34118` |
 
 ---
 
@@ -741,96 +742,59 @@ not putting schema detail back in the message.
 
 ## BUG-12 — Undo of the last remaining delivery loses the batters and bowler
 
-**Severity:** medium · **Found by:** section 3 work · **Relevant to T20-310, EDGE-23**
+**Severity:** medium · **Status: FIXED** in `ab34118`
 
-**What happens.** Undoing back to zero deliveries clears
-`currentStriker`, `currentNonStriker` and `currentBowler`. The scorer must
-re-select both openers and the bowler before scoring can continue, with no
-message explaining why.
-
-**Measured:**
+**Defect as found.** Undoing back to zero deliveries cleared `currentStriker`,
+`currentNonStriker` and `currentBowler`. The scorer had to re-select both openers
+and the bowler, with no message explaining why.
 
 ```
-after openers selected             balls=0 runs=0 striker=set  nonStriker=set  bowler=NULL
-after 1 delivery (2 runs)          balls=1 runs=2 striker=set  nonStriker=set  bowler=set
-after undo of that delivery        balls=0 runs=0 striker=NULL nonStriker=NULL bowler=NULL   <-- lost
-after 2 deliveries                 balls=2 runs=4 striker=set  nonStriker=set  bowler=set
-after undo (1 delivery remains)    balls=1 runs=2 striker=set  nonStriker=set  bowler=set    <-- fine
+after openers selected             striker=set  nonStriker=set  bowler=set
+after 1 delivery (2 runs)          striker=set  nonStriker=set  bowler=set
+after undo of that delivery        striker=NULL nonStriker=NULL bowler=NULL   <-- lost
+after 2 deliveries                 striker=set  nonStriker=set  bowler=set
+after undo (1 delivery remains)    striker=set  nonStriker=set  bowler=set    <-- fine
 ```
 
-**Cause.** `undoLastBall` delegates to `replayInnings`
-(`ScoringService.java:870`), which unconditionally clears the live state:
+**Root cause, shared with BUG-13 and BUG-16.** `replayInnings` rebuilt everything
+about the crease from the delivery stream. A selection is state in its own right —
+`selectBatter` and `correctBowler` put a player on with no delivery behind them —
+so the stream cannot re-derive it. With one delivery left the replay reconstructed
+both ends; with none there was nothing to reconstruct from.
 
-```java
-innings.setCurrentStriker(null);
-innings.setCurrentNonStriker(null);
-innings.setCurrentBowler(null);
-```
+**Fix.** The prior selection is snapshotted before the wipe and restored when the
+replayed stream is empty. Conditional on emptiness deliberately: with deliveries
+present `applyBall` is authoritative and must keep rotating strike, emptying a
+dismissed batter's end and clearing the bowler at an over boundary.
 
-and then rebuilds it by replaying deliveries. With one delivery left the replay
-restores everything. With none left there is nothing to replay from, and the
-selection made by `selectBatter` / `correctBowler` — which is not a delivery and
-so is not part of the replay stream — is gone.
+**After the fix** the third line reads `striker=set nonStriker=set bowler=set`, and
+scoring continues without re-selecting anyone.
 
-**Why it matters beyond the first ball.** The same hole applies at the start of
-any innings and after any correction that empties the delivery list. The workbook
-expects undo to restore "batter/bowler/strike/partnership" (T20-310); at this
-boundary it restores the score but silently drops the players.
-
-**Suite handling.** `e2e/specs/bug-01-strike-rotation.spec.ts` scores a delivery
-before undoing, so it never undoes to zero. Section 13 will assert this directly.
-
----
+**Source of truth.** A batter is at the crease when their stat row says not out and
+carries no exit time. With an empty delivery stream neither can be set, so
+restoring the prior selection is exactly that condition — see BUG-16, which had to
+be fixed for that predicate to hold at all.
 
 ## BUG-13 — Undo omits a crease batter from `batterStats`
 
-**Severity:** low · **Found by:** section 6 (EDGE-23 work) · **Relevant to T20-310, EDGE-23**
+**Severity:** low · **Status: FIXED** in `ab34118`
 
-**What happens.** After an undo, a batter who is at the crease and has a persisted
-`innings_batting_stats` row is missing from the `batterStats` map in the response.
-The database and the API disagree:
+**Defect as found.** After an undo, a batter at the crease with a persisted
+`innings_batting_stats` row was missing from the `batterStats` map:
 
 ```
-after 3 balls  striker=KL
-  API batterStats: {'KL': (0, 0), 'Virat': (7, 3)}
-  DB rows        : {'KL': (0, 0), 'Virat': (7, 3)}
-
 after undo of the wicket
   API batterStats: {'Virat': (7, 3)}          <-- KL missing
   DB rows        : {'KL': (0, 0), 'Virat': (7, 3)}
-  striker: KL   nonStriker: Virat
 ```
 
-**Cause.** `replayInnings` rebuilds `battingStats` by replaying deliveries, so it
-only contains batters who faced one. It then restores crease timestamps and, for
-batters who have timestamps but faced no replayed ball, saves a stub row:
+`replayInnings` wrote the stub row for a batter who faced no replayed ball but
+never added it to the map `buildBallResponse` renders from.
 
-```java
-matchTeamPlayerRepository.findById(mtpId).ifPresent(mtp -> {
-    InningsBattingStat stub = newBattingStat(innings, mtp);
-    ...
-    battingStatRepo.save(stub);
-});
-```
-
-The stub is written to the database but never added to the `battingStats` map that
-`buildBallResponse` renders from, so it is absent from the response.
-
-**Why low.** The stub path only applies to a batter who has faced no delivery in
-the replayed innings, so the missing figures are always 0(0), and the scorer UI
-falls back to zeros for an absent entry — it currently looks correct by
-coincidence. It is still a real API/DB inconsistency, and any consumer that treats
-`batterStats` as the full set of batters at the crease is wrong after an undo.
-
-**Repro.** Score one single so strike rotates, dismiss the new striker (who has
-faced nothing), undo. The batter is restored as striker but is absent from
-`batterStats`; the row is present in `innings_batting_stats`.
-
-**Suite handling.** Covered by a `test.fail()` in `section-06.spec.ts`. EDGE-23
-itself dismisses a batter who has faced deliveries, which is what that scenario is
-actually about, and passes.
-
----
+**Fix.** The stub is added to the map after `save()`, which also keeps it out of
+the preceding `saveAll` and away from the merge-a-pending-entity problem the
+comment there warns about. After the fix the API and the database list the same
+batters, which the regression asserts by comparing the two key sets directly.
 
 ## BUG-14 — The consecutive-over rule was enforced only in the UI
 
@@ -920,3 +884,37 @@ out — in `applyBall` and in both SQL paths together, exactly as BUG-02 was don
 
 **Suite handling.** `test.fail()` in `section-04.spec.ts`. T20-065 itself passes:
 it asserts the dismissal is allowed, which is what that scenario is about.
+
+---
+
+## BUG-16 — An undone dismissal leaves a stale `crease_exited_at`
+
+**Severity:** medium · **Status: FIXED** in `ab34118`
+**Found while fixing BUG-12/BUG-13**, and fixed with them because the crease
+predicate does not hold without it.
+
+**Defect as found.** `replayInnings` snapshots the crease timestamps before wiping
+the stat rows and restores them afterwards. The exit time was restored
+unconditionally, so a batter whose dismissal had just been undone kept an exit time
+for a dismissal that no longer existed:
+
+```
+after 2 balls          Virat is_out=f  crease_exited_at IS NULL=t
+after the wicket       Virat is_out=t  crease_exited_at IS NULL=f
+after undoing it       Virat is_out=f  crease_exited_at IS NULL=f   <-- stale
+```
+
+`is_out` reverted correctly; the timestamp did not. That made "not out and no exit
+time" — the natural definition of being at the crease, and the one BUG-12's fix
+rests on — false for a batter who was demonstrably back at the crease.
+
+**Fix.** The original exit time is restored only when the replay itself produced
+one. `applyBall` sets `creaseExitedAt` whenever it replays a dismissal or a
+retirement, so a non-null value after the replay means the event survived. This
+preserves the original timestamp for a dismissal that still stands, and drops it
+for one that has been undone.
+
+**After the fix** the third line reads `is_out=f  crease_exited_at IS NULL=t`, and
+a dismissal that survives a replay keeps its original timestamp rather than being
+re-stamped with `now()` — both asserted in
+`e2e/specs/bug-12-13-replay-crease.spec.ts`.
