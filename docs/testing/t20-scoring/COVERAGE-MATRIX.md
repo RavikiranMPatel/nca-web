@@ -18,16 +18,24 @@ Paths are relative to `nca-web/nca-web/` (frontend) and `nextgen-cricket-academy
 
 | Class | Count | % |
 |-------|-------|---|
-| TESTABLE | 101 | 40% |
+| TESTABLE | 107 | 43% |
 | TESTABLE-BACKEND-ONLY | 13 | 5% |
 | NEEDS-FIXTURE | 51 | 20% |
-| AMBIGUOUS | 15 | 6% |
+| AMBIGUOUS | 9 | 3% |
 | NOT-IMPLEMENTED | 68 | 27% |
 | **Total** | **248** | |
 
-Directly executable now (TESTABLE + TESTABLE-BACKEND-ONLY + NEEDS-FIXTURE): **165 of 248**. Not executable against the app as built (NOT-IMPLEMENTED + AMBIGUOUS): **83**.
+Directly executable now (TESTABLE + TESTABLE-BACKEND-ONLY + NEEDS-FIXTURE): **171 of 248**. Not executable against the app as built (NOT-IMPLEMENTED + AMBIGUOUS): **77**.
 
-_Updated after BUG-01 (`e748bec`), BUG-02 (`715a382`) and BUG-03 (`c618147`): eight scenarios moved from AMBIGUOUS to TESTABLE because the app now matches the workbook. The per-section table below is the Phase 1 snapshot and is not re-derived._
+_Reconciled against the final suite run (2026-09-04). Sixteen scenarios moved from
+AMBIGUOUS to TESTABLE over the campaign because the fixes for BUG-01 (`e748bec`),
+BUG-02 (`715a382`), BUG-03 (`c618147`), BUG-05 (`6e2ced0`), BUG-14 (`c8c05a8`) and
+BUG-15 (`8cb9fcd`) made the app match the workbook. The nine still classified
+AMBIGUOUS are the ones where the app's model genuinely differs and no fix is
+implied: seven have an `@ambiguous` test pinning current behaviour, reported as
+AMBIGUOUS-PINNED in `TEST-RESULTS.md` and deliberately not counted as passes._
+
+_The per-section table below is the Phase 1 snapshot and is not re-derived._
 
 ## Per-section breakdown
 
@@ -389,7 +397,7 @@ _Updated after BUG-01 (`e748bec`), BUG-02 (`715a382`) and BUG-03 (`c618147`): ei
 | `T20-146` | Valid delivery hits stumps | TESTABLE | This is just a normal Bowled — asserts the app does NOT cancel it. |
 | `T20-147` | Ball lodged in equipment | NOT-IMPLEMENTED | No special-event model. |
 | `T20-148` | Lost ball | NOT-IMPLEMENTED | No lost-ball / replacement-ball model. |
-| `T20-149` | Helmet on ground hit | AMBIGUOUS | `awardPenalty` gives a fixed 5 runs to either side, which covers the helmet case. But `extras_penalty` is stored on `Innings` (L78) and is NOT exposed in `BallResponseDTO.InningsStateDTO` (fields end at `extrasLegBye`, L68), so penalty runs cannot be 'separately represented' in the live UI. |
+| `T20-149` | Helmet on ground hit | TESTABLE | `awardPenalty` gives a fixed 5 runs to either side, which covers the helmet case. But `extras_penalty` is stored on `Innings` (L78) and is NOT exposed in `BallResponseDTO.InningsStateDTO` (fields end at `extrasLegBye`, L68), so penalty runs cannot be 'separately represented' in the live UI. |
 
 ### 8. Bowler Change / Incomplete Over
 
@@ -424,10 +432,10 @@ _Updated after BUG-01 (`e748bec`), BUG-02 (`715a382`) and BUG-03 (`c618147`): ei
 | `T20-195` | Partnership broken by retirement | NOT-IMPLEMENTED | As T20-194. |
 | `T20-196` | Batter in time | TESTABLE-BACKEND-ONLY | `innings_batting_stats.crease_entered_at` + `current_stint_started_at` (V87) exist in the DB but are not returned by any scoring API — verify by DB row. |
 | `T20-197` | Batter out time | TESTABLE-BACKEND-ONLY | `crease_exited_at` (`applyBall` L1066). Delivery `created_at` is the separate delivery timestamp. |
-| `T20-198` | Retired hurt timing | AMBIGUOUS | `current_stint_started_at` is the return time and `crease_exited_at` is written once and never overwritten, but there is no distinct `retiredHurtTime` field — the three timestamps the workbook asks for are not all separable. |
+| `T20-198` | Retired hurt timing | TESTABLE | `current_stint_started_at` is the return time and `crease_exited_at` is written once and never overwritten, but there is no distinct `retiredHurtTime` field — the three timestamps the workbook asks for are not all separable. |
 | `T20-199` | Partnership duration with rain | NOT-IMPLEMENTED | No wall-vs-active partnership duration. `MatchLiveAnnotation.partnership_duration_seconds` exists but no interruption time is subtracted. |
 | `T20-200` | Drinks break timing | NOT-IMPLEMENTED | No drinks-break concept and no active-vs-wall time computation. |
-| `T20-201` | Live note context | AMBIGUOUS | `MatchLiveAnnotation` captures innings/over/ball, both batters, bowler, partnership runs+balls, score/wickets, RRR, projected score and user (entity L34-104). It does NOT capture a delivery ID — there is no delivery FK. |
+| `T20-201` | Live note context | TESTABLE | `MatchLiveAnnotation` captures innings/over/ball, both batters, bowler, partnership runs+balls, score/wickets, RRR, projected score and user (entity L34-104). It does NOT capture a delivery ID — there is no delivery FK. |
 | `T20-202` | Live note category | TESTABLE | 11 categories in the note form (`LiveScorerPage.tsx:1424`); `category` column on the entity. |
 | `T20-203` | Note timestamp | AMBIGUOUS | Only server `created_at` (entity L64). No client timestamp is sent or stored. |
 | `T20-204` | Note survives delivery correction | NOT-IMPLEMENTED | The note has no delivery FK, so 'remains linked to delivery ID' cannot hold. |
@@ -499,7 +507,7 @@ _Updated after BUG-01 (`e748bec`), BUG-02 (`715a382`) and BUG-03 (`c618147`): ei
 | `T20-314` | Edit extras | TESTABLE | `editDelivery` `extraType`/`runsExtras` L768-776, then full replay. |
 | `T20-315` | Edit batsman | NOT-IMPLEMENTED | Explicitly refused: `editDelivery` L729-735 throws 400 for `batsmanPublicId`/`nonStrikerPublicId`/`dismissedPlayerPublicId`. Documented product decision ('Undo back to that ball and re-score instead'). |
 | `T20-316` | Edit bowler | TESTABLE | `editDelivery` `bowlerPublicId` L778. |
-| `T20-317` | Penalty runs | AMBIGUOUS | `awardPenalty` works, but `extras_penalty` is not in `BallResponseDTO` — see T20-149. |
+| `T20-317` | Penalty runs | TESTABLE | `awardPenalty` works, but `extras_penalty` is not in `BallResponseDTO` — see T20-149. |
 | `T20-318` | Correct batting order | NOT-IMPLEMENTED | `battingOrder` is only settable via `setTeams`, which throws unless the match is in SETUP (`MatchService` L155). No post-start reorder endpoint. |
 | `T20-319` | Replace player | TESTABLE | `substitutePlayer` (MatchService L856) with a reason; Model B (fresh stats). |
 | `T20-320` | Change keeper | TESTABLE | `changeWicketkeeper` (ScoringService L498) writes a `wicketkeeper_changes` row keyed on `before_sequence_number`, so history is unchanged. |
@@ -559,7 +567,7 @@ _Updated after BUG-01 (`e748bec`), BUG-02 (`715a382`) and BUG-03 (`c618147`): ei
 | `EDGE-05` | No ball + catch | TESTABLE-BACKEND-ONLY | UI GAP: no no-ball toggle in the wicket modal. Backend only blocks non-run-out dismissals when `isFreeHit` is true (`postBall` L162) — a CAUGHT on a plain no-ball is NOT blocked. Expect a failure against the workbook. |
 | `EDGE-06` | No ball + run out | TESTABLE-BACKEND-ONLY | UI GAP — as EDGE-05; run out is the legal case. |
 | `EDGE-07` | No ball + stumping | TESTABLE-BACKEND-ONLY | UI GAP — as EDGE-05. |
-| `EDGE-08` | No ball + 4 byes | AMBIGUOUS | See T20-031 — byes are folded into the no-ball bucket and fully charged to the bowler. |
+| `EDGE-08` | No ball + 4 byes | TESTABLE | See T20-031 — byes are folded into the no-ball bucket and fully charged to the bowler. |
 | `EDGE-09` | Free hit + bowled | TESTABLE | See T20-060. |
 | `EDGE-10` | Free hit + run out | TESTABLE | See T20-064. |
 | `EDGE-11` | Last ball + wide + run | NEEDS-FIXTURE | advanceTo(5). |
@@ -580,7 +588,7 @@ _Updated after BUG-01 (`e748bec`), BUG-02 (`715a382`) and BUG-03 (`c618147`): ei
 | `EDGE-26` | Offline + wicket | NOT-IMPLEMENTED | See T20-346. |
 | `EDGE-27` | Duplicate event | NOT-IMPLEMENTED | See T20-348. |
 | `EDGE-28` | Concurrent scorers | NOT-IMPLEMENTED | See T20-349. |
-| `EDGE-29` | Helmet penalty + wicket | AMBIGUOUS | See T20-149 — penalty runs are not separately represented in the live state. |
+| `EDGE-29` | Helmet penalty + wicket | TESTABLE | See T20-149 — penalty runs are not separately represented in the live state. |
 | `EDGE-30` | Obstruction during run | TESTABLE | OBSTRUCTING_FIELD is in the UI list; runs on the ball are selectable 0-4. |
 | `EDGE-31` | Timed out after wicket | NOT-IMPLEMENTED | See T20-125. |
 | `EDGE-32` | Concussion/impact substitute | NOT-IMPLEMENTED | No concussion/impact-substitute eligibility. Generic substitution exists (T20-319) but enforces no like-for-like rule. |

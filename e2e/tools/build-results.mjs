@@ -64,7 +64,11 @@ function walk(suite, trail) {
       const skipReason = (r?.errors ?? []).map((e) => e.message ?? "").join(" ")
         || (t.annotations ?? []).find((a) => a.type === "skip")?.description
         || "";
-      const entry = { status, spec: spec.file ?? suite.file, test: spec.title, skipReason };
+      // An @ambiguous test asserts what the app actually does where the workbook
+      // says something else, so its green is a pin on current behaviour, not
+      // agreement with the workbook. Track it so the summary can say so.
+      const pinned = /@ambiguous/.test(label);
+      const entry = { status, spec: spec.file ?? suite.file, test: spec.title, skipReason, pinned };
       if (!ids.length) { harness.push({ ...entry, project, label }); continue; }
       // A scenario can be claimed by more than one test — typically a workbook
       // assertion marked test.fail() alongside an @ambiguous test pinning current
@@ -86,21 +90,35 @@ const PROJECTS = ["desktop", "mobile", "mobile-chrome"];
 
 // Worst-first: a red or known-broken result must never be hidden by a green one
 // claiming the same scenario.
+// PASS outranks SKIPPED deliberately: section 16 cross-references scenarios that
+// other specs assert, and a reference-skip must not mask the passing test it points
+// at. A red or known-broken result still outranks everything.
 const PRIORITY = [
   "FAIL",
   "UNEXPECTED-PASS — bug may be fixed",
   "EXPECTED-FAIL (app bug)",
-  "SKIPPED",
   "PASS",
+  "SKIPPED",
 ];
 const combineStatus = (entries) => {
   for (const p of PRIORITY) if (entries.some((e) => e.status === p)) return p;
-  return entries[0]?.status ?? "—";
+  return entries[0]?.status ?? "\u2014";
+};
+
+// A scenario whose only green comes from @ambiguous tests is reported as
+// AMBIGUOUS-PINNED, never as a plain PASS: the app was observed and pinned, the
+// workbook's stated expectation was not met. A scenario that also has a
+// non-ambiguous passing test is a real PASS.
+const resolveCell = (entries) => {
+  const combined = combineStatus(entries);
+  if (combined !== "PASS") return combined;
+  const greens = entries.filter((e) => e.status === "PASS");
+  return greens.length && greens.every((e) => e.pinned) ? "AMBIGUOUS-PINNED" : "PASS";
 };
 
 const cellFor = (id, project) => {
   const got = results.get(id)?.[project];
-  if (got?.length) return combineStatus(got);
+  if (got?.length) return resolveCell(got);
   const cls = scenarios.get(id)?.cls;
   if (cls === "NOT-IMPLEMENTED") return "SKIPPED-NOT-IMPLEMENTED";
   if (cls === "AMBIGUOUS") return "AMBIGUOUS";
@@ -127,6 +145,14 @@ L.push("and `AMBIGUOUS` are carried over from `COVERAGE-MATRIX.md`: the feature 
 L.push("not exist, or the app defines the rule differently, so no spec is written.\n");
 
 L.push("## Summary\n");
+const pass = counts["PASS"] ?? 0;
+const skipNI = (counts["SKIPPED"] ?? 0) + (counts["SKIPPED-NOT-IMPLEMENTED"] ?? 0);
+const ambiguous = (counts["AMBIGUOUS"] ?? 0) + (counts["AMBIGUOUS-PINNED"] ?? 0);
+const expFail = counts["EXPECTED-FAIL (app bug)"] ?? 0;
+const unclaimed = counts["\u2014"] ?? 0;
+L.push(`**${pass} PASS / ${skipNI} SKIPPED-NOT-IMPLEMENTED / ${ambiguous} AMBIGUOUS-PINNED` +
+       `${expFail ? ` / ${expFail} EXPECTED-FAIL` : " — zero expected-fail"}` +
+       `${unclaimed ? ` / ${unclaimed} not yet claimed by a spec` : ""}.**\n`);
 L.push("| Result | Scenarios |");
 L.push("|--------|-----------|");
 for (const [k, v] of Object.entries(counts).sort((a, b) => b[1] - a[1])) L.push(`| ${k} | ${v} |`);

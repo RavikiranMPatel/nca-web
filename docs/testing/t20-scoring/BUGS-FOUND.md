@@ -23,7 +23,7 @@ Severity scale: **critical** (data loss, cross-tenant, silent corruption) ·
 | BUG-03 | NB+bye and NB+leg-bye send an identical payload | high | **FIXED** — `c618147` |
 | BUG-04 | `extras_penalty` missing from `InningsStateDTO` | medium | **FIXED** — `8549c47` |
 | BUG-05 | Free hit cleared by a wide | high | **FIXED** — `6e2ced0` |
-| BUG-06 | `ScoringService.findMTP()` unscoped by academy | critical | FIXED + proven this session |
+| BUG-06 | `ScoringService.findMTP()` unscoped by academy | critical | **FIXED** — `e849f60`, proven by stashing the fix |
 | BUG-07 | `ROLE_SCORER` cannot reach any scoring endpoint | medium | open — not fixed by instruction |
 | BUG-08 | `ROLE_COACH` cannot load the live scorer page | medium | open — not fixed by instruction |
 | BUG-09 | `docker-compose.yml` DB does not match reality | low | open — docs/infra |
@@ -456,7 +456,7 @@ the field stands on a free hit, rather than an `@ambiguous` pin.
 
 ## BUG-06 — `ScoringService.findMTP()` unscoped by academy
 
-**Severity:** critical · **Status:** FIXED this session
+**Severity:** critical · **Status: FIXED** in `e849f60`
 **Fixed under CLAUDE.md hard rule 2** (tenant scoping is stop-work, not deferrable).
 
 **Defect as found.** `ScoringService.java:1346` resolved a `MatchTeamPlayer` from a
