@@ -31,6 +31,7 @@ Severity scale: **critical** (data loss, cross-tenant, silent corruption) ·
 | BUG-11 | Match public id collides under concurrent creation | medium | open — reproduced by the suite |
 | BUG-12 | Undo of the last remaining delivery loses the batters and bowler | medium | open — reproduced by the suite |
 | BUG-13 | Undo omits a crease batter from `batterStats` | low | open — reproduced by the suite |
+| BUG-14 | Consecutive-over rule enforced only in the UI | medium | open — reproduced by the suite |
 
 ---
 
@@ -779,3 +780,47 @@ faced nothing), undo. The batter is restored as striker but is absent from
 **Suite handling.** Covered by a `test.fail()` in `section-06.spec.ts`. EDGE-23
 itself dismisses a batter who has faced deliveries, which is what that scenario is
 actually about, and passes.
+
+---
+
+## BUG-14 — The consecutive-over rule is enforced only in the UI
+
+**Severity:** medium · **Found by:** section 8 (T20-160) · **Relevant to T20-094, T20-160**
+
+**What happens.** A bowler can bowl two overs in a row through the API. The Laws
+forbid it, and the scorer UI blocks it, but the server does not.
+
+```
+over complete: balls=6  currentBowler=None  lastBowler==Bumrah? True
+correct-bowler with the SAME bowler for the next over -> HTTP 200
+  currentBowler is now Bumrah again? True
+  and a ball from him -> HTTP 200
+  balls now: 7 -> he bowled consecutive overs
+```
+
+**Cause.** `Innings.lastBowler` is maintained correctly — `applyBall` sets it at
+over end — but nothing reads it for validation. `ScoringService.correctBowler`
+checks only that no ball has been bowled this over:
+
+```java
+int ballInOver = innings.getTotalBalls() % match.getBallsPerOver();
+if (ballInOver != 0) { throw ... }
+```
+
+and `postBall` checks the per-bowler over quota but not who bowled last. The only
+enforcement is in the scorer's bowler picker, which marks the previous bowler
+"Bowled last over" and hard-disables the option (`LiveScorerPage.tsx`).
+
+**Why it matters.** This is the pattern `.claude/rules/roles.md` warns about for
+authorisation — a rule that lives only in the client. Any API consumer, a
+mis-ordered request, or a future screen that does not replicate the picker's logic
+produces a scorecard that is invalid under the Laws, silently. The quota rule
+sitting right next to it in `postBall` shows the intended shape: this one should be
+enforced server-side too.
+
+**Not fixed in this slice** (no engine fixes here). The suite covers it with a
+`test.fail()` in `section-08.spec.ts`; T20-094 in section 5 still passes, because
+it asserts the UI behaviour, which is correct.
+
+**Note on scope.** `bowler-injury-replace` was not probed for the same hole and may
+share it — worth checking when this is fixed.
