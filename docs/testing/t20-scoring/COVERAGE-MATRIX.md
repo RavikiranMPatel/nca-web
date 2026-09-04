@@ -18,14 +18,14 @@ Paths are relative to `nca-web/nca-web/` (frontend) and `nextgen-cricket-academy
 
 | Class | Count | % |
 |-------|-------|---|
-| TESTABLE | 99 | 39% |
+| TESTABLE | 100 | 40% |
 | TESTABLE-BACKEND-ONLY | 13 | 5% |
 | NEEDS-FIXTURE | 51 | 20% |
-| AMBIGUOUS | 17 | 6% |
+| AMBIGUOUS | 16 | 6% |
 | NOT-IMPLEMENTED | 68 | 27% |
 | **Total** | **248** | |
 
-Directly executable now (TESTABLE + TESTABLE-BACKEND-ONLY + NEEDS-FIXTURE): **163 of 248**. Not executable against the app as built (NOT-IMPLEMENTED + AMBIGUOUS): **85**.
+Directly executable now (TESTABLE + TESTABLE-BACKEND-ONLY + NEEDS-FIXTURE): **164 of 248**. Not executable against the app as built (NOT-IMPLEMENTED + AMBIGUOUS): **84**.
 
 _Updated after BUG-01 (`e748bec`), BUG-02 (`715a382`) and BUG-03 (`c618147`): eight scenarios moved from AMBIGUOUS to TESTABLE because the app now matches the workbook. The per-section table below is the Phase 1 snapshot and is not re-derived._
 
@@ -330,7 +330,7 @@ _Updated after BUG-01 (`e748bec`), BUG-02 (`715a382`) and BUG-03 (`c618147`): ei
 | `T20-062` | Free hit + caught | TESTABLE | As T20-060. |
 | `T20-063` | Free hit + stumped | TESTABLE | As T20-060. |
 | `T20-064` | Free hit + run out | TESTABLE | RUN_OUT is the one dismissal allowed on a free hit (`postBall` L162). |
-| `T20-065` | Free hit + obstruction | AMBIGUOUS | Under the Laws, obstructing the field IS allowed off a free hit. `postBall` L162 allows only RUN_OUT, so the app blocks it. |
+| `T20-065` | Free hit + obstruction | TESTABLE | Workbook satisfied since BUG-05 (`6e2ced0`): obstructing the field now stands on a free hit, alongside run out, hit the ball twice and handled the ball; bowled, caught, LBW, stumped and hit wicket stay refused.|
 | `T20-066` | Free hit + hit ball twice | NOT-IMPLEMENTED | 'Hit ball twice' is not in the UI dismissal list (`LiveScorerPage.tsx:154`) and has no handling. |
 
 ### 5. Striker / Non-Striker / Last Ball / Over Completion

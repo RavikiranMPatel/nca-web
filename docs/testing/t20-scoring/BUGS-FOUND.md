@@ -22,7 +22,7 @@ Severity scale: **critical** (data loss, cross-tenant, silent corruption) ·
 | BUG-02 | Byes and leg-byes charged to the bowler | high | **FIXED** — `715a382` |
 | BUG-03 | NB+bye and NB+leg-bye send an identical payload | high | **FIXED** — `c618147` |
 | BUG-04 | `extras_penalty` missing from `InningsStateDTO` | medium | open — code evidence |
-| BUG-05 | Free hit cleared by a wide | high | open — code evidence (unnumbered in workbook) |
+| BUG-05 | Free hit cleared by a wide | high | **FIXED** — `6e2ced0` |
 | BUG-06 | `ScoringService.findMTP()` unscoped by academy | critical | FIXED + proven this session |
 | BUG-07 | `ROLE_SCORER` cannot reach any scoring endpoint | medium | open — not fixed by instruction |
 | BUG-08 | `ROLE_COACH` cannot load the live scorer page | medium | open — not fixed by instruction |
@@ -32,6 +32,7 @@ Severity scale: **critical** (data loss, cross-tenant, silent corruption) ·
 | BUG-12 | Undo of the last remaining delivery loses the batters and bowler | medium | open — reproduced by the suite |
 | BUG-13 | Undo omits a crease batter from `batterStats` | low | open — reproduced by the suite |
 | BUG-14 | Consecutive-over rule enforced only in the UI | medium | open — reproduced by the suite |
+| BUG-15 | Obstructing the field credited to the bowler | medium | open — reproduced by the suite |
 
 ---
 
@@ -329,32 +330,80 @@ can ever close once a penalty has been awarded.
 
 ## BUG-05 — Free hit cleared by a wide
 
-**Severity:** high · **Scenario:** unnumbered — no workbook ID covers it directly;
-closest are T20-059 and the section 17 golden-regression free-hit steps
+**Severity:** high · **Status: FIXED** in `6e2ced0`
+(`nextgen-cricket-academy`, branch `feature/multi-tenant`)
 
-**Expected under the Laws.** A free hit is not consumed by a delivery that is
-not a legal ball. If a no-ball is followed by a wide, the free hit carries over
-to the next delivery.
-
-**What the app does.** The flag is a plain assignment evaluated on every
-delivery, so any non-no-ball delivery clears it — including a wide, which is not
-a legal ball:
-
-`ScoringService.java:1145`
+**Defect as found.** The flag was a plain assignment evaluated on every delivery:
 
 ```java
 // ── 8. Free-hit flag for the NEXT delivery ────────────────────────────
 innings.setFreeHit("NO_BALL".equals(extraType));
 ```
 
-**Repro.** No Ball → `NB+0` (`isFreeHit` true). Then Wide → `WD+0`. Expected
-`isFreeHit` still true; app returns false, and the free-hit dismissal
-restriction at `ScoringService.java:162` stops applying.
+Anything that was not a no ball cleared it, including a wide — which is not a
+legal ball and cannot consume a free hit. A no ball followed by a wide lost the
+free hit before it was ever bowled at.
 
-**Note.** Logged as a real deviation, but it is a rule question the workbook does
-not number, so confirm the intended behaviour before fixing.
+A second fault sat alongside it. The dismissal check refused everything but a run
+out:
 
----
+```java
+if (req.isFreeHit() && req.getDismissalType() != null
+        && !"RUN_OUT".equals(req.getDismissalType())) {
+    throw new BusinessException("Only run-outs are allowed on a free hit", ...);
+}
+```
+
+**Fix.** The flag is armed by a no ball, untouched by anything that is not a legal
+delivery, and consumed only by a legal one. Byes and leg-byes are legal deliveries
+and do consume it, which is what keeps the rule "the next legal ball" rather than
+"the next ball off the bat".
+
+Dismissals permitted on a free hit are now run out, obstructing the field, hitting
+the ball twice and handling the ball. Bowled, caught, LBW, stumped and hit wicket
+stay refused.
+
+The two retirements are allowed as well, deliberately: a retirement is not a mode
+of dismissal off the delivery, no ball is bowled, and it can happen at any point.
+Refusing one because a free hit was live blocked a legitimate action for an
+unrelated reason — a side effect of the old run-out-only check rather than a
+decision.
+
+**Measured before and after.**
+
+| delivery | free hit before | after |
+|---|---|---|
+| single | false | false |
+| NB | true | true |
+| WD | **false** | **true** |
+| WD | **false** | **true** |
+| legal 2 | false | false |
+| NB | true | true |
+| NB | true | true |
+| legal 0 | false | false |
+| bye 1 | false | false |
+| NB | true | true |
+| bye 2 | false | false |
+
+| dismissal on a live free hit | before | after |
+|---|---|---|
+| BOWLED / CAUGHT / LBW / STUMPED / HIT_WICKET | refused | refused |
+| RUN_OUT | allowed | allowed |
+| OBSTRUCTING_FIELD | refused | **allowed** |
+| HIT_TWICE | refused | **allowed** |
+| HANDLED_BALL | refused | **allowed** |
+| RETIRED_HURT | refused | **allowed** |
+
+**Nothing else changed.** Over a fixed twelve-delivery sequence mixing no balls,
+wides, byes and legal deliveries: the `deliveries` rows, team total, legal-ball
+count, over and ball-in-over, all four extras buckets, bowler runs, maidens, strike
+and batter stats are byte-identical. Only the free-hit flag and the dismissal
+validation moved.
+
+**Regression coverage.** `section-04.spec.ts` — NB → WD → WD → legal, NB → NB →
+legal, and NB → bye, each asserted on the server and against the UI free-hit
+indicator on all three projects. T20-065 is now a direct assertion that obstructing
+the field stands on a free hit, rather than an `@ambiguous` pin.
 
 ## BUG-06 — `ScoringService.findMTP()` unscoped by academy
 
@@ -824,3 +873,40 @@ it asserts the UI behaviour, which is correct.
 
 **Note on scope.** `bowler-injury-replace` was not probed for the same hole and may
 share it — worth checking when this is fixed.
+
+---
+
+## BUG-15 — Obstructing the field is credited to the bowler
+
+**Severity:** medium · **Found by:** section 4 (T20-065, after BUG-05) · **Relevant to T20-383, T20-123**
+
+**What happens.** A batter given out obstructing the field adds a wicket to the
+bowler's figures. It should not: the bowler did nothing to earn it. The same
+applies to handling the ball, hitting the ball twice and timed out.
+
+**Cause.** `ScoringService.applyBall` excludes only three dismissal types:
+
+```java
+boolean isBowlerWicket = isWicket
+        && !"RUN_OUT".equals(d.getDismissalType())
+        && !"RETIRED_HURT".equals(d.getDismissalType())
+        && !"RETIRED_OUT".equals(d.getDismissalType());
+```
+
+The recomputing paths mirror the same list, so they agree with each other and are
+all wrong together — the same shape as BUG-02:
+
+- `DeliveryRepository.getBowlingStatsForInnings` — `dismissal_type NOT IN ('RUN_OUT','RETIRED_HURT','RETIRED_OUT')`
+- `PlayerCareerStatRepository.findRecentMatchStatsForPlayer` — same list
+
+**Not specific to a free hit.** It surfaced while allowing obstruction on a free
+hit (T20-065), but an obstruction on any delivery is credited the same way. It was
+simply unreachable before, because the app refused the dismissal on a free hit and
+nothing else tested obstruction against the bowler's figures.
+
+**Fix sketch (not applied).** Extend the exclusion to the dismissals that are not
+the bowler's — obstructing the field, handled the ball, hit the ball twice, timed
+out — in `applyBall` and in both SQL paths together, exactly as BUG-02 was done.
+
+**Suite handling.** `test.fail()` in `section-04.spec.ts`. T20-065 itself passes:
+it asserts the dismissal is allowed, which is what that scenario is about.

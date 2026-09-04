@@ -100,7 +100,7 @@ test.describe("§4 No-Ball / Wide Types & Free Hit", () => {
       // the dismissal. Either way the batter is not out, which is what the
       // workbook requires.
       expect(res.status, `${dismissal} on a free hit must be rejected`).toBe(400);
-      expect(String(res.body?.message)).toContain("run-out");
+      expect(String(res.body?.message)).toContain("free hit");
 
       const after = await m.api.state(m.matchPublicId);
       expect(after.inningsState.totalWickets, "no wicket may be recorded").toBe(0);
@@ -136,14 +136,13 @@ test.describe("§4 No-Ball / Wide Types & Free Hit", () => {
     expect(after.bowlerStats[m.bowler.mtpPublicId].wickets, "a run out is not the bowler's").toBe(0);
   });
 
-  test("T20-065 @ambiguous free hit + obstructing the field", async ({ scoringMatch }) => {
+  test("T20-065 free hit + obstructing the field — allowed", async ({ scoringMatch }) => {
     // Workbook: "Configured obstruction outcome; no accidental forbidden dismissal."
-    // Under the Laws obstructing the field IS available off a free hit. The app
-    // allows only RUN_OUT (ScoringService.postBall), so it rejects this too.
-    // Pinned rather than asserted as a bug: which dismissals a free hit permits is
-    // a product ruling, and the workbook says "configured", not "all".
+    // Off a free hit the batter cannot be out to the bowler, but the modes that do
+    // not depend on the delivery being fair still apply — obstructing the field is
+    // one of them. This was an @ambiguous pin while the app allowed only RUN_OUT.
     const m = scoringMatch;
-    let s = await m.api.state(m.matchPublicId);
+    const s = await m.api.state(m.matchPublicId);
     await m.api.postBall(m.matchPublicId, {
       bowlerPublicId: s.currentBowlerPublicId!,
       batsmanPublicId: s.currentStrikerPublicId!,
@@ -151,16 +150,40 @@ test.describe("§4 No-Ball / Wide Types & Free Hit", () => {
       runsBatsman: 0, runsExtras: 1, extraType: "NO_BALL", noBallRunsType: "BAT",
     } as any);
     const armed = await m.api.state(m.matchPublicId);
+    const victim = armed.currentStrikerPublicId!;
+
     const res = await m.api.raw("post", `/api/admin/cricket/matches/${m.matchPublicId}/scoring/ball`, {
       bowlerPublicId: armed.currentBowlerPublicId,
       batsmanPublicId: armed.currentStrikerPublicId,
       nonStrikerPublicId: armed.currentNonStrikerPublicId,
       runsBatsman: 0, isWicket: true, dismissalType: "OBSTRUCTING_FIELD",
-      dismissedPlayerPublicId: armed.currentStrikerPublicId, isFreeHit: true,
+      dismissedPlayerPublicId: victim, isFreeHit: true,
     });
-    expect(res.status, "the app currently permits only RUN_OUT on a free hit").toBe(400);
+    expect(res.status, "obstructing the field stands on a free hit").toBe(200);
+
     const after = await m.api.state(m.matchPublicId);
-    expect(after.inningsState.totalWickets).toBe(0);
+    expect(after.inningsState.totalWickets).toBe(1);
+    expect(after.dismissedMtpPublicIds).toContain(victim);
+  });
+
+  test("obstructing the field is not credited to the bowler", async ({ scoringMatch }) => {
+    test.fail(true, "BUG-15: isBowlerWicket excludes only run outs and retirements");
+    // Not specific to a free hit — the same is true of an obstruction on any
+    // delivery. Surfaced while allowing obstruction on a free hit (T20-065).
+    // Workbook T20-383: "Only bowler-credit dismissals counted."
+    const m = scoringMatch;
+    const s = await m.api.state(m.matchPublicId);
+    await m.api.postBall(m.matchPublicId, {
+      bowlerPublicId: s.currentBowlerPublicId!,
+      batsmanPublicId: s.currentStrikerPublicId!,
+      nonStrikerPublicId: s.currentNonStrikerPublicId!,
+      runsBatsman: 0, isWicket: true, dismissalType: "OBSTRUCTING_FIELD",
+      dismissedPlayerPublicId: s.currentStrikerPublicId!,
+    });
+    const after = await m.api.state(m.matchPublicId);
+    expect(after.inningsState.totalWickets, "it is a wicket for the team").toBe(1);
+    expect(after.bowlerStats[m.bowler.mtpPublicId].wickets,
+      "obstructing the field is not the bowler's wicket").toBe(0);
   });
 
   test("T20-066 free hit + hit ball twice", async () => {
@@ -170,27 +193,66 @@ test.describe("§4 No-Ball / Wide Types & Free Hit", () => {
       "but never built.");
   });
 
-  test("a wide between the no ball and the next legal delivery must not clear the free hit", async ({ scoringMatch }) => {
-    test.fail(true, "BUG-05: any non-no-ball delivery clears the free hit, including a wide");
-    const m = scoringMatch;
-    let s = await m.api.state(m.matchPublicId);
-    await m.api.postBall(m.matchPublicId, {
-      bowlerPublicId: s.currentBowlerPublicId!,
-      batsmanPublicId: s.currentStrikerPublicId!,
-      nonStrikerPublicId: s.currentNonStrikerPublicId!,
-      runsBatsman: 0, runsExtras: 1, extraType: "NO_BALL", noBallRunsType: "BAT",
-    } as any);
-    expect((await m.api.state(m.matchPublicId)).isFreeHit).toBe(true);
+  // The three free-hit lifetime cases are driven entirely through the UI. Posting
+  // via the API behind an open page would leave the page stale — it does not poll —
+  // and expectState's UI/server comparison would fail for that reason rather than a
+  // real one. Clicking also exercises the free-hit indicator, which is the point.
+  const nb = (page: any) => page.getByTestId("extra-no-ball").click()
+    .then(() => page.getByTestId("nb-plus-0").click());
+  const wd = (page: any) => page.getByTestId("extra-wide").click()
+    .then(() => page.getByTestId("wide-plus-0").click());
 
-    // A wide is not a legal ball, so it does not consume the free hit.
-    s = await m.api.state(m.matchPublicId);
-    await m.api.postBall(m.matchPublicId, {
-      bowlerPublicId: s.currentBowlerPublicId!,
-      batsmanPublicId: s.currentStrikerPublicId!,
-      nonStrikerPublicId: s.currentNonStrikerPublicId!,
-      runsBatsman: 0, runsExtras: 1, extraType: "WIDE",
-    });
-    const after = await m.api.state(m.matchPublicId);
-    expect(after.isFreeHit, "the free hit survives a wide and applies to the next legal ball").toBe(true);
+  test("a free hit is consumed only by a legal delivery, not by a wide", async ({ scoringMatch, page }) => {
+    // NB -> WD -> WD -> legal. A wide is not a legal ball, so it cannot use up the
+    // free hit; only the legal delivery does.
+    const m = scoringMatch;
+    await m.open(page);
+
+    await nb(page);
+    await expectState(m, { runs: 1, balls: 0, freeHit: true }, page);
+    await expect(page.getByTestId("free-hit-indicator")).toBeVisible();
+
+    await wd(page);
+    await expectState(m, { runs: 2, balls: 0, freeHit: true }, page);   // survives the first wide
+    await expect(page.getByTestId("free-hit-indicator")).toBeVisible();
+
+    await wd(page);
+    await expectState(m, { runs: 3, balls: 0, freeHit: true }, page);   // and the second
+    await expect(page.getByTestId("free-hit-indicator")).toBeVisible();
+
+    await page.getByTestId("run-1").click();
+    await expectState(m, { runs: 4, balls: 1, freeHit: false }, page);  // consumed
+    await expect(page.getByTestId("free-hit-indicator")).toHaveCount(0);
+  });
+
+  test("a no ball re-arms the free hit", async ({ scoringMatch, page }) => {
+    const m = scoringMatch;
+    await m.open(page);
+
+    await nb(page);
+    await expectState(m, { runs: 1, balls: 0, freeHit: true }, page);
+    await nb(page);
+    await expectState(m, { runs: 2, balls: 0, freeHit: true }, page);
+    await expect(page.getByTestId("free-hit-indicator")).toBeVisible();
+
+    await page.getByTestId("run-0").click();
+    await expectState(m, { runs: 2, balls: 1, freeHit: false }, page);
+    await expect(page.getByTestId("free-hit-indicator")).toHaveCount(0);
+  });
+
+  test("a bye is a legal delivery and does consume the free hit", async ({ scoringMatch, page }) => {
+    // The counterpart to the wide case: byes and leg-byes ARE legal deliveries, so
+    // they use the free hit up. That is what keeps the rule "consumed by the next
+    // legal ball" rather than "consumed by the next ball off the bat".
+    const m = scoringMatch;
+    await m.open(page);
+
+    await nb(page);
+    await expectState(m, { runs: 1, balls: 0, freeHit: true }, page);
+
+    await page.getByTestId("extra-bye").click();
+    await page.getByTestId("bye-1").click();
+    await expectState(m, { runs: 2, balls: 1, freeHit: false }, page);
+    await expect(page.getByTestId("free-hit-indicator")).toHaveCount(0);
   });
 });
