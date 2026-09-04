@@ -44,8 +44,12 @@ export function captureState(matchPublicId: string) {
     JOIN innings i ON s.innings_id = i.id
     JOIN cricket_matches m ON i.match_id = m.id
     JOIN match_team_players mtp ON s.mtp_id = mtp.id
+    JOIN cricket_teams ct ON mtp.team_id = ct.id
     WHERE m.public_id = '${matchPublicId}'
-    ORDER BY i.innings_number, mtp.public_id`);
+    -- Ordered by team and batting position, never by public_id: those are random
+    -- UUIDs, so sorting by them makes the row order differ between two matches
+    -- built identically, which is not a difference worth failing on.
+    ORDER BY i.innings_number, ct.team_type, mtp.batting_order`);
 
   const bowling = q(`
     SELECT i.innings_number, mtp.public_id, s.legal_balls, s.runs_conceded,
@@ -54,8 +58,9 @@ export function captureState(matchPublicId: string) {
     JOIN innings i ON s.innings_id = i.id
     JOIN cricket_matches m ON i.match_id = m.id
     JOIN match_team_players mtp ON s.mtp_id = mtp.id
+    JOIN cricket_teams ct ON mtp.team_id = ct.id
     WHERE m.public_id = '${matchPublicId}'
-    ORDER BY i.innings_number, mtp.public_id`);
+    ORDER BY i.innings_number, ct.team_type, mtp.batting_order`);
 
   const deliveries = q(`
     SELECT i.innings_number, d.over_number, d.ball_number, d.runs_batsman, d.runs_extras,

@@ -60,7 +60,11 @@ function walk(suite, trail) {
             : (t.status === "expected" || r?.status === "passed") ? "PASS" : "FAIL";
       const label = [...here, spec.title].join(" › ");
       const ids = [...new Set(label.match(ID_RE) ?? [])];
-      const entry = { status, spec: spec.file ?? suite.file, test: spec.title };
+      // Capture the skip reason so the report can group them.
+      const skipReason = (r?.errors ?? []).map((e) => e.message ?? "").join(" ")
+        || (t.annotations ?? []).find((a) => a.type === "skip")?.description
+        || "";
+      const entry = { status, spec: spec.file ?? suite.file, test: spec.title, skipReason };
       if (!ids.length) { harness.push({ ...entry, project, label }); continue; }
       // A scenario can be claimed by more than one test — typically a workbook
       // assertion marked test.fail() alongside an @ambiguous test pinning current
@@ -127,6 +131,30 @@ L.push("| Result | Scenarios |");
 L.push("|--------|-----------|");
 for (const [k, v] of Object.entries(counts).sort((a, b) => b[1] - a[1])) L.push(`| ${k} | ${v} |`);
 L.push(`| **Total** | **${scenarios.size}** |\n`);
+
+// ── grouped skip reasons ────────────────────────────────────────────────────
+const skipped = [];
+for (const [id, byProject] of results) {
+  const entries = Object.values(byProject)[0] ?? [];
+  for (const e of entries) {
+    if (e.status === "SKIPPED") { skipped.push({ id, test: e.test, reason: e.skipReason }); break; }
+  }
+}
+if (skipped.length) {
+  L.push("## Skipped scenarios, grouped by reason\n");
+  L.push("Every skip carries the reason it was skipped, taken from the spec itself.\n");
+  const groups = new Map();
+  for (const s of skipped) {
+    const key = (s.reason || "no reason recorded").replace(/\s+/g, " ").trim();
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(s.id);
+  }
+  const sorted = [...groups.entries()].sort((a, b) => b[1].length - a[1].length);
+  for (const [reason, ids] of sorted) {
+    L.push(`- **${ids.sort().join(", ")}** — ${reason}`);
+  }
+  L.push("");
+}
 
 if (harness.length) {
   L.push("## Harness tests (no workbook scenario)\n");
