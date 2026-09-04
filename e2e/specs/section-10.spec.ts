@@ -31,7 +31,7 @@ test.describe("§10 Match Timing / Pause / Rain", () => {
   const resume = async (m: any) =>
     m.api.raw("post", `/api/admin/cricket/matches/${m.matchPublicId}/resume`);
 
-  test("T20-220 @ambiguous T20 timing configuration", async ({ scoringMatch }) => {
+  test("T20-220 @ambiguous @schema-absence T20 timing configuration", async ({ scoringMatch }) => {
     // Workbook: "Scheduled innings duration, interval and over-rate values stored;
     // no hardcoded timing."
     // Two of the three are per-match columns; the session length is not stored at
@@ -184,7 +184,7 @@ test.describe("§10 Match Timing / Pause / Rain", () => {
       "T20-220 — the timing profile the workbook assumes does not exist.");
   });
 
-  test("T20-232 @ambiguous multiple interruptions accumulate into one total", async ({ scoringMatch }) => {
+  test("T20-232 @ambiguous @schema-absence multiple interruptions accumulate into one total", async ({ scoringMatch }) => {
     const m = scoringMatch;
     // Workbook: "Each interruption separately stored with type/start/end/duration/user."
     expect((await pause(m, "Rain")).status).toBe(200);
