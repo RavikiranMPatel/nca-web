@@ -40,7 +40,7 @@ Severity scale: **critical** (data loss, cross-tenant, silent corruption) ·
 | BUG-20 | Production cannot reach `smtp.gmail.com:587` — app mail is dead | high | open — found during the 2026-09-04 deploy |
 | BUG-21 | The mail health indicator has no timeout, so `/actuator/health` takes ~2 minutes | medium | open — found during the 2026-09-04 deploy |
 | BUG-22 | Player public ids collide across academies when two share a prefix | medium | open — found building the Kit module |
-| BUG-23 | "Add New Season" on the Kit tab silently inherits another season's kit | medium | open — found building the Kit module |
+| BUG-23 | "Add New Season" on the Kit tab silently inherits another season's kit | medium | **FIXED** — `d55015b` |
 
 ---
 
@@ -1246,7 +1246,7 @@ done. No rows were faked.
 
 ## BUG-23 — "Add New Season" on the Kit tab silently inherits another season's kit
 
-**Severity:** medium · **Status:** open — pre-existing, logged, not fixed.
+**Severity:** medium · **Status: FIXED** in `d55015b`
 
 On Player Overview → Kit, "+ Add New Season" is meant to open a blank form. It
 does, and then immediately overwrites it.
@@ -1275,6 +1275,21 @@ row's t-shirt and trouser flags. The spec now sets all three flags explicitly an
 uses a run-unique season, which is why it passes; the underlying behaviour is
 unchanged and still wrong.
 
-**Fix direction** (not applied): have "Add New Season" put the form into an
-explicit "creating" mode that the load effect does not write into, or skip the
-load when the selected season has no existing row.
+**Fix.** Adding a season is now an explicit mode. `creatingNew` suppresses the
+load effect, and `startAddNew` no longer moves `selectedSeason` at all —
+retargeting it was the mechanism. Saving points the selector at the new season
+once one exists; cancelling clears the mode, which re-runs the load and restores
+the real row.
+
+The effect also cancels in flight. Guarding only at the top of the effect left a
+real race — a request already outstanding when the button is clicked still
+resolved afterwards and wrote into the just-cleared form. That was not
+theoretical: it is what the regression test caught after the first version of the
+fix, on a page that had only just loaded. Flipping `creatingNew` re-runs the
+effect, so its cleanup marks the earlier response stale before `.then` lands.
+
+**Verified.** With an existing 2026 row fully delivered (XXL/XXL, all three flags,
+`delivered_at` set): Add New Season shows every field empty and every flag
+unchecked; saving 2027 with only a size gives `tshirt_given`/`trouser_given`/
+`cap_given` false, `NOT_DELIVERED`, `delivered_at` null; the 2026 row is
+unchanged. Covered by `kit-tab.spec.ts` on all three projects.
