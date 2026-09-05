@@ -41,6 +41,8 @@ Severity scale: **critical** (data loss, cross-tenant, silent corruption) ·
 | BUG-21 | The mail health indicator has no timeout, so `/actuator/health` takes ~2 minutes | medium | open — found during the 2026-09-04 deploy |
 | BUG-22 | Player public ids collide across academies when two share a prefix | medium | open — found building the Kit module |
 | BUG-23 | "Add New Season" on the Kit tab silently inherits another season's kit | medium | **FIXED** — `d55015b` |
+| BUG-24 | A role-denied request returns 401 "Session expired", not 403 | medium | open — app-wide, pre-existing |
+| BUG-25 | A branchless user cannot write a live annotation — hard 400 | high | open — the branch-resolver failure, reproduced |
 
 ---
 
@@ -1293,3 +1295,77 @@ effect, so its cleanup marks the earlier response stale before `.then` lands.
 unchecked; saving 2027 with only a size gives `tshirt_given`/`trouser_given`/
 `cap_given` false, `NOT_DELIVERED`, `delivered_at` null; the 2026 row is
 unchanged. Covered by `kit-tab.spec.ts` on all three projects.
+
+---
+
+## BUG-24 — A role-denied request returns 401 "Session expired", not 403
+
+**Severity:** medium · **Status:** open — pre-existing and app-wide.
+
+A correctly authenticated user denied by a `SecurityConfig` rule gets:
+
+```
+HTTP 401  {"error": "Session expired. Please login again."}
+```
+
+`SecurityConfig` registers an `authenticationEntryPoint` but **no
+`accessDeniedHandler`**, so an authorization failure at the filter chain falls
+through to the entry point, which is written for expired sessions.
+
+Not specific to any role or module. Measured on `nca_scoring_test`:
+
+| Actor | Request | Status |
+|---|---|---|
+| ADMIN | `POST /api/admin/users` (SUPER_ADMIN-only) | **401** |
+| COACH | `POST /api/admin/players/{id}/kit` | **401** |
+| COACH | `POST /api/admin/kit/bulk-deliver` | **401** |
+| COACH | `GET /api/admin/kit/list/export` | **401** |
+| COACH | `GET /api/admin/players/{id}` | **401** |
+
+Denials raised inside a controller return 403 correctly (`BusinessException` →
+`GlobalExceptionHandler`); it is only the filter-chain denials that mis-report.
+
+**Impact.** The security outcome is right — access is refused and nothing is
+written, asserted directly against the database. The status is wrong, and it is
+wrong in a way that misleads a client: a UI that treats 401 as "session expired"
+will log the user out and bounce them to login instead of showing "you do not
+have permission", producing an apparent login loop for a user whose session is
+perfectly valid.
+
+**Fix direction** (not applied): register an `accessDeniedHandler` returning 403
+alongside the existing entry point. One-line change, but it alters the contract
+for every client, so it wants its own pass — the kit role spec asserts
+"denied (401 or 403)" rather than pinning 401, so it will not go red when fixed.
+
+---
+
+## BUG-25 — A branchless user cannot write a live annotation — hard 400
+
+**Severity:** high · **Status:** open — this is the branch-resolver failure, reproduced.
+
+Running the smoke suite as a `ROLE_SUPER_ADMIN` with `branch_id IS NULL` fails at
+the live-note step:
+
+```
+POST /api/admin/cricket/matches/{id}/scoring/annotations   ->  400
+
+ERROR: null value in column "branch_id" of relation "match_live_annotations"
+       violates not-null constraint
+  Detail: Failing row contains (…, f49460fa-…, null, …, superadmin-a@example.com, …)
+```
+
+`MatchService.createAnnotation` never sets `branchId`; it relies on
+`BaseEntity.@PrePersist`, which fills the field from `AcademyContext` **only when
+that is non-null**. A branchless actor leaves it null, and
+`match_live_annotations.branch_id` is `NOT NULL`.
+
+**`match_live_annotations` is not on the branch-resolver's list of affected
+tables** in SESSION-HANDOFF.md — that list has 16 entries and this is a 17th.
+More importantly it is the first one demonstrated to fail rather than inferred:
+the others are recorded as "latent, not currently biting".
+
+The same actor completed all 44 other smoke assertions, including every scoring
+rule, so this is specific to inserts that depend on `@PrePersist` for `branchId`.
+
+See the branch-reachability section at the top of the branch-resolver entry in
+SESSION-HANDOFF.md for who can actually be branchless.

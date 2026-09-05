@@ -90,7 +90,9 @@ existed in three or four places that did not agree.
 | BUG-20 | Production cannot reach `smtp.gmail.com:587` — app mail is dead | high | Found verifying the 2026-09-04 deploy |
 | BUG-21 | Mail health indicator has no timeout, so `/actuator/health` takes ~2 min | medium | Makes the aggregate unusable as a liveness signal |
 | BUG-22 | Player public ids collide across academies sharing a prefix | medium | Masked in prod by onboarding; nothing enforces it |
-| BUG-23 | "Add New Season" on the Kit tab inherits another season's kit | medium | Pre-existing; surfaced by the new Kit tab test |
+| BUG-23 | "Add New Season" on the Kit tab inherits another season's kit | medium | **FIXED** `d55015b` — pre-existing, surfaced by the new Kit tab test |
+| BUG-24 | A role-denied request returns 401 "Session expired", not 403 | medium | App-wide; no `accessDeniedHandler` configured |
+| BUG-25 | A branchless user cannot write a live annotation — hard 400 | high | The branch-resolver failure, reproduced, on a 17th table |
 | BUG-11 | Match public ids are minted from `currentTimeMillis` and collide | medium | Sibling generators already use UUIDs |
 
 ---
