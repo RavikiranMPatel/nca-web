@@ -42,6 +42,15 @@ async function kitPlayerFor(api: Api, project: string, offset = 0) {
 
 test.describe("Kit module — COACH is read-only", () => {
   test("gets the list, is refused every write, and sees no admin affordances", async ({ page }, testInfo) => {
+    // Desktop only. AuthController rotates tokenVersion on every non-admin login,
+    // so three projects authenticating as the one seeded coach invalidate each
+    // other's tokens and the losers see 401 — noise that looks exactly like the
+    // bug this asserts against. Covering all three would need a coach per
+    // project, which is outside the four rows authorised for this database.
+    // Mobile rendering of the same page is covered by kit-list.spec.ts.
+    // (SUPER_ADMIN below is unaffected: isAdmin exempts it from rotation.)
+    test.skip(testInfo.project.name !== "desktop",
+              "one coach user, and a second login kills the first token");
     const env = config();
     const admin = await Api.login(env.a);
     const coach = await Api.login(env.aCoach);
@@ -62,36 +71,24 @@ test.describe("Kit module — COACH is read-only", () => {
     // has no season to pick.
     expect((await coach.raw("get", "/api/admin/kit/seasons")).status).toBe(200);
 
-    // ── API: every write is refused ────────────────────────────────────────
-    //
-    // The status is 401, not the 403 you would expect. That is pre-existing and
-    // app-wide, not specific to coaches or to this module: SecurityConfig
-    // configures an authenticationEntryPoint but no accessDeniedHandler, so a
-    // request denied at the filter chain falls through to the entry point and
-    // returns "Session expired. Please login again." An ADMIN denied on
-    // POST /api/admin/users gets the same 401 (BUGS-FOUND.md BUG-24).
-    //
-    // Asserted as DENIED rather than pinned to 403, so this test tracks the
-    // security property — access refused, nothing written — and does not quietly
-    // turn green if the status is later corrected to 403.
-    const DENIED = [401, 403];
-    expect(DENIED).toContain(
-      (await coach.raw("post", `/api/admin/players/${player.publicId}/kit`, {
-        seasonYear: SEASON_COACH, tshirtSize: "L", capGiven: true,
-      })).status);
+    // ── API: every write is refused, with 403 ──────────────────────────────
+    // 403 exactly, since BUG-24 was fixed: SecurityConfig now registers an
+    // accessDeniedHandler, so an authenticated-but-unauthorised request no
+    // longer falls through to the authenticationEntryPoint and come back as 401
+    // "Session expired".
+    expect((await coach.raw("post", `/api/admin/players/${player.publicId}/kit`, {
+      seasonYear: SEASON_COACH, tshirtSize: "L", capGiven: true,
+    })).status).toBe(403);
 
-    expect(DENIED).toContain(
-      (await coach.raw("post", "/api/admin/kit/bulk-deliver", {
-        seasonYear: SEASON_COACH, playerPublicIds: [player.publicId],
-        tshirtGiven: true, trouserGiven: true, capGiven: true,
-      })).status);
+    expect((await coach.raw("post", "/api/admin/kit/bulk-deliver", {
+      seasonYear: SEASON_COACH, playerPublicIds: [player.publicId],
+      tshirtGiven: true, trouserGiven: true, capGiven: true,
+    })).status).toBe(403);
 
-    expect(DENIED).toContain(
-      (await coach.ctx.get(`/api/admin/kit/list/export?season=${SEASON_COACH}`)).status());
+    expect((await coach.ctx.get(`/api/admin/kit/list/export?season=${SEASON_COACH}`)).status()).toBe(403);
 
     // Player Overview is ADMIN-only.
-    expect(DENIED).toContain(
-      (await coach.raw("get", `/api/admin/players/${player.publicId}`)).status);
+    expect((await coach.raw("get", `/api/admin/players/${player.publicId}`)).status).toBe(403);
 
     // ── and nothing the coach attempted actually landed ────────────────────
     const after = dbOne(
@@ -186,5 +183,67 @@ test.describe("Kit module — SUPER_ADMIN carries no branch", () => {
     expect(deliveredBy).toBe(env.aSuperAdmin.email);
 
     await admin.dispose(); await su.dispose();
+  });
+});
+
+/**
+ * Lives in this file, not its own, on purpose. playwright.config sets
+ * fullyParallel: false, so tests in one file run serially in a single worker —
+ * which is what keeps this and the coach test above from logging in as the same
+ * coach at the same time. In separate files they land on different workers, the
+ * second login rotates tokenVersion, and the first session dies mid-test: the
+ * app's own interceptor then redirects to /login and the page navigates out from
+ * under the assertion.
+ */
+test.describe("BUG-24 — a denied request is 403 and does not end the session", () => {
+  // Desktop only, and not for want of mobile coverage: AuthController rotates
+  // tokenVersion on every non-admin login (COACH included), so a second login as
+  // the same coach invalidates the first token and JwtAuthFilter answers 401.
+  // Three projects logging in as one coach concurrently therefore race, and the
+  // loser sees 401 — which is indistinguishable from the bug this spec exists to
+  // catch. What is asserted here is a transport-level contract with no viewport
+  // dimension; the coach's rendered affordances are covered per-project in
+  // kit-roles.spec.ts.
+  test("COACH stays logged in and sees an error, instead of being bounced to /login", async ({ page }, testInfo) => {
+    test.skip(testInfo.project.name !== "desktop",
+              "one coach user, and a second login kills the first token");
+    const env = config();
+    const coach = await Api.login(env.aCoach);
+
+    await page.addInitScript((seed) => {
+      for (const [k, v] of Object.entries(seed)) localStorage.setItem(k, v as string);
+    }, coach.storageSeed());
+    await page.goto("/admin/kit/list");
+    await expect(page.getByTestId("kit-list-page")).toBeVisible();
+
+    // A denied write, issued with this session's own token from the page's origin.
+    const outcome = await page.evaluate(async (token) => {
+      const res = await fetch("/api/admin/kit/bulk-deliver", {
+        method: "POST",
+        headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
+        body: JSON.stringify({ seasonYear: "2026", playerPublicIds: ["nope"],
+                               tshirtGiven: true, trouserGiven: true, capGiven: true }),
+      });
+      let body: any = null;
+      try { body = await res.json(); } catch { /* empty body */ }
+      return { status: res.status, message: body?.message ?? null };
+    }, coach.token);
+
+    expect(outcome.status, "a denied write must be 403, not 401").toBe(403);
+    // The interceptor logs out on 401 only (src/api/axios.ts:31) and reads
+    // data.message for its toast, so 403 must carry a reason the component can show.
+    expect(outcome.message, "the reason must reach the component").toContain("Access denied");
+
+    // The session survived: nothing was cleared and no redirect to /login happened.
+    expect(await page.evaluate(() => localStorage.getItem("accessToken"))).toBeTruthy();
+    expect(await page.evaluate(() => localStorage.getItem("userRole"))).toBe("ROLE_COACH");
+    expect(await page.evaluate(() => sessionStorage.getItem("sessionExpired"))).toBeNull();
+    await expect(page).toHaveURL(/\/admin\/kit\/list$/);
+    await expect(page.getByTestId("kit-list-page")).toBeVisible();
+
+    await page.screenshot({
+      path: `e2e/.artifacts/bug24-session-intact-${testInfo.project.name}.png`, fullPage: true });
+
+    await coach.dispose();
   });
 });

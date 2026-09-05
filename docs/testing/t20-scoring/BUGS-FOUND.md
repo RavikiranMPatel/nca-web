@@ -41,7 +41,7 @@ Severity scale: **critical** (data loss, cross-tenant, silent corruption) ·
 | BUG-21 | The mail health indicator has no timeout, so `/actuator/health` takes ~2 minutes | medium | open — found during the 2026-09-04 deploy |
 | BUG-22 | Player public ids collide across academies when two share a prefix | medium | open — found building the Kit module |
 | BUG-23 | "Add New Season" on the Kit tab silently inherits another season's kit | medium | **FIXED** — `d55015b` |
-| BUG-24 | A role-denied request returns 401 "Session expired", not 403 | medium | open — app-wide, pre-existing |
+| BUG-24 | A role-denied request returns 401 "Session expired", not 403 | medium | **FIXED** — `127e8b5` |
 | BUG-25 | A branchless user cannot write a live annotation — hard 400 | high | open — the branch-resolver failure, reproduced |
 
 ---
@@ -1300,7 +1300,7 @@ unchanged. Covered by `kit-tab.spec.ts` on all three projects.
 
 ## BUG-24 — A role-denied request returns 401 "Session expired", not 403
 
-**Severity:** medium · **Status:** open — pre-existing and app-wide.
+**Severity:** medium · **Status: FIXED** in `127e8b5`
 
 A correctly authenticated user denied by a `SecurityConfig` rule gets:
 
@@ -1332,10 +1332,43 @@ will log the user out and bounce them to login instead of showing "you do not
 have permission", producing an apparent login loop for a user whose session is
 perfectly valid.
 
-**Fix direction** (not applied): register an `accessDeniedHandler` returning 403
-alongside the existing entry point. One-line change, but it alters the contract
-for every client, so it wants its own pass — the kit role spec asserts
-"denied (401 or 403)" rather than pinning 401, so it will not go red when fixed.
+**Fix.** An `accessDeniedHandler` returning 403, alongside the existing entry
+point. No route rule changed. Two details mattered more than the handler itself:
+
+- **The handler must write a body.** An empty error response makes the container
+  forward to `/error`, which re-enters the chain on the ERROR dispatch with no
+  `SecurityContext`, hits the entry point and overwrites the status back to 401.
+  That forward is why this was confusing to diagnose: the entry-point log line
+  named `/error`, not the endpoint the client called. Writing the body commits
+  the response and stops the forward — the `/error` re-entries are gone.
+- **The body carries both `error` and `message`.** `error` matches the entry
+  point; `message` is what `GlobalExceptionHandler`'s own 403 uses and what every
+  component reads (`err?.response?.data?.message`), so the reason reaches the
+  user's toast rather than a generic fallback.
+
+**Measured after, with real tokens:**
+
+| Actor | Request | Before | After |
+|---|---|---|---|
+| none | `POST /api/admin/users` | 401 | **401** (unchanged) |
+| ADMIN | `POST /api/admin/users` | 401 | **403** |
+| COACH | kit save / bulk-deliver / export | 401 | **403** |
+| COACH | kit list / kit seasons | 200 | **200** (unchanged) |
+| ADMIN | own players | 200 | **200** (unchanged) |
+
+**Why it mattered.** The interceptor at `src/api/axios.ts:31` treats 401 as a
+dead session — it clears `accessToken`, `userRole` and eleven other keys, sets
+`sessionExpired`, and forces `window.location = "/login"`. There is no 403
+branch, so a 403 now rejects to the caller and the component's `catch` handles
+it. Covered by `kit-roles.spec.ts`, which asserts the coach stays on
+`/admin/kit/list` with the token intact and `sessionExpired` unset after a denied
+write.
+
+**Not shown: a toast screenshot.** No control that a COACH can actually reach
+produces a 403 — the kit page hides every write affordance from them, which is
+the correct design. The 403 path matters for direct API clients and for any
+future control that is not hidden, so what is asserted is the response and the
+surviving session rather than a manufactured toast.
 
 ---
 
