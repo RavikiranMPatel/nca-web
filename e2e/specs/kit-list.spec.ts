@@ -65,6 +65,14 @@ test.describe("Kit / Merchandise list", () => {
     }
     await expect(page.getByTestId(`kit-status-${players[4].publicId}`)).toHaveText("Not delivered");
 
+    // Wait for THIS season's rows before filtering on status. Selecting the
+    // season triggers a fetch; until it lands the table still shows the previous
+    // season's statuses, and a status filter applied to them hides rows that are
+    // NOT_DELIVERED in the season under test. That is what failed on mobile in
+    // the 2026-09-05 full run, and only under load, when the fetch was slow.
+    await expect(page.getByTestId(`kit-status-${players[0].publicId}`)).toHaveText("Not delivered");
+    await expect(page.getByTestId(`kit-status-${players[1].publicId}`)).toHaveText("Not delivered");
+
     // ── filter by status ───────────────────────────────────────────────────
     await page.getByTestId("kit-filter-status").selectOption("NOT_DELIVERED");
     await expect(page.getByTestId(`kit-row-${players[0].publicId}`)).toBeVisible();
