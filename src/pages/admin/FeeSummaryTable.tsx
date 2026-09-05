@@ -24,7 +24,132 @@ export type FeeCollectionSummaryRow = {
   pendingInstallments: number;
   photoUrl?: string | null;
   gender?: string | null;
+
+  // ── Reminder tracking (V64) ──
+  /** When the most recent tracked reminder was sent. Null until one exists. */
+  lastReminderAt: string | null;
+  lastReminderLeg: "PRE_DUE" | "POST_DUE" | "MONTHLY" | "INSTALLMENT_OVERDUE" | null;
+  lastReminderStatus:
+    | "QUEUED" | "SENT" | "DELIVERED" | "READ" | "FAILED" | "UNDELIVERED" | null;
+  lastReminderError: string | null;
+  reminderCount: number;
+  /**
+   * Null unless an inbound arrived AFTER the reminder above. Deliberately never `false`:
+   * "no reply" would claim we asked and were ignored, and before the first tracked
+   * reminder there is nothing to have replied to. A dash is the honest render.
+   */
+  replied: {
+    at: string;
+    threadPublicId: string;
+    preview: string | null;
+    /** Other players reachable on the same number. Non-empty means shared. */
+    sharedWith: string[];
+  } | null;
 };
+
+/**
+ * Whole days between an instant and now, both resolved in Asia/Kolkata.
+ *
+ * en-CA gives YYYY-MM-DD, and both sides are rebuilt with Date.UTC from those parts, so
+ * this is a pure calendar-day count with no timezone shift. Never toISOString(): between
+ * 00:00 and 05:29 IST that reports yesterday.
+ */
+const daysAgoIST = (iso: string): number => {
+  const parts = (d: Date) =>
+    d.toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" }).split("-").map(Number);
+  const [ay, am, ad] = parts(new Date(iso));
+  const [by, bm, bd] = parts(new Date());
+  return Math.round((Date.UTC(by, bm - 1, bd) - Date.UTC(ay, am - 1, ad)) / 86400000);
+};
+
+const agoLabel = (iso: string) => {
+  const d = daysAgoIST(iso);
+  if (d <= 0) return "today";
+  if (d === 1) return "yesterday";
+  return `${d} days ago`;
+};
+
+const LEG_LABEL: Record<string, string> = {
+  PRE_DUE: "pre-due",
+  POST_DUE: "overdue",
+  MONTHLY: "monthly",
+  INSTALLMENT_OVERDUE: "overdue",
+};
+
+/**
+ * Delivery state as WhatsApp itself presents it. SENT is not delivery — it means Twilio
+ * accepted the message — so it stays grey and single-ticked.
+ */
+const DELIVERY: Record<string, { label: string; cls: string; tick: string }> = {
+  QUEUED: { label: "Queued", cls: "text-slate-400", tick: "○" },
+  SENT: { label: "Sent", cls: "text-slate-500", tick: "✓" },
+  DELIVERED: { label: "Delivered", cls: "text-slate-600", tick: "✓✓" },
+  READ: { label: "Read", cls: "text-blue-600", tick: "✓✓" },
+  FAILED: { label: "Failed", cls: "text-red-600", tick: "!" },
+  UNDELIVERED: { label: "Undelivered", cls: "text-red-600", tick: "!" },
+};
+
+/**
+ * The reminder cell: when it was sent, how it was delivered, and whether anything came
+ * back. A dash when no reminder has been tracked for this account — which is every row
+ * until the 09:00 job next runs, and is the intended state rather than a gap to fill.
+ */
+function ReminderCell({ row }: { row: FeeCollectionSummaryRow }) {
+  if (!row.lastReminderAt) {
+    return <span className="text-slate-300">—</span>;
+  }
+  const d = row.lastReminderStatus ? DELIVERY[row.lastReminderStatus] : null;
+  const failed =
+    row.lastReminderStatus === "FAILED" || row.lastReminderStatus === "UNDELIVERED";
+  const shared = (row.replied?.sharedWith.length ?? 0) > 0;
+
+  return (
+    <div className="space-y-0.5">
+      <div className="text-xs text-slate-700 whitespace-nowrap">
+        {agoLabel(row.lastReminderAt)}
+        {row.lastReminderLeg && (
+          <span className="text-slate-400">
+            {" "}· {LEG_LABEL[row.lastReminderLeg] ?? row.lastReminderLeg.toLowerCase()}
+          </span>
+        )}
+        {row.reminderCount > 1 && (
+          <span className="text-slate-400"> · {row.reminderCount} sent</span>
+        )}
+      </div>
+
+      {d && (
+        <div
+          className={`text-[11px] ${d.cls} whitespace-nowrap`}
+          title={failed && row.lastReminderError ? row.lastReminderError : undefined}
+        >
+          <span className="font-semibold">{d.tick}</span> {d.label}
+        </div>
+      )}
+
+      {row.replied && (
+        // Shared numbers are amber and name the other player. The reply is shown on BOTH
+        // siblings' rows and attributed to neither: WhatsApp gives a number and the words,
+        // and "Paid" identifies nobody. Guessing the overdue sibling would have been wrong
+        // the one time this actually happened.
+        <a
+          href="/admin/whatsapp"
+          className={`block text-[11px] hover:underline ${
+            shared ? "text-amber-700" : "text-emerald-700"
+          }`}
+          title={row.replied.preview ?? undefined}
+        >
+          {shared ? "⚠ " : "💬 "}
+          Replied {agoLabel(row.replied.at)}
+          {shared && (
+            <span className="text-amber-600">
+              {" "}— shared number, also reaches {row.replied.sharedWith.join(", ")}
+            </span>
+          )}
+        </a>
+      )}
+    </div>
+  );
+}
 
 type StatusFilter = "ALL" | "DUE" | "OVERDUE" | "PAID";
 type TypeFilter = "ALL" | "MONTHLY" | "ANNUAL" | "OTHER";
@@ -475,6 +600,12 @@ export function FeeSummaryTable({
                         </span>
                       </div>
                     )}
+                    <div className="flex items-start justify-between text-xs gap-3">
+                      <span className="text-slate-400 shrink-0">Reminder</span>
+                      <div className="text-right min-w-0">
+                        <ReminderCell row={row} />
+                      </div>
+                    </div>
                   </div>
 
                   {/* Action buttons — full-area, touch-friendly */}
@@ -527,6 +658,7 @@ export function FeeSummaryTable({
                       "Status",
                       "Installment",
                       "Next Due",
+                      "Reminder",
                       "Actions",
                     ].map((h) => (
                       <th
@@ -633,6 +765,9 @@ export function FeeSummaryTable({
                         ) : (
                           "—"
                         )}
+                      </td>
+                      <td className="px-4 py-3 align-top">
+                        <ReminderCell row={row} />
                       </td>
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-2">
