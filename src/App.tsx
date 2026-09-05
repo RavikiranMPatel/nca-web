@@ -73,6 +73,7 @@ import RepresentativeHonorsAdmin from "./pages/admin/RepresentativeHonorsAdmin";
 import BulkImportPlayerPage from "./pages/player/BulkImportPlayerPage";
 import PlayerKitPage from "./pages/player/PlayerKitPage";
 import KitBulkPage from "./pages/kit/KitBulkPage";
+import KitListPage from "./pages/kit/KitListPage";
 import KitPurchaseOrderPage from "./pages/kit/KitPurchaseOrderPage";
 import InventoryListPage from "./pages/inventory/InventoryListPage";
 import InventoryCheckoutsPage from "./pages/inventory/InventoryCheckoutsPage";
@@ -523,6 +524,21 @@ function App() {
         <Route path="injuries" element={<PlayerInjuriesPage />} />
         <Route path="fitness" element={<PlayerFitnessPage />} />
       </Route>
+
+      {/* Kit / Merchandise list. COACH is admitted read-only: SecurityConfig lets
+          them GET /api/admin/kit/list and nothing else kit-related, and the page
+          hides the edit, bulk and export controls for them. Player Overview stays
+          ADMIN-only, so the list does not link a coach into it. */}
+      <Route
+        path="/admin/kit/list"
+        element={
+          <ProtectedRoute roles={["ROLE_ADMIN", "ROLE_SUPER_ADMIN", "ROLE_COACH"]}>
+            <AppLayout>
+              <KitListPage />
+            </AppLayout>
+          </ProtectedRoute>
+        }
+      />
 
       <Route
         path="/admin/kit"

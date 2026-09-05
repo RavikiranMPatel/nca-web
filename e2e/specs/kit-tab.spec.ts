@@ -10,26 +10,27 @@ import { config } from "../fixtures/env";
  * browser coverage at all before that, which made the extraction unverifiable;
  * these assertions are what make it safe.
  */
-// Each project gets its own player AND its own season. The projects run
-// concurrently, so sharing either would have them writing the same
-// player_kit_details row — which is exactly what happened the first time this
-// was written: desktop saved cap-only, mobile saved over it, and the row ended
-// up with all three flags set from neither run's intent.
-const SEASONS: Record<string, string> = {
-  desktop: "2031", mobile: "2032", "mobile-chrome": "2033",
-};
+// Each project gets its own player, and every run gets a season no previous run
+// has used. Two separate hazards:
+//   - projects run concurrently, so a shared player+season means two runs writing
+//     one player_kit_details row;
+//   - a FIXED season makes the spec non-idempotent, because the second run finds
+//     the row the first one left and inherits its flags.
+// A run-unique season removes both. Season is VARCHAR(10) on the backend.
+const RUN = `9${Date.now() % 100000}`;
+const PROJECT_ORDER = ["desktop", "mobile", "mobile-chrome"];
 
 test.describe("Kit tab (Player Overview → Kit)", () => {
   test("renders, saves a new season, and reads it back", async ({ page }, testInfo) => {
     const env = config();
     const api = await Api.login(env.a);
-    const SEASON = SEASONS[testInfo.project.name] ?? "2039";
+    const SEASON = RUN;
 
     const players = await api.raw("get", "/api/admin/players");
     const mine = (players.body as any[])
       .filter((p) => p.displayName?.startsWith("KitTest A"))
       .sort((a, b) => a.displayName.localeCompare(b.displayName));
-    const idx = Object.keys(SEASONS).indexOf(testInfo.project.name);
+    const idx = PROJECT_ORDER.indexOf(testInfo.project.name);
     const player = mine[idx >= 0 ? idx : 0];
     expect(player, "seeded KitTest players must exist").toBeTruthy();
 
@@ -48,6 +49,11 @@ test.describe("Kit tab (Player Overview → Kit)", () => {
     await page.getByTestId("kit-tab-trouser-size").selectOption("L");
     await page.getByTestId("kit-tab-jersey-name").fill("EXTRACTION");
     await page.getByTestId("kit-tab-jersey-number").fill("99");
+    // Set all three explicitly. "+ Add New Season" repopulates the form from the
+    // selected season's kit (PlayerKitPage's load effect fires on the season it
+    // sets), so leaving any box untouched would inherit whatever that row had.
+    await page.getByTestId("kit-tab-tshirt-given").uncheck();
+    await page.getByTestId("kit-tab-trouser-given").uncheck();
     await page.getByTestId("kit-tab-cap-given").check();
 
     await page.getByRole("button", { name: "Save Kit Details" }).click();

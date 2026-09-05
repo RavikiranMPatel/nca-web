@@ -16,6 +16,7 @@ import {
   CalendarDays,
   BookOpen,
   ChevronRight,
+  Shirt,
 } from "lucide-react";
 import { useState, useEffect, useRef } from "react";
 import LoginPromptModal from "../components/LoginPromptModal";
@@ -23,6 +24,9 @@ import { getImageUrl } from "../utils/imageUrl";
 import publicApi from "../api/publicApi";
 
 const ADMIN_ROLES = ["ROLE_ADMIN", "ROLE_SUPER_ADMIN"];
+// Roles that may open the Kit / Merchandise list. COACH is read-only there and
+// gets only that one entry — the bulk-import and purchase-order pages stay admin.
+const KIT_LIST_ROLES = ["ROLE_ADMIN", "ROLE_SUPER_ADMIN", "ROLE_COACH"];
 
 function LogoutConfirmModal({
   open,
@@ -140,6 +144,7 @@ function Navbar() {
   const [showLogoutToast, setShowLogoutToast] = useState(false);
 
   const isAdmin = !!userRole && ADMIN_ROLES.includes(userRole);
+  const canSeeKitList = !!userRole && KIT_LIST_ROLES.includes(userRole);
 
   const [loginPromptMessage, setLoginPromptMessage] = useState<string | null>(
     null,
@@ -577,6 +582,42 @@ function Navbar() {
           )}
 
           {/* Admin section */}
+          {canSeeKitList && (
+            <>
+              <p className="px-4 text-[10px] font-semibold text-gray-400 uppercase tracking-wider mt-4 mb-1">
+                Kit / Merchandise
+              </p>
+              <DrawerItem
+                icon={Shirt}
+                label="Kit List"
+                active={location.pathname === "/admin/kit/list"}
+                onClick={() => { navigate("/admin/kit/list"); setMobileOpen(false); }}
+                iconBg="#ecfdf5"
+                iconColor="#059669"
+              />
+              {isAdmin && (
+                <>
+                  <DrawerItem
+                    icon={Shirt}
+                    label="Bulk Import"
+                    active={location.pathname === "/admin/kit"}
+                    onClick={() => { navigate("/admin/kit"); setMobileOpen(false); }}
+                    iconBg="#ecfdf5"
+                    iconColor="#059669"
+                  />
+                  <DrawerItem
+                    icon={Shirt}
+                    label="Purchase Order"
+                    active={location.pathname === "/admin/kit/purchase-order"}
+                    onClick={() => { navigate("/admin/kit/purchase-order"); setMobileOpen(false); }}
+                    iconBg="#ecfdf5"
+                    iconColor="#059669"
+                  />
+                </>
+              )}
+            </>
+          )}
+
           {isAdmin && (
             <>
               <p className="px-4 text-[10px] font-semibold text-gray-400 uppercase tracking-wider mt-4 mb-1">
