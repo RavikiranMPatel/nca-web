@@ -1359,10 +1359,17 @@ ERROR: null value in column "branch_id" of relation "match_live_annotations"
 that is non-null**. A branchless actor leaves it null, and
 `match_live_annotations.branch_id` is `NOT NULL`.
 
-**`match_live_annotations` is not on the branch-resolver's list of affected
-tables** in SESSION-HANDOFF.md — that list has 16 entries and this is a 17th.
-More importantly it is the first one demonstrated to fail rather than inferred:
-the others are recorded as "latent, not currently biting".
+**`match_live_annotations` was absent from the branch-resolver's list of affected
+tables** in SESSION-HANDOFF.md. That list has since been re-derived from the
+schema: 92 tables carry `branch_id`, **32 are NOT NULL** and can fail this way,
+and `match_live_annotations` is one of two that carry the constraint with no FK
+at all. It is also the first of the 32 demonstrated to fail rather than inferred.
+
+Note the site *does* assign the column — `MatchService.java:1021`,
+`ann.setBranchId(actor.getBranchId())`. It looks handled and still fails, because
+the actor has no branch. An explicit assignment from the actor is no safer than
+relying on `@PrePersist`; 35 of the 58 `setBranchId` sites in the codebase write
+null for a branchless actor.
 
 The same actor completed all 44 other smoke assertions, including every scoring
 rule, so this is specific to inserts that depend on `@PrePersist` for `branchId`.
