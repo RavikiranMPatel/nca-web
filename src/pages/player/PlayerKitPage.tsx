@@ -2,9 +2,7 @@ import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import { toast } from "react-hot-toast";
 import api from "../../api/axios";
-
-// Keep in sync with PlayerKitDetails.VALID_SIZES on the backend
-const KIT_SIZES = ["22","24","26","28","30","32","34","36","S","M","L","XL","XXL"];
+import KitDetailsForm, { emptyKitForm, type KitFormValues } from "../../components/kit/KitDetailsForm";
 
 type KitDetails = {
   publicId: string;
@@ -12,11 +10,25 @@ type KitDetails = {
   tshirtSize: string | null;
   trouserSize: string | null;
   capGiven: boolean;
+  tshirtGiven: boolean;
+  trouserGiven: boolean;
   jerseyName: string | null;
   jerseyNumber: string | null;
+  deliveryStatus?: string;
 };
 
 type SeasonEntry = KitDetails & { playerName?: string };
+
+const toForm = (k: KitDetails): KitFormValues => ({
+  seasonYear: k.seasonYear,
+  tshirtSize: k.tshirtSize ?? "",
+  trouserSize: k.trouserSize ?? "",
+  capGiven: k.capGiven,
+  tshirtGiven: k.tshirtGiven ?? false,
+  trouserGiven: k.trouserGiven ?? false,
+  jerseyName: k.jerseyName ?? "",
+  jerseyNumber: k.jerseyNumber ?? "",
+});
 
 export default function PlayerKitPage() {
   const { playerPublicId } = useParams<{ playerPublicId: string }>();
@@ -28,15 +40,8 @@ export default function PlayerKitPage() {
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(true);
 
-  // Form state
-  const [form, setForm] = useState({
-    seasonYear: new Date().getFullYear().toString(),
-    tshirtSize: "",
-    trouserSize: "",
-    capGiven: false,
-    jerseyName: "",
-    jerseyNumber: "",
-  });
+  // Form state — shape owned by the shared editor
+  const [form, setForm] = useState<KitFormValues>(emptyKitForm());
 
   // Load all seasons for this player
   useEffect(() => {
@@ -61,14 +66,7 @@ export default function PlayerKitPage() {
           setKit(null);
         } else {
           setKit(res.data);
-          setForm({
-            seasonYear: res.data.seasonYear,
-            tshirtSize: res.data.tshirtSize ?? "",
-            trouserSize: res.data.trouserSize ?? "",
-            capGiven: res.data.capGiven,
-            jerseyName: res.data.jerseyName ?? "",
-            jerseyNumber: res.data.jerseyNumber ?? "",
-          });
+          setForm(toForm(res.data));
         }
       })
       .catch(() => setKit(null));
@@ -78,20 +76,13 @@ export default function PlayerKitPage() {
     setKit(null);
     const newSeason = new Date().getFullYear().toString();
     setSelectedSeason(newSeason);
-    setForm({ seasonYear: newSeason, tshirtSize: "", trouserSize: "", capGiven: false, jerseyName: "", jerseyNumber: "" });
+    setForm({ ...emptyKitForm(), seasonYear: newSeason });
     setEditing(true);
   };
 
   const startEdit = () => {
     if (!kit) return;
-    setForm({
-      seasonYear: kit.seasonYear,
-      tshirtSize: kit.tshirtSize ?? "",
-      trouserSize: kit.trouserSize ?? "",
-      capGiven: kit.capGiven,
-      jerseyName: kit.jerseyName ?? "",
-      jerseyNumber: kit.jerseyNumber ?? "",
-    });
+    setForm(toForm(kit));
     setEditing(true);
   };
 
@@ -104,6 +95,8 @@ export default function PlayerKitPage() {
         tshirtSize: form.tshirtSize || null,
         trouserSize: form.trouserSize || null,
         capGiven: form.capGiven,
+        tshirtGiven: form.tshirtGiven,
+        trouserGiven: form.trouserGiven,
         jerseyName: form.jerseyName || null,
         jerseyNumber: form.jerseyNumber || null,
       });
@@ -158,62 +151,7 @@ export default function PlayerKitPage() {
             <h3 className="font-semibold text-gray-800 text-base">
               {kit ? "Edit Kit Details" : "Add Kit Details"}
             </h3>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <Field label="Season / Year *">
-                <input
-                  type="text"
-                  value={form.seasonYear}
-                  onChange={(e) => setForm({ ...form, seasonYear: e.target.value })}
-                  placeholder="e.g. 2025"
-                  className={inputClass}
-                />
-              </Field>
-              <Field label="T-Shirt Size">
-                <select value={form.tshirtSize} onChange={(e) => setForm({ ...form, tshirtSize: e.target.value })} className={inputClass}>
-                  <option value="">— Select —</option>
-                  {KIT_SIZES.map((s) => <option key={s} value={s}>{s}</option>)}
-                </select>
-              </Field>
-              <Field label="Trouser Size">
-                <select value={form.trouserSize} onChange={(e) => setForm({ ...form, trouserSize: e.target.value })} className={inputClass}>
-                  <option value="">— Select —</option>
-                  {KIT_SIZES.map((s) => <option key={s} value={s}>{s}</option>)}
-                </select>
-              </Field>
-              <Field label="Jersey Name">
-                <input
-                  type="text"
-                  value={form.jerseyName}
-                  onChange={(e) => setForm({ ...form, jerseyName: e.target.value })}
-                  maxLength={50}
-                  placeholder="Name on jersey"
-                  className={inputClass}
-                />
-              </Field>
-              <Field label="Jersey Number">
-                <input
-                  type="text"
-                  value={form.jerseyNumber}
-                  onChange={(e) => setForm({ ...form, jerseyNumber: e.target.value })}
-                  maxLength={10}
-                  placeholder="e.g. 7"
-                  className={inputClass}
-                />
-              </Field>
-              <Field label="Cap Given">
-                <div className="flex items-center gap-3 h-10">
-                  <label className="flex items-center gap-2 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={form.capGiven}
-                      onChange={(e) => setForm({ ...form, capGiven: e.target.checked })}
-                      className="w-4 h-4 rounded"
-                    />
-                    <span className="text-sm text-gray-700">Cap has been issued to player</span>
-                  </label>
-                </div>
-              </Field>
-            </div>
+            <KitDetailsForm values={form} onChange={setForm} idPrefix="kit-tab" />
             <div className="flex gap-3 pt-2">
               <button
                 onClick={handleSave}
@@ -269,16 +207,7 @@ export default function PlayerKitPage() {
   );
 }
 
-const inputClass = "w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500";
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div>
-      <label className="block text-xs font-medium text-gray-500 mb-1">{label}</label>
-      {children}
-    </div>
-  );
-}
 
 function KitField({ label, value, highlight }: { label: string; value: string; highlight?: boolean }) {
   return (
