@@ -37,6 +37,10 @@ export default function PlayerKitPage() {
   const [selectedSeason, setSelectedSeason] = useState<string>("");
   const [kit, setKit] = useState<KitDetails | null>(null);
   const [editing, setEditing] = useState(false);
+  // "Adding a new season" is a mode, not just a blank form. Without it the load
+  // effect below races startAddNew and repopulates the form it just cleared
+  // (BUGS-FOUND.md BUG-23).
+  const [creatingNew, setCreatingNew] = useState(false);
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(true);
 
@@ -57,11 +61,27 @@ export default function PlayerKitPage() {
       .finally(() => setLoading(false));
   }, [playerPublicId]);
 
-  // Load kit for selected season
+  // Load kit for selected season.
+  //
+  // Skipped entirely while adding a new season. startAddNew hands the user a
+  // blank form; letting this run would fetch whatever kit already exists and
+  // setForm over it, so a player with a delivered 2026 kit would start their 2027
+  // entry pre-filled with 2026's sizes and given-flags, and saving would copy
+  // them across. creatingNew is in the dependency list so that leaving the mode
+  // (cancel, or a completed save) re-runs the load and restores the real row.
   useEffect(() => {
+    if (creatingNew) return;
     if (!selectedSeason || !playerPublicId) return;
+
+    // Guarding only at the top of the effect is not enough: a request already in
+    // flight when the user clicks "Add New Season" still resolves afterwards and
+    // writes the old season's kit into the form that was just cleared. Flipping
+    // creatingNew re-runs this effect, so the cleanup below marks the previous
+    // response stale before its .then can land.
+    let cancelled = false;
     api.get(`/admin/players/${playerPublicId}/kit`, { params: { season: selectedSeason } })
       .then((res) => {
+        if (cancelled) return;
         if (res.status === 204 || !res.data) {
           setKit(null);
         } else {
@@ -69,19 +89,24 @@ export default function PlayerKitPage() {
           setForm(toForm(res.data));
         }
       })
-      .catch(() => setKit(null));
-  }, [selectedSeason, playerPublicId]);
+      .catch(() => { if (!cancelled) setKit(null); });
+    return () => { cancelled = true; };
+  }, [selectedSeason, playerPublicId, creatingNew]);
 
   const startAddNew = () => {
+    // Deliberately does NOT move selectedSeason. Retargeting it was what pulled
+    // the existing season's kit into this form; the dropdown keeps showing the
+    // season the card was on, and the save handler points it at the new season
+    // once one actually exists.
+    setCreatingNew(true);
     setKit(null);
-    const newSeason = new Date().getFullYear().toString();
-    setSelectedSeason(newSeason);
-    setForm({ ...emptyKitForm(), seasonYear: newSeason });
+    setForm(emptyKitForm());
     setEditing(true);
   };
 
   const startEdit = () => {
     if (!kit) return;
+    setCreatingNew(false);
     setForm(toForm(kit));
     setEditing(true);
   };
@@ -101,6 +126,7 @@ export default function PlayerKitPage() {
         jerseyNumber: form.jerseyNumber || null,
       });
       setKit(res.data);
+      setCreatingNew(false);
       setSelectedSeason(res.data.seasonYear);
       // Refresh season list
       const seasonsRes = await api.get(`/admin/players/${playerPublicId}/kit/seasons`);
@@ -161,7 +187,7 @@ export default function PlayerKitPage() {
                 {saving ? "Saving…" : "Save Kit Details"}
               </button>
               <button
-                onClick={() => { setEditing(false); }}
+                onClick={() => { setEditing(false); setCreatingNew(false); }}
                 className="px-4 py-2 text-sm text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-800 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700 transition"
               >
                 Cancel
