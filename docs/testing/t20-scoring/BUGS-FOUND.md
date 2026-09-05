@@ -39,6 +39,8 @@ Severity scale: **critical** (data loss, cross-tenant, silent corruption) ·
 | BUG-19 | `extra_type` is unvalidated, so unknown values silently lose runs | high | open — reproduced by the suite |
 | BUG-20 | Production cannot reach `smtp.gmail.com:587` — app mail is dead | high | open — found during the 2026-09-04 deploy |
 | BUG-21 | The mail health indicator has no timeout, so `/actuator/health` takes ~2 minutes | medium | open — found during the 2026-09-04 deploy |
+| BUG-22 | Player public ids collide across academies when two share a prefix | medium | open — found building the Kit module |
+| BUG-23 | "Add New Season" on the Kit tab silently inherits another season's kit | medium | open — found building the Kit module |
 
 ---
 
@@ -1185,3 +1187,94 @@ and `mail.smtp.connectiontimeout`, or exclude the mail indicator from the health
 group with `management.health.mail.enabled=false`. Fixing BUG-20 removes the
 symptom but not the missing timeout, which would bite again on the next
 unreachable mail host.
+
+---
+
+## BUG-22 — Player public ids collide across academies when two share a prefix
+
+**Severity:** medium · **Status:** open — logged, not fixed.
+
+`players.public_id` is globally unique, but the id is generated from a
+**per-academy** counter:
+
+```java
+// AcademySettingsService.java:98-104
+public synchronized String generateNextPlayerId() {
+    String counterStr = getSetting("PLAYER_ID_COUNTER", "0");
+    int counter = Integer.parseInt(counterStr) + 1;
+    updateSetting("PLAYER_ID_COUNTER", String.valueOf(counter));
+    String prefix = getSetting("PLAYER_ID_PREFIX", "");
+    return String.format("%s-%d", prefix, counter);
+}
+```
+
+Two academies whose `PLAYER_ID_PREFIX` matches therefore generate the same
+sequence, and the second academy fails on its **first** player:
+
+```
+ERROR: duplicate key value violates unique constraint "players_public_id_key"
+  Detail: Key (public_id)=(-1) already exists.
+```
+
+Reproduced on `nca_scoring_test` while seeding fixtures for the Kit module:
+Academy A created players `-1` … `-5`, and Academy B's first player was rejected.
+
+**Why it is not currently biting production.** Academies onboarded through the
+platform flow get a distinct prefix automatically:
+
+```java
+// PlatformAcademyService.java:304
+d.add(new Object[]{"PLAYER_ID_PREFIX", "PLY-" + code, "Player public ID prefix", "TEXT"});
+```
+
+Both live tenants were created that way, so their prefixes differ. The defect is
+that nothing **enforces** it: the prefix is a free-text setting an admin can edit
+to any value, including one another academy already uses, and there is no
+uniqueness check on it. An empty prefix — the fallback in the code above — makes
+collision certain.
+
+**Fix direction** (not applied): either make the uniqueness constraint
+`(academy_id, public_id)` rather than global, or validate prefix uniqueness when
+the setting is written. The former is the more honest model, since a public id is
+only ever meaningful within one academy.
+
+**Workaround used for testing.** The two test academies were given distinct
+prefixes through the app's own settings API, matching what onboarding would have
+done. No rows were faked.
+
+---
+
+## BUG-23 — "Add New Season" on the Kit tab silently inherits another season's kit
+
+**Severity:** medium · **Status:** open — pre-existing, logged, not fixed.
+
+On Player Overview → Kit, "+ Add New Season" is meant to open a blank form. It
+does, and then immediately overwrites it.
+
+```js
+// PlayerKitPage.tsx — startAddNew
+setKit(null);
+const newSeason = new Date().getFullYear().toString();
+setSelectedSeason(newSeason);            // <- fires the load effect below
+setForm({ ...emptyKitForm(), seasonYear: newSeason });
+```
+
+Setting `selectedSeason` re-runs the effect that loads that season's kit, and
+that effect calls `setForm(toForm(res.data))`. So if the player already has a kit
+row for the current year, the "new" form comes up populated with it — including
+the given-flags — and saving under a different year copies those values onto the
+new season.
+
+**Confirmed pre-existing**, not introduced by the KitDetailsForm extraction:
+`git show 2ec1e84~1:src/pages/player/PlayerKitPage.tsx` has the identical
+`setSelectedSeason` / load-effect pair.
+
+**How it surfaced.** `kit-tab.spec.ts` set only the cap flag and asserted
+PARTIAL, and got DELIVERED — because the form had inherited an already-delivered
+row's t-shirt and trouser flags. The spec now sets all three flags explicitly and
+uses a run-unique season, which is why it passes; the underlying behaviour is
+unchanged and still wrong.
+
+**Fix direction** (not applied): have "Add New Season" put the form into an
+explicit "creating" mode that the load effect does not write into, or skip the
+load when the selected season has no existing row.

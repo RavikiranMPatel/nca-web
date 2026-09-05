@@ -19,10 +19,10 @@ Companion documents: `WORKBOOK-EXTRACTED.md` (the workbook), `COVERAGE-MATRIX.md
 | Skipped, not implemented | 84 |
 | Ambiguous — current behaviour pinned | 7 |
 | Expected-fail (open bugs) | 4 |
-| Tests, all projects | 942 |
+| Tests, all projects | 948 |
 | Golden regression | 33 steps, ~1.6s |
 | Unexpected failures | **0** |
-| Full suite runtime | 249s |
+| Full suite runtime | 299s |
 | Smoke runtime (`npm run e2e:smoke`) | 39s, 45 tests |
 
 Projects: `desktop` (Chromium 1440x900), `mobile` (WebKit iPhone 14),
@@ -87,6 +87,10 @@ existed in three or four places that did not agree.
 | BUG-07 | `ROLE_SCORER` cannot reach any scoring endpoint | medium | Needs a product decision on whether the role is real |
 | BUG-08 | `ROLE_COACH` cannot load the scorer page it is granted access to | medium | Either the grant or the route guard is wrong |
 | BUG-09 | `docker-compose.yml` pins Postgres 15 on 5433; reality is 17 on 5432 | low | Docs/infra |
+| BUG-20 | Production cannot reach `smtp.gmail.com:587` — app mail is dead | high | Found verifying the 2026-09-04 deploy |
+| BUG-21 | Mail health indicator has no timeout, so `/actuator/health` takes ~2 min | medium | Makes the aggregate unusable as a liveness signal |
+| BUG-22 | Player public ids collide across academies sharing a prefix | medium | Masked in prod by onboarding; nothing enforces it |
+| BUG-23 | "Add New Season" on the Kit tab inherits another season's kit | medium | Pre-existing; surfaced by the new Kit tab test |
 | BUG-11 | Match public ids are minted from `currentTimeMillis` and collide | medium | Sibling generators already use UUIDs |
 
 ---
