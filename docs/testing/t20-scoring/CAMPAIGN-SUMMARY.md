@@ -93,6 +93,7 @@ existed in three or four places that did not agree.
 | BUG-23 | "Add New Season" on the Kit tab inherits another season's kit | medium | **FIXED** `d55015b` — pre-existing, surfaced by the new Kit tab test |
 | BUG-24 | A role-denied request returns 401 "Session expired", not 403 | medium | **FIXED** `127e8b5` — app-wide; no `accessDeniedHandler` was configured |
 | BUG-25 | A branchless user cannot write a live annotation — hard 400 | high | The branch-resolver failure, reproduced; one of 32 `branch_id NOT NULL` tables |
+| BUG-26 | Brevo key revoked — every production email is failing | critical | Not just deploy mail: 11 callers, fee reminders and attendance reports included |
 | BUG-11 | Match public ids are minted from `currentTimeMillis` and collide | medium | Sibling generators already use UUIDs |
 
 ---

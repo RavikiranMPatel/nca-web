@@ -43,6 +43,7 @@ Severity scale: **critical** (data loss, cross-tenant, silent corruption) ·
 | BUG-23 | "Add New Season" on the Kit tab silently inherits another season's kit | medium | **FIXED** — `d55015b` |
 | BUG-24 | A role-denied request returns 401 "Session expired", not 403 | medium | **FIXED** — `127e8b5` |
 | BUG-25 | A branchless user cannot write a live annotation — hard 400 | high | open — the branch-resolver failure, reproduced |
+| BUG-26 | Brevo API key revoked — **every** production email is failing, not just deploy mail | critical | open — live production issue |
 
 ---
 
@@ -1409,3 +1410,72 @@ rule, so this is specific to inserts that depend on `@PrePersist` for `branchId`
 
 See the branch-reachability section at the top of the branch-resolver entry in
 SESSION-HANDOFF.md for who can actually be branchless.
+
+---
+
+## BUG-26 — The Brevo API key is revoked, so every production email is failing
+
+**Severity:** critical · **Status:** open — **live production issue**, not a
+deploy-tooling inconvenience.
+
+Probed directly against Brevo from `rkmpcrease-prod` on 2026-09-05, reading the
+key from `/opt/rkmpcrease/.env` inside a Python process (never printed, never on
+a command line):
+
+```
+key present: True | length: 90
+Brevo /v3/account -> 401 {"message":"Key not found","code":"unauthorized"}
+```
+
+`"Key not found"` rather than a permissions error: Brevo does not recognise this
+key at all, which is what a **revoked** key looks like — consistent with a new
+one having been generated without the old being replaced on the server.
+
+**This was mis-scoped until now.** It had been recorded only as "deploy emails
+401" (CLAUDE.md, and the note against the 2026-09-04 deploy). The same key backs
+the application's entire transactional email path:
+
+```
+application-prod.properties:41   brevo.api.key=${BREVO_API_KEY}
+BrevoEmailClient.java:108        .header("api-key", apiKey)
+                                 POST https://api.brevo.com/v3/smtp/email
+```
+
+`BrevoEmailClient` is used by `PlayerEmailService`, which has **11 callers**
+across services, schedulers and controllers:
+
+| Caller | What is not being delivered |
+|---|---|
+| `FeeStatusScheduler`, `FeeInstallmentService`, `AdminFeeController` | Fee reminders |
+| `AttendanceReminderScheduler` | Attendance reminders, weekly and low-attendance reports |
+| `CommunicationService` | Admin-sent communications |
+| `BirthdayNotificationScheduler` | Birthday notifications |
+| `InventoryOverdueAlertScheduler`, `InventoryOverdueAlertController` | Inventory overdue alerts |
+| `PlayerCoachingService`, `PlayerInjuryService`, `PracticeDayService` | Coaching, injury and practice-day notifications |
+| `PlayerEmailService` directly | Welcome emails, enquiry welcome and follow-ups, summer-camp enrolment, player lists, contact-form notifications to admin |
+
+**Impact.** Every one of those is silently failing in production right now. The
+schedulers keep running and keep logging success at the service layer; the 401
+happens inside the HTTP client. Nothing surfaces to an admin — there is no
+delivery dashboard, and `NotificationLog` is only written on some paths. Live
+tenants are not yet in real use, which is the only reason this has not produced
+complaints.
+
+**Distinct from BUG-20.** That is the *other* mail path — the application's
+`JavaMailSender` cannot open `smtp.gmail.com:587` from this droplet. Both mail
+routes out of production are broken, for unrelated reasons, at the same time.
+
+**Fix.** Generate a key in the Brevo dashboard and write it to
+`BREVO_API_KEY=` in `/opt/rkmpcrease/.env`, then restart the backend so Spring
+re-reads it (`brevo.api.key` is injected at startup, not per request). Verify
+with the probe above expecting **200**, and confirm a real send afterwards.
+
+**Do not gate on the file's mtime.** `deploy.sh:180-184` rewrites `BUILD_NUMBER`
+into the same `.env` on every deploy, so its mtime always looks fresh afterwards.
+Two separate attempts to use mtime as a "was it rotated?" test gave a false
+positive.
+
+_Also outstanding, and adjacent: `application-dev.properties` still carries a
+hardcoded Brevo key in a tracked file. That is the known item in CLAUDE.md hard
+rule 6 and should move to an env var; if the dev key is ever the same key, it is
+also now revoked._
