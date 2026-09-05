@@ -10,6 +10,9 @@ export interface E2EEnv {
   webBase: string;
   a: Tenant;
   b: Tenant;
+  /** Non-admin roles in academy A, seeded for the role-boundary specs. */
+  aCoach: Tenant;
+  aSuperAdmin: Tenant;
   db: { name: string; user: string; host: string; port: string };
 }
 export interface Tenant {
@@ -58,8 +61,25 @@ export function config(): E2EEnv {
     a: {
       slug: need("E2E_A_SLUG"),
       origin: need("E2E_A_ORIGIN"),
-      email: need("E2E_A_EMAIL"),
-      password: need("E2E_A_PASSWORD"),
+      // E2E_AS_SUPER_ADMIN=1 runs the whole suite as academy A's SUPER_ADMIN
+      // instead of its ADMIN. Used to confirm the scoring and kit rules behave
+      // identically for a branchless super admin.
+      email: process.env.E2E_AS_SUPER_ADMIN === "1"
+        ? need("E2E_A_SUPERADMIN_EMAIL") : need("E2E_A_EMAIL"),
+      password: process.env.E2E_AS_SUPER_ADMIN === "1"
+        ? need("E2E_A_SUPERADMIN_PASSWORD") : need("E2E_A_PASSWORD"),
+    },
+    aCoach: {
+      slug: need("E2E_A_SLUG"),
+      origin: need("E2E_A_ORIGIN"),
+      email: need("E2E_A_COACH_EMAIL"),
+      password: need("E2E_A_COACH_PASSWORD"),
+    },
+    aSuperAdmin: {
+      slug: need("E2E_A_SLUG"),
+      origin: need("E2E_A_ORIGIN"),
+      email: need("E2E_A_SUPERADMIN_EMAIL"),
+      password: need("E2E_A_SUPERADMIN_PASSWORD"),
     },
     b: {
       slug: need("E2E_B_SLUG"),

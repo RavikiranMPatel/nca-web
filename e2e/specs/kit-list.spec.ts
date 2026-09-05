@@ -51,6 +51,10 @@ test.describe("Kit / Merchandise list", () => {
     // so the seeding above must happen before the page loads.
     await page.goto("/admin/kit/list");
     await expect(page.getByTestId("kit-list-page")).toBeVisible();
+    // The season selector is filled by a separate request; selecting before it
+    // resolves re-renders the <select> out from under the click.
+    await expect(page.getByTestId("kit-list-season")
+      .locator(`option[value="${SEASON}"]`)).toHaveCount(1);
     await page.getByTestId("kit-list-season").selectOption(SEASON);
     await expect(page.getByTestId("kit-list-table")).toBeVisible();
     await shot("01-loaded");
