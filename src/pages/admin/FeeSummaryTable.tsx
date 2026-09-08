@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Link } from "react-router-dom";
 import { Calendar, X } from "lucide-react";
 import api from "../../api/axios";
 import { toast } from "react-hot-toast";
@@ -535,9 +536,18 @@ export function FeeSummaryTable({
                       size="md"
                     />
                     <div className="flex-1 min-w-0 flex items-start justify-between gap-2">
-                      <p className="text-sm font-semibold text-slate-800 leading-snug truncate">
+                      {/* Straight to the player instead of leaving the page and
+                          searching Players by name. Deliberately /info, not /fees: the
+                          fees tab is ProtectedRoute["ROLE_SUPER_ADMIN"], and a role
+                          mismatch there redirects to /home with no message — a ROLE_ADMIN
+                          can see this page but would be silently thrown out of admin. */}
+                      <Link
+                        to={`/admin/players/${row.playerPublicId}/info`}
+                        title={row.playerName}
+                        className="text-sm font-semibold text-slate-800 leading-snug truncate hover:text-blue-600 hover:underline transition-colors"
+                      >
                         {row.playerName}
-                      </p>
+                      </Link>
                       <span
                         className={`flex-shrink-0 text-[10px] font-bold px-2 py-0.5 rounded-full ${
                           row.feeStatus === "PAID"
@@ -686,9 +696,13 @@ export function FeeSummaryTable({
                             gender={row.gender}
                             size="sm"
                           />
-                          <p className="text-sm font-semibold text-slate-800">
+                          {/* /info, not /fees — see the note on the mobile card. */}
+                          <Link
+                            to={`/admin/players/${row.playerPublicId}/info`}
+                            className="text-sm font-semibold text-slate-800 hover:text-blue-600 hover:underline transition-colors"
+                          >
                             {row.playerName}
-                          </p>
+                          </Link>
                         </div>
                       </td>
                       <td className="px-4 py-3">
