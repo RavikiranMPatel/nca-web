@@ -501,11 +501,13 @@ function AdminMembersPage() {
                 key={u.publicId}
                 className="flex items-center justify-between px-4 py-3 hover:bg-slate-50 border-b border-slate-100 last:border-0"
               >
-                <div>
-                  <p className="text-sm font-semibold text-slate-800">
+                {/* min-w-0 + truncate: "phone · email" is unbounded next to a
+                    shrink-0 button, so a long email pushed the dropdown row wide. */}
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-slate-800 truncate">
                     {u.name}
                   </p>
-                  <p className="text-xs text-slate-500">
+                  <p className="text-xs text-slate-500 truncate" title={`${u.phone} · ${u.email}`}>
                     {u.phone} · {u.email}
                   </p>
                 </div>
@@ -589,68 +591,113 @@ function AdminMembersPage() {
                     className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden"
                   >
                     <div
-                      className="flex items-center justify-between p-4 cursor-pointer hover:bg-slate-50 transition"
+                      className="p-4 cursor-pointer hover:bg-slate-50 transition"
                       onClick={() => toggleExpand(sub.publicId)}
                     >
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-full bg-green-100 flex items-center justify-center text-green-700 font-bold text-sm">
-                          {sub.userName.charAt(0).toUpperCase() || "?"}
+                      <div className="flex items-center justify-between gap-3">
+                        {/* min-w-0 on the row AND the inner block, truncate on the name
+                            and email, shrink-0 on the avatar — the History tab's shape
+                            (L1040-1067), which is the only one here that never overflows.
+                            A flex child will not shrink below its intrinsic width without
+                            min-w-0, so a long email pushed this row wide. */}
+                        <div className="flex items-center gap-3 min-w-0">
+                          <div className="w-10 h-10 shrink-0 rounded-full bg-green-100 flex items-center justify-center text-green-700 font-bold text-sm">
+                            {sub.userName.charAt(0).toUpperCase() || "?"}
+                          </div>
+                          <div className="min-w-0">
+                            <p className="font-semibold text-slate-900 text-sm flex items-center gap-1 min-w-0">
+                              <span className="truncate">{sub.userName || "—"}</span>
+                              {sub.isHistorical && (
+                                <span className="shrink-0 text-[10px] font-bold px-1.5 py-0.5 rounded bg-slate-100 text-slate-500 ml-1">
+                                  Historical
+                                </span>
+                              )}
+                            </p>
+                            <p className="text-xs text-slate-500 truncate">
+                              {sub.userEmail}
+                            </p>
+                          </div>
                         </div>
-                        <div>
-                          <p className="font-semibold text-slate-900 text-sm flex items-center gap-1">
-                            {sub.userName || "—"}
-                            {sub.isHistorical && (
-                              <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-slate-100 text-slate-500 ml-1">
-                                Historical
+                        <div className="flex items-center gap-4 shrink-0">
+                          <div className="text-right">
+                            <p className="text-sm font-bold text-slate-900">
+                              {sub.sessionsRemaining}
+                              <span className="text-slate-400 font-normal">
+                                /{sub.totalSessions}
                               </span>
+                            </p>
+                            <p className="text-xs text-slate-500">
+                              sessions left
+                            </p>
+                          </div>
+                          {/* Progress moved from `hidden sm:block` to `hidden md:block`
+                              so it matches Expires below: both are inline from md up and
+                              both come from the mobile strip under this row. Without the
+                              change they would double up between 640 and 767. */}
+                          <div className="w-20 hidden md:block">
+                            <div className="h-2 bg-slate-100 rounded-full">
+                              <div
+                                className={`h-2 rounded-full transition-all ${pct > 50 ? "bg-green-500" : pct > 20 ? "bg-amber-500" : "bg-red-500"}`}
+                                style={{ width: `${pct}%` }}
+                              />
+                            </div>
+                            <p className="text-xs text-slate-400 mt-0.5 text-right">
+                              {pct}%
+                            </p>
+                          </div>
+                          <div className="text-right hidden md:block">
+                            <p className="text-xs text-slate-500">Expires</p>
+                            <p className="text-sm font-medium text-slate-700">
+                              {formatDateOrDash(sub.expiresOn)}
+                            </p>
+                            {sub.originalExpiresOn && (
+                              <p className="text-[11px] text-amber-600 flex items-center justify-end gap-0.5 mt-0.5">
+                                <Clock size={10} />
+                                Extended from{" "}
+                                {formatDateOrDash(sub.originalExpiresOn)}
+                              </p>
                             )}
-                          </p>
-                          <p className="text-xs text-slate-500">
-                            {sub.userEmail}
-                          </p>
+                          </div>
+                          {isExpanded ? (
+                            <ChevronUp size={16} className="text-slate-400 shrink-0" />
+                          ) : (
+                            <ChevronDown size={16} className="text-slate-400 shrink-0" />
+                          )}
                         </div>
                       </div>
-                      <div className="flex items-center gap-4">
-                        <div className="text-right">
-                          <p className="text-sm font-bold text-slate-900">
-                            {sub.sessionsRemaining}
-                            <span className="text-slate-400 font-normal">
-                              /{sub.totalSessions}
-                            </span>
+
+                      {/* Expiry and progress on mobile.
+                          They were `hidden md:block` and `hidden sm:block` inside the row
+                          above, so a phone lost the expiry date entirely — on a page whose
+                          purpose is tracking when memberships end — and lost the goodwill
+                          extension note with it, making an extended subscription
+                          indistinguishable from a normal one. Rendered here as a
+                          grid-cols-2 strip, the History tab's stats pattern. */}
+                      <div className="md:hidden mt-3 grid grid-cols-2 gap-3">
+                        <div className="min-w-0">
+                          <p className="text-[11px] text-slate-400">Expires</p>
+                          <p className="text-sm font-medium text-slate-700 truncate">
+                            {formatDateOrDash(sub.expiresOn)}
                           </p>
-                          <p className="text-xs text-slate-500">
-                            sessions left
-                          </p>
+                          {sub.originalExpiresOn && (
+                            <p className="text-[11px] text-amber-600 flex items-center gap-0.5 mt-0.5">
+                              <Clock size={10} className="shrink-0" />
+                              <span className="truncate">
+                                Extended from {formatDateOrDash(sub.originalExpiresOn)}
+                              </span>
+                            </p>
+                          )}
                         </div>
-                        <div className="w-20 hidden sm:block">
-                          <div className="h-2 bg-slate-100 rounded-full">
+                        <div className="min-w-0">
+                          <p className="text-[11px] text-slate-400">Sessions used</p>
+                          <div className="h-2 bg-slate-100 rounded-full mt-1.5">
                             <div
                               className={`h-2 rounded-full transition-all ${pct > 50 ? "bg-green-500" : pct > 20 ? "bg-amber-500" : "bg-red-500"}`}
                               style={{ width: `${pct}%` }}
                             />
                           </div>
-                          <p className="text-xs text-slate-400 mt-0.5 text-right">
-                            {pct}%
-                          </p>
+                          <p className="text-[11px] text-slate-400 mt-0.5">{pct}% left</p>
                         </div>
-                        <div className="text-right hidden md:block">
-                          <p className="text-xs text-slate-500">Expires</p>
-                          <p className="text-sm font-medium text-slate-700">
-                            {formatDateOrDash(sub.expiresOn)}
-                          </p>
-                          {sub.originalExpiresOn && (
-                            <p className="text-[11px] text-amber-600 flex items-center justify-end gap-0.5 mt-0.5">
-                              <Clock size={10} />
-                              Extended from{" "}
-                              {formatDateOrDash(sub.originalExpiresOn)}
-                            </p>
-                          )}
-                        </div>
-                        {isExpanded ? (
-                          <ChevronUp size={16} className="text-slate-400" />
-                        ) : (
-                          <ChevronDown size={16} className="text-slate-400" />
-                        )}
                       </div>
                     </div>
 
@@ -882,28 +929,37 @@ function AdminMembersPage() {
                       <p className="font-semibold text-slate-900 text-sm truncate">
                         {user.name || "—"}
                       </p>
-                      <div className="flex items-center gap-2 flex-wrap mt-0.5">
+                      {/* flex-wrap alone cannot save this row: an email address is a
+                          single unbreakable token, so it has to be allowed to shrink
+                          (min-w-0) and ellipsise (truncate). Without it the address ran
+                          past the card's right edge at 380px. */}
+                      <div className="flex items-center gap-2 flex-wrap mt-0.5 min-w-0">
                         {user.phone && (
-                          <span className="flex items-center gap-1 text-xs text-slate-500">
-                            <Phone size={11} /> {user.phone}
+                          <span className="flex items-center gap-1 text-xs text-slate-500 shrink-0">
+                            <Phone size={11} className="shrink-0" /> {user.phone}
                           </span>
                         )}
                         {user.email && (
-                          <span className="flex items-center gap-1 text-xs text-slate-500">
-                            <Mail size={11} /> {user.email}
+                          <span className="flex items-center gap-1 text-xs text-slate-500 min-w-0" title={user.email}>
+                            <Mail size={11} className="shrink-0" />
+                            <span className="truncate">{user.email}</span>
                           </span>
                         )}
                       </div>
                     </div>
                   </div>
-                  <div className="flex flex-wrap gap-2 w-full sm:w-auto">
-                    <div className="text-right hidden sm:block">
+                  {/* bookings and spent were `hidden sm:block`, so on a phone the admin
+                      was asked to assign a plan with the two numbers that justify it
+                      removed from the screen. Shown at every width now; the container
+                      already wraps. */}
+                  <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto">
+                    <div className="text-right shrink-0">
                       <p className="text-sm font-bold text-slate-900">
                         {user.bookingCount}
                       </p>
                       <p className="text-xs text-slate-500">bookings</p>
                     </div>
-                    <div className="text-right hidden sm:block">
+                    <div className="text-right shrink-0">
                       <p className="text-sm font-bold text-slate-900">
                         ₹{user.totalSpent?.toLocaleString("en-IN")}
                       </p>
@@ -966,26 +1022,29 @@ function AdminMembersPage() {
                       <p className="font-semibold text-slate-900 text-sm truncate">
                         {guest.name || "Guest"}
                       </p>
-                      <div className="flex items-center gap-2 flex-wrap mt-0.5">
-                        <span className="flex items-center gap-1 text-xs text-slate-500">
-                          <Phone size={11} /> {guest.phone}
+                      {/* Same unbreakable-email problem as the No Plan tab. */}
+                      <div className="flex items-center gap-2 flex-wrap mt-0.5 min-w-0">
+                        <span className="flex items-center gap-1 text-xs text-slate-500 shrink-0">
+                          <Phone size={11} className="shrink-0" /> {guest.phone}
                         </span>
                         {guest.email && (
-                          <span className="flex items-center gap-1 text-xs text-slate-500">
-                            <Mail size={11} /> {guest.email}
+                          <span className="flex items-center gap-1 text-xs text-slate-500 min-w-0" title={guest.email}>
+                            <Mail size={11} className="shrink-0" />
+                            <span className="truncate">{guest.email}</span>
                           </span>
                         )}
                       </div>
                     </div>
                   </div>
-                  <div className="flex flex-wrap gap-2 w-full sm:w-auto">
-                    <div className="text-right hidden sm:block">
+                  {/* Same loss as the No Plan tab, same fix. */}
+                  <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto">
+                    <div className="text-right shrink-0">
                       <p className="text-sm font-bold text-slate-900">
                         {guest.bookingCount}
                       </p>
                       <p className="text-xs text-slate-500">bookings</p>
                     </div>
-                    <div className="text-right hidden sm:block">
+                    <div className="text-right shrink-0">
                       <p className="text-sm font-bold text-slate-900">
                         ₹{guest.totalSpent?.toLocaleString("en-IN")}
                       </p>
@@ -1046,13 +1105,14 @@ function AdminMembersPage() {
                             {sub.userName || "—"}
                           </p>
                           {sub.userEmail && (
-                            <p className="text-xs text-slate-500 flex items-center gap-1">
-                              <Mail size={11} /> {sub.userEmail}
+                            <p className="text-xs text-slate-500 flex items-center gap-1 min-w-0" title={sub.userEmail}>
+                              <Mail size={11} className="shrink-0" />
+                              <span className="truncate">{sub.userEmail}</span>
                             </p>
                           )}
                           {sub.userPhone && (
                             <p className="text-xs text-slate-500 flex items-center gap-1 mt-0.5">
-                              <Phone size={11} /> {sub.userPhone}
+                              <Phone size={11} className="shrink-0" /> {sub.userPhone}
                             </p>
                           )}
                         </div>
@@ -1252,12 +1312,16 @@ function AdminMembersPage() {
               <div className="md:hidden space-y-3">
                 {usageReport.map((row, i) => (
                   <div key={i} className="bg-white rounded-xl border border-slate-200 shadow-sm p-4 space-y-2">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="font-semibold text-slate-900">{row.memberName}</p>
-                        <p className="text-xs text-slate-400">{row.memberPhone}</p>
+                    {/* min-w-0 + truncate: the name sits beside a fixed 40px badge with
+                        nothing stopping it pushing the row wide. */}
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="font-semibold text-slate-900 truncate" title={row.memberName}>
+                          {row.memberName}
+                        </p>
+                        <p className="text-xs text-slate-400 truncate">{row.memberPhone}</p>
                       </div>
-                      <span className="inline-flex items-center justify-center w-10 h-10 rounded-full bg-blue-100 text-blue-700 font-bold">
+                      <span className="shrink-0 inline-flex items-center justify-center w-10 h-10 rounded-full bg-blue-100 text-blue-700 font-bold">
                         {row.sessionsUsed}
                       </span>
                     </div>
