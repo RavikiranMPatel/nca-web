@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import {
   MessageCircle, Send, Loader2, AlertTriangle, Check, CheckCheck, ArrowLeft, User,
+  Paperclip, Download,
 } from "lucide-react";
 import { toast } from "react-hot-toast";
 import api from "../../api/axios";
@@ -47,9 +48,16 @@ type Thread = {
 type Message = {
   direction: "INBOUND" | "OUTBOUND";
   at: string;
+  /** Present on inbound messages; addresses the media endpoint. */
+  publicId?: string;
   body?: string | null;
   numMedia?: number;
-  mediaUrls?: string[];
+  /**
+   * Content types only. The Twilio URLs are deliberately no longer sent: they needed HTTP
+   * Basic auth with the account SID and token, so no browser could ever open one, and
+   * they embedded that account SID in the page.
+   */
+  mediaContentTypes?: string[];
   matchStatus?: "MATCHED" | "UNMATCHED" | "AMBIGUOUS";
   /** SNAPSHOT — who this number matched when the message arrived. */
   players?: InboxPlayer[];
@@ -186,6 +194,140 @@ function PlayerRow({ p, onOpen }: { p: InboxPlayer; onOpen: (publicId: string) =
 }
 
 /**
+ * Inbound attachments, fetched through the authenticated proxy and rendered inline.
+ *
+ * Not an <a href>: the endpoint requires the Bearer token that the axios interceptor adds
+ * per request, and a plain navigation or target="_blank" carries no headers. That is the
+ * same reason the old Twilio links failed, so linking straight to the proxy would just
+ * swap Twilio's 401 for ours. The bytes are fetched as a blob and shown from an object
+ * URL, following the receipt-PDF download in PlayerFeesTab.
+ */
+function MessageMedia({
+  messagePublicId,
+  count,
+  contentTypes,
+}: {
+  messagePublicId?: string;
+  count: number;
+  contentTypes?: string[];
+}) {
+  const [loaded, setLoaded] = useState<Record<number, { url: string; type: string }>>({});
+  const [busy, setBusy] = useState<number | null>(null);
+  const [failed, setFailed] = useState<Record<number, string>>({});
+  // Every object URL ever created here, revoked once on unmount. Keying the cleanup on
+  // `loaded` instead would revoke a URL the moment a second attachment loaded.
+  const createdUrls = useRef<string[]>([]);
+  useEffect(() => () => createdUrls.current.forEach((u) => URL.revokeObjectURL(u)), []);
+
+  if (!count || !messagePublicId) return null;
+
+  const load = async (i: number) => {
+    if (loaded[i] || busy !== null) return;
+    setBusy(i);
+    setFailed((p) => {
+      const next = { ...p };
+      delete next[i];
+      return next;
+    });
+    try {
+      const res = await api.get(
+        `/admin/whatsapp/messages/${messagePublicId}/media/${i}`,
+        { responseType: "blob" },
+      );
+      const type =
+        (res.data as Blob).type || contentTypes?.[i] || "application/octet-stream";
+      const url = URL.createObjectURL(res.data as Blob);
+      createdUrls.current.push(url);
+      setLoaded((p) => ({ ...p, [i]: { url, type } }));
+    } catch (e: any) {
+      // responseType blob means an error body is a Blob too, so the status is the only
+      // thing reliably readable here.
+      setFailed((p) => ({
+        ...p,
+        [i]:
+          e?.response?.status === 404
+            ? "No longer available from WhatsApp"
+            : "Couldn't load this attachment",
+      }));
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  return (
+    <ul className="mt-1.5 space-y-1.5">
+      {Array.from({ length: count }, (_, i) => {
+        const got = loaded[i];
+        const type = got?.type ?? contentTypes?.[i] ?? "";
+        if (got) {
+          if (type.startsWith("image/")) {
+            return (
+              <li key={i}>
+                {/* The object URL already exists, so this open is synchronous with the
+                    click and is not treated as a popup. */}
+                <img
+                  src={got.url}
+                  alt={`Attachment ${i + 1}`}
+                  onClick={() => window.open(got.url, "_blank", "noopener")}
+                  className="max-h-64 w-auto max-w-full rounded-lg border border-gray-200 cursor-zoom-in"
+                />
+              </li>
+            );
+          }
+          if (type.startsWith("audio/")) {
+            return (
+              <li key={i}>
+                <audio controls src={got.url} className="w-full max-w-[240px]" />
+              </li>
+            );
+          }
+          if (type.startsWith("video/")) {
+            return (
+              <li key={i}>
+                <video controls src={got.url} className="max-h-64 w-auto max-w-full rounded-lg" />
+              </li>
+            );
+          }
+          return (
+            <li key={i}>
+              <a
+                href={got.url}
+                download={`attachment-${i + 1}`}
+                className="inline-flex items-center gap-1 text-xs text-blue-600 underline"
+              >
+                <Download size={12} /> Save attachment {i + 1}
+                {type ? ` (${type})` : ""}
+              </a>
+            </li>
+          );
+        }
+        return (
+          <li key={i}>
+            <button
+              type="button"
+              onClick={() => load(i)}
+              disabled={busy !== null}
+              className="inline-flex items-center gap-1 text-xs text-blue-600 underline disabled:opacity-50"
+            >
+              {busy === i ? (
+                <Loader2 size={12} className="animate-spin" />
+              ) : (
+                <Paperclip size={12} />
+              )}
+              View attachment {i + 1}
+              {contentTypes?.[i] ? ` (${contentTypes[i]})` : ""}
+            </button>
+            {failed[i] && (
+              <p className="text-[10px] text-red-600 mt-0.5">{failed[i]}</p>
+            )}
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
+/**
  * Identity only: the publicId when there is one, the snapshot name otherwise. Active
  * state is deliberately excluded — "was active then, inactive now" is the same person and
  * must not read as a change of who holds the number.
@@ -195,6 +337,7 @@ const identityKey = (ps?: InboxPlayer[]) =>
 
 export default function AdminWhatsAppInbox() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [threads, setThreads] = useState<Thread[]>([]);
   const [selected, setSelected] = useState<ThreadDetail | null>(null);
   const [loading, setLoading] = useState(true);
@@ -220,6 +363,23 @@ export default function AdminWhatsAppInbox() {
   useEffect(() => {
     loadThreads();
   }, [loadThreads]);
+
+  // ?thread=WAT-… opens that conversation directly. This is what the inbound admin email
+  // links to: the email cannot link the media endpoint itself, because a mail client's
+  // browser has no Bearer token and would get the same 401 the Twilio links gave.
+  const deepLinkThread = searchParams.get("thread");
+  const deepLinked = useRef(false);
+  useEffect(() => {
+    if (deepLinked.current || !deepLinkThread || threads.length === 0) return;
+    const match = threads.find((t) => t.publicId === deepLinkThread);
+    if (match) {
+      deepLinked.current = true;
+      openThread(match);
+    }
+    // Runs once per load: a second attempt after the admin navigates away would yank
+    // them back to the emailed thread.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [deepLinkThread, threads]);
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -481,22 +641,11 @@ export default function AdminWhatsAppInbox() {
                       <p className="whitespace-pre-wrap break-words">
                         {m.body || <em className="text-gray-500">(media only)</em>}
                       </p>
-                      {!!m.mediaUrls?.length && (
-                        <ul className="mt-1 space-y-0.5">
-                          {m.mediaUrls.map((u, j) => (
-                            <li key={j}>
-                              <a
-                                href={u}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="text-xs text-blue-600 underline break-all"
-                              >
-                                View media {j + 1}
-                              </a>
-                            </li>
-                          ))}
-                        </ul>
-                      )}
+                      <MessageMedia
+                        messagePublicId={m.publicId}
+                        count={m.numMedia ?? 0}
+                        contentTypes={m.mediaContentTypes}
+                      />
                       <div className="flex items-center gap-1 justify-end mt-1">
                         <span className="text-[10px] text-gray-400">{fmtTime(m.at)}</span>
                         {m.direction === "OUTBOUND" && <DeliveryTick status={m.status} />}
