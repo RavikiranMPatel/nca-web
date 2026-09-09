@@ -23,6 +23,19 @@ export type FeeCollectionSummaryRow = {
   installmentBalance: number | null;
   overdueInstallments: number;
   pendingInstallments: number;
+  /**
+   * The next unpaid installment, earliest due date first. Null for a monthly account
+   * with no plan, and for a plan whose installments are all settled.
+   *
+   * "Next unpaid", never "upcoming": every unpaid installment in production is already
+   * past its due date, so a forward-looking label would be wrong on every row.
+   */
+  nextInstallment: {
+    number: number;
+    dueDate: string;
+    balance: number;
+    status: "PENDING" | "PARTIAL" | "OVERDUE";
+  } | null;
   photoUrl?: string | null;
   gender?: string | null;
 
@@ -89,6 +102,45 @@ const DELIVERY: Record<string, { label: string; cls: string; tick: string }> = {
   FAILED: { label: "Failed", cls: "text-red-600", tick: "!" },
   UNDELIVERED: { label: "Undelivered", cls: "text-red-600", tick: "!" },
 };
+
+/**
+ * The next unpaid installment.
+ *
+ * Renders nothing at all when there is none — blank, not a dash. A monthly account has no
+ * installments by design and its date already sits in Next Due, so a dash there would
+ * imply missing data rather than an inapplicable column.
+ *
+ * This is the cell that surfaces an account whose own status disagrees with its plan: a
+ * fee account can read PAID off a direct payment while an ACTIVE installment plan still
+ * has money outstanding, because refreshStatus never consults installments.
+ */
+function NextInstallmentCell({ row }: { row: FeeCollectionSummaryRow }) {
+  const n = row.nextInstallment;
+  if (!n) return null;
+  const overdue = n.status === "OVERDUE";
+  return (
+    <div className="space-y-0.5">
+      <div className={`text-sm font-semibold ${overdue ? "text-red-600" : "text-slate-800"}`}>
+        ₹{n.balance.toLocaleString("en-IN")}
+      </div>
+      <div className={`text-[11px] whitespace-nowrap ${overdue ? "text-red-500" : "text-slate-400"}`}>
+        #{n.number} · {fmtDate(n.dueDate)}
+        {overdue && " · overdue"}
+      </div>
+      {/* The plan's whole outstanding balance, shown ONLY when more than one installment
+          is unpaid and it therefore differs from the figure above. Every plan in
+          production currently has exactly one unpaid installment, so this stays hidden —
+          but without it, replacing the old total-only cell would silently drop the total
+          the first time a plan falls two behind. */}
+      {row.overdueInstallments + row.pendingInstallments > 1 &&
+        row.installmentBalance !== null && (
+          <div className="text-[11px] text-slate-400 whitespace-nowrap">
+            ₹{row.installmentBalance.toLocaleString("en-IN")} outstanding in total
+          </div>
+        )}
+    </div>
+  );
+}
 
 /**
  * The reminder cell: when it was sent, how it was delivered, and whether anything came
@@ -594,20 +646,12 @@ export function FeeSummaryTable({
                         {row.nextDueOn ? fmtDate(row.nextDueOn) : "—"}
                       </span>
                     </div>
-                    {row.hasInstallmentPlan && row.installmentBalance !== null && (
-                      <div className="flex items-center justify-between text-xs">
-                        <span className="text-slate-400">Installment</span>
-                        <span
-                          className={
-                            row.installmentBalance > 0
-                              ? "text-red-600 font-semibold"
-                              : "text-emerald-600 font-semibold"
-                          }
-                        >
-                          {row.installmentBalance > 0
-                            ? `₹${row.installmentBalance.toLocaleString("en-IN")} due`
-                            : "✓ Fully paid"}
-                        </span>
+                    {row.nextInstallment && (
+                      <div className="flex items-start justify-between text-xs gap-3">
+                        <span className="text-slate-400 shrink-0">Next unpaid</span>
+                        <div className="text-right min-w-0">
+                          <NextInstallmentCell row={row} />
+                        </div>
                       </div>
                     )}
                     <div className="flex items-start justify-between text-xs gap-3">
@@ -666,7 +710,7 @@ export function FeeSummaryTable({
                       "Fee Type",
                       "Plan",
                       "Status",
-                      "Installment",
+                      "Next unpaid",
                       "Next Due",
                       "Reminder",
                       "Actions",
@@ -735,33 +779,11 @@ export function FeeSummaryTable({
                           {row.feeStatus}
                         </span>
                       </td>
-                      <td className="px-4 py-3 text-sm">
-                        {row.hasInstallmentPlan &&
-                        row.installmentBalance !== null ? (
-                          <div>
-                            <span
-                              className={
-                                row.installmentBalance > 0
-                                  ? "text-red-600 font-semibold"
-                                  : "text-emerald-600 font-semibold"
-                              }
-                            >
-                              {row.installmentBalance > 0
-                                ? `₹${row.installmentBalance.toLocaleString("en-IN")} due`
-                                : "✓ Fully paid"}
-                            </span>
-                            {row.installmentPaid !== null &&
-                              row.installmentPaid > 0 && (
-                                <p className="text-[10px] text-slate-400 mt-0.5">
-                                  ₹
-                                  {row.installmentPaid.toLocaleString("en-IN")}{" "}
-                                  paid
-                                </p>
-                              )}
-                          </div>
-                        ) : (
-                          <span className="text-slate-300">—</span>
-                        )}
+                      {/* Blank, not a dash. A monthly account has no installments by
+                          design and its date is already in Next Due; a dash there would
+                          read as missing data rather than an inapplicable column. */}
+                      <td className="px-4 py-3 text-sm align-top">
+                        <NextInstallmentCell row={row} />
                       </td>
                       <td className="px-4 py-3 text-sm">
                         {row.nextDueOn ? (
