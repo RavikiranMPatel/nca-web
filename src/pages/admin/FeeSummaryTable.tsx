@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import { Calendar, X } from "lucide-react";
+import { AlertTriangle, Calendar, X } from "lucide-react";
 import api from "../../api/axios";
 import { toast } from "react-hot-toast";
 import PlayerAvatar from "../../components/player/PlayerAvatar";
@@ -102,6 +102,28 @@ const DELIVERY: Record<string, { label: string; cls: string; tick: string }> = {
   FAILED: { label: "Failed", cls: "text-red-600", tick: "!" },
   UNDELIVERED: { label: "Undelivered", cls: "text-red-600", tick: "!" },
 };
+
+/**
+ * "Never paid" — the real content of a DUE status, which the status badge did not convey.
+ *
+ * refreshStatus pins any account with a null lastPaidOn to DUE regardless of its due
+ * date, so DUE conflated two unrelated things: "due soon" and "has never paid us". 9 of
+ * 13 DUE rows have never been paid, one of them due June 2027 — a date-proximity badge
+ * said nothing useful about any of them.
+ *
+ * Deliberately NOT styled as a status pill. It is a fact about the account's history, not
+ * a third value in the PAID/DUE/OVERDUE vocabulary those pills belonged to, and making it
+ * look like one would just rename the problem.
+ */
+function NeverPaidMarker({ row }: { row: FeeCollectionSummaryRow }) {
+  if (row.lastPaidOn !== null) return null;
+  return (
+    <span className="flex items-center gap-1 text-[11px] font-medium text-amber-700 whitespace-nowrap">
+      <AlertTriangle size={11} className="shrink-0" />
+      Never paid
+    </span>
+  );
+}
 
 /**
  * The next unpaid installment.
@@ -587,7 +609,11 @@ export function FeeSummaryTable({
                       gender={row.gender}
                       size="md"
                     />
-                    <div className="flex-1 min-w-0 flex items-start justify-between gap-2">
+                    {/* The status pill is gone here too, for the same reason as the
+                        table: OVERDUE is already carried by the red Next due date below,
+                        and DUE told us nothing the never-paid marker does not say
+                        better. */}
+                    <div className="flex-1 min-w-0 space-y-0.5">
                       {/* Straight to the player instead of leaving the page and
                           searching Players by name. Deliberately /info, not /fees: the
                           fees tab is ProtectedRoute["ROLE_SUPER_ADMIN"], and a role
@@ -596,41 +622,28 @@ export function FeeSummaryTable({
                       <Link
                         to={`/admin/players/${row.playerPublicId}/info`}
                         title={row.playerName}
-                        className="text-sm font-semibold text-slate-800 leading-snug truncate hover:text-blue-600 hover:underline transition-colors"
+                        className="block text-sm font-semibold text-slate-800 leading-snug truncate hover:text-blue-600 hover:underline transition-colors"
                       >
                         {row.playerName}
                       </Link>
-                      <span
-                        className={`flex-shrink-0 text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                          row.feeStatus === "PAID"
-                            ? "bg-emerald-100 text-emerald-700"
-                            : row.feeStatus === "OVERDUE"
-                              ? "bg-red-100 text-red-700"
-                              : "bg-amber-100 text-amber-700"
-                        }`}
-                      >
-                        {row.feeStatus === "OVERDUE" ? "⚠ OVERDUE" : row.feeStatus}
-                      </span>
+                      <NeverPaidMarker row={row} />
                     </div>
                   </div>
 
                   {/* Info rows */}
                   <div className="space-y-1 mb-3">
-                    <div className="flex items-center gap-2">
-                      <span
-                        className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                          row.feeType === "ANNUAL"
-                            ? "bg-indigo-100 text-indigo-700"
-                            : row.feeType === "MONTHLY"
-                              ? "bg-blue-100 text-blue-700"
-                              : "bg-slate-100 text-slate-600"
-                        }`}
-                      >
-                        {row.feeType}
-                      </span>
-                      <span className="text-xs text-slate-400 truncate">
+                    {/* feeType badge dropped — the plan name already says Monthly or
+                        Annual on 82 of 84 accounts. The field is untouched; it still
+                        drives the summary tiles and the filter chips above. */}
+                    <div className="flex items-baseline justify-between gap-3 text-xs">
+                      <span className="text-slate-500 truncate" title={row.feePlanName}>
                         {row.feePlanName}
                       </span>
+                      {row.planAmount != null && (
+                        <span className="text-slate-400 shrink-0">
+                          ₹{row.planAmount.toLocaleString("en-IN")}
+                        </span>
+                      )}
                     </div>
                     <div className="flex items-center justify-between text-xs">
                       <span className="text-slate-400">Next due</span>
@@ -707,12 +720,9 @@ export function FeeSummaryTable({
                   <tr className="text-xs text-slate-500 uppercase tracking-wide border-b bg-slate-50/50">
                     {[
                       "Player",
-                      "Fee Type",
                       "Plan",
-                      "Status",
+                      "Next due",
                       "Next unpaid",
-                      "Next Due",
-                      "Reminder",
                       "Actions",
                     ].map((h) => (
                       <th
@@ -732,60 +742,57 @@ export function FeeSummaryTable({
                         row.feeStatus === "OVERDUE" ? "bg-red-50/30" : ""
                       }`}
                     >
-                      <td className="px-4 py-3">
-                        <div className="flex items-center gap-2.5">
-                          <PlayerAvatar
-                            displayName={row.playerName}
-                            photoUrl={row.photoUrl}
-                            gender={row.gender}
-                            size="sm"
-                          />
-                          {/* /info, not /fees — see the note on the mobile card. */}
-                          <Link
-                            to={`/admin/players/${row.playerPublicId}/info`}
-                            className="text-sm font-semibold text-slate-800 hover:text-blue-600 hover:underline transition-colors"
-                          >
-                            {row.playerName}
-                          </Link>
+                      {/* Player absorbs the never-paid marker and the reminder. The
+                          reminder had its own column and was the widest thing in the
+                          table for three lines that are empty on most rows. */}
+                      <td className="px-4 py-3 align-top">
+                        <div className="flex items-start gap-2.5 min-w-0">
+                          <div className="shrink-0 pt-0.5">
+                            <PlayerAvatar
+                              displayName={row.playerName}
+                              photoUrl={row.photoUrl}
+                              gender={row.gender}
+                              size="sm"
+                            />
+                          </div>
+                          <div className="min-w-0 space-y-0.5">
+                            {/* /info, not /fees — see the note on the mobile card. */}
+                            <Link
+                              to={`/admin/players/${row.playerPublicId}/info`}
+                              className="block text-sm font-semibold text-slate-800 truncate hover:text-blue-600 hover:underline transition-colors"
+                            >
+                              {row.playerName}
+                            </Link>
+                            <NeverPaidMarker row={row} />
+                            {/* Only when there IS one. ReminderCell's em-dash is a
+                                column placeholder, and there is no longer a Reminder
+                                column for it to hold open. */}
+                            {row.lastReminderAt && <ReminderCell row={row} />}
+                          </div>
                         </div>
                       </td>
-                      <td className="px-4 py-3">
-                        <span
-                          className={`text-xs font-bold px-2.5 py-1 rounded-full ${
-                            row.feeType === "ANNUAL"
-                              ? "bg-indigo-100 text-indigo-700"
-                              : row.feeType === "MONTHLY"
-                                ? "bg-blue-100 text-blue-700"
-                                : "bg-slate-100 text-slate-600"
-                          }`}
-                        >
-                          {row.feeType}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 text-sm text-slate-500">
-                        {row.feePlanName}
-                      </td>
-                      <td className="px-4 py-3">
-                        <span
-                          className={`inline-flex items-center gap-1 text-xs font-bold px-2.5 py-1 rounded-full ${
-                            row.feeStatus === "PAID"
-                              ? "bg-emerald-100 text-emerald-700"
-                              : row.feeStatus === "OVERDUE"
-                                ? "bg-red-100 text-red-700"
-                                : "bg-amber-100 text-amber-700"
-                          }`}
-                        >
-                          {row.feeStatus === "OVERDUE" && "⚠ "}
-                          {row.feeStatus}
-                        </span>
-                      </td>
-                      {/* Blank, not a dash. A monthly account has no installments by
-                          design and its date is already in Next Due; a dash there would
-                          read as missing data rather than an inapplicable column. */}
+                      {/* Plan absorbs Fee Type. feeType is derived from the plan's own
+                          durationDays and 82 of 84 accounts already say "Monthly" or
+                          "Annual" in the plan name, so the badge restated the cell beside
+                          it. The FIELD stays — it drives the summary tiles and the
+                          Monthly/Annual filter chips. */}
                       <td className="px-4 py-3 text-sm align-top">
-                        <NextInstallmentCell row={row} />
+                        <p className="text-slate-700 truncate max-w-[220px]" title={row.feePlanName}>
+                          {row.feePlanName}
+                        </p>
+                        {row.planAmount != null && (
+                          <p className="text-[11px] text-slate-400">
+                            ₹{row.planAmount.toLocaleString("en-IN")}
+                          </p>
+                        )}
                       </td>
-                      <td className="px-4 py-3 text-sm">
+                      {/* Next due absorbs the OVERDUE badge. All 17 OVERDUE rows have a
+                          past date and this cell already renders red for exactly them, so
+                          the badge was one fact twice. DUE is NOT collapsed into the
+                          colour: 12 of 13 DUE rows have a FUTURE date and would be
+                          indistinguishable from PAID — what marks them is the never-paid
+                          marker in the Player cell, or amber for a real due window. */}
+                      <td className="px-4 py-3 text-sm align-top whitespace-nowrap">
                         {row.nextDueOn ? (
                           <span
                             className={`font-medium ${
@@ -802,8 +809,11 @@ export function FeeSummaryTable({
                           "—"
                         )}
                       </td>
-                      <td className="px-4 py-3 align-top">
-                        <ReminderCell row={row} />
+                      {/* Blank, not a dash. A monthly account has no installments by
+                          design and its date is already in Next due; a dash there would
+                          read as missing data rather than an inapplicable column. */}
+                      <td className="px-4 py-3 text-sm align-top">
+                        <NextInstallmentCell row={row} />
                       </td>
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-2">
