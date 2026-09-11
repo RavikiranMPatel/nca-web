@@ -28,10 +28,12 @@ export const ROLE_LABELS: Record<string, string> = {
   WK_BATSMAN: "WK",
 };
 
+// Ruling 6: there is no scorer role. Scoring happens in the app, so appointing
+// someone to it is a promise the tournament cannot keep — and the server now
+// rejects it, so offering it here would only produce a 400.
 export const OFFICIAL_ROLES = [
   "UMPIRE",
   "THIRD_UMPIRE",
-  "SCORER",
   "REFEREE",
   "MATCH_REFEREE",
 ];
@@ -39,9 +41,11 @@ export const OFFICIAL_ROLES = [
 export const OFFICIAL_ROLE_LABELS: Record<string, string> = {
   UMPIRE: "Umpire",
   THIRD_UMPIRE: "3rd Umpire",
-  SCORER: "Scorer",
   REFEREE: "Referee",
   MATCH_REFEREE: "Match Referee",
+  // Kept for display only: a pool entry created before ruling 6 still needs a
+  // label, even though the role can no longer be chosen.
+  SCORER: "Scorer",
 };
 
 export const DAY_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];

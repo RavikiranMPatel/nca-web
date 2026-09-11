@@ -300,6 +300,57 @@ test.describe("Slice 4 — conflicts and reschedule", () => {
     await api.dispose(); await su.dispose();
   });
 
+  // ── Venues and officials: DTOs, and ruling 6 ────────────────────────────
+
+  test("venues and officials come back as DTOs, and there is no scorer role",
+    async () => {
+    const api = await Api.login(config().a);
+    const b = await build(api, "venuedto");
+
+    const venues = (await api.raw("get",
+      `/api/admin/cricket/tournaments/${b.tid}/venues`)).body as any[];
+    expect(venues.length).toBeGreaterThan(0);
+    for (const leaked of ["academyId", "branchId", "tournament", "createdBy"]) {
+      expect(venues[0], `${leaked} is not exposed`).not.toHaveProperty(leaked);
+    }
+    expect(venues[0], "but the id the UI filters by is").toHaveProperty("id");
+
+    // Ruling 6: scoring happens in the app, so there is no scorer to appoint.
+    const scorer = await api.raw("post",
+      `/api/admin/cricket/tournaments/${b.tid}/officials-pool`,
+      { name: "A Scorer", role: "SCORER" });
+    expect(scorer.status, "SCORER is refused").toBe(400);
+    expect((scorer.body as any).message).toContain("Valid roles");
+
+    const umpire = await api.raw("post",
+      `/api/admin/cricket/tournaments/${b.tid}/officials-pool`,
+      { name: "A N Umpire", role: "umpire" });
+    expect(umpire.status, "and a real role is accepted, case-insensitively").toBe(200);
+    expect((umpire.body as any).role).toBe("UMPIRE");
+    expect(umpire.body, "returned as a DTO").not.toHaveProperty("academyId");
+
+    // A venue with no name is a 400 rather than a row called null.
+    const unnamed = await api.raw("post",
+      `/api/admin/cricket/tournaments/${b.tid}/venues`, { maxMatchesPerDay: 2 });
+    expect(unnamed.status, "a venue needs a name").toBe(400);
+
+    // And a number sent as a string is a 400, not the ClassCastException 500 the
+    // hand-cast Map produced.
+    const badNumber = await api.raw("post",
+      `/api/admin/cricket/tournaments/${b.tid}/venues`,
+      { name: "Oval Two", maxMatchesPerDay: "lots" });
+    expect(badNumber.status, "a bad number is a 400").toBe(400);
+
+    // Deleting another tournament's official used to return 200 and remove
+    // nothing.
+    const other = await build(api, "venueother");
+    const foreign = await api.raw("delete",
+      `/api/admin/cricket/tournaments/${other.tid}/officials-pool/${(umpire.body as any).id}`);
+    expect(foreign.status, "refused, rather than a silent no-op").toBe(404);
+
+    await api.dispose();
+  });
+
   // ── Cross-tenant ────────────────────────────────────────────────────────
 
   test("Academy B is refused both new endpoints", async () => {

@@ -49,6 +49,8 @@ Severity scale: **critical** (data loss, cross-tenant, silent corruption) ·
 | BUG-29 | `getTeams` returns the two sides unordered, so positional callers can swap them | high | **FIXED** — `093f827` + `6225508` |
 | BUG-30 | A match created from a fixture never linked back, so standings stayed empty | high | **FIXED** — `8aaceb4` |
 | BUG-31 | The final-fixture flag was unreadable and unclearable through the API | medium | **FIXED** — `fb97d83` |
+| BUG-32 | Team order was undetermined, so fixture generation was not deterministic | medium | **FIXED** — Slice 4 |
+| BUG-33 | Player ID generation loses its lock before it commits, so concurrent creates collide | medium | open — found in the Slice 4 suite run |
 
 ---
 
@@ -1776,3 +1778,93 @@ that name and absent under Lombok's, then marks, unmarks, and checks the row.
 problem, and `FAIL_ON_UNKNOWN_PROPERTIES=false` guarantees the write half fails
 silently. `Innings.isSuperOver` and `CricketMatch.isDeleted`-style fields are the
 same shape; they happen not to be read by name from the client today.
+
+---
+
+## BUG-32 — Team order was undetermined, so fixture generation was not deterministic
+
+**Severity:** medium · **Status: FIXED** in Slice 4 — found by the full suite,
+not by the code review that preceded it
+
+Fixture generation reads its teams through:
+
+```java
+List<TournamentTeam> findAllByTournamentIdOrderBySeedAsc(UUID tournamentId);
+```
+
+`seed` has no column default and nothing sets it unless an admin types one, so in
+practice **every seed is NULL** — and ordering by a column where every value is
+equal leaves the order to the heap. Postgres gives no guarantee there, and it
+does change: the same tournament generated twice could put a different side at
+home.
+
+This is the same defect class as BUG-29 one level up — an `ORDER BY` that does
+not determine an order — and it quietly undermined the headline claim of the
+slice that found it. `FixtureGenerator` is deterministic given its input; the
+input was not.
+
+**How it surfaced.** A Slice 3 test that had passed a dozen times —
+"completing the fixture marked as the final sets champion, runner-up and
+COMPLETED" — failed in the Slice 4 full-suite run with the champion coming back
+as `teams[1]` instead of `teams[0]`. Nothing about champions had changed; the
+generated fixture's home side had. Re-running it alone would have passed, which
+is exactly what makes this class of defect expensive.
+
+**Fixed** by ordering explicitly, with NULL seeds last and a stable tiebreaker:
+
+```sql
+ORDER BY CASE WHEN seed IS NULL THEN 1 ELSE 0 END, seed ASC, created_at ASC, id ASC
+```
+
+`created_at` then `id` breaks the tie the way a user would expect — the order the
+teams were entered in.
+
+**Worth remembering:** `ORDER BY <nullable column>` on a column nothing populates
+is indistinguishable from no ORDER BY at all. Both BUG-29 and this one presented
+as flaky tests and were defects in what the query promised.
+
+---
+
+## BUG-33 — Player ID generation loses its lock before it commits
+
+**Severity:** medium · **Status: open** — found during the Slice 4 full-suite run;
+outside that slice's scope, so reported rather than fixed
+
+`AcademySettingsService.generateNextPlayerId` guards a read-modify-write with
+`synchronized`, on a `@Transactional` method:
+
+```java
+@Transactional
+public synchronized String generateNextPlayerId() {
+    String counterStr = getSetting("PLAYER_ID_COUNTER", "0");
+    int counter = Integer.parseInt(counterStr) + 1;
+    updateSetting("PLAYER_ID_COUNTER", String.valueOf(counter));
+    ...
+}
+```
+
+**These two do not compose.** `@Transactional` works through a proxy: the proxy
+opens the transaction, calls the method, the method returns — releasing the
+monitor — and only *then* does the proxy commit. So the lock is given up before
+the write is visible to anyone else. Thread A reads 5 and writes 6 uncommitted;
+thread B acquires the monitor, reads **5 again**, and writes 6 as well. Both
+players get the same id, and the second insert trips the unique constraint.
+
+`generateNextEnquiryId` immediately below it has the identical shape.
+
+**How it surfaced.** `kit-roles.spec.ts` — "kit rows still get the academy's main
+branch, never NULL" — failed on `mobile-chrome` with `create player SuBranch
+88474300 P01 … Expected < 400, Received 409`. Run alone it passes; it needs two
+Playwright workers creating players at once, which is the ordinary case for the
+suite and a plausible one for two admins onboarding a batch.
+
+Related to **BUG-22**, which records id collisions *across* academies sharing a
+prefix. This is the same symptom from a different cause: one academy, two
+threads.
+
+**The fix is not a bigger lock.** `synchronized` cannot span a proxy-managed
+commit at all, and would not survive a second app instance. The counter needs to
+be incremented by the database in one statement — `UPDATE … SET value =
+(value::int + 1)::text WHERE … RETURNING value` — or held under a real row lock.
+That is a change in the player/settings module, not the tournament one, which is
+why it is logged here rather than fixed in passing.
