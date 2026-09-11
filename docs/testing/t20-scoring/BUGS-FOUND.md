@@ -2010,3 +2010,59 @@ two-line `@ExceptionHandler(NoResourceFoundException.class)` returning 404, but
 it changes the response of **every** unmapped URL in the application, so it
 belongs in its own change with its own check of what currently asserts 500 —
 not bundled into a tournament slice.
+
+---
+
+## BUG-40 — Recording a final's result returned a broken response
+
+**Found:** Slice 5, by a full-suite run. **Status:** fixed.
+
+A test failed with `Parse Error: Expected LF after chunk data` on a request that
+had already returned **200**, and the backend log carried six of these — every
+one from `POST /api/admin/cricket/matches/{id}/result`:
+
+```
+Could not write JSON: Infinite recursion (StackOverflowError)
+```
+
+Jackson's own reference chain names the cycle:
+
+```
+TournamentTeam["tournament"] -> Tournament["championTeam"]
+  -> TournamentTeam["tournament"] -> ...
+```
+
+Slice 3's V99 gave `Tournament` a `championTeam` and a `runnerUpTeam`, both
+`ManyToOne` to `TournamentTeam`. `TournamentTeam.tournament` points back and
+carried **no** `@JsonIgnoreProperties` at all. `CricketMatch.tournament` is
+`FetchType.EAGER`, and its ignore list names `fixtures`, `stages` and
+`mvpWeights` — written before the champion columns existed and never extended.
+
+So **any** endpoint returning a `CricketMatch` entity for a decided tournament
+recursed, and `/result` is the very call that sets the champion.
+
+**Why it looked like a network fault.** The response is chunked, so by the time
+serialisation blew up the 200 and its headers were usually already flushed and
+could not be taken back — the client saw a malformed chunk rather than a clean
+500. Whether it did depended on output-buffer timing, which is why it read as
+intermittent and why re-running the test five times in isolation passed.
+
+**The write had already committed.** The tournament really was completed,
+champion and all; only the response was broken. That is why most specs never
+noticed — they re-read the state afterwards — and why it survived from Slice 3
+until a full-suite run caught it.
+
+**Fixed** by cutting the back-reference: `@JsonIgnore` on
+`TournamentTeam.tournament`. Nothing reads it over the wire (the frontend reads
+`match.tournament`, never `team.tournament`), `TournamentTeam` is never a
+`@RequestBody`, and Java callers are unaffected. It also removes a whole inlined
+`Tournament` from every team on every match response.
+
+`EntityCycleTest` reproduces it deterministically in milliseconds with no
+database — the cycle is a mapping property, not a data one.
+
+**The root cause is unfixed.** `recordResult` returns a JPA entity as its
+response body, which PLAN.md standing constraint 3 forbids for new code. That is
+also how BUG-38's tenant and audit columns reach the browser on this endpoint.
+Converting it is a change to Slice 3's verified result path and belongs in its
+own slice.
