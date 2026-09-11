@@ -1,7 +1,6 @@
 import { test, expect, type APIRequestContext } from "@playwright/test";
 import fs from "node:fs";
-import { Api } from "../fixtures/api";
-import { config } from "../fixtures/env";
+import { createKitPlayers } from "../fixtures/kitPlayers";
 
 /**
  * Kit / Merchandise list: filter, inline edit, bulk mark delivered, export.
@@ -10,29 +9,19 @@ import { config } from "../fixtures/env";
  * never write the same player_kit_details row. Sharing one produced a failure
  * that looked like an app bug when kit-tab.spec.ts was first written.
  */
-// One season per run, not a fixed one: a fixed season makes the spec
-// non-idempotent, since the next run finds the rows this one delivered and the
-// status filters no longer match. Season is VARCHAR(10) on the backend.
-const RUN = `8${Date.now() % 100000}`;
 
-/** Players are seeded once outside Playwright; read them back rather than create. */
-async function kitPlayers(api: Api) {
-  const res = await api.raw("get", "/api/admin/players");
-  return (res.body as any[])
-    .filter((p) => p.displayName?.startsWith("KitTest A"))
-    .sort((a, b) => a.displayName.localeCompare(b.displayName));
-}
 
 test.describe("Kit / Merchandise list", () => {
   test("filters, edits inline, bulk-marks and exports", async ({ page }, testInfo) => {
-    const env = config();
-    const api = await Api.login(env.a);
-    const SEASON = RUN;
+    // Five players of its own: the spec asserts on rows 1-5 and on a bulk action
+    // over the first two, so a shared pool would let a concurrent project's writes
+    // change what this one is asserting.
+    const fx = await createKitPlayers({ count: 5, label: "KitList" });
+    const { api, players } = fx;
+    const SEASON = fx.season;
     const shot = (n: string) =>
       page.screenshot({ path: `e2e/.artifacts/kit-list-${testInfo.project.name}-${n}.png`, fullPage: true });
-
-    const players = await kitPlayers(api);
-    expect(players.length, "seeded KitTest A players").toBeGreaterThanOrEqual(5);
+  try {
 
     // Give this project's season a known starting shape: two players sized, none delivered.
     for (const p of players.slice(0, 2)) {
@@ -116,6 +105,8 @@ test.describe("Kit / Merchandise list", () => {
     expect(body.subarray(0, 2).toString("latin1")).toBe("PK");   // xlsx = zip
     fs.writeFileSync(`e2e/.artifacts/kit-export-${testInfo.project.name}.xlsx`, body);
 
-    await api.dispose();
+  } finally {
+    await fx.destroy();
+  }
   });
 });

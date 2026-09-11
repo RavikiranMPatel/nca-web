@@ -2,6 +2,7 @@ import { test, expect } from "@playwright/test";
 import { execFileSync } from "node:child_process";
 import { Api } from "../fixtures/api";
 import { config } from "../fixtures/env";
+import { createKitPlayers } from "../fixtures/kitPlayers";
 
 const PROJECTS = ["desktop", "mobile", "mobile-chrome"];
 
@@ -25,20 +26,6 @@ function dbOne(sql: string): string {
  * no app path can create a COACH without a SUPER_ADMIN token, and none can create
  * a SUPER_ADMIN with a null branch at all. See SESSION-HANDOFF.md.
  */
-/**
- * Each project gets its own player and its own season. The projects run
- * concurrently against one database, so a shared row means one project's
- * "nothing was written" assertion reads another project's writes.
- */
-async function kitPlayerFor(api: Api, project: string, offset = 0) {
-  const res = await api.raw("get", "/api/admin/players");
-  const list = (res.body as any[])
-    .filter((p) => p.displayName?.startsWith("KitTest A"))
-    .sort((a, b) => a.displayName.localeCompare(b.displayName));
-  expect(list.length, "seeded KitTest players").toBeGreaterThan(offset + PROJECTS.length);
-  const idx = Math.max(0, PROJECTS.indexOf(project));
-  return list[offset + idx];
-}
 
 test.describe("Kit module — COACH is read-only", () => {
   test("gets the list, is refused every write, and sees no admin affordances", async ({ page }, testInfo) => {
@@ -52,10 +39,12 @@ test.describe("Kit module — COACH is read-only", () => {
     test.skip(testInfo.project.name !== "desktop",
               "one coach user, and a second login kills the first token");
     const env = config();
-    const admin = await Api.login(env.a);
     const coach = await Api.login(env.aCoach);
-    const SEASON_COACH = `7${Date.now() % 100000}-${testInfo.project.name.slice(0, 3)}`;
-    const player = await kitPlayerFor(admin, testInfo.project.name, 0);
+    const fx = await createKitPlayers({ count: 1, label: "CoachRO" });
+    const { api: admin } = fx;
+    const SEASON_COACH = fx.season;
+    const player = fx.players[0];
+  try {
 
     // Give the season a row so the list has something to show.
     expect((await admin.raw("post", `/api/admin/players/${player.publicId}/kit`, {
@@ -125,15 +114,18 @@ test.describe("Kit module — COACH is read-only", () => {
     await expect(page.getByTestId(`kit-player-name-${player.publicId}`)).toBeVisible();
     await expect(page.locator('a[href*="/admin/players/"]')).toHaveCount(0);
 
-    await admin.dispose(); await coach.dispose();
+  } finally {
+    await fx.destroy(); await coach.dispose();
+  }
   });
 });
 
 test.describe("Kit module — SUPER_ADMIN carries no branch", () => {
   test("kit rows still get the academy's main branch, never NULL", async ({}, testInfo) => {
     const env = config();
-    const admin = await Api.login(env.a);
     const su = await Api.login(env.aSuperAdmin);
+    const fx = await createKitPlayers({ count: 2, label: "SuBranch" });
+    const { api: admin } = fx;
     const SEASON = `6${Date.now() % 100000}-${testInfo.project.name.slice(0, 3)}`;
 
     // The premise of the whole check: this actor genuinely has no branch, so
@@ -141,9 +133,8 @@ test.describe("Kit module — SUPER_ADMIN carries no branch", () => {
     // PlayerKitService.resolveBranchId can supply one.
     expect(su.session.branchId ?? null, "SUPER_ADMIN must carry no branch").toBeNull();
 
-    // Offsets disjoint from the coach spec's players above.
-    const viaSave = await kitPlayerFor(admin, testInfo.project.name, 3);
-    const viaBulk = await kitPlayerFor(admin, testInfo.project.name, 6);
+    const [viaSave, viaBulk] = fx.players;
+  try {
 
     // ── create a kit row as SUPER_ADMIN, the Kit tab's write path ───────────
     expect((await su.raw("post", `/api/admin/players/${viaSave.publicId}/kit`, {
@@ -182,7 +173,9 @@ test.describe("Kit module — SUPER_ADMIN carries no branch", () => {
        WHERE p.public_id = '${viaBulk.publicId}' AND k.season_year = '${SEASON}'`);
     expect(deliveredBy).toBe(env.aSuperAdmin.email);
 
-    await admin.dispose(); await su.dispose();
+  } finally {
+    await fx.destroy(); await su.dispose();
+  }
   });
 });
 

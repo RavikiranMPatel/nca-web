@@ -1,6 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { Api } from "../fixtures/api";
-import { config } from "../fixtures/env";
+import { createKitPlayers } from "../fixtures/kitPlayers";
 
 /**
  * Regression cover for the per-player Kit tab.
@@ -10,37 +9,14 @@ import { config } from "../fixtures/env";
  * browser coverage at all before that, which made the extraction unverifiable;
  * these assertions are what make it safe.
  */
-// Each project gets its own player, and every run gets a season no previous run
-// has used. Two separate hazards:
-//   - projects run concurrently, so a shared player+season means two runs writing
-//     one player_kit_details row;
-//   - a FIXED season makes the spec non-idempotent, because the second run finds
-//     the row the first one left and inherits its flags.
-// A run-unique season removes both. Season is VARCHAR(10) on the backend.
-const RUN = `9${Date.now() % 100000}`;
-const PROJECT_ORDER = ["desktop", "mobile", "mobile-chrome"];
-
-/** Players are seeded outside Playwright; read them back rather than create. */
-async function kitPlayersA(api: Api) {
-  const res = await api.raw("get", "/api/admin/players");
-  return (res.body as any[])
-    .filter((p) => p.displayName?.startsWith("KitTest A"))
-    .sort((a, b) => a.displayName.localeCompare(b.displayName));
-}
 
 test.describe("Kit tab (Player Overview → Kit)", () => {
   test("renders, saves a new season, and reads it back", async ({ page }, testInfo) => {
-    const env = config();
-    const api = await Api.login(env.a);
-    const SEASON = RUN;
-
-    const players = await api.raw("get", "/api/admin/players");
-    const mine = (players.body as any[])
-      .filter((p) => p.displayName?.startsWith("KitTest A"))
-      .sort((a, b) => a.displayName.localeCompare(b.displayName));
-    const idx = PROJECT_ORDER.indexOf(testInfo.project.name);
-    const player = mine[idx >= 0 ? idx : 0];
-    expect(player, "seeded KitTest players must exist").toBeTruthy();
+    const fx = await createKitPlayers({ count: 1, label: "KitTab" });
+    const { api } = fx;
+    const SEASON = fx.season;
+    const player = fx.players[0];
+  try {
 
     await page.addInitScript((seed) => {
       for (const [k, v] of Object.entries(seed)) localStorage.setItem(k, v as string);
@@ -78,19 +54,18 @@ test.describe("Kit tab (Player Overview → Kit)", () => {
     });
 
     await page.screenshot({ path: `e2e/.artifacts/kit-tab-${testInfo.project.name}.png`, fullPage: true });
-    await api.dispose();
+  } finally {
+    await fx.destroy();
+  }
   });
 
   test("BUG-23: Add New Season starts blank even when the current season is delivered", async ({ page }, testInfo) => {
-    const env = config();
-    const api = await Api.login(env.a);
+    const fx = await createKitPlayers({ count: 1, label: "Bug23" });
+    const { api } = fx;
+    const player = fx.players[0];
     const shot = (n: string) =>
       page.screenshot({ path: `e2e/.artifacts/bug23-${testInfo.project.name}-${n}.png`, fullPage: true });
-
-    const players = await kitPlayersA(api);
-    const idx = PROJECT_ORDER.indexOf(testInfo.project.name);
-    const player = players[(idx >= 0 ? idx : 0) + 5];   // distinct from the list spec's first five
-    expect(player).toBeTruthy();
+  try {
 
     // The season startAddNew defaults to is the current year, which is exactly
     // the one it used to inherit from. Seed that year fully delivered.
@@ -143,6 +118,8 @@ test.describe("Kit tab (Player Overview → Kit)", () => {
       tshirtGiven: true, trouserGiven: true, capGiven: true, deliveryStatus: "DELIVERED",
     });
 
-    await api.dispose();
+  } finally {
+    await fx.destroy();
+  }
   });
 });
