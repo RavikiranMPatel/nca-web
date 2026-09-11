@@ -42,6 +42,7 @@ import {
 import type {
   SettingsForm,
   GenForm,
+  EditFixtureForm,
 } from "../../components/tournament/types";
 import OverviewTab from "../../components/tournament/OverviewTab";
 import TeamsTab from "../../components/tournament/TeamsTab";
@@ -173,7 +174,7 @@ export default function TournamentDetailPage() {
 
   const [showEditFixture, setShowEditFixture] = useState(false);
   const [editingFixture, setEditingFixture] = useState<any>(null);
-  const [editFixtureForm, setEditFixtureForm] = useState({
+  const [editFixtureForm, setEditFixtureForm] = useState<EditFixtureForm>({
     roundNumber: 1,
     homeTeamPublicId: "",
     awayTeamPublicId: "",
@@ -182,6 +183,14 @@ export default function TournamentDetailPage() {
     status: "SCHEDULED",
     scheduledDate: "",
     scheduledTime: "",
+    matchNumber: "",
+    city: "",
+    umpire1Name: "",
+    umpire2Name: "",
+    umpire3Name: "",
+    refereeName: "",
+    scorerName: "",
+    notes: "",
   });
 
   // ── STATS STATE (NEW) ─────────────────────────────────────────────────────
@@ -828,6 +837,18 @@ export default function TournamentDetailPage() {
       status: f.status,
       scheduledDate: schedDate,
       scheduledTime: schedTime,
+      // Scheduling fields (V100/V102). The API has accepted these since Slice 4
+      // and nothing could edit them until now. "" rather than null: the PATCH
+      // treats blank as "clear it", which is what an official who has changed
+      // needs, and only an absent field means "leave alone".
+      matchNumber: f.matchNumber ?? "",
+      city: f.city ?? "",
+      umpire1Name: f.umpire1Name ?? "",
+      umpire2Name: f.umpire2Name ?? "",
+      umpire3Name: f.umpire3Name ?? "",
+      refereeName: f.refereeName ?? "",
+      scorerName: f.scorerName ?? "",
+      notes: f.notes ?? "",
     });
     setShowEditFixture(true);
   };
@@ -837,6 +858,12 @@ export default function TournamentDetailPage() {
     setPosting(true);
     try {
       const payload: any = { ...editFixtureForm };
+      // The binder wants an Integer or nothing; "" would be a 400.
+      payload.matchNumber =
+        editFixtureForm.matchNumber === "" || editFixtureForm.matchNumber === null
+          ? null
+          : Number(editFixtureForm.matchNumber);
+      if (payload.matchNumber === null) delete payload.matchNumber;
       if (editFixtureForm.scheduledDate && editFixtureForm.scheduledTime) {
         payload.scheduledAt = new Date(
           `${editFixtureForm.scheduledDate}T${editFixtureForm.scheduledTime}:00`,
@@ -2072,7 +2099,10 @@ export default function TournamentDetailPage() {
 
       {/* ── EDIT FIXTURE MODAL ── */}
       {showEditFixture && editingFixture && (
-        <div className="fixed inset-0 z-[60] bg-black/70 flex items-end">
+        <div
+          data-testid="edit-fixture-modal"
+          className="fixed inset-0 z-[60] bg-black/70 flex items-end"
+        >
           <div className="w-full bg-white dark:bg-gray-900 rounded-t-2xl p-5 max-h-[85vh] overflow-y-auto">
             <div className="w-10 h-1 bg-gray-300 rounded-full mx-auto mb-4" />
             <div className="flex items-center justify-between mb-4">
@@ -2241,6 +2271,116 @@ export default function TournamentDetailPage() {
                   )}
                 </div>
               </div>
+              {/* ── Scheduling and officials (Slice 4b) ── */}
+              <div className="pt-2 border-t border-gray-100 dark:border-gray-800">
+                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3 mt-3">
+                  📋 Schedule Sheet
+                </p>
+                <div className="space-y-3">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label
+                        htmlFor="fixture-match-number"
+                        className="text-xs text-gray-400 mb-1 block"
+                      >
+                        Match Number
+                      </label>
+                      <input
+                        id="fixture-match-number"
+                        data-testid="fixture-match-number"
+                        type="number"
+                        min={1}
+                        placeholder="e.g. 14"
+                        className="w-full px-3 py-2.5 bg-gray-100 dark:bg-gray-800 rounded-xl text-sm outline-none text-gray-900 dark:text-gray-100"
+                        value={editFixtureForm.matchNumber}
+                        onChange={(e) =>
+                          setEditFixtureForm((p) => ({
+                            ...p,
+                            matchNumber: e.target.value,
+                          }))
+                        }
+                      />
+                    </div>
+                    <div>
+                      <label
+                        htmlFor="fixture-city"
+                        className="text-xs text-gray-400 mb-1 block"
+                      >
+                        City
+                      </label>
+                      <input
+                        id="fixture-city"
+                        data-testid="fixture-city"
+                        placeholder="e.g. Mysuru"
+                        className="w-full px-3 py-2.5 bg-gray-100 dark:bg-gray-800 rounded-xl text-sm outline-none text-gray-900 dark:text-gray-100"
+                        value={editFixtureForm.city}
+                        onChange={(e) =>
+                          setEditFixtureForm((p) => ({ ...p, city: e.target.value }))
+                        }
+                      />
+                    </div>
+                  </div>
+
+                  {(
+                    [
+                      ["umpire1Name", "Umpire 1", "fixture-umpire1"],
+                      ["umpire2Name", "Umpire 2", "fixture-umpire2"],
+                      ["umpire3Name", "Third Umpire", "fixture-umpire3"],
+                      ["refereeName", "Match Referee", "fixture-referee"],
+                      ["scorerName", "Scorer", "fixture-scorer"],
+                    ] as const
+                  ).map(([field, label, testId]) => (
+                    <div key={field}>
+                      <label
+                        htmlFor={testId}
+                        className="text-xs text-gray-400 mb-1 block"
+                      >
+                        {label}
+                      </label>
+                      <input
+                        id={testId}
+                        data-testid={testId}
+                        placeholder="Name"
+                        className="w-full px-3 py-2.5 bg-gray-100 dark:bg-gray-800 rounded-xl text-sm outline-none text-gray-900 dark:text-gray-100"
+                        value={editFixtureForm[field]}
+                        onChange={(e) =>
+                          setEditFixtureForm((p) => ({
+                            ...p,
+                            [field]: e.target.value,
+                          }))
+                        }
+                      />
+                    </div>
+                  ))}
+
+                  <p className="text-xs text-gray-400 -mt-1">
+                    Officials are free text on the schedule. Naming a scorer here
+                    grants no access to the scorer page.
+                  </p>
+
+                  <div>
+                    <label
+                      htmlFor="fixture-notes"
+                      className="text-xs text-gray-400 mb-1 block"
+                    >
+                      Notes
+                    </label>
+                    <textarea
+                      id="fixture-notes"
+                      data-testid="fixture-notes"
+                      rows={2}
+                      maxLength={1000}
+                      placeholder="e.g. day/night, reserve day 12th"
+                      className="w-full px-3 py-2.5 bg-gray-100 dark:bg-gray-800 rounded-xl text-sm outline-none resize-none text-gray-900 dark:text-gray-100"
+                      value={editFixtureForm.notes}
+                      onChange={(e) =>
+                        setEditFixtureForm((p) => ({ ...p, notes: e.target.value }))
+                      }
+                    />
+                  </div>
+                </div>
+              </div>
+
               <div className="flex gap-3 pt-2">
                 <button
                   onClick={() => {
@@ -2254,6 +2394,7 @@ export default function TournamentDetailPage() {
                 <button
                   onClick={handleEditFixture}
                   disabled={posting}
+                  data-testid="fixture-save"
                   className="flex-1 py-2.5 bg-blue-600 text-white rounded-xl text-sm font-semibold disabled:opacity-40"
                 >
                   {posting ? "Saving..." : "Save Changes"}

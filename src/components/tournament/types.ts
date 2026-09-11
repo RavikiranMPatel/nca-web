@@ -58,3 +58,34 @@ export interface SchedulePreview {
   duration: number;
   slots: ScheduleSlot[];
 }
+
+/**
+ * The Edit Fixture form.
+ *
+ * Named for the same reason SettingsForm and GenForm are: a type inferred from a
+ * useState initialiser suffices inside one function, but the moment a field is
+ * added the inference becomes the spec, and every `setForm((p) => ...)` updater
+ * silently disagrees with it. That produced eight TS errors the first time the
+ * schedule-sheet fields were added.
+ *
+ * matchNumber is a string, not a number: an empty numeric input is "", and the
+ * PATCH binder wants an Integer or the field absent.
+ */
+export interface EditFixtureForm {
+  roundNumber: number;
+  homeTeamPublicId: string;
+  awayTeamPublicId: string;
+  venue: string;
+  venueId: string;
+  status: string;
+  scheduledDate: string;
+  scheduledTime: string;
+  matchNumber: string;
+  city: string;
+  umpire1Name: string;
+  umpire2Name: string;
+  umpire3Name: string;
+  refereeName: string;
+  scorerName: string;
+  notes: string;
+}

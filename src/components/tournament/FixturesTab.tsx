@@ -372,6 +372,9 @@ export default function FixturesTab({
                                       </button>
                                     )}
                                     <button
+                                      data-testid={`fixture-edit-${f.publicId}`}
+                                      aria-label="Edit fixture"
+                                      title="Edit fixture"
                                       onClick={() => openEditFixture(f)}
                                       className="p-1 rounded-lg bg-gray-100 dark:bg-gray-800 text-gray-500 active:scale-90"
                                     >
