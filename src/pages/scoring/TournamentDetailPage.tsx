@@ -11,7 +11,8 @@ import {
   addManualFixture,
   getStandings,
   updateTournamentStatus,
-  declareWinner,
+  getChampion,
+  completeTournament,
   advanceToKnockout,
   advanceToPlayoffs,
   getSquad,
@@ -163,11 +164,15 @@ export default function TournamentDetailPage() {
     scheduledTime: "",
   });
 
-  const [showDeclareWinner, setShowDeclareWinner] = useState(false);
+  const [showComplete, setShowComplete] = useState(false);
+  const [champion, setChampion] = useState<{
+    championName: string | null;
+    runnerUpName: string | null;
+    format: string;
+  } | null>(null);
   const [showAdvancePlayoffs, setShowAdvancePlayoffs] = useState(false);
   const [playoffTopN, setPlayoffTopN] = useState(4);
   const [playoffBracketType, setPlayoffBracketType] = useState("IPL");
-  const [winnerTeam, setWinnerTeam] = useState("");
 
   const [showEditFixture, setShowEditFixture] = useState(false);
 
@@ -727,16 +732,28 @@ export default function TournamentDetailPage() {
     }
   };
 
-  const handleDeclareWinner = async () => {
-    if (!winnerTeam) return;
+  // The champion is derived from the fixtures, so this opens a confirmation of
+  // what the results already decided rather than a picker. The old flow let an
+  // admin choose any team, showed "Winner declared!", and stored nothing.
+  const openComplete = async () => {
+    setShowComplete(true);
+    setChampion(null);
+    try {
+      setChampion(await getChampion(publicId!));
+    } catch {
+      setChampion({ championName: null, runnerUpName: null, format: "" });
+    }
+  };
+
+  const handleComplete = async () => {
     setPosting(true);
     try {
-      await declareWinner(publicId!, winnerTeam);
-      setShowDeclareWinner(false);
+      const r = await completeTournament(publicId!);
+      setShowComplete(false);
       await loadAll();
-      showToast("🏆 Winner declared!");
+      showToast(`🏆 ${r.championName} — champions`);
     } catch (e: any) {
-      setError(e.response?.data?.message ?? "Failed to declare winner");
+      setError(e.response?.data?.message ?? "Failed to complete tournament");
     } finally {
       setPosting(false);
     }
@@ -921,17 +938,15 @@ export default function TournamentDetailPage() {
           )}
           {tournament.status === "ACTIVE" && (
             <>
+              {/* One action. "Complete" used to PATCH the status directly,
+                  which skipped the champion entirely, while "Declare Winner"
+                  stored nothing. Completing a tournament and crowning it are
+                  the same event. */}
               <button
-                onClick={() => setShowDeclareWinner(true)}
+                onClick={openComplete}
                 className="flex-shrink-0 px-3 py-1.5 bg-yellow-600 text-white text-xs font-semibold rounded-lg active:scale-95"
               >
-                🏆 Declare Winner
-              </button>
-              <button
-                onClick={() => handleStatusChange("COMPLETED")}
-                className="flex-shrink-0 px-3 py-1.5 bg-blue-600 text-white text-xs font-semibold rounded-lg active:scale-95"
-              >
-                ✓ Complete
+                🏆 Complete Tournament
               </button>
             </>
           )}
@@ -3190,49 +3205,74 @@ export default function TournamentDetailPage() {
       )}
 
       {/* ── DECLARE WINNER MODAL ── */}
-      {showDeclareWinner && (
-        <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-6">
-          <div className="w-full max-w-sm bg-white dark:bg-gray-900 rounded-2xl p-5">
-            <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-4">
-              🏆 Declare Winner
+      {/* ── COMPLETE TOURNAMENT ── */}
+      {showComplete && (
+        <div className="fixed inset-0 z-50 bg-black/60 flex items-end">
+          <div className="w-full bg-white dark:bg-gray-900 rounded-t-2xl max-h-[85dvh] overflow-y-auto p-5">
+            <div className="w-10 h-1 bg-gray-300 rounded-full mx-auto mb-4" />
+            <h3 className="text-sm font-semibold text-gray-900 dark:text-white text-center">
+              Complete Tournament
             </h3>
-            <div className="space-y-2 mb-4">
-              {teams.map((t: any) => (
-                <button
-                  key={t.publicId}
-                  onClick={() => setWinnerTeam(t.publicId)}
-                  className={`w-full p-3 rounded-xl border text-left transition-all ${winnerTeam === t.publicId ? "bg-yellow-50 border-yellow-400 dark:bg-yellow-900/20" : "bg-gray-50 border-gray-200 dark:bg-gray-800 dark:border-gray-700"}`}
-                >
-                  <div className="flex items-center gap-2">
-                    <div
-                      className="w-5 h-5 rounded-full"
-                      style={{ backgroundColor: t.colorHex ?? "#3b82f6" }}
-                    />
-                    <span className="text-sm font-medium text-gray-900 dark:text-gray-100">
-                      {t.name}
-                    </span>
-                    {winnerTeam === t.publicId && (
-                      <span className="ml-auto text-yellow-500">🏆</span>
-                    )}
+
+            {champion === null && (
+              <p className="text-xs text-gray-400 text-center mt-4 mb-4">
+                Working out the champion…
+              </p>
+            )}
+
+            {champion && champion.championName && (
+              <>
+                <p className="text-xs text-gray-500 dark:text-gray-400 text-center mt-1 mb-4">
+                  {champion.format === "ROUND_ROBIN"
+                    ? "Top of the table with every fixture concluded."
+                    : "Winner of the Final."}
+                </p>
+                <div className="rounded-2xl border border-yellow-300 bg-yellow-50 dark:bg-yellow-900/20 dark:border-yellow-800 p-4 text-center">
+                  <div className="text-3xl mb-1">🏆</div>
+                  <div className="text-base font-bold text-gray-900 dark:text-white break-words">
+                    {champion.championName}
                   </div>
+                  <div className="text-xs text-yellow-700 dark:text-yellow-500 mt-0.5">
+                    Champions
+                  </div>
+                </div>
+                {champion.runnerUpName && (
+                  <div className="mt-2 rounded-2xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 p-3 text-center">
+                    <div className="text-sm font-semibold text-gray-700 dark:text-gray-200 break-words">
+                      {champion.runnerUpName}
+                    </div>
+                    <div className="text-xs text-gray-400">Runners-up</div>
+                  </div>
+                )}
+                <button
+                  disabled={posting}
+                  onClick={handleComplete}
+                  className="mt-4 w-full h-14 bg-yellow-600 text-white rounded-xl font-bold text-sm disabled:opacity-40 active:scale-95"
+                >
+                  {posting ? "Completing..." : "Confirm and Complete"}
                 </button>
-              ))}
-            </div>
-            <div className="flex gap-3">
-              <button
-                onClick={() => setShowDeclareWinner(false)}
-                className="flex-1 py-2.5 border border-gray-200 dark:border-gray-700 rounded-xl text-sm text-gray-600 dark:text-gray-400"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleDeclareWinner}
-                disabled={!winnerTeam || posting}
-                className="flex-1 py-2.5 bg-yellow-600 text-white rounded-xl text-sm font-semibold disabled:opacity-40"
-              >
-                Confirm
-              </button>
-            </div>
+              </>
+            )}
+
+            {champion && !champion.championName && (
+              <>
+                <p className="text-xs text-gray-500 dark:text-gray-400 text-center mt-3 mb-4">
+                  {champion.format === "ROUND_ROBIN"
+                    ? "Every fixture has to be concluded before a league champion exists."
+                    : "There is no completed Final yet, so the bracket has not produced a champion."}
+                </p>
+                <div className="rounded-2xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 p-4 text-center text-sm text-gray-500">
+                  Nothing to confirm yet
+                </div>
+              </>
+            )}
+
+            <button
+              onClick={() => setShowComplete(false)}
+              className="w-full py-3 mt-2 text-gray-400 text-sm"
+            >
+              Cancel
+            </button>
           </div>
         </div>
       )}

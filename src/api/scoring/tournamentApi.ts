@@ -61,11 +61,25 @@ export const getStandings = (publicId: string) =>
     .get(`/admin/cricket/tournaments/${publicId}/standings`)
     .then((r) => r.data);
 
-export const declareWinner = (publicId: string, winnerTeamPublicId: string) =>
+// The champion is DERIVED from the fixtures. There is no winnerTeamPublicId:
+// declareWinner used to take one from a picker and the backend discarded it.
+export const getChampion = (publicId: string) =>
   api
-    .post(`/admin/cricket/tournaments/${publicId}/declare-winner`, {
-      winnerTeamPublicId,
-    })
+    .get<{
+      championName: string | null;
+      championPublicId: string | null;
+      runnerUpName: string | null;
+      format: string;
+    }>(`/admin/cricket/tournaments/${publicId}/champion`)
+    .then((r) => r.data);
+
+export const completeTournament = (publicId: string) =>
+  api
+    .post<{
+      status: string;
+      championName: string;
+      runnerUpName: string | null;
+    }>(`/admin/cricket/tournaments/${publicId}/complete`, {})
     .then((r) => r.data);
 
 export const getSquad = (tournamentPublicId: string, teamPublicId: string) =>
