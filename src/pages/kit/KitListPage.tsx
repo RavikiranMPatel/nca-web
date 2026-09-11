@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { toast } from "react-hot-toast";
 import api from "../../api/axios";
@@ -82,13 +82,22 @@ export default function KitListPage() {
       });
   }, []);
 
+  // Responses are applied in issue order, not arrival order.
+  //
+  // load() is called from three places — the season effect below, saveDrawer and
+  // bulkDeliver — so several requests can be in flight at once. Without this, a
+  // slow earlier response lands after a later one and overwrites the table: edit a
+  // row, and it silently reverts to its pre-edit values a moment later. Each call
+  // takes a ticket, and only the newest ticket is allowed to write.
+  const loadTicket = useRef(0);
   const load = (forSeason: string) => {
     if (!forSeason) return;
+    const ticket = ++loadTicket.current;
     setLoading(true);
     api.get("/admin/kit/list", { params: { season: forSeason } })
-      .then((res) => setRows(res.data ?? []))
-      .catch(() => toast.error("Failed to load kit list"))
-      .finally(() => setLoading(false));
+      .then((res) => { if (ticket === loadTicket.current) setRows(res.data ?? []); })
+      .catch(() => { if (ticket === loadTicket.current) toast.error("Failed to load kit list"); })
+      .finally(() => { if (ticket === loadTicket.current) setLoading(false); });
   };
   useEffect(() => { load(season); /* eslint-disable-next-line */ }, [season]);
 
