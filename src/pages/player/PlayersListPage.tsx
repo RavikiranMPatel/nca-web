@@ -46,6 +46,8 @@ type Player = {
   feeStatus?: "PAID" | "DUE" | "OVERDUE" | null;
   nextDueOn?: string | null;
   excludeFromAttendance?: boolean;
+  // Only EXT players can be deleted, so the trash icon is gated on this.
+  external?: boolean;
 };
 
 const ITEMS_PER_PAGE = 10;
@@ -1139,13 +1141,14 @@ function PlayersListPage() {
 
                   {/* Chevron hint */}
                   <div className="flex flex-col items-end justify-between gap-1 flex-shrink-0">
-                    {isSuperAdmin && (
+                    {isSuperAdmin && p.external && (
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
                           setDeleteConfirm({ open: true, player: p });
                         }}
                         className="p-1.5 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition"
+                        title="Delete external player"
                       >
                         <Trash2 size={14} />
                       </button>
@@ -1404,14 +1407,14 @@ function PlayersListPage() {
                       </td>
                       <td className="px-6 py-4 text-right">
                         <div className="flex items-center justify-end gap-2">
-                          {isSuperAdmin && (
+                          {isSuperAdmin && p.external && (
                             <button
                               onClick={(e) => {
                                 e.stopPropagation();
                                 setDeleteConfirm({ open: true, player: p });
                               }}
                               className="p-2 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition"
-                              title="Delete player"
+                              title="Delete external player"
                             >
                               <Trash2 size={15} />
                             </button>
@@ -1568,9 +1571,30 @@ function PlayersListPage() {
                   <span className="font-mono text-xs text-slate-500">
                     ({deleteConfirm.player.publicId})
                   </span>
-                  . All associated records will also be deleted.
+                  .
                 </p>
               </div>
+
+              {/* The dialog used to say "All associated records will also be deleted",
+                  which was both frightening and wrong. Name what actually happens. */}
+              <div className="space-y-2 text-xs">
+                <div className="flex gap-2">
+                  <span className="text-red-500 font-semibold shrink-0">Deleted</span>
+                  <span className="text-slate-600">
+                    Profile, batches, attendance, assessments, goals, practice days
+                    and coaching records.
+                  </span>
+                </div>
+                <div className="flex gap-2">
+                  <span className="text-emerald-600 font-semibold shrink-0">Kept</span>
+                  <span className="text-slate-600">
+                    Fee payments, fee accounts and enquiries stay in the academy's
+                    books under this player's name. Deleting someone must not change
+                    last month's revenue.
+                  </span>
+                </div>
+              </div>
+
               <p className="text-xs text-slate-400">
                 This action cannot be undone.
               </p>
