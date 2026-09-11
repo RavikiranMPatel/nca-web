@@ -46,6 +46,7 @@ Severity scale: **critical** (data loss, cross-tenant, silent corruption) ·
 | BUG-26 | Brevo API key revoked — **every** production email is failing, not just deploy mail | critical | open — live production issue |
 | BUG-27 | Tournament venues, officials and leaderboards reachable by any academy | critical | **FIXED** — `204bf21` |
 | BUG-28 | The kit list could revert an edit it had just saved | medium | **FIXED** — `376bcc0` |
+| BUG-29 | `getTeams` returns the two sides unordered, so positional callers can swap them | high | open — found during the Slice 1 suite run |
 
 ---
 
@@ -1602,3 +1603,58 @@ meets on a slow connection.
 
 Verified: three consecutive runs of `kit-list.spec.ts` across all three projects,
 3/3 each, plus the full suite green from an empty database.
+
+---
+
+## BUG-29 — `getTeams` returns the two sides unordered, so positional callers can swap them
+
+**Severity:** high · **Status: open** — found during the Slice 1 full-suite run,
+not caused by it
+
+`CricketTeamRepository.findAllByMatchId` has no `ORDER BY`:
+
+```java
+List<CricketTeam> findAllByMatchId(UUID matchId);
+```
+
+Postgres is therefore free to return TEAM_A and TEAM_B in either order, and it
+does — the order is stable for long stretches and then changes, which is what
+makes this look like a flaky test rather than a defect.
+
+**How it surfaced.** `bug-01-strike-rotation.spec.ts` failed once on `mobile`
+with `opener 1 must be Virat per the workbook baseline / Received: "David
+Warner"` — Warner is `BOWLING_XI[0]`. The fixture had taken `teams[0]` as the
+batting side and been handed Australia. The rows themselves were correct: the
+orphaned match left behind by the failure held `India|TEAM_A` and
+`Australia|TEAM_B`. Only the read order was wrong. Re-running the spec in
+isolation passed 10/10, which is the signature of this bug, not evidence against
+it.
+
+**Why it is an app defect and not a test race.** Two pages index the list
+positionally rather than by `teamType`:
+
+- `ManualEntryPage.tsx:152-185` — `ts[0]` is used as Team A *and* as the first
+  innings' batting side, `ts[1]` as Team B and the bowling side. If the order
+  flips, an entire manually entered scorecard is recorded against the wrong
+  teams, with each side's XI attached to the other. This writes wrong data, it
+  does not merely display it.
+- `LiveScorerPage.tsx:611-612` — `ts[0]`/`ts[1]` become batting/bowling in the
+  branch taken when no innings is in progress, so the scorer can be shown the
+  wrong side's players before the first innings starts. Once an innings exists
+  the server-authoritative `currentInnings` is used instead, which bounds this
+  one to the pre-innings window.
+
+`MatchReportPage` and `ExternalMatchReportPage` already do it correctly, with
+`find(t => t.teamType === "TEAM_A")` — so the right pattern is present in the
+codebase and was simply not used in the other two.
+
+**Same family as BUG-28 and BUG-23:** a latent ordering/timing assumption that
+passes in isolation and fails under concurrency.
+
+**Suggested fix.** Order at the source — `ORDER BY team_type` on
+`findAllByMatchId` (and `findAllByMatchIdNative`, which `ScorecardService` uses)
+— *and* convert the two positional call sites to select by `teamType`, since the
+backend guarantee should not be the only thing keeping them correct.
+
+**Not yet fixed:** it is outside Slice 1, which did not introduce it. Slice 1
+touched `buildTeam` only to set an additional field and changed no ordering.
