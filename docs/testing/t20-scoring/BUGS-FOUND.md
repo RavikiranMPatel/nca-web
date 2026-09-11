@@ -46,7 +46,7 @@ Severity scale: **critical** (data loss, cross-tenant, silent corruption) ·
 | BUG-26 | Brevo API key revoked — **every** production email is failing, not just deploy mail | critical | open — live production issue |
 | BUG-27 | Tournament venues, officials and leaderboards reachable by any academy | critical | **FIXED** — `204bf21` |
 | BUG-28 | The kit list could revert an edit it had just saved | medium | **FIXED** — `376bcc0` |
-| BUG-29 | `getTeams` returns the two sides unordered, so positional callers can swap them | high | open — found during the Slice 1 suite run |
+| BUG-29 | `getTeams` returns the two sides unordered, so positional callers can swap them | high | **FIXED** — `093f827` + `6225508` |
 
 ---
 
@@ -1608,8 +1608,8 @@ Verified: three consecutive runs of `kit-list.spec.ts` across all three projects
 
 ## BUG-29 — `getTeams` returns the two sides unordered, so positional callers can swap them
 
-**Severity:** high · **Status: open** — found during the Slice 1 full-suite run,
-not caused by it
+**Severity:** high · **Status: FIXED** in `093f827` (backend) and `6225508`
+(nca-web) — found during the Slice 1 full-suite run, not caused by it
 
 `CricketTeamRepository.findAllByMatchId` has no `ORDER BY`:
 
@@ -1656,5 +1656,23 @@ passes in isolation and fails under concurrency.
 — *and* convert the two positional call sites to select by `teamType`, since the
 backend guarantee should not be the only thing keeping them correct.
 
-**Not yet fixed:** it is outside Slice 1, which did not introduce it. Slice 1
-touched `buildTeam` only to set an additional field and changed no ordering.
+**Fixed.** `findAllByMatchId` became `findAllByMatchIdOrderByTeamTypeAsc` — renamed
+rather than quietly sorted, so every call site states the dependency — and the
+native query used by `ScorecardService` got the same `ORDER BY`. Both positional
+frontend callers now resolve each side with `find(t => t.teamType === …)`, so the
+backend ordering is a convenience rather than the only thing keeping them correct.
+`ManualEntryPage` stops with a message if either side is missing instead of
+reading `undefined`.
+
+**Proof, against a deliberately flipped heap.** An `UPDATE` moves the TEAM_A
+tuple to the tail of the heap, so an unordered scan of those rows returns
+`TEAM_B,TEAM_A` — exactly what the old query did. In that state:
+
+| | result |
+|---|---|
+| raw unordered scan (the old query) | `TEAM_B,TEAM_A` |
+| `GET /matches/{id}/teams` (fixed) | `["TEAM_A:India","TEAM_B:Australia"]` |
+
+Backend suite 10/10. Playwright full suite **684 passed / 6 expected-fail / 285
+skipped / 0 unexpected**, mobile back to 226 from 225. TypeScript held at the 88
+baseline.
