@@ -44,6 +44,7 @@ Severity scale: **critical** (data loss, cross-tenant, silent corruption) ·
 | BUG-24 | A role-denied request returns 401 "Session expired", not 403 | medium | **FIXED** — `127e8b5` |
 | BUG-25 | A branchless user cannot write a live annotation — hard 400 | high | open — the branch-resolver failure, reproduced |
 | BUG-26 | Brevo API key revoked — **every** production email is failing, not just deploy mail | critical | open — live production issue |
+| BUG-27 | Tournament venues, officials and leaderboards reachable by any academy | critical | **FIXED** — `204bf21` |
 
 ---
 
@@ -1479,3 +1480,95 @@ _Also outstanding, and adjacent: `application-dev.properties` still carries a
 hardcoded Brevo key in a tracked file. That is the known item in CLAUDE.md hard
 rule 6 and should move to an env var; if the dev key is ever the same key, it is
 also now revoked._
+
+---
+
+## BUG-27 — Tournament venues, officials and leaderboards were reachable by any academy
+
+**Severity:** critical (cross-tenant read **and write**) · **Status: FIXED** in `204bf21`
+
+Found during the Stage A tournament-module assessment.
+
+`TournamentVenueController` resolved the tournament with a bare `findByPublicId`
+and then never checked the actor's academy on **any of its eight endpoints**:
+
+```java
+// TournamentVenueController.java:40-46 (before)
+// Intentionally unscoped: KSCA-style tournaments span multiple academies (same
+// as TournamentStatsService.getTournament and TournamentService.linkMatchToFixture).
+private Tournament getTournament(String publicId) {
+    return tournamentRepo.findByPublicId(publicId)
+            .orElseThrow(() -> new BusinessException("Tournament not found", HttpStatus.NOT_FOUND));
+}
+```
+
+The write path was the worst of it:
+
+```java
+// TournamentVenueController.java:67-83 (before)
+Tournament t = getTournament(publicId);     // the FOREIGN tournament
+venue.setTournament(t);                     // attached to the victim's tournament
+venue.setAcademyId(actor.getAcademyId());   // stamped with the ATTACKER's academy
+```
+
+That persisted a row whose `academy_id` and `tournament_id` belonged to different
+academies, and `listVenues` reads by `tournamentId` alone — so the victim would
+then see the injected venue inside their own tournament. Not just a leak:
+cross-tenant data injection. `PATCH` and `DELETE` scoped only by the foreign
+tournament id and operated freely on the victim's rows.
+
+`TournamentStatsService:427-433` had the same helper feeding the batting, bowling
+and MVP leaderboards — another academy's player statistics.
+
+Reachable by any `ROLE_ADMIN` or `ROLE_SUPER_ADMIN`: the route falls to the
+generic `/api/admin/**` rule (`SecurityConfig:141`) and neither class carried a
+`@PreAuthorize`.
+
+**Why the comments did not make it safe.** Both sites asserted KSCA-style intent
+and cited each other as precedent — a circular justification.
+`.claude/rules/multi-tenancy.md:28-30` ratifies exactly three exceptions and
+neither was among them.
+
+**The fix.** `TournamentAccessGuard`, one component, applying the rule
+`MatchService.createMatch` has always used — cross-academy reach is real but not
+unconditional — split by operation:
+
+| | Rule | Applies to |
+|---|---|---|
+| `requireParticipant` | owner **or** a team entered | 2 reads, 3 leaderboards |
+| `requireOwner` | owner only | 5 writes |
+
+Both raise **404, never 403**: the existence of another academy's tournament must
+not be revealed. One component rather than a copied helper, because
+`multi-tenancy.md` records a cross-cutting check duplicated across four services
+that carried the same bypass bug in each. Its unscoped loader is private and
+cannot be reached without passing a check.
+
+Also deleted `TournamentTeamRepository.findByPublicId` — zero callers.
+
+**Sibling audit after the change:** the only unscoped lookups left in the
+tournament package are the guard's private loader and
+`TournamentService.linkMatchToFixture`, which is the one ratified exception and is
+untouched.
+
+**Verified** (`e2e/specs/bug-27-tournament-scoping.spec.ts`): Academy B gets 404
+on all eight venue/officials endpoints and all three leaderboards of Academy A's
+tournament, with zero rows written and zero `tournament_venues` rows whose
+academy differs from their tournament's; the owner is unaffected (200, and can
+still add a venue). Read-only checks on `nca_scoring_test` and on production
+found **no pre-existing mismatched rows** — production holds no tournaments at
+all, so the defect was never exploitable against live data.
+
+### Finding: the KSCA participation branch is currently unreachable
+
+Proving the participation case required seeding a `tournament_teams` row
+directly, because **no API path creates it**. `TournamentService.addTeam` is
+owner-scoped (`:122`) and stamps the row with the caller's own academy (`:130`),
+so `tournament_teams.academy_id` can only ever be the owner's, and
+`existsByTournamentIdAndAcademyId(tournamentId, visitingAcademy)` can never be
+true. `MatchService.createMatch`'s `hasTeam` test (`:137-138`) has therefore never
+been able to pass either — the KSCA exception is already effectively owner-only.
+
+The guard is written to the documented rule and asserted against a seeded
+participation row, so it is correct for when a cross-academy entry flow exists.
+Building that flow is a product decision, not an implementation detail.
