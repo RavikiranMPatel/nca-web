@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
 import {
   IndianRupee,
@@ -51,7 +51,9 @@ type FeePayment = {
   type: string;
   feePlan: FeePlan;
   referenceNumber: string | null;
-  receiptImageUrl: string | null;
+  // Was receiptImageUrl, a /uploads/... path the browser fetched directly — and so could
+  // anyone else. The bytes now come from an authenticated endpoint keyed on publicId.
+  hasReceiptImage: boolean;
   player?: { phone?: string; parentsPhone?: string; displayName?: string };
   nextDueOn?: string;
   reversedPaymentPublicId?: string;
@@ -267,9 +269,67 @@ function PlayerFeesTab() {
   const [showPayModal, setShowPayModal] = useState(false);
   const [showAssignModal, setShowAssignModal] = useState(false);
   const [showChangePlanModal, setShowChangePlanModal] = useState(false);
+  // Holds the payment's publicId, not a URL. The image is fetched as a blob through the
+  // authenticated endpoint — same pattern as AdminWhatsAppInbox.tsx:233, because an
+  // <img src> cannot carry an Authorization header.
   const [showReceiptViewer, setShowReceiptViewer] = useState<string | null>(
     null,
   );
+  const [receiptBlobUrl, setReceiptBlobUrl] = useState<string | null>(null);
+  const [receiptLoading, setReceiptLoading] = useState(false);
+  const [receiptError, setReceiptError] = useState<string | null>(null);
+  const receiptObjectUrl = useRef<string | null>(null);
+
+  const revokeReceipt = () => {
+    if (receiptObjectUrl.current) {
+      URL.revokeObjectURL(receiptObjectUrl.current);
+      receiptObjectUrl.current = null;
+    }
+  };
+
+  const closeReceiptViewer = () => {
+    revokeReceipt();
+    setReceiptBlobUrl(null);
+    setReceiptError(null);
+    setShowReceiptViewer(null);
+  };
+
+  useEffect(() => {
+    if (!showReceiptViewer) return;
+    let cancelled = false;
+    setReceiptLoading(true);
+    setReceiptError(null);
+    (async () => {
+      try {
+        const res = await api.get(
+          `/admin/fees/payments/${showReceiptViewer}/receipt-image`,
+          { responseType: "blob" },
+        );
+        if (cancelled) return;
+        revokeReceipt();
+        const url = URL.createObjectURL(res.data as Blob);
+        receiptObjectUrl.current = url;
+        setReceiptBlobUrl(url);
+      } catch (e: any) {
+        if (cancelled) return;
+        // responseType blob means the error body is a Blob too, so the status is the
+        // only thing reliably readable here.
+        setReceiptError(
+          e?.response?.status === 404
+            ? "This receipt is no longer on file"
+            : "Couldn't load this receipt",
+        );
+      } finally {
+        if (!cancelled) setReceiptLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [showReceiptViewer]);
+
+  // Revoke on unmount so closing the tab mid-view does not leak the object URL.
+  useEffect(() => revokeReceipt, []);
 
   const [paymentMode, setPaymentMode] = useState("PHONE_PE");
   const [otherModeText, setOtherModeText] = useState("");
@@ -1018,17 +1078,17 @@ function PlayerFeesTab() {
                                     {p.referenceNumber}
                                   </span>
                                 )}
-                                {p.receiptImageUrl && (
+                                {p.hasReceiptImage && (
                                   <button
                                     onClick={() =>
-                                      setShowReceiptViewer(p.receiptImageUrl)
+                                      setShowReceiptViewer(p.publicId)
                                     }
                                     className="text-blue-600 hover:text-blue-700 p-1 hover:bg-blue-50 rounded"
                                   >
                                     <Eye size={14} />
                                   </button>
                                 )}
-                                {!p.referenceNumber && !p.receiptImageUrl && (
+                                {!p.referenceNumber && !p.hasReceiptImage && (
                                   <span className="text-xs text-slate-400">
                                     —
                                   </span>
@@ -1255,7 +1315,7 @@ function PlayerFeesTab() {
                         >
                           {p.feePlan?.name}
                         </p>
-                        {(p.referenceNumber || p.receiptImageUrl) &&
+                        {(p.referenceNumber || p.hasReceiptImage) &&
                           !reversal && (
                             <div className="flex items-center gap-2 mb-1.5">
                               {p.referenceNumber && (
@@ -1263,10 +1323,10 @@ function PlayerFeesTab() {
                                   Ref: {p.referenceNumber}
                                 </span>
                               )}
-                              {p.receiptImageUrl && (
+                              {p.hasReceiptImage && (
                                 <button
                                   onClick={() =>
-                                    setShowReceiptViewer(p.receiptImageUrl)
+                                    setShowReceiptViewer(p.publicId)
                                   }
                                   className="text-[11px] text-blue-600 flex items-center gap-1"
                                 >
@@ -1567,7 +1627,7 @@ function PlayerFeesTab() {
       {showReceiptViewer && (
         <div
           className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4"
-          onClick={() => setShowReceiptViewer(null)}
+          onClick={closeReceiptViewer}
         >
           <div
             className="relative bg-white rounded-xl shadow-xl max-w-lg w-full max-h-[85dvh] overflow-hidden"
@@ -1578,18 +1638,31 @@ function PlayerFeesTab() {
                 <ImageIcon size={16} /> Payment Receipt
               </h4>
               <button
-                onClick={() => setShowReceiptViewer(null)}
+                onClick={closeReceiptViewer}
                 className="text-slate-400 hover:text-slate-600 p-1"
               >
                 <X size={18} />
               </button>
             </div>
             <div className="p-4 flex items-center justify-center bg-slate-100 min-h-[200px]">
-              <img
-                src={showReceiptViewer}
-                alt="Payment receipt"
-                className="max-w-full max-h-[70vh] object-contain rounded"
-              />
+              {receiptLoading && (
+                <div className="flex flex-col items-center gap-2 text-slate-400">
+                  <div className="w-6 h-6 border-2 border-slate-300 border-t-slate-500 rounded-full animate-spin" />
+                  <span className="text-xs">Loading receipt…</span>
+                </div>
+              )}
+              {!receiptLoading && receiptError && (
+                <p className="text-xs text-slate-500 text-center px-4">
+                  {receiptError}
+                </p>
+              )}
+              {!receiptLoading && !receiptError && receiptBlobUrl && (
+                <img
+                  src={receiptBlobUrl}
+                  alt="Payment receipt"
+                  className="max-w-full max-h-[70vh] object-contain rounded"
+                />
+              )}
             </div>
           </div>
         </div>
