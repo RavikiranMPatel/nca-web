@@ -79,6 +79,7 @@ export interface CreateMatchRequest {
   ballsPerOver?: number;
   dataSource?: DataSource;
   tournamentPublicId?: string;
+  fixturePublicId?: string;
   notes?: string;
 }
 

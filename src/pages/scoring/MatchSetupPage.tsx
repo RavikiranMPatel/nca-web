@@ -9,7 +9,6 @@ import {
   getBranchPlayers,
   getMatch,
 } from "../../api/scoring/matchApi";
-import { linkMatchToFixture } from "../../api/scoring/tournamentApi";
 import type {
   CricketMatch,
   CricketTeam,
@@ -645,6 +644,9 @@ export default function MatchSetupPage() {
       const match = await createMatch({
         ...matchDetails,
         tournamentPublicId: tournamentId ?? undefined,
+        // Without this the backend leaves cricket_matches.fixture_id NULL, and
+        // the match never attaches to its fixture or the points table.
+        fixturePublicId: fixtureId ?? undefined,
       });
       setCreatedMatch(match);
       setStep(1);
@@ -740,17 +742,11 @@ export default function MatchSetupPage() {
       // Save officials first (non-fatal)
       await saveOfficials();
 
-      if (fixtureId && tournamentId) {
-        try {
-          await linkMatchToFixture(
-            tournamentId,
-            fixtureId,
-            createdMatch.publicId,
-          );
-        } catch {
-          /* non-fatal */
-        }
-      }
+      // The fixture link is written by createMatch and the fixture's move to
+      // IN_PROGRESS by startMatch, both server-side and both in the same
+      // transaction as the thing they describe. There is no separate
+      // best-effort link call to swallow an error from any more: if startMatch
+      // below fails, the catch surfaces it and the match does not start.
       localStorage.setItem("nca_ww_enabled", String(wagonWheelEnabled));
       await startMatch(createdMatch.publicId);
       navigate(`/admin/cricket/matches/${createdMatch.publicId}/score`);
