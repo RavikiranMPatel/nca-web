@@ -242,7 +242,7 @@ const MatchCard = ({
           </span>
         </>
       )}
-      {match.status === "COMPLETED" && (
+      {["COMPLETED", "ABANDONED"].includes(match.status) && (
         <ActionChip label="View Scorecard" color="gray" />
       )}
       {match.dataSource === "MANUAL" && match.status === "SETUP" && (
@@ -317,7 +317,7 @@ export default function MatchListPage() {
         : filter === "live"
           ? ["IN_PROGRESS", "INNINGS_BREAK", "SUPER_OVER"].includes(m.status)
           : filter === "completed"
-            ? m.status === "COMPLETED"
+            ? ["COMPLETED", "ABANDONED"].includes(m.status)
             : filter === "tournament"
               ? !!m.tournament?.name
               : true;
@@ -332,7 +332,10 @@ export default function MatchListPage() {
       ["IN_PROGRESS", "INNINGS_BREAK", "SUPER_OVER"].includes(match.status)
     ) {
       navigate(`/admin/cricket/matches/${match.publicId}/score`);
-    } else if (match.status === "COMPLETED") {
+    } else if (["COMPLETED", "ABANDONED"].includes(match.status)) {
+      // An abandoned match still has the innings that were played before the
+      // rain, so the scorecard is worth opening. Without this the card was a
+      // dead tap.
       window.open(`/match/${match.publicId}/scorecard`, "_blank");
     }
   };

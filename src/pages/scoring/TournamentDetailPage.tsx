@@ -19,7 +19,11 @@ import {
   removeFromSquad,
   getAllTournamentPlayers,
   prepareMatchFromFixture,
+  postponeFixture,
+  rescheduleFixture,
+  abandonFixture,
 } from "../../api/scoring/tournamentApi";
+import { INTERRUPTION_REASONS, FIXTURE_STATUSES } from "../../types/match";
 import { getBranchPlayers } from "../../api/scoring/matchApi";
 import api from "../../api/axios";
 
@@ -166,6 +170,18 @@ export default function TournamentDetailPage() {
   const [winnerTeam, setWinnerTeam] = useState("");
 
   const [showEditFixture, setShowEditFixture] = useState(false);
+
+  // ── Postpone / reschedule / abandon ───────────────────────────────────────
+  const [rainFixture, setRainFixture] = useState<any | null>(null);
+  const [rainMode, setRainMode] = useState<
+    "menu" | "postpone" | "reschedule" | "abandon"
+  >("menu");
+  const [rainReason, setRainReason] = useState("RAIN");
+  const [rainNote, setRainNote] = useState("");
+  const [rainDate, setRainDate] = useState("");
+  const [rainTime, setRainTime] = useState("");
+  const [rainVenueId, setRainVenueId] = useState("");
+  const [rainPosting, setRainPosting] = useState(false);
   const [editingFixture, setEditingFixture] = useState<any>(null);
   const [editFixtureForm, setEditFixtureForm] = useState({
     roundNumber: 1,
@@ -599,6 +615,45 @@ export default function TournamentDetailPage() {
       );
     } catch (e: any) {
       setError(e.response?.data?.message ?? "Failed to prepare match");
+    }
+  };
+
+  const openRain = (f: any) => {
+    setRainFixture(f);
+    setRainMode("menu");
+    setRainReason("RAIN");
+    setRainNote("");
+    setRainVenueId(f.tournamentVenue?.id ?? "");
+    // Rule 6: seed the date picker from local parts, never toISOString().
+    const d = f.scheduledAt ? new Date(f.scheduledAt) : new Date();
+    const pad = (n: number) => String(n).padStart(2, "0");
+    setRainDate(
+      `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`,
+    );
+    setRainTime(`${pad(d.getHours())}:${pad(d.getMinutes())}`);
+  };
+
+  const closeRain = () => {
+    setRainFixture(null);
+    setRainMode("menu");
+    setRainNote("");
+  };
+
+  const runRain = async (fn: () => Promise<unknown>, ok: string) => {
+    if (rainReason === "OTHER" && !rainNote.trim()) {
+      setError("A note is required when the reason is Other");
+      return;
+    }
+    setRainPosting(true);
+    try {
+      await fn();
+      closeRain();
+      await loadAll();
+      showToast(ok);
+    } catch (e: any) {
+      setError(e.response?.data?.message ?? "Action failed");
+    } finally {
+      setRainPosting(false);
     }
   };
 
@@ -1693,6 +1748,16 @@ export default function TournamentDetailPage() {
                                             🔴 Live Scorer
                                           </button>
                                         )}
+                                      {["SCHEDULED", "POSTPONED"].includes(
+                                        f.status,
+                                      ) && (
+                                        <button
+                                          onClick={() => openRain(f)}
+                                          className="px-3 py-1.5 bg-amber-50 border border-amber-200 text-amber-700 text-xs font-semibold rounded-lg active:scale-95"
+                                        >
+                                          🌧 Rain
+                                        </button>
+                                      )}
                                       {f.status === "COMPLETED" && f.match && (
                                         <button
                                           onClick={() =>
@@ -3138,6 +3203,218 @@ export default function TournamentDetailPage() {
       )}
 
       {/* ── EDIT FIXTURE MODAL ── */}
+      {/* ── POSTPONE / RESCHEDULE / ABANDON ── */}
+      {rainFixture && (
+        <div className="fixed inset-0 z-50 bg-black/60 flex items-end">
+          <div className="w-full bg-white dark:bg-gray-900 rounded-t-2xl max-h-[85dvh] overflow-y-auto p-5">
+            <div className="w-10 h-1 bg-gray-300 rounded-full mx-auto mb-4" />
+            <h3 className="text-sm font-semibold text-gray-900 dark:text-white text-center">
+              {rainFixture.homeTeam?.name} vs {rainFixture.awayTeam?.name}
+            </h3>
+
+            {rainMode === "menu" && (
+              <div className="mt-4 space-y-2">
+                <button
+                  onClick={() => setRainMode("reschedule")}
+                  className="w-full flex items-center gap-3 px-4 py-3.5 bg-gray-50 dark:bg-gray-800 rounded-xl text-left active:scale-95"
+                >
+                  <span className="text-lg w-8 text-center">📅</span>
+                  <div>
+                    <div className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                      Reschedule
+                    </div>
+                    <div className="text-xs text-gray-400">
+                      New date, time or ground. Stays in the tournament.
+                    </div>
+                  </div>
+                </button>
+                <button
+                  onClick={() => setRainMode("postpone")}
+                  className="w-full flex items-center gap-3 px-4 py-3.5 bg-gray-50 dark:bg-gray-800 rounded-xl text-left active:scale-95"
+                >
+                  <span className="text-lg w-8 text-center">⏸</span>
+                  <div>
+                    <div className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                      Postpone
+                    </div>
+                    <div className="text-xs text-gray-400">
+                      Will be replayed. No points yet. Date decided later.
+                    </div>
+                  </div>
+                </button>
+                <button
+                  onClick={() => setRainMode("abandon")}
+                  className="w-full flex items-center gap-3 px-4 py-3.5 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl text-left active:scale-95"
+                >
+                  <span className="text-lg w-8 text-center">🌧</span>
+                  <div>
+                    <div className="text-sm font-medium text-red-700 dark:text-red-400">
+                      Abandon
+                    </div>
+                    <div className="text-xs text-red-400">
+                      No result — 1 point each. Cannot be undone.
+                    </div>
+                  </div>
+                </button>
+              </div>
+            )}
+
+            {rainMode !== "menu" && (
+              <>
+                {rainMode === "reschedule" && (
+                  <div className="mt-4 grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="text-xs text-gray-400 mb-1 block">
+                        Date
+                      </label>
+                      <input
+                        type="date"
+                        value={rainDate}
+                        onChange={(e) => setRainDate(e.target.value)}
+                        className="w-full px-3 py-2.5 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm text-gray-900 dark:text-gray-100 outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs text-gray-400 mb-1 block">
+                        Time
+                      </label>
+                      <input
+                        type="time"
+                        value={rainTime}
+                        onChange={(e) => setRainTime(e.target.value)}
+                        className="w-full px-3 py-2.5 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm text-gray-900 dark:text-gray-100 outline-none"
+                      />
+                    </div>
+                  </div>
+                )}
+                {rainMode === "reschedule" && venues.length > 0 && (
+                  <div className="mt-3">
+                    <label className="text-xs text-gray-400 mb-1 block">
+                      Ground
+                    </label>
+                    <select
+                      value={rainVenueId}
+                      onChange={(e) => setRainVenueId(e.target.value)}
+                      className="w-full px-3 py-2.5 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm text-gray-900 dark:text-gray-100 outline-none"
+                    >
+                      <option value="">
+                        Keep {rainFixture.venue ?? "current"}
+                      </option>
+                      {venues.map((v: any) => (
+                        <option key={v.id} value={v.id}>
+                          {v.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+
+                <label className="text-xs text-gray-400 mb-1.5 block mt-4">
+                  Reason
+                </label>
+                <div className="grid grid-cols-2 gap-2">
+                  {INTERRUPTION_REASONS.map((r) => (
+                    <button
+                      key={r.value}
+                      onClick={() => setRainReason(r.value)}
+                      className={`h-11 rounded-xl text-sm font-semibold border transition-all active:scale-95 ${
+                        rainReason === r.value
+                          ? "bg-blue-600 border-blue-600 text-white"
+                          : "bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400"
+                      }`}
+                    >
+                      {r.label}
+                    </button>
+                  ))}
+                </div>
+
+                {rainReason === "OTHER" && (
+                  <input
+                    type="text"
+                    className="mt-3 w-full px-3 py-2.5 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm text-gray-900 dark:text-gray-100 outline-none"
+                    placeholder="What happened?"
+                    value={rainNote}
+                    onChange={(e) => setRainNote(e.target.value)}
+                  />
+                )}
+
+                <button
+                  disabled={rainPosting}
+                  onClick={() => {
+                    const fx = rainFixture.publicId;
+                    if (rainMode === "reschedule") {
+                      // Rule 6: a local datetime string with no Z parses in the
+                      // browser's zone, and toISOString then converts correctly.
+                      const at = new Date(
+                        `${rainDate}T${rainTime}:00`,
+                      ).toISOString();
+                      runRain(
+                        () =>
+                          rescheduleFixture(publicId!, fx, {
+                            scheduledAt: at,
+                            venueId: rainVenueId || undefined,
+                            reason: rainReason,
+                            note: rainNote || undefined,
+                          }),
+                        "✓ Fixture rescheduled",
+                      );
+                    } else if (rainMode === "postpone") {
+                      runRain(
+                        () =>
+                          postponeFixture(
+                            publicId!,
+                            fx,
+                            rainReason,
+                            rainNote || undefined,
+                          ),
+                        "✓ Fixture postponed",
+                      );
+                    } else {
+                      runRain(
+                        () =>
+                          abandonFixture(
+                            publicId!,
+                            fx,
+                            rainReason,
+                            rainNote || undefined,
+                          ),
+                        "✓ Fixture abandoned",
+                      );
+                    }
+                  }}
+                  className={`mt-4 w-full h-14 text-white rounded-xl font-bold text-sm disabled:opacity-40 active:scale-95 ${
+                    rainMode === "abandon" ? "bg-red-600" : "bg-blue-600"
+                  }`}
+                >
+                  {rainPosting
+                    ? "Saving..."
+                    : rainMode === "reschedule"
+                      ? "Reschedule"
+                      : rainMode === "postpone"
+                        ? "Postpone"
+                        : "Abandon Fixture"}
+                </button>
+                <button
+                  onClick={() => setRainMode("menu")}
+                  className="w-full py-3 text-gray-400 text-sm"
+                >
+                  Back
+                </button>
+              </>
+            )}
+
+            {rainMode === "menu" && (
+              <button
+                onClick={closeRain}
+                className="w-full py-3 mt-2 text-gray-400 text-sm"
+              >
+                Cancel
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
       {showEditFixture && editingFixture && (
         <div className="fixed inset-0 z-50 bg-black/70 flex items-end">
           <div className="w-full bg-white dark:bg-gray-900 rounded-t-2xl p-5 max-h-[85dvh] overflow-y-auto">
@@ -3293,19 +3570,17 @@ export default function TournamentDetailPage() {
                   Status Override
                 </label>
                 <div className="grid grid-cols-2 gap-2">
-                  {["SCHEDULED", "IN_PROGRESS", "COMPLETED", "CANCELLED"].map(
-                    (s) => (
-                      <button
-                        key={s}
-                        onClick={() =>
-                          setEditFixtureForm((p) => ({ ...p, status: s }))
-                        }
-                        className={`py-2 rounded-xl text-xs font-semibold border transition-all active:scale-95 ${editFixtureForm.status === s ? "bg-blue-600 border-blue-600 text-white" : "bg-gray-100 dark:bg-gray-800 border-transparent text-gray-600 dark:text-gray-400"}`}
-                      >
-                        {s}
-                      </button>
-                    ),
-                  )}
+                  {FIXTURE_STATUSES.map((s) => (
+                    <button
+                      key={s}
+                      onClick={() =>
+                        setEditFixtureForm((p) => ({ ...p, status: s }))
+                      }
+                      className={`py-2 rounded-xl text-xs font-semibold border transition-all active:scale-95 ${editFixtureForm.status === s ? "bg-blue-600 border-blue-600 text-white" : "bg-gray-100 dark:bg-gray-800 border-transparent text-gray-600 dark:text-gray-400"}`}
+                    >
+                      {s}
+                    </button>
+                  ))}
                 </div>
               </div>
               <div className="flex gap-3 pt-2">

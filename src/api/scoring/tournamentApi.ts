@@ -116,6 +116,54 @@ export const prepareMatchFromFixture = (
     )
     .then((r) => r.data);
 
+// Postpone: the fixture WILL be replayed. No points, no result. Distinct from
+// abandon, which is terminal and awards noResultPoints to both sides.
+export const postponeFixture = (
+  tournamentPublicId: string,
+  fixturePublicId: string,
+  reason: string,
+  note?: string,
+) =>
+  api
+    .post(
+      `/admin/cricket/tournaments/${tournamentPublicId}/fixtures/${fixturePublicId}/postpone`,
+      { reason, note },
+    )
+    .then((r) => r.data);
+
+// Reschedule: new date/time/venue, back to SCHEDULED. The original schedule is
+// preserved on the fixture on the first move only.
+export const rescheduleFixture = (
+  tournamentPublicId: string,
+  fixturePublicId: string,
+  body: {
+    scheduledAt: string;
+    venueId?: string;
+    reason: string;
+    note?: string;
+  },
+) =>
+  api
+    .post(
+      `/admin/cricket/tournaments/${tournamentPublicId}/fixtures/${fixturePublicId}/reschedule`,
+      body,
+    )
+    .then((r) => r.data);
+
+// Abandon a fixture that never produced a match — a washed-out day.
+export const abandonFixture = (
+  tournamentPublicId: string,
+  fixturePublicId: string,
+  reason: string,
+  note?: string,
+) =>
+  api
+    .post(
+      `/admin/cricket/tournaments/${tournamentPublicId}/fixtures/${fixturePublicId}/abandon`,
+      { reason, note },
+    )
+    .then((r) => r.data);
+
 export const linkMatchToFixture = (
   tournamentPublicId: string,
   fixturePublicId: string,

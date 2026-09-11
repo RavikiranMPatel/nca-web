@@ -8,6 +8,46 @@ export type MatchStatus =
   | "SUPER_OVER"
   | "COMPLETED"
   | "ABANDONED";
+// Mirrors the comment on Fixture.java. Fixtures are otherwise untyped `any`
+// throughout TournamentDetailPage, so the dropdown and the badge maps had
+// nothing keeping them in sync with the backend.
+export type FixtureStatus =
+  | "SCHEDULED"
+  | "IN_PROGRESS"
+  | "COMPLETED"
+  | "CANCELLED"
+  | "POSTPONED"
+  | "ABANDONED"
+  | "NO_RESULT"
+  | "BYE";
+
+export const FIXTURE_STATUSES: FixtureStatus[] = [
+  "SCHEDULED",
+  "IN_PROGRESS",
+  "COMPLETED",
+  "POSTPONED",
+  "ABANDONED",
+  "NO_RESULT",
+  "CANCELLED",
+  "BYE",
+];
+
+// RAIN | BAD_LIGHT | GROUND_ISSUE | TEAM_ISSUE | OTHER — mirrors
+// InterruptionReason.java, which validates these server-side.
+export type InterruptionReason =
+  "RAIN" | "BAD_LIGHT" | "GROUND_ISSUE" | "TEAM_ISSUE" | "OTHER";
+
+export const INTERRUPTION_REASONS: {
+  value: InterruptionReason;
+  label: string;
+}[] = [
+  { value: "RAIN", label: "Rain" },
+  { value: "BAD_LIGHT", label: "Bad Light" },
+  { value: "GROUND_ISSUE", label: "Ground Issue" },
+  { value: "TEAM_ISSUE", label: "Team Issue" },
+  { value: "OTHER", label: "Other" },
+];
+
 export type DataSource = "BALL_BY_BALL" | "MANUAL";
 export type TossDecision = "BAT" | "FIELD";
 export type ResultType =

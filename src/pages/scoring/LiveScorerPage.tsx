@@ -9,7 +9,14 @@ import {
   awardPenalty,
   selectBatter,
 } from "../../api/scoring/scoringApi";
-import { getMatch, getTeams, pauseMatch, resumeMatch } from "../../api/scoring/matchApi";
+import {
+  getMatch,
+  getTeams,
+  pauseMatch,
+  resumeMatch,
+  abandonMatch,
+} from "../../api/scoring/matchApi";
+import { INTERRUPTION_REASONS } from "../../types/match";
 import type {
   BallResponse,
   InningsState,
@@ -119,45 +126,47 @@ const PlayerSelector = ({
           {filtered.map((p) => {
             const rh = retiredHurtStats[p.publicId];
             return (
-            <button
-              key={p.publicId}
-              onClick={() => {
-                onSelect(p);
-                onSearchChange("");
-              }}
-              className="w-full flex items-center gap-3 px-3 py-3 bg-gray-800 hover:bg-gray-700 rounded-xl text-left active:scale-95 transition-all"
-            >
-              <div className="w-8 h-8 bg-gray-700 rounded-full flex items-center justify-center text-xs font-bold text-white flex-shrink-0">
-                {p.displayName.charAt(0).toUpperCase()}
-              </div>
-              <div>
-                <div className="text-sm font-medium text-white">
-                  {p.displayName}
+              <button
+                key={p.publicId}
+                onClick={() => {
+                  onSelect(p);
+                  onSearchChange("");
+                }}
+                className="w-full flex items-center gap-3 px-3 py-3 bg-gray-800 hover:bg-gray-700 rounded-xl text-left active:scale-95 transition-all"
+              >
+                <div className="w-8 h-8 bg-gray-700 rounded-full flex items-center justify-center text-xs font-bold text-white flex-shrink-0">
+                  {p.displayName.charAt(0).toUpperCase()}
                 </div>
-                {rh ? (
-                  <div className="text-xs text-amber-400 font-medium mt-0.5">
-                    retired hurt · {rh.runs}({rh.balls})
+                <div>
+                  <div className="text-sm font-medium text-white">
+                    {p.displayName}
                   </div>
-                ) : (p.battingStyle || p.playerRole) && (
-                  <div className="text-xs text-gray-400">
-                    {[
-                      p.playerRole === "WK_BATSMAN"
-                        ? "🧤 WK"
-                        : p.playerRole === "BATSMAN"
-                          ? "🏏 Bat"
-                          : p.playerRole === "BOWLER"
-                            ? "⚾ Bowl"
-                            : p.playerRole === "ALL_ROUNDER"
-                              ? "⭐ AR"
-                              : null,
-                      p.battingStyle,
-                    ]
-                      .filter(Boolean)
-                      .join(" · ")}
-                  </div>
-                )}
-              </div>
-            </button>
+                  {rh ? (
+                    <div className="text-xs text-amber-400 font-medium mt-0.5">
+                      retired hurt · {rh.runs}({rh.balls})
+                    </div>
+                  ) : (
+                    (p.battingStyle || p.playerRole) && (
+                      <div className="text-xs text-gray-400">
+                        {[
+                          p.playerRole === "WK_BATSMAN"
+                            ? "🧤 WK"
+                            : p.playerRole === "BATSMAN"
+                              ? "🏏 Bat"
+                              : p.playerRole === "BOWLER"
+                                ? "⚾ Bowl"
+                                : p.playerRole === "ALL_ROUNDER"
+                                  ? "⭐ AR"
+                                  : null,
+                          p.battingStyle,
+                        ]
+                          .filter(Boolean)
+                          .join(" · ")}
+                      </div>
+                    )
+                  )}
+                </div>
+              </button>
             );
           })}
           {filtered.length === 0 && (
@@ -235,7 +244,6 @@ const emptyStats = (): BatterStats => ({
   sixes: 0,
 });
 
-
 export default function LiveScorerPage() {
   const { matchId } = useParams<{ matchId: string }>();
   const navigate = useNavigate();
@@ -294,7 +302,9 @@ export default function LiveScorerPage() {
   );
   const [prevSuperOverBowlerPublicId, setPrevSuperOverBowlerPublicId] =
     useState<string | null>(null);
-  const [serverBowlerStats, setServerBowlerStats] = useState<Record<string, BowlerStatDTO>>({});
+  const [serverBowlerStats, setServerBowlerStats] = useState<
+    Record<string, BowlerStatDTO>
+  >({});
   const [battingTeamId, setBattingTeamId] = useState<string | null>(null);
   const [bowlingTeamId, setBowlingTeamId] = useState<string | null>(null);
   const [battingPlayers, setBattingPlayers] = useState<ScoringPlayer[]>([]);
@@ -344,6 +354,12 @@ export default function LiveScorerPage() {
   const [pauseInputValue, setPauseInputValue] = useState("");
   const [pausePosting, setPausePosting] = useState(false);
 
+  // ── Abandon state ─────────────────────────────────────────────────────────
+  const [showAbandon, setShowAbandon] = useState(false);
+  const [abandonReason, setAbandonReason] = useState("RAIN");
+  const [abandonNote, setAbandonNote] = useState("");
+  const [abandonPosting, setAbandonPosting] = useState(false);
+
   // ── Man of the Match state (in result flow) ───────────────────────────────
   const [motmPublicId, setMotmPublicId] = useState("");
   const [motmNote, setMotmNote] = useState("");
@@ -364,11 +380,13 @@ export default function LiveScorerPage() {
   const [moreSearch, setMoreSearch] = useState("");
   const [moreError, setMoreError] = useState("");
   const [morePicking, setMorePicking] = useState(false);
-  const [pendingRunnerFor, setPendingRunnerFor] = useState<ScoringPlayer | null>(null);
+  const [pendingRunnerFor, setPendingRunnerFor] =
+    useState<ScoringPlayer | null>(null);
   const [activeRunnerFor, setActiveRunnerFor] = useState<string | null>(null);
   const [activeRunnerName, setActiveRunnerName] = useState<string | null>(null);
   const [subExternalName, setSubExternalName] = useState("");
-  const [subSelectedPlayer, setSubSelectedPlayer] = useState<ScoringPlayer | null>(null);
+  const [subSelectedPlayer, setSubSelectedPlayer] =
+    useState<ScoringPlayer | null>(null);
 
   const loadingRef = useRef(false);
   // True when the batter picker is opened by the post-wicket flow, not initial setup.
@@ -496,9 +514,21 @@ export default function LiveScorerPage() {
     setInnings(state.inningsState);
 
     // Players — resolved from server publicIds against the local roster
-    setStriker(battingPlayersRef.current.find(p => p.publicId === state.currentStrikerPublicId) ?? null);
-    setNonStriker(battingPlayersRef.current.find(p => p.publicId === state.currentNonStrikerPublicId) ?? null);
-    setBowler(bowlingPlayersRef.current.find(p => p.publicId === state.currentBowlerPublicId) ?? null);
+    setStriker(
+      battingPlayersRef.current.find(
+        (p) => p.publicId === state.currentStrikerPublicId,
+      ) ?? null,
+    );
+    setNonStriker(
+      battingPlayersRef.current.find(
+        (p) => p.publicId === state.currentNonStrikerPublicId,
+      ) ?? null,
+    );
+    setBowler(
+      bowlingPlayersRef.current.find(
+        (p) => p.publicId === state.currentBowlerPublicId,
+      ) ?? null,
+    );
 
     setIsFreeHit(state.isFreeHit ?? false);
     setPartnershipRuns(state.partnershipRuns ?? 0);
@@ -628,13 +658,7 @@ export default function LiveScorerPage() {
         runsBatsman: runs,
         runsExtras: extra ? extraRuns : 0,
         extraType: (extra ?? null) as
-          | "WIDE"
-          | "NO_BALL"
-          | "LEG_BYE"
-          | "BYE"
-          | "PENALTY"
-          | null
-          | undefined,
+          "WIDE" | "NO_BALL" | "LEG_BYE" | "BYE" | "PENALTY" | null | undefined,
         isWicket: false,
         isFreeHit,
       });
@@ -654,7 +678,9 @@ export default function LiveScorerPage() {
         const overSnap = [...thisOver, currentBallForSummary];
         setLastOverNumber(prevOverNumber);
         setLastOverBalls(overSnap);
-        setLastOverRuns(overSnap.reduce((s, b) => s + b.runsBatsman + b.runsExtras, 0));
+        setLastOverRuns(
+          overSnap.reduce((s, b) => s + b.runsBatsman + b.runsExtras, 0),
+        );
         setThisOver([]);
         setShowOverSummary(true);
         setShowBowlerSelect(true);
@@ -755,7 +781,9 @@ export default function LiveScorerPage() {
         const overSnap = [...thisOver, wicketBallForSummary];
         setLastOverNumber(prevOverNumber);
         setLastOverBalls(overSnap);
-        setLastOverRuns(overSnap.reduce((s, b) => s + b.runsBatsman + b.runsExtras, 0));
+        setLastOverRuns(
+          overSnap.reduce((s, b) => s + b.runsBatsman + b.runsExtras, 0),
+        );
         setThisOver([]);
         setShowOverSummary(true);
         setShowBowlerSelect(true);
@@ -772,13 +800,13 @@ export default function LiveScorerPage() {
         const currentNonStrikerId = state.currentNonStrikerPublicId;
         const availableBatters = battingPlayers.filter(
           (p) =>
-            !dismissedSet.has(p.publicId) &&
-            p.publicId !== currentNonStrikerId,
+            !dismissedSet.has(p.publicId) && p.publicId !== currentNonStrikerId,
         );
         if (availableBatters.length > 0) {
           postWicketSelectRef.current = true;
           // Server has already rotated — open whichever slot is unfilled
-          const needsNonStriker = !state.currentNonStrikerPublicId &&
+          const needsNonStriker =
+            !state.currentNonStrikerPublicId &&
             capturedDismissedPlayer?.publicId === capturedNonStriker?.publicId;
           setShowBatterSelect(needsNonStriker ? "nonstriker" : "striker");
         }
@@ -921,6 +949,26 @@ export default function LiveScorerPage() {
     }
   };
 
+  const handleAbandon = async () => {
+    if (!matchId) return;
+    if (abandonReason === "OTHER" && !abandonNote.trim()) {
+      setError("A note is required when the reason is Other");
+      return;
+    }
+    setAbandonPosting(true);
+    try {
+      await abandonMatch(matchId, abandonReason, abandonNote || undefined);
+      navigate("/admin/cricket/matches");
+    } catch (e: unknown) {
+      const msg =
+        (e as { response?: { data?: { message?: string } } })?.response?.data
+          ?.message ?? "Failed to abandon match";
+      setError(msg);
+    } finally {
+      setAbandonPosting(false);
+    }
+  };
+
   // ── Pause / resume handlers ───────────────────────────────────────────────
   const handlePause = async () => {
     if (!matchId) return;
@@ -972,15 +1020,17 @@ export default function LiveScorerPage() {
     setMoreError("");
     try {
       const state = await api
-        .post<BallResponse>(`/admin/cricket/matches/${matchId}/scoring/swap-batters`)
+        .post<BallResponse>(
+          `/admin/cricket/matches/${matchId}/scoring/swap-batters`,
+        )
         .then((r) => r.data);
       applyState(state);
       closeMore();
       showToast("✓ Batters swapped");
     } catch (e: unknown) {
       setMoreError(
-        (e as { response?: { data?: { message?: string } } })?.response?.data?.message ??
-          "Failed to swap batters",
+        (e as { response?: { data?: { message?: string } } })?.response?.data
+          ?.message ?? "Failed to swap batters",
       );
     } finally {
       setMorePicking(false);
@@ -993,17 +1043,20 @@ export default function LiveScorerPage() {
     setMoreError("");
     try {
       const state = await api
-        .post<BallResponse>(`/admin/cricket/matches/${matchId}/scoring/correct-bowler`, {
-          bowlerPublicId: p.publicId,
-        })
+        .post<BallResponse>(
+          `/admin/cricket/matches/${matchId}/scoring/correct-bowler`,
+          {
+            bowlerPublicId: p.publicId,
+          },
+        )
         .then((r) => r.data);
       applyState(state);
       closeMore();
       showToast(`✓ Bowler corrected to ${p.displayName}`);
     } catch (e: unknown) {
       setMoreError(
-        (e as { response?: { data?: { message?: string } } })?.response?.data?.message ??
-          "Failed to correct bowler",
+        (e as { response?: { data?: { message?: string } } })?.response?.data
+          ?.message ?? "Failed to correct bowler",
       );
     } finally {
       setMorePicking(false);
@@ -1016,17 +1069,20 @@ export default function LiveScorerPage() {
     setMoreError("");
     try {
       const state = await api
-        .post<BallResponse>(`/admin/cricket/matches/${matchId}/scoring/bowler-injury-replace`, {
-          replacementBowlerPublicId: p.publicId,
-        })
+        .post<BallResponse>(
+          `/admin/cricket/matches/${matchId}/scoring/bowler-injury-replace`,
+          {
+            replacementBowlerPublicId: p.publicId,
+          },
+        )
         .then((r) => r.data);
       applyState(state);
       closeMore();
       showToast(`✓ ${p.displayName} replaces injured bowler`);
     } catch (e: unknown) {
       setMoreError(
-        (e as { response?: { data?: { message?: string } } })?.response?.data?.message ??
-          "Failed to replace bowler",
+        (e as { response?: { data?: { message?: string } } })?.response?.data
+          ?.message ?? "Failed to replace bowler",
       );
     } finally {
       setMorePicking(false);
@@ -1039,18 +1095,21 @@ export default function LiveScorerPage() {
     setMoreError("");
     try {
       const state = await api
-        .post<BallResponse>(`/admin/cricket/matches/${matchId}/scoring/runner`, {
-          injuredBatterMtpPublicId: pendingRunnerFor.publicId,
-          runnerMtpPublicId: runnerPublicId,
-        })
+        .post<BallResponse>(
+          `/admin/cricket/matches/${matchId}/scoring/runner`,
+          {
+            injuredBatterMtpPublicId: pendingRunnerFor.publicId,
+            runnerMtpPublicId: runnerPublicId,
+          },
+        )
         .then((r) => r.data);
       applyState(state);
       closeMore();
       showToast("✓ Runner set");
     } catch (e: unknown) {
       setMoreError(
-        (e as { response?: { data?: { message?: string } } })?.response?.data?.message ??
-          "Failed to set runner",
+        (e as { response?: { data?: { message?: string } } })?.response?.data
+          ?.message ?? "Failed to set runner",
       );
     } finally {
       setMorePicking(false);
@@ -1063,15 +1122,17 @@ export default function LiveScorerPage() {
     setMoreError("");
     try {
       const state = await api
-        .delete<BallResponse>(`/admin/cricket/matches/${matchId}/scoring/runner`)
+        .delete<BallResponse>(
+          `/admin/cricket/matches/${matchId}/scoring/runner`,
+        )
         .then((r) => r.data);
       applyState(state);
       closeMore();
       showToast("✓ Runner removed");
     } catch (e: unknown) {
       setMoreError(
-        (e as { response?: { data?: { message?: string } } })?.response?.data?.message ??
-          "Failed to remove runner",
+        (e as { response?: { data?: { message?: string } } })?.response?.data
+          ?.message ?? "Failed to remove runner",
       );
     } finally {
       setMorePicking(false);
@@ -1084,17 +1145,20 @@ export default function LiveScorerPage() {
     setMoreError("");
     try {
       const state = await api
-        .post<BallResponse>(`/admin/cricket/matches/${matchId}/scoring/change-wicketkeeper`, {
-          newKeeperPublicId: p.publicId,
-        })
+        .post<BallResponse>(
+          `/admin/cricket/matches/${matchId}/scoring/change-wicketkeeper`,
+          {
+            newKeeperPublicId: p.publicId,
+          },
+        )
         .then((r) => r.data);
       applyState(state);
       closeMore();
       showToast(`✓ ${p.displayName} is new wicketkeeper`);
     } catch (e: unknown) {
       setMoreError(
-        (e as { response?: { data?: { message?: string } } })?.response?.data?.message ??
-          "Failed to change wicketkeeper",
+        (e as { response?: { data?: { message?: string } } })?.response?.data
+          ?.message ?? "Failed to change wicketkeeper",
       );
     } finally {
       setMorePicking(false);
@@ -1120,10 +1184,11 @@ export default function LiveScorerPage() {
       showToast("✓ Substitute added");
       await loadAll();
     } catch (e: unknown) {
-      const status = (e as { response?: { status?: number } })?.response?.status;
+      const status = (e as { response?: { status?: number } })?.response
+        ?.status;
       const msg =
-        (e as { response?: { data?: { message?: string } } })?.response?.data?.message ??
-        "Failed to add substitute";
+        (e as { response?: { data?: { message?: string } } })?.response?.data
+          ?.message ?? "Failed to add substitute";
       setMoreError(status === 409 ? `Already exists: ${msg}` : msg);
     } finally {
       setMorePicking(false);
@@ -1136,15 +1201,17 @@ export default function LiveScorerPage() {
     setMoreError("");
     try {
       const state = await api
-        .post<BallResponse>(`/admin/cricket/matches/${matchId}/scoring/super-over`)
+        .post<BallResponse>(
+          `/admin/cricket/matches/${matchId}/scoring/super-over`,
+        )
         .then((r) => r.data);
       applyState(state);
       closeMore();
       showToast("✓ Super over started");
     } catch (e: unknown) {
       setMoreError(
-        (e as { response?: { data?: { message?: string } } })?.response?.data?.message ??
-          "Failed to start super over",
+        (e as { response?: { data?: { message?: string } } })?.response?.data
+          ?.message ?? "Failed to start super over",
       );
     } finally {
       setMorePicking(false);
@@ -1289,8 +1356,8 @@ export default function LiveScorerPage() {
               {activeRunnerName}{" "}
               <span className="text-gray-400">
                 running for{" "}
-                {battingPlayers.find((p) => p.publicId === activeRunnerFor)?.displayName ??
-                  "batter"}
+                {battingPlayers.find((p) => p.publicId === activeRunnerFor)
+                  ?.displayName ?? "batter"}
               </span>
             </span>
           </div>
@@ -1517,14 +1584,17 @@ export default function LiveScorerPage() {
           ].filter(Boolean)}
           retiredHurtStats={Object.fromEntries(
             battingPlayers
-              .filter((p) => batterStatsMap[p.publicId]?.dismissalType === "RETIRED_HURT")
+              .filter(
+                (p) =>
+                  batterStatsMap[p.publicId]?.dismissalType === "RETIRED_HURT",
+              )
               .map((p) => [
                 p.publicId,
                 {
                   runs: batterStatsMap[p.publicId].runs,
                   balls: batterStatsMap[p.publicId].balls,
                 },
-              ])
+              ]),
           )}
           searchValue={showPlayerSearch}
           onSearchChange={setShowPlayerSearch}
@@ -1703,7 +1773,11 @@ export default function LiveScorerPage() {
         <PlayerSelector
           title="Select Fielder"
           players={bowlingPlayers}
-          exclude={["Stumped"].includes(dismissalType) ? [bowler?.publicId ?? ""].filter(Boolean) : []}
+          exclude={
+            ["Stumped"].includes(dismissalType)
+              ? [bowler?.publicId ?? ""].filter(Boolean)
+              : []
+          }
           searchValue={showPlayerSearch}
           onSearchChange={setShowPlayerSearch}
           onClose={closeSelector}
@@ -1734,7 +1808,13 @@ export default function LiveScorerPage() {
                   {DISMISSALS.map((d) => {
                     const blockedOnFreeHit =
                       isFreeHit &&
-                      ["Bowled", "Caught", "LBW", "Stumped", "Hit Wicket"].includes(d);
+                      [
+                        "Bowled",
+                        "Caught",
+                        "LBW",
+                        "Stumped",
+                        "Hit Wicket",
+                      ].includes(d);
                     return (
                       <button
                         key={d}
@@ -2354,10 +2434,17 @@ export default function LiveScorerPage() {
                 {motmPublicId ? (
                   <div className="flex items-center gap-2 px-3 py-2.5 bg-amber-50 border border-amber-200 rounded-xl">
                     <span className="text-sm font-medium text-gray-900 flex-1">
-                      🏅 {[...battingPlayers, ...bowlingPlayers].find(p => p.publicId === motmPublicId)?.displayName ?? motmPublicId}
+                      🏅{" "}
+                      {[...battingPlayers, ...bowlingPlayers].find(
+                        (p) => p.publicId === motmPublicId,
+                      )?.displayName ?? motmPublicId}
                     </span>
                     <button
-                      onClick={() => { setMotmPublicId(""); setMotmNote(""); setShowMotmPicker(false); }}
+                      onClick={() => {
+                        setMotmPublicId("");
+                        setMotmNote("");
+                        setShowMotmPicker(false);
+                      }}
                       className="text-xs text-gray-400"
                     >
                       ✕
@@ -2376,7 +2463,10 @@ export default function LiveScorerPage() {
                     {[...battingPlayers, ...bowlingPlayers].map((p) => (
                       <button
                         key={p.publicId}
-                        onClick={() => { setMotmPublicId(p.publicId); setShowMotmPicker(false); }}
+                        onClick={() => {
+                          setMotmPublicId(p.publicId);
+                          setShowMotmPicker(false);
+                        }}
                         className="w-full px-3 py-2 text-sm text-left text-gray-800 hover:bg-gray-50 border-b border-gray-100 last:border-0"
                       >
                         {p.displayName}
@@ -2433,7 +2523,9 @@ export default function LiveScorerPage() {
         <div className="fixed inset-0 z-50 bg-black/60 flex items-end">
           <div className="w-full bg-white rounded-t-2xl p-5">
             <div className="w-10 h-1 bg-gray-300 rounded-full mx-auto mb-4" />
-            <h3 className="text-sm font-semibold text-gray-900 text-center mb-3">Pause Match</h3>
+            <h3 className="text-sm font-semibold text-gray-900 text-center mb-3">
+              Pause Match
+            </h3>
             <input
               type="text"
               className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm text-gray-900 outline-none mb-3"
@@ -2450,8 +2542,73 @@ export default function LiveScorerPage() {
               {pausePosting ? "Pausing..." : "Pause Match"}
             </button>
             <button
-              onClick={() => { setShowPauseInput(false); setPauseInputValue(""); }}
+              onClick={() => {
+                setShowPauseInput(false);
+                setPauseInputValue("");
+              }}
               className="w-full py-2 text-gray-400 text-sm"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ── ABANDON SHEET ── */}
+      {showAbandon && (
+        <div className="fixed inset-0 z-50 bg-black/60 flex items-end">
+          <div className="w-full bg-white rounded-t-2xl max-h-[85dvh] overflow-y-auto p-5">
+            <div className="w-10 h-1 bg-gray-300 rounded-full mx-auto mb-4" />
+            <h3 className="text-sm font-semibold text-gray-900 text-center">
+              Abandon Match
+            </h3>
+            <p className="text-xs text-gray-500 text-center mt-1 mb-4">
+              No result. Both teams get {"\u0031"} point. NRR is unaffected.
+              This cannot be undone — to replay this match later, postpone the
+              fixture instead.
+            </p>
+
+            <label className="text-xs text-gray-400 mb-1.5 block">Reason</label>
+            <div className="grid grid-cols-2 gap-2 mb-3">
+              {INTERRUPTION_REASONS.map((r) => (
+                <button
+                  key={r.value}
+                  onClick={() => setAbandonReason(r.value)}
+                  className={`h-11 rounded-xl text-sm font-semibold border transition-all active:scale-95 ${
+                    abandonReason === r.value
+                      ? "bg-red-600 border-red-600 text-white"
+                      : "bg-gray-50 border-gray-200 text-gray-600"
+                  }`}
+                >
+                  {r.label}
+                </button>
+              ))}
+            </div>
+
+            {abandonReason === "OTHER" && (
+              <input
+                type="text"
+                className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm text-gray-900 outline-none mb-3"
+                placeholder="What happened?"
+                value={abandonNote}
+                onChange={(e) => setAbandonNote(e.target.value)}
+                autoFocus
+              />
+            )}
+
+            <button
+              disabled={abandonPosting}
+              onClick={handleAbandon}
+              className="w-full h-14 bg-red-600 text-white rounded-xl font-bold text-sm disabled:opacity-40 active:scale-95 mb-2"
+            >
+              {abandonPosting ? "Abandoning..." : "Abandon Match"}
+            </button>
+            <button
+              onClick={() => {
+                setShowAbandon(false);
+                setAbandonNote("");
+              }}
+              className="w-full py-3 text-gray-400 text-sm"
             >
               Cancel
             </button>
@@ -2495,14 +2652,37 @@ export default function LiveScorerPage() {
             {/* Action list */}
             {!moreSubAction && (
               <div className="overflow-y-auto flex-1 p-3 space-y-2">
+                {/* Abandon sits first and is styled red: it is the only
+                    irreversible action in this sheet. */}
+                <button
+                  onClick={() => {
+                    setShowMoreSheet(false);
+                    setShowAbandon(true);
+                  }}
+                  className="w-full flex items-center gap-3 px-4 py-3.5 bg-red-50 border border-red-200 rounded-xl text-left active:scale-95 transition-all"
+                >
+                  <span className="text-lg w-8 text-center">🌧</span>
+                  <div>
+                    <div className="text-sm font-medium text-red-700">
+                      Abandon Match
+                    </div>
+                    <div className="text-xs text-red-400">
+                      No result — 1 point each, NRR unaffected
+                    </div>
+                  </div>
+                </button>
                 <button
                   onClick={() => setMoreSubAction("swap-confirm")}
                   className="w-full flex items-center gap-3 px-4 py-3.5 bg-gray-50 rounded-xl text-left active:scale-95 transition-all"
                 >
                   <span className="text-lg w-8 text-center">↕</span>
                   <div>
-                    <div className="text-sm font-medium text-gray-900">Swap Batters</div>
-                    <div className="text-xs text-gray-400">Switch striker and non-striker</div>
+                    <div className="text-sm font-medium text-gray-900">
+                      Swap Batters
+                    </div>
+                    <div className="text-xs text-gray-400">
+                      Switch striker and non-striker
+                    </div>
                   </div>
                 </button>
                 <button
@@ -2514,7 +2694,9 @@ export default function LiveScorerPage() {
                 >
                   <span className="text-lg w-8 text-center">✏️</span>
                   <div>
-                    <div className="text-sm font-medium text-gray-900">Correct Bowler</div>
+                    <div className="text-sm font-medium text-gray-900">
+                      Correct Bowler
+                    </div>
                     <div className="text-xs text-gray-400">
                       Change the recorded bowler for this over
                     </div>
@@ -2532,7 +2714,9 @@ export default function LiveScorerPage() {
                     <div className="text-sm font-medium text-gray-900">
                       Bowler Injury Replace
                     </div>
-                    <div className="text-xs text-gray-400">Replace injured bowler mid-over</div>
+                    <div className="text-xs text-gray-400">
+                      Replace injured bowler mid-over
+                    </div>
                   </div>
                 </button>
                 {activeRunnerFor ? (
@@ -2543,7 +2727,9 @@ export default function LiveScorerPage() {
                   >
                     <span className="text-lg w-8 text-center">🏃</span>
                     <div>
-                      <div className="text-sm font-medium text-gray-900">Clear Runner</div>
+                      <div className="text-sm font-medium text-gray-900">
+                        Clear Runner
+                      </div>
                       <div className="text-xs text-gray-400">
                         {activeRunnerName} is currently running
                       </div>
@@ -2559,7 +2745,9 @@ export default function LiveScorerPage() {
                   >
                     <span className="text-lg w-8 text-center">🏃</span>
                     <div>
-                      <div className="text-sm font-medium text-gray-900">Set Runner</div>
+                      <div className="text-sm font-medium text-gray-900">
+                        Set Runner
+                      </div>
                       <div className="text-xs text-gray-400">
                         Assign a runner for an injured batter
                       </div>
@@ -2575,7 +2763,9 @@ export default function LiveScorerPage() {
                 >
                   <span className="text-lg w-8 text-center">🧤</span>
                   <div>
-                    <div className="text-sm font-medium text-gray-900">Change Wicketkeeper</div>
+                    <div className="text-sm font-medium text-gray-900">
+                      Change Wicketkeeper
+                    </div>
                     <div className="text-xs text-gray-400">
                       Assign new keeper in fielding side
                     </div>
@@ -2592,7 +2782,9 @@ export default function LiveScorerPage() {
                 >
                   <span className="text-lg w-8 text-center">🔄</span>
                   <div>
-                    <div className="text-sm font-medium text-gray-900">Fielding Substitute</div>
+                    <div className="text-sm font-medium text-gray-900">
+                      Fielding Substitute
+                    </div>
                     <div className="text-xs text-gray-400">
                       Add a substitute for {bowlingTeamName}
                     </div>
@@ -2605,8 +2797,12 @@ export default function LiveScorerPage() {
                   >
                     <span className="text-lg w-8 text-center">⚡</span>
                     <div>
-                      <div className="text-sm font-medium text-teal-800">Start Super Over</div>
-                      <div className="text-xs text-teal-500">Match tied — initiate super over</div>
+                      <div className="text-sm font-medium text-teal-800">
+                        Start Super Over
+                      </div>
+                      <div className="text-xs text-teal-500">
+                        Match tied — initiate super over
+                      </div>
                     </div>
                   </button>
                 )}
@@ -2617,8 +2813,14 @@ export default function LiveScorerPage() {
               <div className="flex-1 p-5 flex flex-col gap-4">
                 <p className="text-sm text-gray-600 text-center mt-2">
                   Swap{" "}
-                  <b className="text-gray-900">{striker?.displayName ?? "striker"}</b> and{" "}
-                  <b className="text-gray-900">{nonStriker?.displayName ?? "non-striker"}</b>?
+                  <b className="text-gray-900">
+                    {striker?.displayName ?? "striker"}
+                  </b>{" "}
+                  and{" "}
+                  <b className="text-gray-900">
+                    {nonStriker?.displayName ?? "non-striker"}
+                  </b>
+                  ?
                 </p>
                 <button
                   disabled={morePicking}
@@ -2646,7 +2848,9 @@ export default function LiveScorerPage() {
                 <div className="overflow-y-auto flex-1 p-3 space-y-2">
                   {bowlingPlayers
                     .filter((p) =>
-                      p.displayName.toLowerCase().includes(moreSearch.toLowerCase()),
+                      p.displayName
+                        .toLowerCase()
+                        .includes(moreSearch.toLowerCase()),
                     )
                     .map((p) => {
                       const isSoRestricted =
@@ -2672,15 +2876,22 @@ export default function LiveScorerPage() {
                               {p.displayName}
                             </div>
                             {p.bowlingStyle && (
-                              <div className="text-xs text-gray-400">{p.bowlingStyle}</div>
+                              <div className="text-xs text-gray-400">
+                                {p.bowlingStyle}
+                              </div>
                             )}
                             {isSoRestricted && (
-                              <div className="text-xs text-red-500">Bowled previous Super Over</div>
+                              <div className="text-xs text-red-500">
+                                Bowled previous Super Over
+                              </div>
                             )}
                           </div>
-                          {bowler?.publicId === p.publicId && !isSoRestricted && (
-                            <span className="text-xs text-teal-500 flex-shrink-0">current</span>
-                          )}
+                          {bowler?.publicId === p.publicId &&
+                            !isSoRestricted && (
+                              <span className="text-xs text-teal-500 flex-shrink-0">
+                                current
+                              </span>
+                            )}
                         </button>
                       );
                     })}
@@ -2710,7 +2921,9 @@ export default function LiveScorerPage() {
                       {p!.displayName}
                     </div>
                     {p === striker && (
-                      <span className="text-xs text-teal-500 flex-shrink-0">striker *</span>
+                      <span className="text-xs text-teal-500 flex-shrink-0">
+                        striker *
+                      </span>
                     )}
                   </button>
                 ))}
@@ -2722,7 +2935,9 @@ export default function LiveScorerPage() {
                 <div className="flex-shrink-0 px-4 pt-3 pb-1">
                   <p className="text-xs text-gray-400">
                     Runner for{" "}
-                    <b className="text-gray-700">{pendingRunnerFor?.displayName}</b>
+                    <b className="text-gray-700">
+                      {pendingRunnerFor?.displayName}
+                    </b>
                   </p>
                 </div>
                 <div className="flex-shrink-0 px-3 pb-1">
@@ -2742,7 +2957,9 @@ export default function LiveScorerPage() {
                         !dismissedPlayerIds.has(p.publicId) &&
                         p.publicId !== striker?.publicId &&
                         p.publicId !== nonStriker?.publicId &&
-                        p.displayName.toLowerCase().includes(moreSearch.toLowerCase()),
+                        p.displayName
+                          .toLowerCase()
+                          .includes(moreSearch.toLowerCase()),
                     )
                     .map((p) => (
                       <button
@@ -2778,7 +2995,9 @@ export default function LiveScorerPage() {
                 <div className="overflow-y-auto flex-1 p-3 space-y-2">
                   {bowlingPlayers
                     .filter((p) =>
-                      p.displayName.toLowerCase().includes(moreSearch.toLowerCase()),
+                      p.displayName
+                        .toLowerCase()
+                        .includes(moreSearch.toLowerCase()),
                     )
                     .map((p) => (
                       <button
@@ -2795,7 +3014,9 @@ export default function LiveScorerPage() {
                             {p.displayName}
                           </div>
                           {p.isWicketkeeper && (
-                            <div className="text-xs text-teal-500">current keeper</div>
+                            <div className="text-xs text-teal-500">
+                              current keeper
+                            </div>
                           )}
                         </div>
                       </button>
@@ -2849,7 +3070,9 @@ export default function LiveScorerPage() {
                         {p.displayName}
                       </div>
                       {subSelectedPlayer?.publicId === p.publicId && (
-                        <span className="text-xs text-teal-500 flex-shrink-0">✓</span>
+                        <span className="text-xs text-teal-500 flex-shrink-0">
+                          ✓
+                        </span>
                       )}
                     </button>
                   ))}
@@ -2861,9 +3084,12 @@ export default function LiveScorerPage() {
               <div className="flex-1 p-5 flex flex-col gap-4">
                 <div className="text-center py-4">
                   <div className="text-4xl mb-3">⚡</div>
-                  <p className="text-sm text-gray-700 font-medium">The match is tied</p>
+                  <p className="text-sm text-gray-700 font-medium">
+                    The match is tied
+                  </p>
                   <p className="text-xs text-gray-400 mt-1">
-                    Starting a super over sets up a new 1-over innings for each team.
+                    Starting a super over sets up a new 1-over innings for each
+                    team.
                   </p>
                 </div>
                 <button
@@ -2879,7 +3105,10 @@ export default function LiveScorerPage() {
             <div className="flex-shrink-0 p-3 border-t border-gray-100 space-y-2">
               {moreSubAction === "sub-pick" && (
                 <button
-                  disabled={morePicking || (!subSelectedPlayer && !subExternalName.trim())}
+                  disabled={
+                    morePicking ||
+                    (!subSelectedPlayer && !subExternalName.trim())
+                  }
                   onClick={handleSubstitute}
                   className="w-full py-3.5 bg-teal-600 text-white rounded-xl font-bold text-sm disabled:opacity-40 active:scale-95"
                 >

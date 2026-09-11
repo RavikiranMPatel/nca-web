@@ -56,15 +56,28 @@ export const recordResult = (
 export const getBranchPlayers = () =>
   api.get("/admin/players").then((r) => r.data);
 
+// Abandon a match that has already started. Terminal: records NO_RESULT,
+// awards noResultPoints, and closes the fixture as ABANDONED. A fixture that
+// never produced a match is abandoned from the Fixtures tab instead.
+export const abandonMatch = (publicId: string, reason: string, note?: string) =>
+  api
+    .post<CricketMatch>(`${BASE}/${publicId}/abandon`, { reason, note })
+    .then((r) => r.data);
+
 export const deleteMatch = (publicId: string) =>
   api.delete(`/admin/cricket/matches/${publicId}`);
 
 export const pauseMatch = (publicId: string, reason?: string) =>
   api
-    .post<import("../../types/match").CricketMatch>(`${BASE}/${publicId}/pause`, { reason: reason ?? "" })
+    .post<import("../../types/match").CricketMatch>(
+      `${BASE}/${publicId}/pause`,
+      { reason: reason ?? "" },
+    )
     .then((r) => r.data);
 
 export const resumeMatch = (publicId: string) =>
   api
-    .post<import("../../types/match").CricketMatch>(`${BASE}/${publicId}/resume`)
+    .post<import("../../types/match").CricketMatch>(
+      `${BASE}/${publicId}/resume`,
+    )
     .then((r) => r.data);
