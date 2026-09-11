@@ -2,6 +2,7 @@ import { expect } from "@playwright/test";
 import { Api } from "./api";
 import { config, type Tenant } from "./env";
 import { dbExec } from "./db";
+import { createPlayer } from "./createPlayer";
 
 /**
  * A self-contained set of players for the kit specs.
@@ -55,20 +56,14 @@ export async function createKitPlayers(opts: {
   const players: KitPlayer[] = [];
   for (let i = 0; i < opts.count; i++) {
     const displayName = `${label} ${tag} P${String(i + 1).padStart(2, "0")}`;
-    // Player creation is multipart (@RequestPart("player")), not JSON.
-    const fd = new FormData();
-    fd.append("player", new Blob([JSON.stringify({
+    const { publicId } = await createPlayer(api, {
       displayName, gender: "MALE", profession: "STUDENT",
       dob: `2010-01-${String((i % 28) + 1).padStart(2, "0")}`,
       // Phone is unique per academy; the tag keeps runs from colliding.
       phone: `9${tag}${String(i).padStart(2, "0")}`.slice(0, 10),
       joiningDate: "2026-01-15", batchIds: [batchId],
-    })], { type: "application/json" }), "player.json");
-
-    const res = await api.ctx.post("/api/admin/players", { multipart: fd as any });
-    expect(res.status(), `create player ${displayName}`).toBeLessThan(400);
-    const body = await res.json();
-    players.push({ publicId: body.publicId ?? body.player?.publicId, displayName });
+    }, displayName);
+    players.push({ publicId, displayName });
   }
 
   return {

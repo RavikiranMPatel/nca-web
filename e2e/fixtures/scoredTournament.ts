@@ -2,6 +2,7 @@ import { expect } from "@playwright/test";
 import { Api } from "./api";
 import { config, type Tenant } from "./env";
 import { dbExec } from "./db";
+import { createPlayer } from "./createPlayer";
 
 /**
  * A tournament with one COMPLETED, really-scored fixture — built from REAL
@@ -135,39 +136,13 @@ async function build(api: Api, tag: string, label: string,
   const players: { publicId: string; displayName: string }[] = [];
   for (let i = 0; i < PER_SIDE * 2; i++) {
     const displayName = `${label} ${tag} P${String(i + 1).padStart(2, "0")}`;
-    // Player creation is multipart (@RequestPart("player")), not JSON.
-    const fd = new FormData();
-    fd.append("player", new Blob([JSON.stringify({
+    const { publicId } = await createPlayer(api, {
       displayName, gender: "MALE", profession: "STUDENT",
       dob: `2010-01-${String((i % 28) + 1).padStart(2, "0")}`,
       phone: `9${tag}${String(i).padStart(2, "0")}`.slice(0, 10),
       joiningDate: "2026-01-15", batchIds: [batchId],
-    })], { type: "application/json" }), "player.json");
-    // Retried on 409 — BUG-33, recorded in PROGRESS.md by Slice 4b and still open.
-    // AcademySettingsService.generateNextPlayerId is @Transactional AND
-    // synchronized, which do not compose: Spring's proxy commits after the method
-    // returns, so the monitor is released before the write is visible and two
-    // threads read the same counter. It surfaces as exactly this — a 409 creating a
-    // player when two Playwright workers run, passing in isolation. Retried here
-    // rather than serialising the suite, the same way createScoringMatch retries
-    // BUG-11's public-id collision, because serialising would hide the defect
-    // behind a slower run.
-    let res = await api.ctx.post("/api/admin/players", { multipart: fd as any });
-    for (let attempt = 0; attempt < 6 && res.status() === 409; attempt++) {
-      await new Promise((r) => setTimeout(r, 40 + attempt * 40));
-      const retryFd = new FormData();
-      retryFd.append("player", new Blob([JSON.stringify({
-        displayName, gender: "MALE", profession: "STUDENT",
-        dob: `2010-01-${String((i % 28) + 1).padStart(2, "0")}`,
-        phone: `9${tag}${String(i).padStart(2, "0")}`.slice(0, 10),
-        joiningDate: "2026-01-15", batchIds: [batchId],
-      })], { type: "application/json" }), "player.json");
-      res = await api.ctx.post("/api/admin/players", { multipart: retryFd as any });
-    }
-    expect(res.status(), `create player ${displayName} (409s are BUG-33)`)
-      .toBeLessThan(400);
-    const body = await res.json();
-    players.push({ publicId: body.publicId ?? body.player?.publicId, displayName });
+    }, displayName);
+    players.push({ publicId, displayName });
   }
   const homePlayers = players.slice(0, PER_SIDE);
   const awayPlayers = players.slice(PER_SIDE);
