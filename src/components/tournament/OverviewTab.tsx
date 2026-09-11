@@ -1,7 +1,13 @@
 import type { ApiRecord } from "./types";
+import type { TournamentDashboard } from "../../api/scoring/tournamentApi";
+import DashboardCards from "./DashboardCards";
 
 /**
- * OverviewTab — the summary rows — format, dates, venue, and the counts of teams, players and fixtures.
+ * OverviewTab — Phase 4's dashboard cards, above the summary rows.
+ *
+ * Slice 5 added the cards. The summary rows below them are unchanged and still
+ * come from data the page already had; the cards come from the single
+ * /dashboard request, so the tab makes one extra call and not twelve.
  *
  * Moved out of TournamentDetailPage by the Slice 2 split, JSX unchanged. Every
  * piece of state and every handler still lives in the page and arrives here as a
@@ -14,6 +20,8 @@ interface Props {
   fixtures: ApiRecord[];
   teams: ApiRecord[];
   tournament: ApiRecord;
+  dashboard: TournamentDashboard | null;
+  dashboardLoading: boolean;
 }
 
 export default function OverviewTab({
@@ -21,9 +29,13 @@ export default function OverviewTab({
   fixtures,
   teams,
   tournament,
+  dashboard,
+  dashboardLoading,
 }: Props) {
   return (
       <div data-testid="tournament-panel-overview" className="space-y-4">
+        <DashboardCards dashboard={dashboard} loading={dashboardLoading} />
+
         <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-800 divide-y divide-gray-100 dark:divide-gray-800">
           {[
             {

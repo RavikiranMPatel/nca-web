@@ -17,7 +17,7 @@ export default function StandingsTab({
   standings,
 }: Props) {
   return (
-      <div data-testid="tournament-panel-standings">
+      <div data-testid="tournament-panel-points-table">
         {standings.length === 0 ? (
           <div className="text-center py-12">
             <div className="text-3xl mb-2">📊</div>

@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
+import { useAuth } from "../../auth/useAuth";
 import {
   getTournament,
   listTeams,
@@ -23,6 +24,8 @@ import {
   getAllTournamentPlayers,
   prepareMatchFromFixture,
   getTournamentResult,
+  getTournamentDashboard,
+  type TournamentDashboard,
   markFixtureFinal,
   rescheduleFixture,
   type TournamentResult,
@@ -51,8 +54,10 @@ import VenuesTab from "../../components/tournament/VenuesTab";
 import OfficialsTab from "../../components/tournament/OfficialsTab";
 import FixturesTab from "../../components/tournament/FixturesTab";
 import StandingsTab from "../../components/tournament/StandingsTab";
-import StatsTab from "../../components/tournament/StatsTab";
 import SettingsTab from "../../components/tournament/SettingsTab";
+import StatisticsTab from "../../components/tournament/StatisticsTab";
+import AwardsTab from "../../components/tournament/AwardsTab";
+import ReportsTab from "../../components/tournament/ReportsTab";
 
 // Slice 5: the ten modals TournamentDetailPage used to hold inline, one file each.
 import AddOfficialModal from "../../components/tournament/modals/AddOfficialModal";
@@ -69,8 +74,16 @@ import RescheduleModal from "../../components/tournament/modals/RescheduleModal"
 export default function TournamentDetailPage() {
   const { publicId } = useParams<{ publicId: string }>();
   const navigate = useNavigate();
+  const { userRole } = useAuth();
 
-  const [tab, setTab] = useState(0);
+  // Awards are ADMIN or SUPER_ADMIN. The service refuses the write regardless —
+  // this only decides whether the buttons are offered, because a button that
+  // always fails is worse than no button.
+  const canAward = userRole === "ROLE_ADMIN" || userRole === "ROLE_SUPER_ADMIN";
+
+  // The selected tab, by KEY. It was an index until Slice 5 added three tabs in
+  // the middle of the list, which would have renumbered every panel after them.
+  const [tab, setTab] = useState("overview");
   const [tournament, setTournament] = useState<any>(null);
   const [teams, setTeams] = useState<any[]>([]);
   const [stages, setStages] = useState<any[]>([]);
@@ -205,15 +218,11 @@ export default function TournamentDetailPage() {
     notes: "",
   });
 
-  // ── STATS STATE (NEW) ─────────────────────────────────────────────────────
-  const [statsSubTab, setStatsSubTab] = useState<"batting" | "bowling" | "mvp">(
-    "batting",
-  );
-  const [battingStats, setBattingStats] = useState<any[]>([]);
-  const [bowlingStats, setBowlingStats] = useState<any[]>([]);
-  const [mvpStats, setMvpStats] = useState<any[]>([]);
-  const [statsLoading, setStatsLoading] = useState(false);
-  const [statsLoaded, setStatsLoaded] = useState(false);
+  // ── DASHBOARD (Phase 4) ───────────────────────────────────────────────────
+  // One request, twelve cards. The leaderboards moved into StatisticsTab, which
+  // fetches its own pages — the page no longer holds three arrays of stat rows.
+  const [dashboard, setDashboard] = useState<TournamentDashboard | null>(null);
+  const [dashboardLoading, setDashboardLoading] = useState(false);
 
   const showToast = (msg: string) => {
     setToast(msg);
@@ -451,42 +460,32 @@ export default function TournamentDetailPage() {
     }));
   };
 
-  // ── LOAD STATS (NEW) ──────────────────────────────────────────────────────
-  const loadStats = async () => {
-    if (!publicId || statsLoaded) return;
-    setStatsLoading(true);
+  // ── LOAD DASHBOARD ────────────────────────────────────────────────────────
+  const loadDashboard = async () => {
+    if (!publicId) return;
+    setDashboardLoading(true);
     try {
-      const [bat, bowl, mvp] = await Promise.all([
-        api
-          .get(`/admin/cricket/tournaments/${publicId}/stats/batting`)
-          .then((r) => r.data),
-        api
-          .get(`/admin/cricket/tournaments/${publicId}/stats/bowling`)
-          .then((r) => r.data),
-        api
-          .get(`/admin/cricket/tournaments/${publicId}/stats/mvp`)
-          .then((r) => r.data),
-      ]);
-      setBattingStats(bat);
-      setBowlingStats(bowl);
-      setMvpStats(mvp);
-      setStatsLoaded(true);
+      setDashboard(await getTournamentDashboard(publicId));
     } catch {
-      setError("Failed to load stats");
+      setError("Failed to load the tournament summary");
     } finally {
-      setStatsLoading(false);
+      setDashboardLoading(false);
     }
   };
 
+  // The dashboard is reloaded whenever Overview is opened rather than cached:
+  // completing a fixture on the Fixtures tab changes almost every card, and a
+  // stale summary is worse than a second request.
   useEffect(() => {
-    if (tab === 7) loadStats();
-  }, [tab]);
+    if (tab === "overview") loadDashboard();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab, publicId]);
 
   useEffect(() => {
-    if (tab === 3) loadVenues();
+    if (tab === "venues") loadVenues();
   }, [tab]);
   useEffect(() => {
-    if (tab === 4) loadOfficialsPool();
+    if (tab === "officials") loadOfficialsPool();
   }, [tab]);
 
   useEffect(() => {
@@ -1060,14 +1059,14 @@ export default function TournamentDetailPage() {
         )}
 
         <div className="flex gap-0 mt-3 border-b border-gray-100 dark:border-gray-800 -mx-4 px-4 overflow-x-auto">
-          {TABS.map((t, i) => (
+          {TABS.map((t) => (
             <button
-              key={t}
-              data-testid={`tournament-tab-${t.toLowerCase()}`}
-              onClick={() => setTab(i)}
-              className={`px-3 py-2 text-xs font-medium border-b-2 transition-colors flex-shrink-0 ${tab === i ? "border-blue-600 text-blue-600" : "border-transparent text-gray-500"}`}
+              key={t.key}
+              data-testid={`tournament-tab-${t.key}`}
+              onClick={() => setTab(t.key)}
+              className={`px-3 py-2 text-xs font-medium border-b-2 transition-colors flex-shrink-0 ${tab === t.key ? "border-blue-600 text-blue-600" : "border-transparent text-gray-500"}`}
             >
-              {t}
+              {t.label}
             </button>
           ))}
         </div>
@@ -1084,9 +1083,11 @@ export default function TournamentDetailPage() {
 
       <div className="px-4 pt-4 max-w-2xl mx-auto">
         {/* ── OVERVIEW ── */}
-        {tab === 0 && (
+        {tab === "overview" && (
           <OverviewTab
             allTournamentPlayers={allTournamentPlayers}
+            dashboard={dashboard}
+            dashboardLoading={dashboardLoading}
             fixtures={fixtures}
             teams={teams}
             tournament={tournament}
@@ -1094,7 +1095,7 @@ export default function TournamentDetailPage() {
         )}
 
         {/* ── TEAMS ── */}
-        {tab === 1 && (
+        {tab === "teams" && (
           <TeamsTab
             expandedTeam={expandedTeam}
             handleExpandTeam={handleExpandTeam}
@@ -1108,7 +1109,7 @@ export default function TournamentDetailPage() {
         )}
 
         {/* ── PLAYERS ── */}
-        {tab === 2 && (
+        {tab === "players" && (
           <PlayersTab
             allTournamentPlayers={allTournamentPlayers}
             playersByTeam={playersByTeam}
@@ -1117,7 +1118,7 @@ export default function TournamentDetailPage() {
         )}
 
         {/* ── VENUES ── */}
-        {tab === 3 && (
+        {tab === "venues" && (
           <VenuesTab
             editingVenue={editingVenue}
             handleDeleteVenue={handleDeleteVenue}
@@ -1130,7 +1131,7 @@ export default function TournamentDetailPage() {
         )}
 
         {/* ── MATCH OFFICIALS ── */}
-        {tab === 4 && (
+        {tab === "officials" && (
           <OfficialsTab
             handleDeleteOfficial={handleDeleteOfficial}
             officialsPool={officialsPool}
@@ -1139,7 +1140,7 @@ export default function TournamentDetailPage() {
         )}
 
         {/* ── FIXTURES ── */}
-        {tab === 5 && (
+        {tab === "fixtures" && (
           <FixturesTab
             handleMarkFinal={handleMarkFinal}
             fixtureGroundFilter={fixtureGroundFilter}
@@ -1165,30 +1166,32 @@ export default function TournamentDetailPage() {
           />
         )}
 
-        {/* ── STANDINGS ── */}
-        {tab === 6 && (
+        {/* ── POINTS TABLE ── */}
+        {tab === "points-table" && (
           <StandingsTab
             standings={standings}
           />
         )}
 
-        {/* ── STATS (NEW) ── */}
-        {tab === 7 && (
-          <StatsTab
-            battingStats={battingStats}
-            bowlingStats={bowlingStats}
-            loadStats={loadStats}
-            mvpStats={mvpStats}
-            setStatsLoaded={setStatsLoaded}
-            setStatsSubTab={setStatsSubTab}
-            statsLoading={statsLoading}
-            statsSubTab={statsSubTab}
-            tournament={tournament}
+        {/* ── STATISTICS (Phase 17) ── */}
+        {tab === "statistics" && <StatisticsTab publicId={publicId!} />}
+
+        {/* ── AWARDS (Phases 15, 16) ── */}
+        {tab === "awards" && (
+          <AwardsTab
+            publicId={publicId!}
+            fixtures={fixtures}
+            canAward={canAward}
+            showToast={showToast}
+            setError={setError}
           />
         )}
 
+        {/* ── REPORTS (a stub; Slice 6 builds it) ── */}
+        {tab === "reports" && <ReportsTab />}
+
         {/* ── SETTINGS ── */}
-        {tab === 8 && (
+        {tab === "settings" && (
           <SettingsTab
             computeMatchDuration={computeMatchDuration}
             computeMaxMatchesPerGround={computeMaxMatchesPerGround}

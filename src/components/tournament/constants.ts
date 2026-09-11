@@ -7,16 +7,41 @@
  * do too. Moving them out is what lets a tab component stop importing the page.
  */
 
-export const TABS = [
-  "Overview",
-  "Teams",
-  "Players",
-  "Venues",
-  "Officials",
-  "Fixtures",
-  "Standings",
-  "Stats",
-  "Settings",
+/**
+ * The tabs, as (key, label) pairs rather than bare strings.
+ *
+ * Two reasons, both learned in Slice 5. The page selected its tab by INDEX
+ * (`tab === 7`), so inserting Awards and Reports in the middle would have
+ * silently renumbered every panel after them. And the testid was derived from
+ * the label, so "Points Table" would have produced
+ * `tournament-tab-points table` — a testid with a space in it.
+ *
+ * The key is the slug used for both `tournament-tab-<key>` and
+ * `tournament-panel-<key>`, and it is what `tab` now holds.
+ *
+ * Phase 4 names eight tabs: Overview, Teams, Fixtures, Points Table,
+ * Statistics, Awards, Reports, Settings. Players, Venues and Officials are not
+ * in that list but exist, work and are covered by specs, so they are kept —
+ * Phase 4's list is the required set, not an exhaustive one. Standings and Stats
+ * are renamed to the names Phase 4 uses for them.
+ */
+export interface TabDef {
+  key: string;
+  label: string;
+}
+
+export const TABS: TabDef[] = [
+  { key: "overview", label: "Overview" },
+  { key: "teams", label: "Teams" },
+  { key: "players", label: "Players" },
+  { key: "venues", label: "Venues" },
+  { key: "officials", label: "Officials" },
+  { key: "fixtures", label: "Fixtures" },
+  { key: "points-table", label: "Points Table" },
+  { key: "statistics", label: "Statistics" },
+  { key: "awards", label: "Awards" },
+  { key: "reports", label: "Reports" },
+  { key: "settings", label: "Settings" },
 ];
 
 export const ROLES = ["BATSMAN", "BOWLER", "ALL_ROUNDER", "WK_BATSMAN"];

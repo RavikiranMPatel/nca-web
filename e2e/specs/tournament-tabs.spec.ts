@@ -24,17 +24,27 @@ import { dbExec } from "../fixtures/db";
 
 const RUN = `${Date.now() % 1000000}`;
 
-/** Tab label → its panel testid, in the order the tab bar renders them. */
+/**
+ * Every tab, as (key, label), in the order the tab bar renders them.
+ *
+ * Slice 5 took this from nine to eleven and renamed two. The KEY is what the
+ * testids are built from — `tournament-tab-<key>` and `tournament-panel-<key>` —
+ * because the page selects by key now rather than by index, and because
+ * "Points Table" as a label would otherwise have produced a testid with a space
+ * in it.
+ */
 const TABS = [
-  "Overview",
-  "Teams",
-  "Players",
-  "Venues",
-  "Officials",
-  "Fixtures",
-  "Standings",
-  "Stats",
-  "Settings",
+  { key: "overview", label: "Overview" },
+  { key: "teams", label: "Teams" },
+  { key: "players", label: "Players" },
+  { key: "venues", label: "Venues" },
+  { key: "officials", label: "Officials" },
+  { key: "fixtures", label: "Fixtures" },
+  { key: "points-table", label: "Points Table" },
+  { key: "statistics", label: "Statistics" },
+  { key: "awards", label: "Awards" },
+  { key: "reports", label: "Reports" },
+  { key: "settings", label: "Settings" },
 ] as const;
 
 const TEAMS = [
@@ -108,30 +118,30 @@ async function openTournament(page: Page) {
   ).toBeVisible();
 }
 
-const panel = (page: Page, tab: string) =>
-  page.getByTestId(`tournament-panel-${tab.toLowerCase()}`);
+const panel = (page: Page, key: string) =>
+  page.getByTestId(`tournament-panel-${key}`);
 
-const tabButton = (page: Page, tab: string) =>
-  page.getByTestId(`tournament-tab-${tab.toLowerCase()}`);
+const tabButton = (page: Page, key: string) =>
+  page.getByTestId(`tournament-tab-${key}`);
 
 test.describe("TournamentDetailPage — tabs", () => {
   test("every tab opens its own panel, and only that panel", async ({ page }) => {
     await openTournament(page);
 
     // Overview is the landing tab and must already be showing.
-    await expect(panel(page, "Overview")).toBeVisible();
+    await expect(panel(page, "overview")).toBeVisible();
 
     for (const tab of TABS) {
-      await tabButton(page, tab).click();
-      await expect(panel(page, tab), `${tab} panel visible`).toBeVisible();
+      await tabButton(page, tab.key).click();
+      await expect(panel(page, tab.key), `${tab.label} panel visible`).toBeVisible();
 
       // Exactly one panel at a time — a split that renders two tabs at once, or
       // none, fails here rather than silently looking fine.
       for (const other of TABS) {
-        if (other === tab) continue;
+        if (other.key === tab.key) continue;
         await expect(
-          panel(page, other),
-          `${other} panel hidden while on ${tab}`,
+          panel(page, other.key),
+          `${other.label} panel hidden while on ${tab.label}`,
         ).toHaveCount(0);
       }
     }
@@ -141,57 +151,69 @@ test.describe("TournamentDetailPage — tabs", () => {
     await openTournament(page);
 
     // ── Overview: the summary rows, with counts that match what was seeded.
-    await tabButton(page, "Overview").click();
-    const overview = panel(page, "Overview");
+    await tabButton(page, "overview").click();
+    const overview = panel(page, "overview");
     await expect(overview).toContainText("Format");
     await expect(overview).toContainText("Default Overs");
     await expect(overview).toContainText("20 overs");
     await expect(overview).toContainText("Tabs Ground");
 
     // ── Teams: both seeded sides, by name.
-    await tabButton(page, "Teams").click();
-    const teams = panel(page, "Teams");
+    await tabButton(page, "teams").click();
+    const teams = panel(page, "teams");
     for (const team of TEAMS) {
       await expect(teams, `${team.name} listed`).toContainText(team.name);
     }
     await expect(teams.getByRole("button", { name: "+ Add Team" })).toBeVisible();
 
     // ── Players: no squad was registered, so the empty state is the content.
-    await tabButton(page, "Players").click();
-    await expect(panel(page, "Players")).toContainText("No players registered yet");
+    await tabButton(page, "players").click();
+    await expect(panel(page, "players")).toContainText("No players registered yet");
 
     // ── Venues and Officials: both load on demand when their tab is selected,
     // which is behaviour the split could easily drop.
-    await tabButton(page, "Venues").click();
-    await expect(panel(page, "Venues")).toContainText("No venues added yet");
+    await tabButton(page, "venues").click();
+    await expect(panel(page, "venues")).toContainText("No venues added yet");
 
-    await tabButton(page, "Officials").click();
-    await expect(panel(page, "Officials")).toContainText("No officials added yet");
+    await tabButton(page, "officials").click();
+    await expect(panel(page, "officials")).toContainText("No officials added yet");
 
     // ── Fixtures: the generated round-robin.
-    await tabButton(page, "Fixtures").click();
-    const fixtures = panel(page, "Fixtures");
+    await tabButton(page, "fixtures").click();
+    const fixtures = panel(page, "fixtures");
     // The fixture card names both sides in full, not by short name.
     await expect(fixtures).toContainText(TEAMS[0].name);
     await expect(fixtures).toContainText(TEAMS[1].name);
     await expect(fixtures).toContainText("Round 1");
 
     // ── Standings: both teams on zero, the fixture being unplayed.
-    await tabButton(page, "Standings").click();
-    const standings = panel(page, "Standings");
+    await tabButton(page, "points-table").click();
+    const standings = panel(page, "points-table");
     // The table renders `teamName`, so it is the full name here too.
     for (const team of TEAMS) {
       await expect(standings, `${team.name} in the table`).toContainText(team.name);
     }
 
-    // ── Stats: nothing scored, so both leaderboards are empty.
-    await tabButton(page, "Stats").click();
-    await expect(panel(page, "Stats")).toContainText("No batting data yet");
+    // ── Statistics: nothing scored, so the batting board is empty. The tab
+    // fetches its own page now rather than the page pre-loading three arrays.
+    await tabButton(page, "statistics").click();
+    await expect(panel(page, "statistics")).toContainText("No batting data yet");
+
+    // ── Awards: the tournament-level slots always render; there are no
+    // completed fixtures, so Man of the Match has nothing to offer.
+    await tabButton(page, "awards").click();
+    const awards = panel(page, "awards");
+    await expect(awards).toContainText("Man of the Series");
+    await expect(awards).toContainText("No completed matches yet");
+
+    // ── Reports: a stub until Slice 6, and it says so.
+    await tabButton(page, "reports").click();
+    await expect(panel(page, "reports")).toContainText("Reports are not built yet");
 
     // ── Settings: the editable form, holding the values the tournament was
     // created with.
-    await tabButton(page, "Settings").click();
-    const settings = panel(page, "Settings");
+    await tabButton(page, "settings").click();
+    const settings = panel(page, "settings");
     await expect(settings.locator("input, select").first()).toBeVisible();
   });
 
@@ -201,13 +223,13 @@ test.describe("TournamentDetailPage — tabs", () => {
     // Overview is the default on load. This pins the current behaviour so the
     // split cannot quietly introduce (or lose) tab persistence without the
     // change showing up here.
-    await tabButton(page, "Standings").click();
-    await expect(panel(page, "Standings")).toBeVisible();
+    await tabButton(page, "points-table").click();
+    await expect(panel(page, "points-table")).toBeVisible();
 
     await page.reload();
     await expect(page.getByRole("heading", { name: tournamentName })).toBeVisible();
     await expect(
-      panel(page, "Overview"),
+      panel(page, "overview"),
       "tab selection is not persisted today — Overview is shown again",
     ).toBeVisible();
   });

@@ -235,3 +235,157 @@ export const advanceToPlayoffs = (
       bracketType,
     })
     .then((r) => r.data);
+
+// ── Slice 5: Phase 4's dashboard, Phase 17's leaderboards, Phases 15/16 awards ──
+
+/** One headline card on the dashboard. Null when nothing has been played yet. */
+export interface Highlight {
+  publicId: string | null;
+  name: string;
+  subtitle: string | null;
+  value: string;
+  numericValue: number;
+}
+
+export interface TournamentDashboard {
+  tournamentPublicId: string;
+  tournamentName: string;
+  status: string;
+  format: string;
+  teams: number;
+  matches: number;
+  completed: number;
+  upcoming: number;
+  live: number;
+  totalRuns: number;
+  totalWickets: number;
+  highestTeamScore: Highlight | null;
+  highestIndividualScore: Highlight | null;
+  topRunScorer: Highlight | null;
+  topWicketTaker: Highlight | null;
+  currentLeader: Highlight | null;
+}
+
+/** A server-side page. Deliberately not Spring's Page — see PageDto. */
+export interface Page<T> {
+  content: T[];
+  page: number;
+  size: number;
+  totalElements: number;
+  totalPages: number;
+}
+
+export interface BattingStat {
+  playerPublicId: string; playerName: string;
+  teamName: string; teamPublicId: string | null;
+  innings: number; notOuts: number; runs: number; balls: number;
+  highScore: number; highScoreNotOut: boolean;
+  average: number; strikeRate: number;
+  fours: number; sixes: number; fifties: number; hundreds: number;
+}
+
+export interface BowlingStat {
+  playerPublicId: string; playerName: string;
+  teamName: string; teamPublicId: string | null;
+  innings: number; overs: string; maidens: number;
+  runsConceded: number; wickets: number; dotBalls: number;
+  economy: number; average: number; bestFigures: string;
+  threeWickets: number; fiveWickets: number;
+}
+
+export interface FieldingStat {
+  playerPublicId: string; playerName: string;
+  teamName: string; teamPublicId: string | null;
+  catches: number; runOuts: number; stumpings: number; dismissals: number;
+}
+
+export interface TeamStat {
+  teamPublicId: string; teamName: string;
+  shortName: string | null; colorHex: string | null;
+  played: number; won: number; lost: number; tied: number; noResult: number;
+  highestScore: number | null; lowestScore: number | null;
+  totalRuns: number; totalWickets: number;
+  sixes: number; fours: number; nrr: number;
+}
+
+export interface TournamentAward {
+  publicId: string;
+  awardType: string;
+  awardLabel: string;
+  playerPublicId: string;
+  playerName: string;
+  teamPublicId: string;
+  teamName: string;
+  matchPublicId: string | null;
+  reason: string | null;
+  awardedByName: string | null;
+  awardedAt: string;
+}
+
+/** An award the tournament can give, and whoever holds it. */
+export interface AwardSlot {
+  awardType: string;
+  label: string;
+  /** BATTING | BOWLING | FIELDING | ALL_ROUND — which figures to lead with. */
+  candidateSource: string;
+  award: TournamentAward | null;
+}
+
+export interface AwardCandidate {
+  playerPublicId: string; playerName: string;
+  teamPublicId: string | null; teamName: string;
+  runs: number; balls: number; fours: number; sixes: number;
+  strikeRate: number; notOut: boolean;
+  overs: string; runsConceded: number; wickets: number; economy: number;
+  catches: number; runOuts: number; stumpings: number;
+  impactPoints: number;
+}
+
+export const getTournamentDashboard = (publicId: string): Promise<TournamentDashboard> =>
+  api.get(`/admin/cricket/tournaments/${publicId}/dashboard`).then((r) => r.data);
+
+const leaderboard = <T,>(publicId: string, kind: string, page: number, size: number) =>
+  api
+    .get(`/admin/cricket/tournaments/${publicId}/stats/${kind}`, { params: { page, size } })
+    .then((r) => r.data as Page<T>);
+
+export const getBattingLeaderboard = (publicId: string, page = 0, size = 20) =>
+  leaderboard<BattingStat>(publicId, "batting", page, size);
+export const getBowlingLeaderboard = (publicId: string, page = 0, size = 20) =>
+  leaderboard<BowlingStat>(publicId, "bowling", page, size);
+export const getFieldingLeaderboard = (publicId: string, page = 0, size = 20) =>
+  leaderboard<FieldingStat>(publicId, "fielding", page, size);
+export const getTeamLeaderboard = (publicId: string, page = 0, size = 20) =>
+  leaderboard<TeamStat>(publicId, "teams", page, size);
+
+export const listAwards = (publicId: string): Promise<TournamentAward[]> =>
+  api.get(`/admin/cricket/tournaments/${publicId}/awards`).then((r) => r.data);
+
+export const listAwardSlots = (publicId: string): Promise<AwardSlot[]> =>
+  api.get(`/admin/cricket/tournaments/${publicId}/awards/slots`).then((r) => r.data);
+
+export const getTournamentAwardCandidates = (publicId: string): Promise<AwardCandidate[]> =>
+  api.get(`/admin/cricket/tournaments/${publicId}/awards/candidates`).then((r) => r.data);
+
+export const getMatchAwardCandidates = (
+  publicId: string,
+  matchPublicId: string,
+): Promise<AwardCandidate[]> =>
+  api
+    .get(`/admin/cricket/tournaments/${publicId}/matches/${matchPublicId}/award-candidates`)
+    .then((r) => r.data);
+
+export const giveAward = (
+  publicId: string,
+  data: {
+    awardType: string;
+    playerPublicId: string;
+    teamPublicId: string;
+    matchPublicId?: string;
+    reason?: string;
+  },
+): Promise<TournamentAward> =>
+  api.post(`/admin/cricket/tournaments/${publicId}/awards`, data).then((r) => r.data);
+
+export const revokeAward = (publicId: string, awardPublicId: string) =>
+  api.delete(`/admin/cricket/tournaments/${publicId}/awards/${awardPublicId}`);

@@ -38,7 +38,7 @@ const TEAMS = [
 let tournamentPublicId: string;
 let tournamentName: string;
 let seed: Record<string, string>;
-let teamPublicIds: string[] = [];
+const teamPublicIds: string[] = [];
 let playoffPublicId: string;
 let playoffName: string;
 
