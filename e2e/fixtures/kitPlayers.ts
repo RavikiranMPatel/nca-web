@@ -47,6 +47,39 @@ export async function createKitPlayers(opts: {
   const tag = `${Date.now() % 1000000}${(counter++).toString().padStart(2, "0")}`;
   const label = opts.label ?? "Kit";
 
+  try {
+    return await build(api, opts.count, tag, label);
+  } catch (e) {
+    // If setup throws part-way, the caller never receives a fixture and can never
+    // call destroy(), so everything created up to the failure stays in the
+    // database. That is not hypothetical: a BUG-33 409 on the SECOND player left
+    // the first one and its batch behind, and they were still there after the
+    // run. Clean up what exists, then rethrow the original error.
+    removeEverything(tag, label);
+    await api.dispose().catch(() => { /* already gone */ });
+    throw e;
+  }
+}
+
+/**
+ * Removes everything a run with this tag created, complete or not.
+ *
+ * Keyed by the tag rather than by ids collected along the way, so it works from
+ * a half-built fixture — which is the case it exists for.
+ */
+function removeEverything(tag: string, label: string): void {
+  const like = `${label} ${tag} P%`;
+  const ids = `(SELECT id FROM players WHERE display_name LIKE '${like}')`;
+  dbExec(`DELETE FROM player_kit_details WHERE player_id IN ${ids}`);
+  dbExec(`DELETE FROM player_career_stats WHERE player_id IN ${ids}`);
+  dbExec(`DELETE FROM player_batches WHERE player_id IN ${ids}`);
+  dbExec(`DELETE FROM players WHERE display_name LIKE '${like}'`);
+  dbExec(`DELETE FROM batches WHERE name = '${label} Batch ${tag}'`);
+}
+
+async function build(
+  api: Api, count: number, tag: string, label: string,
+): Promise<KitFixture> {
   const batch = await api.raw("post", "/api/admin/batches", {
     name: `${label} Batch ${tag}`, startTime: "06:00:00", endTime: "08:00:00", active: true,
   });
@@ -54,7 +87,7 @@ export async function createKitPlayers(opts: {
   const batchId = (batch.body as any).id as string;
 
   const players: KitPlayer[] = [];
-  for (let i = 0; i < opts.count; i++) {
+  for (let i = 0; i < count; i++) {
     const displayName = `${label} ${tag} P${String(i + 1).padStart(2, "0")}`;
     const { publicId } = await createPlayer(api, {
       displayName, gender: "MALE", profession: "STUDENT",
@@ -73,18 +106,9 @@ export async function createKitPlayers(opts: {
     async destroy() {
       // Kit rows and squad links have no delete endpoint, and players cannot be
       // deleted while career stats reference them. Cleared directly — local only,
-      // and the config refuses any non-localhost target.
-      const names = players.map((p) => `'${p.publicId}'`).join(",");
-      if (names) {
-        dbExec(`DELETE FROM player_kit_details WHERE player_id IN
-                  (SELECT id FROM players WHERE public_id IN (${names}))`);
-        dbExec(`DELETE FROM player_career_stats WHERE player_id IN
-                  (SELECT id FROM players WHERE public_id IN (${names}))`);
-        dbExec(`DELETE FROM player_batches WHERE player_id IN
-                  (SELECT id FROM players WHERE public_id IN (${names}))`);
-        dbExec(`DELETE FROM players WHERE public_id IN (${names})`);
-      }
-      dbExec(`DELETE FROM batches WHERE id = '${batchId}'`);
+      // and the config refuses any non-localhost target. Same routine the
+      // partial-failure path uses, so there is one implementation to keep right.
+      removeEverything(tag, label);
       await api.dispose();
     },
   };
