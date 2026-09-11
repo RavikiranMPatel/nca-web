@@ -45,6 +45,7 @@ Severity scale: **critical** (data loss, cross-tenant, silent corruption) ·
 | BUG-25 | A branchless user cannot write a live annotation — hard 400 | high | open — the branch-resolver failure, reproduced |
 | BUG-26 | Brevo API key revoked — **every** production email is failing, not just deploy mail | critical | open — live production issue |
 | BUG-27 | Tournament venues, officials and leaderboards reachable by any academy | critical | **FIXED** — `204bf21` |
+| BUG-28 | The kit list could revert an edit it had just saved | medium | **FIXED** — `376bcc0` |
 
 ---
 
@@ -1572,3 +1573,32 @@ been able to pass either — the KSCA exception is already effectively owner-onl
 The guard is written to the documented rule and asserted against a seeded
 participation row, so it is correct for when a cross-academy entry flow exists.
 Building that flow is a product decision, not an implementation detail.
+
+---
+
+## BUG-28 — The kit list could revert an edit it had just saved
+
+**Severity:** medium · **Status: FIXED** in `376bcc0`
+
+`KitListPage.load` (`:85-92`) had no guard against out-of-order responses, and is
+called from three places — the season effect (`:93`), `saveDrawer` (`:147`) and
+`bulkDeliver` (`:164`). Several requests can be in flight at once, so a slow
+earlier response landing after a later one overwrote the table with pre-edit rows:
+save a size in the drawer, watch it appear, and a moment later the row silently
+reverts.
+
+Each call now takes a ticket and only the newest may write.
+
+**Same family as BUG-23**, which was the identical race in `PlayerKitPage`'s load
+effect. That one was fixed with a cancellation flag; this page was never given the
+same treatment — worth remembering that fixing a race in one component does not
+fix its twin.
+
+**An app defect, not a test race.** The kit-list spec failed on desktop with the
+table showing `M` ten seconds after the drawer had saved `XXL`, while passing
+three times out of three in isolation. Concurrency across the three Playwright
+projects is what made the slow response land late — the same condition a real user
+meets on a slow connection.
+
+Verified: three consecutive runs of `kit-list.spec.ts` across all three projects,
+3/3 each, plus the full suite green from an empty database.
