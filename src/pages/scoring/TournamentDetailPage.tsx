@@ -13,6 +13,9 @@ import {
   updateTournamentStatus,
   getChampion,
   getOverview,
+  getAwards,
+  getAwardCandidates,
+  giveAward,
   completeTournament,
   advanceToKnockout,
   advanceToPlayoffs,
@@ -38,6 +41,7 @@ const TABS = [
   "Fixtures",
   "Standings",
   "Stats",
+  "Awards",
   "Settings",
 ];
 const ROLES = ["BATSMAN", "BOWLER", "ALL_ROUNDER", "WK_BATSMAN"];
@@ -166,6 +170,10 @@ export default function TournamentDetailPage() {
   });
 
   const [overview, setOverview] = useState<any | null>(null);
+  const [awards, setAwards] = useState<any[]>([]);
+  const [awardCands, setAwardCands] = useState<any | null>(null);
+  const [awardPick, setAwardPick] = useState<any | null>(null); // {type,label}
+  const [awardPosting, setAwardPosting] = useState(false);
   const [showComplete, setShowComplete] = useState(false);
   const [champion, setChampion] = useState<{
     championName: string | null;
@@ -459,6 +467,7 @@ export default function TournamentDetailPage() {
 
   useEffect(() => {
     if (tab === 7) loadStats();
+    if (tab === 8) loadAwards();
   }, [tab]);
 
   useEffect(() => {
@@ -665,6 +674,38 @@ export default function TournamentDetailPage() {
       setError(e.response?.data?.message ?? "Action failed");
     } finally {
       setRainPosting(false);
+    }
+  };
+
+  const loadAwards = async () => {
+    if (!publicId) return;
+    try {
+      const [a, c] = await Promise.all([
+        getAwards(publicId),
+        getAwardCandidates(publicId),
+      ]);
+      setAwards(a);
+      setAwardCands(c);
+    } catch {
+      /* leave the tab empty rather than breaking the page */
+    }
+  };
+
+  const confirmAward = async (
+    type: string,
+    playerPublicId: string,
+    reason: string,
+  ) => {
+    setAwardPosting(true);
+    try {
+      await giveAward(publicId!, type, playerPublicId, reason);
+      setAwardPick(null);
+      await loadAwards();
+      showToast("🏆 Award recorded");
+    } catch (e: any) {
+      setError(e.response?.data?.message ?? "Failed to record award");
+    } finally {
+      setAwardPosting(false);
     }
   };
 
@@ -2352,7 +2393,125 @@ export default function TournamentDetailPage() {
         )}
 
         {/* ── SETTINGS ── */}
+        {/* ── AWARDS ── */}
         {tab === 8 && (
+          <div className="space-y-3">
+            {(() => {
+              const AW = [
+                {
+                  type: "PLAYER_OF_SERIES",
+                  label: "Player of the Series",
+                  icon: "🏆",
+                  derived: false,
+                },
+                {
+                  type: "BEST_BATTER",
+                  label: "Best Batter",
+                  icon: "🏏",
+                  derived: true,
+                  key: "bestBatter",
+                },
+                {
+                  type: "BEST_BOWLER",
+                  label: "Best Bowler",
+                  icon: "🎯",
+                  derived: true,
+                  key: "bestBowler",
+                },
+                {
+                  type: "BEST_FIELDER",
+                  label: "Best Fielder",
+                  icon: "🧤",
+                  derived: true,
+                  key: "bestFielder",
+                },
+              ];
+              const held = (t: string) => awards.find((a) => a.awardType === t);
+              return AW.map((aw) => {
+                const a = held(aw.type);
+                const proposal = aw.derived ? awardCands?.[aw.key!] : null;
+                return (
+                  <div
+                    key={aw.type}
+                    className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-800 p-3"
+                  >
+                    <div className="flex items-start gap-2.5">
+                      <span className="text-lg leading-none mt-0.5 flex-shrink-0">
+                        {aw.icon}
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <div className="text-[10px] uppercase tracking-wide text-gray-400">
+                          {aw.label}
+                        </div>
+                        {a ? (
+                          <>
+                            <div className="text-sm font-semibold text-gray-900 dark:text-white leading-tight break-words">
+                              {a.playerName}
+                              {a.playerDeleted && (
+                                <span className="ml-1 text-[10px] text-gray-400">
+                                  (player removed)
+                                </span>
+                              )}
+                            </div>
+                            <div className="text-[11px] text-gray-400 leading-tight break-words">
+                              {a.figures}
+                              {a.teamName ? ` · ${a.teamName}` : ""}
+                            </div>
+                            <div className="text-[10px] text-gray-400 mt-0.5 break-words">
+                              by {a.awardedBy}
+                            </div>
+                          </>
+                        ) : proposal ? (
+                          <>
+                            <div className="text-sm font-semibold text-gray-900 dark:text-white leading-tight break-words">
+                              {proposal.playerName}
+                            </div>
+                            <div className="text-[11px] text-gray-400 leading-tight break-words">
+                              {proposal.figures} · {proposal.teamName}
+                            </div>
+                            <div className="text-[10px] text-blue-500 mt-0.5">
+                              Proposed from the data — not yet confirmed
+                            </div>
+                          </>
+                        ) : (
+                          <div className="text-sm text-gray-400">
+                            Not awarded
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* The caveat travels with the award, not a code comment:
+                        a quarter of run outs across this database credit
+                        nobody, so a derived fielding count can be short. */}
+                    {aw.type === "BEST_FIELDER" && awardCands && (
+                      <div className="mt-2 px-2.5 py-1.5 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800">
+                        <div className="text-[11px] text-amber-700 dark:text-amber-500 leading-tight break-words">
+                          {awardCands.fieldingUnattributedRunOuts > 0
+                            ? `${awardCands.fieldingUnattributedRunOuts} of ${awardCands.fieldingTotalRunOuts} run outs credit no fielder — this count is incomplete.`
+                            : `All ${awardCands.fieldingTotalRunOuts} run outs credit a fielder. Catches and stumpings always do.`}
+                        </div>
+                      </div>
+                    )}
+
+                    <button
+                      onClick={() => setAwardPick(aw)}
+                      className={`mt-2 w-full h-11 rounded-xl text-xs font-semibold active:scale-95 ${
+                        a
+                          ? "bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400"
+                          : "bg-blue-600 text-white"
+                      }`}
+                    >
+                      {a ? "Change" : aw.derived ? "Confirm" : "Choose"}
+                    </button>
+                  </div>
+                );
+              });
+            })()}
+          </div>
+        )}
+
+        {tab === 9 && (
           <div className="space-y-5">
             {/* Match Format */}
             <div className="bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 rounded-2xl p-4 space-y-4">
@@ -3329,6 +3488,85 @@ export default function TournamentDetailPage() {
 
       {/* ── DECLARE WINNER MODAL ── */}
       {/* ── COMPLETE TOURNAMENT ── */}
+      {/* ── AWARD PICKER ── */}
+      {awardPick && (
+        <div className="fixed inset-0 z-50 bg-black/60 flex items-end">
+          <div className="w-full bg-white dark:bg-gray-900 rounded-t-2xl max-h-[85dvh] overflow-y-auto p-5">
+            <div className="w-10 h-1 bg-gray-300 rounded-full mx-auto mb-4" />
+            <h3 className="text-sm font-semibold text-gray-900 dark:text-white text-center">
+              {awardPick.label}
+            </h3>
+            <p className="text-xs text-gray-500 text-center mt-1 mb-4">
+              {awardPick.derived
+                ? "Derived from the tournament data. Confirm, or pick someone else."
+                : "Ranked by MVP points. The choice is yours."}
+            </p>
+
+            {/* Full-width rows: three stat groups do not fit a half-width tile
+                at 380px, and only the groups that apply are shown. */}
+            <div className="space-y-2">
+              {(awardPick.derived
+                ? [awardCands?.[awardPick.key]]
+                    .filter(Boolean)
+                    .map((p: any) => ({
+                      playerPublicId: p.playerPublicId,
+                      playerName: p.playerName,
+                      teamName: p.teamName,
+                      summary: p.figures,
+                      badge: "Proposed",
+                    }))
+                : (awardCands?.playerOfSeriesCandidates ?? []).map(
+                    (c: any) => ({
+                      playerPublicId: c.playerPublicId,
+                      playerName: c.playerName,
+                      teamName: c.teamName,
+                      summary: c.summary,
+                      badge: `${c.mvpPoints} pts`,
+                    }),
+                  )
+              ).map((c: any) => (
+                <button
+                  key={c.playerPublicId}
+                  disabled={awardPosting}
+                  onClick={() =>
+                    confirmAward(
+                      awardPick.type,
+                      c.playerPublicId,
+                      awardPick.derived
+                        ? "Confirmed from tournament data"
+                        : "Selected",
+                    )
+                  }
+                  className="w-full text-left px-3 py-2.5 bg-gray-50 dark:bg-gray-800 rounded-xl active:scale-95 disabled:opacity-40"
+                >
+                  <div className="flex items-start gap-2">
+                    <div className="min-w-0 flex-1">
+                      <div className="text-sm font-medium text-gray-900 dark:text-gray-100 leading-tight break-words">
+                        {c.playerName}
+                      </div>
+                      <div className="text-[11px] text-gray-400 leading-tight break-words">
+                        {c.summary}
+                        {c.teamName ? ` · ${c.teamName}` : ""}
+                      </div>
+                    </div>
+                    <span className="flex-shrink-0 text-[10px] text-gray-400 mt-0.5">
+                      {c.badge}
+                    </span>
+                  </div>
+                </button>
+              ))}
+            </div>
+
+            <button
+              onClick={() => setAwardPick(null)}
+              className="w-full py-3 mt-3 text-gray-400 text-sm"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+
       {showComplete && (
         <div className="fixed inset-0 z-50 bg-black/60 flex items-end">
           <div className="w-full bg-white dark:bg-gray-900 rounded-t-2xl max-h-[85dvh] overflow-y-auto p-5">

@@ -77,6 +77,32 @@ export const getResultPreview = (publicId: string) =>
     }>(`${BASE}/${publicId}/result-preview`)
     .then((r) => r.data);
 
+// Player of the Match candidates with batting, bowling and fielding figures.
+// The picker used to be a bare list of names.
+export type AwardCandidate = {
+  playerPublicId: string;
+  playerName: string;
+  teamName: string;
+  runs: number;
+  ballsFaced: number;
+  fours: number;
+  sixes: number;
+  strikeRate: number;
+  bowlingLine: string | null;
+  wickets: number;
+  economy: number;
+  catches: number;
+  runOuts: number;
+  stumpings: number;
+  batted: boolean;
+  bowled: boolean;
+  fielded: boolean;
+};
+export const getMatchAwardCandidates = (publicId: string) =>
+  api
+    .get<AwardCandidate[]>(`${BASE}/${publicId}/award-candidates`)
+    .then((r) => r.data);
+
 export const deleteMatch = (publicId: string) =>
   api.delete(`/admin/cricket/matches/${publicId}`);
 

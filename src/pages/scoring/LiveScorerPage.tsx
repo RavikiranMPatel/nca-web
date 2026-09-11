@@ -16,7 +16,9 @@ import {
   resumeMatch,
   abandonMatch,
   getResultPreview,
+  getMatchAwardCandidates,
 } from "../../api/scoring/matchApi";
+import type { AwardCandidate } from "../../api/scoring/matchApi";
 import { INTERRUPTION_REASONS } from "../../types/match";
 import type {
   BallResponse,
@@ -363,6 +365,7 @@ export default function LiveScorerPage() {
   const [motmPublicId, setMotmPublicId] = useState("");
   const [motmNote, setMotmNote] = useState("");
   const [showMotmPicker, setShowMotmPicker] = useState(false);
+  const [motmCandidates, setMotmCandidates] = useState<AwardCandidate[]>([]);
 
   const [showMoreSheet, setShowMoreSheet] = useState(false);
   const [moreSubAction, setMoreSubAction] = useState<
@@ -892,6 +895,13 @@ export default function LiveScorerPage() {
   useEffect(() => {
     if (!showResult || !matchId) return;
     let cancelled = false;
+    getMatchAwardCandidates(matchId)
+      .then((c) => {
+        if (!cancelled) setMotmCandidates(c);
+      })
+      .catch(() => {
+        /* the picker falls back to names only */
+      });
     getResultPreview(matchId)
       .then((p) => {
         if (cancelled || !p.resultType) return;
@@ -2450,19 +2460,56 @@ export default function LiveScorerPage() {
                   </button>
                 )}
                 {showMotmPicker && !motmPublicId && (
-                  <div className="mt-1 max-h-48 overflow-y-auto border border-gray-200 rounded-xl bg-white">
-                    {[...battingPlayers, ...bowlingPlayers].map((p) => (
-                      <button
-                        key={p.publicId}
-                        onClick={() => {
-                          setMotmPublicId(p.publicId);
-                          setShowMotmPicker(false);
-                        }}
-                        className="w-full px-3 py-2 text-sm text-left text-gray-800 hover:bg-gray-50 border-b border-gray-100 last:border-0"
-                      >
-                        {p.displayName}
-                      </button>
-                    ))}
+                  <div className="mt-1 max-h-64 overflow-y-auto border border-gray-200 rounded-xl bg-white">
+                    {/* Full-width rows, most involved first. Only the groups
+                        that apply are shown — a bowler who did not bat shows
+                        bowling alone, which is what keeps three stat groups
+                        legible at 380px. */}
+                    {(motmCandidates.length
+                      ? motmCandidates
+                      : [...battingPlayers, ...bowlingPlayers].map(
+                          (p) =>
+                            ({
+                              playerPublicId: p.publicId,
+                              playerName: p.displayName,
+                              teamName: "",
+                              batted: false,
+                              bowled: false,
+                              fielded: false,
+                            }) as unknown as AwardCandidate,
+                        )
+                    ).map((c) => {
+                      const bits: string[] = [];
+                      if (c.batted)
+                        bits.push(
+                          `${c.runs} (${c.ballsFaced}b${c.fours ? `, ${c.fours}\u00d74` : ""}${c.sixes ? `, ${c.sixes}\u00d76` : ""})`,
+                        );
+                      if (c.bowled) bits.push(`${c.bowlingLine}`);
+                      const f: string[] = [];
+                      if (c.catches) f.push(`${c.catches} ct`);
+                      if (c.runOuts) f.push(`${c.runOuts} ro`);
+                      if (c.stumpings) f.push(`${c.stumpings} st`);
+                      if (f.length) bits.push(f.join(", "));
+                      return (
+                        <button
+                          key={c.playerPublicId}
+                          onClick={() => {
+                            setMotmPublicId(c.playerPublicId);
+                            setShowMotmPicker(false);
+                          }}
+                          className="w-full px-3 py-2.5 text-left hover:bg-gray-50 border-b border-gray-100 last:border-0"
+                        >
+                          <div className="text-sm text-gray-900 leading-tight break-words">
+                            {c.playerName}
+                          </div>
+                          {bits.length > 0 && (
+                            <div className="text-xs text-gray-400 leading-tight break-words">
+                              {bits.join(" \u00b7 ")}
+                            </div>
+                          )}
+                        </button>
+                      );
+                    })}
                   </div>
                 )}
                 {motmPublicId && (

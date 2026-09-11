@@ -71,6 +71,33 @@ export type NamedFigure = {
   teamName: string;
   value: number;
 };
+// Awards. Append-only server-side: giving one supersedes the standing award of
+// that type rather than overwriting it.
+export const getAwards = (publicId: string) =>
+  api.get<any[]>(`/admin/cricket/tournaments/${publicId}/awards`).then((r) => r.data);
+
+// What the data says: derived proposals for batter/bowler/fielder, a ranked
+// candidate list for the subjective Player of the Series, and the run-out
+// attribution gap so Best Fielder can be confirmed knowingly.
+export const getAwardCandidates = (publicId: string) =>
+  api
+    .get<any>(`/admin/cricket/tournaments/${publicId}/awards/candidates`)
+    .then((r) => r.data);
+
+export const giveAward = (
+  publicId: string,
+  awardType: string,
+  playerPublicId: string,
+  reason?: string,
+) =>
+  api
+    .post(`/admin/cricket/tournaments/${publicId}/awards`, {
+      awardType,
+      playerPublicId,
+      reason,
+    })
+    .then((r) => r.data);
+
 export const getOverview = (publicId: string) =>
   api
     .get<{
