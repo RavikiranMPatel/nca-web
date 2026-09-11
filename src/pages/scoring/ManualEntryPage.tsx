@@ -145,16 +145,26 @@ export default function ManualEntryPage() {
         setMatch(m);
         setTeams(ts);
 
+        // Select by teamType, never by position: the list arrives ordered, but a
+        // whole manual scorecard is recorded against these two ids, so it must not
+        // depend on the server's ordering staying what it is today (BUG-29).
+        const teamA = ts.find((t) => t.teamType === "TEAM_A");
+        const teamB = ts.find((t) => t.teamType === "TEAM_B");
+        if (!teamA || !teamB) {
+          setError("This match does not have both teams set up yet.");
+          return;   // the finally below clears loading
+        }
+
         const [xiA, xiB]: [MatchTeamPlayer[], MatchTeamPlayer[]] =
           await Promise.all([
             api
               .get(
-                `/admin/cricket/matches/${matchId}/teams/${ts[0].publicId}/players`,
+                `/admin/cricket/matches/${matchId}/teams/${teamA.publicId}/players`,
               )
               .then((r) => r.data),
             api
               .get(
-                `/admin/cricket/matches/${matchId}/teams/${ts[1].publicId}/players`,
+                `/admin/cricket/matches/${matchId}/teams/${teamB.publicId}/players`,
               )
               .then((r) => r.data),
           ]);
@@ -164,8 +174,8 @@ export default function ManualEntryPage() {
         // Initialise two innings — 1st: Team A bats, 2nd: Team B bats
         setInn([
           {
-            battingTeamId: ts[0].publicId,
-            bowlingTeamId: ts[1].publicId,
+            battingTeamId: teamA.publicId,
+            bowlingTeamId: teamB.publicId,
             totalRuns: 0,
             totalWickets: 0,
             totalBalls: 0,
@@ -181,8 +191,8 @@ export default function ManualEntryPage() {
             ),
           },
           {
-            battingTeamId: ts[1].publicId,
-            bowlingTeamId: ts[0].publicId,
+            battingTeamId: teamB.publicId,
+            bowlingTeamId: teamA.publicId,
             totalRuns: 0,
             totalWickets: 0,
             totalBalls: 0,

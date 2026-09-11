@@ -608,12 +608,17 @@ export default function LiveScorerPage() {
         setBattingPlayers(localBattingPlayers);
         setBowlingPlayers(localBowlingPlayers);
       } else {
-        const t0 = (ts as CricketTeam[])[0]?.publicId;
-        const t1 = (ts as CricketTeam[])[1]?.publicId;
+        // No innings yet, so there is no server-authoritative batting side to
+        // read: fall back to TEAM_A batting first. Selected by teamType rather
+        // than by position — getTeams is ordered, but the scorer must not be
+        // shown the wrong side's players if that ever changes (BUG-29).
+        const teams = ts as CricketTeam[];
+        const t0 = teams.find((t) => t.teamType === "TEAM_A")?.publicId;
+        const t1 = teams.find((t) => t.teamType === "TEAM_B")?.publicId;
         setBattingTeamId(t0 ?? null);
         setBowlingTeamId(t1 ?? null);
-        localBattingPlayers = teamPlayers[t0] ?? [];
-        localBowlingPlayers = teamPlayers[t1] ?? [];
+        localBattingPlayers = t0 ? (teamPlayers[t0] ?? []) : [];
+        localBowlingPlayers = t1 ? (teamPlayers[t1] ?? []) : [];
         setBattingPlayers(localBattingPlayers);
         setBowlingPlayers(localBowlingPlayers);
       }
