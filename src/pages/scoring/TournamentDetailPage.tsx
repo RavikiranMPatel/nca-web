@@ -21,6 +21,7 @@ import {
   prepareMatchFromFixture,
   getTournamentResult,
   markFixtureFinal,
+  rescheduleFixture,
   type TournamentResult,
 } from "../../api/scoring/tournamentApi";
 import { getBranchPlayers } from "../../api/scoring/matchApi";
@@ -112,6 +113,16 @@ export default function TournamentDetailPage() {
   const [externalRole, setExternalRole] = useState("ALL_ROUNDER");
 
   const [fixtureGroundFilter] = useState<string>("ALL");
+  const [fixtureView, setFixtureView] = useState<string>("calendar");
+
+  // Reschedule / postpone (Slice 4). overrideReason is only sent when the server
+  // has already refused the move for a clash and the actor is a SUPER_ADMIN.
+  const [reschedulingFixture, setReschedulingFixture] = useState<any>(null);
+  const [rescheduleForm, setRescheduleForm] = useState({
+    date: "", time: "", reason: "", postpone: false,
+  });
+  const [rescheduleConflict, setRescheduleConflict] = useState("");
+  const [rescheduleOverride, setRescheduleOverride] = useState("");
 
   const [showGenerate, setShowGenerate] = useState(false);
   const [genForm, setGenForm] = useState<GenForm>({
@@ -683,6 +694,54 @@ export default function TournamentDetailPage() {
     }
   };
 
+  const openReschedule = (f: any) => {
+    setReschedulingFixture(f);
+    setRescheduleConflict("");
+    setRescheduleOverride("");
+    let date = "", time = "";
+    if (f.scheduledAt) {
+      const d = new Date(f.scheduledAt);
+      date = d.toISOString().split("T")[0];
+      time = d.toTimeString().substring(0, 5);
+    }
+    setRescheduleForm({ date, time, reason: "", postpone: false });
+  };
+
+  const submitReschedule = async (override: boolean) => {
+    if (!reschedulingFixture || !rescheduleForm.reason.trim()) return;
+    setPosting(true);
+    try {
+      const body: any = {
+        reason: rescheduleForm.reason.trim(),
+        postpone: rescheduleForm.postpone,
+      };
+      if (!rescheduleForm.postpone) {
+        body.scheduledAt = new Date(
+          `${rescheduleForm.date}T${rescheduleForm.time}:00`,
+        ).toISOString();
+      }
+      if (override) {
+        body.overrideConflicts = true;
+        body.overrideReason = rescheduleOverride.trim();
+      }
+      await rescheduleFixture(publicId!, reschedulingFixture.publicId, body);
+      setReschedulingFixture(null);
+      await loadAll();
+      showToast(rescheduleForm.postpone ? "Fixture postponed" : "✓ Fixture moved");
+    } catch (e: any) {
+      // A 409 is the server refusing a clash, which is a different thing from an
+      // error: it is an answer, and it names what clashes. Keep the dialog open
+      // and offer the override to whoever is allowed to use it.
+      if (e.response?.status === 409) {
+        setRescheduleConflict(e.response?.data?.message ?? "That slot clashes.");
+      } else {
+        setError(e.response?.data?.message ?? "Failed to reschedule");
+      }
+    } finally {
+      setPosting(false);
+    }
+  };
+
   const handleMarkFinal = async (fixturePublicId: string, isFinal: boolean) => {
     setPosting(true);
     try {
@@ -1017,6 +1076,9 @@ export default function TournamentDetailPage() {
           <FixturesTab
             handleMarkFinal={handleMarkFinal}
             fixtureGroundFilter={fixtureGroundFilter}
+            fixtureView={fixtureView}
+            setFixtureView={setFixtureView}
+            openReschedule={openReschedule}
             fixtures={fixtures}
             handleAdvanceKnockout={handleAdvanceKnockout}
             handleStartMatch={handleStartMatch}
@@ -1780,6 +1842,122 @@ export default function TournamentDetailPage() {
                   Add Fixture
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── RESCHEDULE / POSTPONE MODAL ── */}
+      {reschedulingFixture && (
+        <div className="fixed inset-0 z-[60] bg-black/60 flex items-center justify-center p-6">
+          <div
+            data-testid="reschedule-modal"
+            className="w-full max-w-sm bg-white dark:bg-gray-900 rounded-2xl p-5 max-h-[90vh] overflow-y-auto"
+          >
+            <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-1">
+              🕑 Reschedule
+            </h3>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">
+              {reschedulingFixture.homeTeam?.name ?? "TBD"} v{" "}
+              {reschedulingFixture.awayTeam?.name ?? "TBD"}
+            </p>
+
+            <label className="flex items-center gap-2 mb-4 text-xs text-gray-700 dark:text-gray-300">
+              <input
+                data-testid="reschedule-postpone"
+                type="checkbox"
+                checked={rescheduleForm.postpone}
+                onChange={(e) =>
+                  setRescheduleForm({ ...rescheduleForm, postpone: e.target.checked })
+                }
+              />
+              Postpone instead — give up the slot without setting a new one
+            </label>
+
+            {!rescheduleForm.postpone && (
+              <div className="flex gap-2 mb-4">
+                <input
+                  data-testid="reschedule-date"
+                  type="date"
+                  value={rescheduleForm.date}
+                  onChange={(e) =>
+                    setRescheduleForm({ ...rescheduleForm, date: e.target.value })
+                  }
+                  className="flex-1 px-3 py-2 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm text-gray-900 dark:text-gray-100"
+                />
+                <input
+                  data-testid="reschedule-time"
+                  type="time"
+                  value={rescheduleForm.time}
+                  onChange={(e) =>
+                    setRescheduleForm({ ...rescheduleForm, time: e.target.value })
+                  }
+                  className="w-28 px-3 py-2 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm text-gray-900 dark:text-gray-100"
+                />
+              </div>
+            )}
+
+            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
+              Reason <span className="text-red-500">*</span>
+            </p>
+            <textarea
+              data-testid="reschedule-reason"
+              value={rescheduleForm.reason}
+              onChange={(e) =>
+                setRescheduleForm({ ...rescheduleForm, reason: e.target.value })
+              }
+              rows={2}
+              placeholder="Why is it moving?"
+              className="w-full mb-4 px-3 py-2 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm text-gray-900 dark:text-gray-100"
+            />
+
+            {/* The server refused the slot. This is an answer, not an error — it
+                names what clashes, and only a SUPER_ADMIN can go ahead anyway. */}
+            {rescheduleConflict && (
+              <div
+                data-testid="reschedule-conflict"
+                className="mb-4 px-3 py-2 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl text-xs text-red-700 dark:text-red-400"
+              >
+                {rescheduleConflict}
+                <textarea
+                  data-testid="reschedule-override-reason"
+                  value={rescheduleOverride}
+                  onChange={(e) => setRescheduleOverride(e.target.value)}
+                  rows={2}
+                  placeholder="SUPER_ADMIN only — why schedule over it anyway?"
+                  className="w-full mt-2 px-3 py-2 bg-white dark:bg-gray-800 border border-red-200 dark:border-red-800 rounded-xl text-xs text-gray-900 dark:text-gray-100"
+                />
+                <button
+                  data-testid="reschedule-override-confirm"
+                  onClick={() => submitReschedule(true)}
+                  disabled={!rescheduleOverride.trim() || posting}
+                  className="w-full mt-2 py-2 bg-red-600 text-white rounded-xl text-xs font-semibold disabled:opacity-40"
+                >
+                  Schedule over the clash
+                </button>
+              </div>
+            )}
+
+            <div className="flex gap-3">
+              <button
+                onClick={() => setReschedulingFixture(null)}
+                className="flex-1 py-2.5 bg-gray-100 dark:bg-gray-800 rounded-xl text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700"
+              >
+                Cancel
+              </button>
+              <button
+                data-testid="reschedule-confirm"
+                onClick={() => submitReschedule(false)}
+                disabled={
+                  !rescheduleForm.reason.trim() ||
+                  posting ||
+                  (!rescheduleForm.postpone &&
+                    (!rescheduleForm.date || !rescheduleForm.time))
+                }
+                className="flex-1 py-2.5 bg-blue-600 text-white rounded-xl text-sm font-semibold disabled:opacity-40"
+              >
+                {rescheduleForm.postpone ? "Postpone" : "Move"}
+              </button>
             </div>
           </div>
         </div>

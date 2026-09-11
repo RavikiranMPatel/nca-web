@@ -12,8 +12,18 @@ import type { ApiRecord, GenForm, Handler } from "./types";
 import { fixtureStatusColor } from "./constants";
 import api from "../../api/axios";
 
+/** Phase 18's four ways of looking at the same fixture list. */
+const FIXTURE_VIEWS = [
+  { key: "calendar", label: "📅 Calendar" },
+  { key: "stage", label: "🏆 Stage" },
+  { key: "group", label: "🔤 Group" },
+  { key: "team", label: "🏏 Team" },
+] as const;
+
 interface Props {
   fixtureGroundFilter: ApiRecord;
+  fixtureView: string;
+  setFixtureView: Dispatch<SetStateAction<ApiRecord>>;
   fixtures: ApiRecord[];
   handleAdvanceKnockout: ApiRecord;
   handleMarkFinal: Handler;
@@ -21,6 +31,7 @@ interface Props {
   loadAll: Handler;
   navigate: Handler;
   openEditFixture: Handler;
+  openReschedule: Handler;
   posting: ApiRecord;
   publicId: ApiRecord;
   setError: Dispatch<SetStateAction<ApiRecord>>;
@@ -35,6 +46,8 @@ interface Props {
 
 export default function FixturesTab({
   fixtureGroundFilter,
+  fixtureView,
+  setFixtureView,
   fixtures,
   handleAdvanceKnockout,
   handleMarkFinal,
@@ -42,6 +55,7 @@ export default function FixturesTab({
   loadAll,
   navigate,
   openEditFixture,
+  openReschedule,
   posting,
   publicId,
   setError,
@@ -160,12 +174,34 @@ export default function FixturesTab({
             })()}
         </div>
 
-        {/* ── DATE+GROUND VIEW ── */}
+        {/* ── VIEWS (Phase 18) ──
+            Calendar, stage, group and team are the same fixture cards under a
+            different two-level grouping, so the card markup is written once. A
+            fixture belongs to one date and one stage, but to *two* teams, which
+            is why the outer key is a list. */}
+        <div
+          data-testid="fixture-views"
+          className="flex gap-1 overflow-x-auto pb-1 -mx-1 px-1"
+        >
+          {FIXTURE_VIEWS.map((v) => (
+            <button
+              key={v.key}
+              data-testid={`fixture-view-${v.key}`}
+              onClick={() => setFixtureView(v.key)}
+              className={`flex-shrink-0 px-2.5 py-1 rounded-lg text-xs font-medium transition-colors ${
+                fixtureView === v.key
+                  ? "bg-blue-600 text-white"
+                  : "bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300"
+              }`}
+            >
+              {v.label}
+            </button>
+          ))}
+        </div>
+
         {(() => {
-          // Group fixtures by date
-          const byDate: Record<string, any[]> = {};
-          fixtures.forEach((f: any) => {
-            const dateKey = f.scheduledAt
+          const dateOf = (f: any) =>
+            f.scheduledAt
               ? new Date(f.scheduledAt).toLocaleDateString("en-IN", {
                   day: "2-digit",
                   month: "short",
@@ -173,8 +209,49 @@ export default function FixturesTab({
                   weekday: "short",
                 })
               : "Unscheduled";
-            if (!byDate[dateKey]) byDate[dateKey] = [];
-            byDate[dateKey].push(f);
+
+          const teamNames = (f: any) =>
+            f.byeTeam
+              ? [f.byeTeam.name]
+              : [f.homeTeam?.name ?? "TBD", f.awayTeam?.name ?? "TBD"];
+
+          // Outer grouping: a list, because in the team view one fixture belongs
+          // under both sides.
+          const outerKeys = (f: any): string[] => {
+            switch (fixtureView) {
+              case "stage":
+                return [f.stage?.stageName ?? "Unassigned"];
+              case "group":
+                return [
+                  f.homeTeam?.groupName
+                    ? `Group ${f.homeTeam.groupName}`
+                    : "No group",
+                ];
+              case "team":
+                return teamNames(f);
+              default:
+                return [dateOf(f)];
+            }
+          };
+
+          const innerKey = (f: any) =>
+            fixtureView === "calendar"
+              ? (f.venue ?? "No Venue")
+              : `Round ${f.roundNumber}`;
+
+          const innerIcon = fixtureView === "calendar" ? "📍" : "🔢";
+          const outerIcon =
+            fixtureView === "calendar" ? "📅"
+            : fixtureView === "team" ? "🏏"
+            : fixtureView === "group" ? "🔤"
+            : "🏆";
+
+          const byDate: Record<string, any[]> = {};
+          fixtures.forEach((f: any) => {
+            for (const key of outerKeys(f)) {
+              if (!byDate[key]) byDate[key] = [];
+              byDate[key].push(f);
+            }
           });
 
           // Apply ground filter
@@ -201,10 +278,9 @@ export default function FixturesTab({
 
           return Object.entries(filteredByDate).map(
             ([dateStr, dayFixtures]) => {
-              // Group by ground within the day
               const byGround: Record<string, any[]> = {};
               dayFixtures.forEach((f: any) => {
-                const groundKey = f.venue ?? "No Venue";
+                const groundKey = innerKey(f);
                 if (!byGround[groundKey]) byGround[groundKey] = [];
                 byGround[groundKey].push(f);
               });
@@ -214,8 +290,11 @@ export default function FixturesTab({
                   {/* Date header */}
                   <div className="flex items-center gap-2 mt-2">
                     <div className="h-px flex-1 bg-gray-100 dark:bg-gray-800" />
-                    <span className="text-xs font-semibold text-gray-500 dark:text-gray-400 px-2">
-                      📅 {dateStr} · {dayFixtures.length} match
+                    <span
+                      data-testid="fixture-group-heading"
+                      className="text-xs font-semibold text-gray-500 dark:text-gray-400 px-2"
+                    >
+                      {outerIcon} {dateStr} · {dayFixtures.length} match
                       {dayFixtures.length !== 1 ? "es" : ""}
                     </span>
                     <div className="h-px flex-1 bg-gray-100 dark:bg-gray-800" />
@@ -230,7 +309,7 @@ export default function FixturesTab({
                       >
                         {/* Ground header */}
                         <div className="flex items-center gap-2 px-4 py-2 bg-gray-50 dark:bg-gray-800/50 border-b border-gray-100 dark:border-gray-800">
-                          <span className="text-xs">📍</span>
+                          <span className="text-xs">{innerIcon}</span>
                           <span className="text-xs font-semibold text-gray-700 dark:text-gray-300">
                             {groundName}
                           </span>
@@ -282,6 +361,16 @@ export default function FixturesTab({
                                     >
                                       {f.isFinal ? "🏆 Final" : "🏆"}
                                     </button>
+                                    {!f.byeTeam && (
+                                      <button
+                                        data-testid={`fixture-reschedule-${f.publicId}`}
+                                        title="Reschedule or postpone"
+                                        onClick={() => openReschedule(f)}
+                                        className="px-1.5 py-0.5 rounded-lg bg-gray-100 dark:bg-gray-800 text-gray-500 text-xs active:scale-90"
+                                      >
+                                        🕑
+                                      </button>
+                                    )}
                                     <button
                                       onClick={() => openEditFixture(f)}
                                       className="p-1 rounded-lg bg-gray-100 dark:bg-gray-800 text-gray-500 active:scale-90"

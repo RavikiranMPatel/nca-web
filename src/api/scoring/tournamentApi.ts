@@ -43,6 +43,37 @@ export const getTournamentResult = (publicId: string) =>
     .get<TournamentResult>(`/admin/cricket/tournaments/${publicId}/result`)
     .then((r) => r.data);
 
+/**
+ * Move or postpone a fixture.
+ *
+ * Returns 409 when the slot clashes; that is an answer rather than a failure,
+ * and the message names what clashes and when. Only a SUPER_ADMIN may retry with
+ * overrideConflicts, and only with an overrideReason (ruling 4).
+ */
+export const rescheduleFixture = (
+  publicId: string,
+  fixturePublicId: string,
+  body: {
+    scheduledAt?: string;
+    venueId?: string;
+    postpone?: boolean;
+    reason: string;
+    overrideConflicts?: boolean;
+    overrideReason?: string;
+  },
+) =>
+  api
+    .post(
+      `/admin/cricket/tournaments/${publicId}/fixtures/${fixturePublicId}/reschedule`,
+      body,
+    )
+    .then((r) => r.data);
+
+export const listFixtureConflicts = (publicId: string) =>
+  api
+    .get(`/admin/cricket/tournaments/${publicId}/conflicts`)
+    .then((r) => r.data);
+
 /** Mark (or clear) the fixture whose result decides the tournament. */
 export const markFixtureFinal = (
   publicId: string,
