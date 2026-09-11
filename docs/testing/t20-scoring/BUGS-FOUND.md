@@ -47,6 +47,7 @@ Severity scale: **critical** (data loss, cross-tenant, silent corruption) ·
 | BUG-27 | Tournament venues, officials and leaderboards reachable by any academy | critical | **FIXED** — `204bf21` |
 | BUG-28 | The kit list could revert an edit it had just saved | medium | **FIXED** — `376bcc0` |
 | BUG-29 | `getTeams` returns the two sides unordered, so positional callers can swap them | high | **FIXED** — `093f827` + `6225508` |
+| BUG-30 | A match created from a fixture never linked back, so standings stayed empty | high | **FIXED** — `8aaceb4` |
 
 ---
 
@@ -1676,3 +1677,56 @@ tuple to the tail of the heap, so an unordered scan of those rows returns
 Backend suite 10/10. Playwright full suite **684 passed / 6 expected-fail / 285
 skipped / 0 unexpected**, mobile back to 226 from 225. TypeScript held at the 88
 baseline.
+
+---
+
+## BUG-30 — A match created from a fixture never linked back, so standings stayed empty
+
+**Severity:** high · **Status: FIXED** in `8aaceb4` — found during Slice 3, not
+caused by it
+
+`MatchService.createMatch` set one end of the link and not the other:
+
+```java
+match.setFixture(fixture);   // and nothing set fixture.setMatch(match)
+```
+
+Only `TournamentService.linkMatchToFixture` — the create-the-match-first,
+link-it-afterwards path — ever wrote `fixtures.match_id`. A match created
+**from** a fixture, which is the flow the UI offers via prepare-match, left it
+null for ever.
+
+**Why that matters.** Standings walk fixtures, and every path skips a fixture
+whose match is null:
+
+```java
+if (!isHome && !isAway || f.getMatch() == null) continue;
+```
+
+So the points table stayed empty however many games were played. Measured before
+the fix, on a completed fixture-created match:
+
+| | value |
+|---|---|
+| `fixtures.match_id` | `NULL` |
+| `fixtures.status` | `COMPLETED` |
+| standings, both sides | `played 0, points 0` |
+
+The same nulls made the Fixtures tab's **Score** and **Scorecard** buttons dead,
+since both read `f.match.publicId`.
+
+It also means Slice 1's NRR exclusion was correct but never fired for these
+matches — there was nothing for it to exclude, because the fixture never reached
+its innings at all.
+
+**The fix, and what it broke on the way.** Linking both ends made `CricketMatch`
+and `Fixture` genuinely circular, and Jackson follows that until the response
+dies mid-body — arriving as `Parse Error: Expected LF after chunk data` on a 200,
+a truncated chunked reply rather than a clean 500. Each side now excludes the
+other from serialisation while keeping what its own consumers read: a match still
+carries its fixture, a fixture still carries its match.
+
+**Covered by** `tournament-status.spec.ts` — "a match created from a fixture now
+counts towards the standings (BUG-30)", asserting `fixtures.match_id` is
+populated and that the winner is on `played 1, won 1, points 2` against the
+loser's `played 1, lost 1, points 0`.
