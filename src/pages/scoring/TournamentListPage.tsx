@@ -14,19 +14,48 @@ const statusBadge: Record<string, string> = {
   CANCELLED: "bg-red-100 text-red-500 dark:bg-red-900/20 dark:text-red-400",
 };
 
+// The four formats generateFixtures actually accepts. DOUBLE_ELIMINATION and
+// CUSTOM used to be here and are rejected by the backend with "Unsupported
+// format"; LEAGUE_PLAYOFFS was missing, so an IPL-format tournament rendered a
+// blank label.
 const formatLabel: Record<string, string> = {
   ROUND_ROBIN: "Round Robin",
   KNOCKOUT: "Knockout",
   GROUP_KNOCKOUT: "Group + Knockout",
-  DOUBLE_ELIMINATION: "Double Elimination",
-  CUSTOM: "Custom",
+  LEAGUE_PLAYOFFS: "League + Playoffs",
 };
+
+// Rule 6: the year comes from the ISO string's own parts. new Date(iso)
+// .getFullYear() parses as UTC midnight, so a 1 January tournament reads as
+// 31 December of the previous year in IST.
+const yearOf = (iso?: string | null) =>
+  iso && iso.length >= 4 ? iso.slice(0, 4) : "";
+
+type SortKey =
+  "name" | "year" | "startDate" | "endDate" | "status" | "teams" | "matches";
+
+const SORTS: { key: SortKey; label: string }[] = [
+  { key: "startDate", label: "Start date" },
+  { key: "endDate", label: "End date" },
+  { key: "name", label: "Name" },
+  { key: "year", label: "Year" },
+  { key: "status", label: "Status" },
+  { key: "teams", label: "Teams" },
+  { key: "matches", label: "Matches" },
+];
 
 export default function TournamentListPage() {
   const navigate = useNavigate();
   const [tournaments, setTournaments] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState<"all" | "ACTIVE" | "COMPLETED">("all");
+  const [search, setSearch] = useState("");
+  const [fStatus, setFStatus] = useState("all");
+  const [fYear, setFYear] = useState("all");
+  const [fFormat, setFFormat] = useState("all");
+  const [fVenue, setFVenue] = useState("all");
+  const [sortKey, setSortKey] = useState<SortKey>("startDate");
+  const [sortAsc, setSortAsc] = useState(false);
+  const [showFilters, setShowFilters] = useState(false);
   const [toast, setToast] = useState("");
   const [menuOpen, setMenuOpen] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<any | null>(null);
@@ -75,9 +104,72 @@ export default function TournamentListPage() {
     }
   };
 
-  const filtered = tournaments.filter((t) =>
-    filter === "all" ? true : t.status === filter,
-  );
+  // Options come from the data itself, so a filter can never offer a value that
+  // matches nothing. Everything below is client-side: an academy runs a handful
+  // of tournaments a year, and server-side filtering would be machinery that
+  // never earns itself.
+  const years = Array.from(
+    new Set(tournaments.map((t) => yearOf(t.startDate)).filter(Boolean)),
+  ).sort((a, b) => b.localeCompare(a));
+  const formats = Array.from(
+    new Set(tournaments.map((t) => t.format).filter(Boolean)),
+  ).sort();
+  const statuses = Array.from(
+    new Set(tournaments.map((t) => t.status).filter(Boolean)),
+  ).sort();
+  const venues = Array.from(
+    new Set(tournaments.map((t) => t.venue).filter(Boolean)),
+  ).sort();
+
+  const activeFilterCount =
+    (fStatus !== "all" ? 1 : 0) +
+    (fYear !== "all" ? 1 : 0) +
+    (fFormat !== "all" ? 1 : 0) +
+    (fVenue !== "all" ? 1 : 0);
+
+  const filtered = tournaments
+    .filter((t) => {
+      // Search covers name and year. Short name and tournament type are NOT
+      // searchable because neither column exists — they belong with the other
+      // Phase 2 fields that were specified and never added.
+      const q = search.trim().toLowerCase();
+      const matchesSearch =
+        !q ||
+        (t.name ?? "").toLowerCase().includes(q) ||
+        yearOf(t.startDate).includes(q);
+      return (
+        matchesSearch &&
+        (fStatus === "all" || t.status === fStatus) &&
+        (fYear === "all" || yearOf(t.startDate) === fYear) &&
+        (fFormat === "all" || t.format === fFormat) &&
+        (fVenue === "all" || t.venue === fVenue)
+      );
+    })
+    .sort((a, b) => {
+      const dir = sortAsc ? 1 : -1;
+      const cmp = (() => {
+        switch (sortKey) {
+          case "name":
+            return (a.name ?? "").localeCompare(b.name ?? "");
+          case "year":
+            return yearOf(a.startDate).localeCompare(yearOf(b.startDate));
+          case "endDate":
+            // ISO strings compare correctly as strings; parsing them to Date
+            // would reintroduce the UTC-midnight problem Rule 6 warns about.
+            return (a.endDate ?? "").localeCompare(b.endDate ?? "");
+          case "status":
+            return (a.status ?? "").localeCompare(b.status ?? "");
+          case "teams":
+            return (a.teamCount ?? 0) - (b.teamCount ?? 0);
+          case "matches":
+            return (a.matchCount ?? 0) - (b.matchCount ?? 0);
+          default:
+            return (a.startDate ?? "").localeCompare(b.startDate ?? "");
+        }
+      })();
+      // Name is the stable fallback so equal keys do not reorder per render.
+      return cmp !== 0 ? cmp * dir : (a.name ?? "").localeCompare(b.name ?? "");
+    });
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-950 pb-24">
@@ -107,18 +199,47 @@ export default function TournamentListPage() {
             New Tournament
           </button>
         </div>
-        <div className="flex gap-2">
-          {(["all", "ACTIVE", "COMPLETED"] as const).map((f) => (
+        {/* Search + the one filter that is used constantly. Year, format, venue
+            and sort live in a sheet: eight controls inline would push the list
+            itself below the fold at 380px. */}
+        <div className="flex gap-2 mb-2">
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search name or year..."
+            className="flex-1 min-w-0 px-3 py-2 bg-gray-100 dark:bg-gray-800 rounded-xl text-xs text-gray-900 dark:text-gray-100 outline-none"
+          />
+          <button
+            onClick={() => setShowFilters(true)}
+            className={`flex-shrink-0 px-3 py-2 rounded-xl text-xs font-semibold active:scale-95 ${
+              activeFilterCount > 0
+                ? "bg-blue-600 text-white"
+                : "bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400"
+            }`}
+          >
+            Filters{activeFilterCount > 0 ? ` (${activeFilterCount})` : ""}
+          </button>
+        </div>
+
+        {/* Same pattern as the 9-tab bar: scrolls horizontally inside its own
+            container rather than wrapping or being clipped. */}
+        <div className="flex gap-2 -mx-4 px-4 overflow-x-auto">
+          {["all", ...statuses].map((f) => (
             <button
               key={f}
-              onClick={() => setFilter(f)}
-              className={`flex-1 py-1.5 rounded-lg text-xs font-medium transition-all ${
-                filter === f
+              onClick={() => setFStatus(f)}
+              className={`flex-shrink-0 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                fStatus === f
                   ? "bg-blue-600 text-white"
                   : "bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400"
               }`}
             >
-              {f === "all" ? "All" : f === "ACTIVE" ? "🏏 Active" : "Completed"}
+              {f === "all"
+                ? "All"
+                : f === "ACTIVE"
+                  ? "🏏 Active"
+                  : f.charAt(0) + f.slice(1).toLowerCase()}
             </button>
           ))}
         </div>
@@ -168,7 +289,11 @@ export default function TournamentListPage() {
                       {formatLabel[t.format] ?? t.format}
                     </span>
                   </div>
-                  <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100 truncate">
+                  {/* Wraps rather than truncating: the name is what search
+                      matches on, and "Jayalakshmipuram Invitational Trophy
+                      2025" was being cut at 238px of the 294px it needs. The
+                      card is already several lines tall, so wrapping is free. */}
+                  <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100 leading-tight break-words">
                     {t.name}
                   </h3>
                   <p className="text-xs text-gray-400 mt-0.5">
@@ -178,6 +303,13 @@ export default function TournamentListPage() {
                   {t.venue && (
                     <p className="text-xs text-gray-400">📍 {t.venue}</p>
                   )}
+                  {/* Shown because they are sortable — a sort key the card
+                      never displays is a sort nobody can verify. */}
+                  <p className="text-xs text-gray-400">
+                    {t.teamCount ?? 0} {t.teamCount === 1 ? "team" : "teams"} ·{" "}
+                    {t.matchCount ?? 0}{" "}
+                    {t.matchCount === 1 ? "match" : "matches"}
+                  </p>
                 </div>
 
                 {/* ── 3-dot menu ── */}
@@ -315,6 +447,108 @@ export default function TournamentListPage() {
       </div>
 
       {/* ── CONFIRM DELETE MODAL ── */}
+      {/* ── FILTERS & SORT SHEET ── */}
+      {showFilters && (
+        <div className="fixed inset-0 z-50 bg-black/60 flex items-end">
+          <div className="w-full bg-white dark:bg-gray-900 rounded-t-2xl max-h-[85dvh] overflow-y-auto p-5">
+            <div className="w-10 h-1 bg-gray-300 rounded-full mx-auto mb-4" />
+            <h3 className="text-sm font-semibold text-gray-900 dark:text-white text-center mb-4">
+              Filters &amp; Sort
+            </h3>
+
+            {(
+              [
+                { label: "Year", value: fYear, set: setFYear, opts: years },
+                {
+                  label: "Format",
+                  value: fFormat,
+                  set: setFFormat,
+                  opts: formats,
+                  labelFor: (v: string) => formatLabel[v] ?? v,
+                },
+                { label: "Venue", value: fVenue, set: setFVenue, opts: venues },
+              ] as const
+            ).map((g: any) => (
+              <div key={g.label} className="mb-4">
+                <label className="text-xs text-gray-400 mb-1.5 block">
+                  {g.label}
+                </label>
+                <div className="flex flex-wrap gap-2">
+                  {["all", ...g.opts].map((o: string) => (
+                    <button
+                      key={o}
+                      onClick={() => g.set(o)}
+                      className={`px-3 h-10 rounded-xl text-xs font-semibold border transition-all active:scale-95 break-words ${
+                        g.value === o
+                          ? "bg-blue-600 border-blue-600 text-white"
+                          : "bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400"
+                      }`}
+                    >
+                      {o === "all" ? "Any" : g.labelFor ? g.labelFor(o) : o}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ))}
+
+            <label className="text-xs text-gray-400 mb-1.5 block">
+              Sort by
+            </label>
+            <div className="grid grid-cols-2 gap-2 mb-3">
+              {SORTS.map((srt) => (
+                <button
+                  key={srt.key}
+                  onClick={() => setSortKey(srt.key)}
+                  className={`h-11 rounded-xl text-xs font-semibold border transition-all active:scale-95 ${
+                    sortKey === srt.key
+                      ? "bg-blue-600 border-blue-600 text-white"
+                      : "bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400"
+                  }`}
+                >
+                  {srt.label}
+                </button>
+              ))}
+            </div>
+
+            <div className="grid grid-cols-2 gap-2">
+              {([false, true] as const).map((asc) => (
+                <button
+                  key={String(asc)}
+                  onClick={() => setSortAsc(asc)}
+                  className={`h-11 rounded-xl text-xs font-semibold border transition-all active:scale-95 ${
+                    sortAsc === asc
+                      ? "bg-blue-600 border-blue-600 text-white"
+                      : "bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400"
+                  }`}
+                >
+                  {asc ? "↑ Ascending" : "↓ Descending"}
+                </button>
+              ))}
+            </div>
+
+            <button
+              onClick={() => setShowFilters(false)}
+              className="mt-4 w-full h-14 bg-blue-600 text-white rounded-xl font-bold text-sm active:scale-95"
+            >
+              Show {filtered.length}{" "}
+              {filtered.length === 1 ? "tournament" : "tournaments"}
+            </button>
+            <button
+              onClick={() => {
+                setFYear("all");
+                setFFormat("all");
+                setFVenue("all");
+                setFStatus("all");
+                setSearch("");
+              }}
+              className="w-full py-3 text-gray-400 text-sm"
+            >
+              Clear all
+            </button>
+          </div>
+        </div>
+      )}
+
       {confirmDelete && (
         <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-6">
           <div className="w-full max-w-sm bg-white dark:bg-gray-900 rounded-2xl p-5 shadow-xl max-h-[85dvh] overflow-y-auto">
