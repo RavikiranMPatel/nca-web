@@ -64,6 +64,19 @@ export const abandonMatch = (publicId: string, reason: string, note?: string) =>
     .post<CricketMatch>(`${BASE}/${publicId}/abandon`, { reason, note })
     .then((r) => r.data);
 
+// The result this match has produced, derived server-side from the innings and
+// the real playing-XI size. Replaces computeAutoResult, which built the winning
+// sentence in the browser off a hardcoded `10 - totalWickets`.
+export const getResultPreview = (publicId: string) =>
+  api
+    .get<{
+      resultType: string | null;
+      resultMargin?: number | null;
+      resultDescription?: string | null;
+      winnerTeamName?: string | null;
+    }>(`${BASE}/${publicId}/result-preview`)
+    .then((r) => r.data);
+
 export const deleteMatch = (publicId: string) =>
   api.delete(`/admin/cricket/matches/${publicId}`);
 

@@ -1802,6 +1802,13 @@ export default function TournamentDetailPage() {
             ) : (
               <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-800 overflow-hidden">
                 <div className="overflow-x-auto">
+                  {/* No min-w: at 380px the table compresses to fit and long
+                      team names wrap onto a second line, which keeps Pts and
+                      NRR — the two columns that decide the order — on screen
+                      without scrolling. A min-width pushed exactly those two
+                      off the right edge. The overflow-x-auto wrapper stays so
+                      the table scrolls rather than clips if a future column
+                      makes it genuinely too wide. */}
                   <table className="w-full text-sm">
                     <thead>
                       <tr className="border-b border-gray-100 dark:border-gray-800">
@@ -1811,20 +1818,26 @@ export default function TournamentDetailPage() {
                         <th className="py-2.5 px-3 text-xs font-medium text-gray-400 text-left">
                           Team
                         </th>
-                        <th className="py-2.5 px-2 text-xs font-medium text-gray-400 text-center">
+                        <th className="py-2.5 px-1 text-xs font-medium text-gray-400 text-center">
                           P
                         </th>
-                        <th className="py-2.5 px-2 text-xs font-medium text-gray-400 text-center">
+                        <th className="py-2.5 px-1 text-xs font-medium text-gray-400 text-center">
                           W
                         </th>
-                        <th className="py-2.5 px-2 text-xs font-medium text-gray-400 text-center">
+                        <th className="py-2.5 px-1 text-xs font-medium text-gray-400 text-center">
                           L
                         </th>
-                        <th className="py-2.5 px-2 text-xs font-medium text-gray-400 text-center">
+                        <th className="py-2.5 px-1 text-xs font-medium text-gray-400 text-center">
                           T
                         </th>
-                        <th className="py-2.5 px-2 text-xs font-medium text-gray-400 text-center font-bold">
+                        <th className="py-2.5 px-1 text-xs font-medium text-gray-400 text-center">
+                          NR
+                        </th>
+                        <th className="py-2.5 px-1 text-xs font-medium text-gray-400 text-center font-bold">
                           Pts
+                        </th>
+                        <th className="py-2.5 px-2 text-xs font-medium text-gray-400 text-right whitespace-nowrap">
+                          NRR
                         </th>
                       </tr>
                     </thead>
@@ -1834,19 +1847,23 @@ export default function TournamentDetailPage() {
                           key={s.teamPublicId}
                           className="border-b border-gray-50 dark:border-gray-800/50 hover:bg-gray-50 dark:hover:bg-gray-800/30"
                         >
-                          <td className="py-2.5 px-3 text-gray-400 text-xs">
+                          <td className="py-2.5 px-2 text-gray-400 text-xs">
                             {i + 1}
                           </td>
-                          <td className="py-2.5 px-3">
-                            <div className="flex items-center gap-2">
+                          {/* Capped so a long name wraps instead of pushing Pts
+                              and NRR off a 380px screen. Nothing is hidden or
+                              truncated — "Jayalakshmipuram Jaguars" simply takes
+                              two lines. */}
+                          <td className="py-2.5 px-2 max-w-[104px]">
+                            <div className="flex items-start gap-1.5">
                               <div
-                                className="w-4 h-4 rounded-full flex-shrink-0"
+                                className="w-3 h-3 mt-1 rounded-full flex-shrink-0"
                                 style={{
                                   backgroundColor: s.colorHex ?? "#3b82f6",
                                 }}
                               />
-                              <div>
-                                <div className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                              <div className="min-w-0">
+                                <div className="text-xs font-medium leading-tight break-words text-gray-900 dark:text-gray-100">
                                   {s.teamName}
                                 </div>
                                 {s.groupName && (
@@ -1857,20 +1874,38 @@ export default function TournamentDetailPage() {
                               </div>
                             </div>
                           </td>
-                          <td className="py-2.5 px-2 text-center text-gray-500">
+                          <td className="py-2.5 px-1 text-center text-gray-500">
                             {s.played}
                           </td>
-                          <td className="py-2.5 px-2 text-center text-green-600">
+                          <td className="py-2.5 px-1 text-center text-green-600">
                             {s.won}
                           </td>
-                          <td className="py-2.5 px-2 text-center text-red-500">
+                          <td className="py-2.5 px-1 text-center text-red-500">
                             {s.lost}
                           </td>
-                          <td className="py-2.5 px-2 text-center text-gray-400">
+                          <td className="py-2.5 px-1 text-center text-gray-400">
                             {s.tied}
                           </td>
-                          <td className="py-2.5 px-2 text-center font-bold text-gray-900 dark:text-white">
+                          <td className="py-2.5 px-1 text-center text-gray-400">
+                            {s.noResult}
+                          </td>
+                          <td className="py-2.5 px-1 text-center font-bold text-gray-900 dark:text-white">
                             {s.points}
+                          </td>
+                          {/* The backend has always computed NRR and sorted the
+                              table by it; it was never displayed, so the order of
+                              two teams on equal points looked arbitrary. */}
+                          <td
+                            className={`py-2.5 px-1 text-right tabular-nums whitespace-nowrap ${
+                              s.nrr > 0
+                                ? "text-green-600 dark:text-green-400"
+                                : s.nrr < 0
+                                  ? "text-red-500 dark:text-red-400"
+                                  : "text-gray-400"
+                            }`}
+                          >
+                            {s.nrr > 0 ? "+" : ""}
+                            {Number(s.nrr).toFixed(3)}
                           </td>
                         </tr>
                       ))}
@@ -1943,28 +1978,28 @@ export default function TournamentDetailPage() {
                           <th className="py-2.5 px-3 text-xs font-medium text-gray-400 text-left">
                             Player
                           </th>
-                          <th className="py-2.5 px-2 text-xs font-medium text-gray-400 text-center">
+                          <th className="py-2.5 px-1 text-xs font-medium text-gray-400 text-center">
                             Inn
                           </th>
-                          <th className="py-2.5 px-2 text-xs font-medium text-gray-400 text-center">
+                          <th className="py-2.5 px-1 text-xs font-medium text-gray-400 text-center">
                             Runs
                           </th>
-                          <th className="py-2.5 px-2 text-xs font-medium text-gray-400 text-center">
+                          <th className="py-2.5 px-1 text-xs font-medium text-gray-400 text-center">
                             HS
                           </th>
-                          <th className="py-2.5 px-2 text-xs font-medium text-gray-400 text-center">
+                          <th className="py-2.5 px-1 text-xs font-medium text-gray-400 text-center">
                             Avg
                           </th>
-                          <th className="py-2.5 px-2 text-xs font-medium text-gray-400 text-center">
+                          <th className="py-2.5 px-1 text-xs font-medium text-gray-400 text-center">
                             SR
                           </th>
-                          <th className="py-2.5 px-2 text-xs font-medium text-gray-400 text-center">
+                          <th className="py-2.5 px-1 text-xs font-medium text-gray-400 text-center">
                             50
                           </th>
-                          <th className="py-2.5 px-2 text-xs font-medium text-gray-400 text-center">
+                          <th className="py-2.5 px-1 text-xs font-medium text-gray-400 text-center">
                             100
                           </th>
-                          <th className="py-2.5 px-2 text-xs font-medium text-gray-400 text-center">
+                          <th className="py-2.5 px-1 text-xs font-medium text-gray-400 text-center">
                             6s
                           </th>
                         </tr>
@@ -1989,7 +2024,7 @@ export default function TournamentDetailPage() {
                             <td className="py-2.5 px-2 text-center text-xs text-gray-500">
                               {p.innings}
                             </td>
-                            <td className="py-2.5 px-2 text-center font-bold text-gray-900 dark:text-white">
+                            <td className="py-2.5 px-1 text-center font-bold text-gray-900 dark:text-white">
                               {p.runs}
                             </td>
                             <td className="py-2.5 px-2 text-center text-xs text-gray-600 dark:text-gray-300">
@@ -2040,25 +2075,25 @@ export default function TournamentDetailPage() {
                           <th className="py-2.5 px-3 text-xs font-medium text-gray-400 text-left">
                             Player
                           </th>
-                          <th className="py-2.5 px-2 text-xs font-medium text-gray-400 text-center">
+                          <th className="py-2.5 px-1 text-xs font-medium text-gray-400 text-center">
                             Ov
                           </th>
-                          <th className="py-2.5 px-2 text-xs font-medium text-gray-400 text-center">
+                          <th className="py-2.5 px-1 text-xs font-medium text-gray-400 text-center">
                             Wkts
                           </th>
-                          <th className="py-2.5 px-2 text-xs font-medium text-gray-400 text-center">
+                          <th className="py-2.5 px-1 text-xs font-medium text-gray-400 text-center">
                             Runs
                           </th>
-                          <th className="py-2.5 px-2 text-xs font-medium text-gray-400 text-center">
+                          <th className="py-2.5 px-1 text-xs font-medium text-gray-400 text-center">
                             Econ
                           </th>
-                          <th className="py-2.5 px-2 text-xs font-medium text-gray-400 text-center">
+                          <th className="py-2.5 px-1 text-xs font-medium text-gray-400 text-center">
                             Best
                           </th>
-                          <th className="py-2.5 px-2 text-xs font-medium text-gray-400 text-center">
+                          <th className="py-2.5 px-1 text-xs font-medium text-gray-400 text-center">
                             3W
                           </th>
-                          <th className="py-2.5 px-2 text-xs font-medium text-gray-400 text-center">
+                          <th className="py-2.5 px-1 text-xs font-medium text-gray-400 text-center">
                             5W
                           </th>
                         </tr>
@@ -2083,7 +2118,7 @@ export default function TournamentDetailPage() {
                             <td className="py-2.5 px-2 text-center text-xs text-gray-500">
                               {p.overs}
                             </td>
-                            <td className="py-2.5 px-2 text-center font-bold text-gray-900 dark:text-white">
+                            <td className="py-2.5 px-1 text-center font-bold text-gray-900 dark:text-white">
                               {p.wickets}
                             </td>
                             <td className="py-2.5 px-2 text-center text-xs text-gray-600 dark:text-gray-300">

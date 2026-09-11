@@ -15,6 +15,7 @@ import {
   pauseMatch,
   resumeMatch,
   abandonMatch,
+  getResultPreview,
 } from "../../api/scoring/matchApi";
 import { INTERRUPTION_REASONS } from "../../types/match";
 import type {
@@ -345,8 +346,6 @@ export default function LiveScorerPage() {
     resultMargin: number;
     resultDescription: string;
   } | null>(null);
-  const [finalInningsState, setFinalInningsState] =
-    useState<InningsState | null>(null);
 
   // ── Pause / resume state ──────────────────────────────────────────────────
   const [pauseReason, setPauseReason] = useState<string | null>(null);
@@ -581,7 +580,6 @@ export default function LiveScorerPage() {
 
     if (state.inningsComplete) {
       if (state.inningsState.inningsNumber === 2) {
-        setFinalInningsState(state.inningsState);
         setShowResult(true);
       } else {
         setShowCloseInnings(true);
@@ -882,46 +880,37 @@ export default function LiveScorerPage() {
     }
   };
 
-  const battingTeamName =
-    teams.find((t) => t.publicId === battingTeamId)?.name ?? "Batting Team";
   const bowlingTeamName =
     teams.find((t) => t.publicId === bowlingTeamId)?.name ?? "Bowling Team";
 
-  const computeAutoResult = useCallback(() => {
-    const src = finalInningsState ?? innings;
-    if (!src) return null;
-    const { totalRuns, totalWickets, target, inningsNumber } = src;
-    if (inningsNumber === 2 && target) {
-      if (totalRuns >= target) {
-        const w = 10 - totalWickets;
-        return {
-          resultType: "WON_BY_WICKETS",
-          resultMargin: w,
-          resultDescription: `${battingTeamName} won by ${w} wicket${w !== 1 ? "s" : ""}`,
-        };
-      } else {
-        const r = target - totalRuns - 1;
-        return {
-          resultType: "WON_BY_RUNS",
-          resultMargin: r,
-          resultDescription: `${bowlingTeamName} won by ${r} run${r !== 1 ? "s" : ""}`,
-        };
-      }
-    }
-    return null;
-  }, [finalInningsState, innings, battingTeamName, bowlingTeamName]);
-
+  // computeAutoResult used to live here: it decided the winner in the browser,
+  // hardcoded `10 - totalWickets` for the margin (wrong for any side that is
+  // not 11-a-side), and wrote a sentence that the points table then parsed back
+  // with startsWith(). The result is derived server-side now — from the innings
+  // and the real playing-XI size — and the winner is stored structurally as
+  // cricket_matches.winner_team_id. Deleted rather than left dormant.
   useEffect(() => {
-    if (showResult) {
-      const computed = computeAutoResult();
-      setAutoResult(computed);
-      if (computed) {
-        setResultType(computed.resultType);
-        setResultDesc(computed.resultDescription);
-        setResultMargin(String(computed.resultMargin));
-      }
-    }
-  }, [showResult, computeAutoResult]);
+    if (!showResult || !matchId) return;
+    let cancelled = false;
+    getResultPreview(matchId)
+      .then((p) => {
+        if (cancelled || !p.resultType) return;
+        setAutoResult({
+          resultType: p.resultType,
+          resultMargin: p.resultMargin ?? 0,
+          resultDescription: p.resultDescription ?? "",
+        });
+        setResultType(p.resultType);
+        setResultDesc(p.resultDescription ?? "");
+        setResultMargin(p.resultMargin != null ? String(p.resultMargin) : "");
+      })
+      .catch(() => {
+        /* the scorer can still pick a result type by hand */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [showResult, matchId]);
 
   const handleResult = async () => {
     if (!matchId) return;
@@ -930,10 +919,10 @@ export default function LiveScorerPage() {
     setPosting(true);
     try {
       await recordResult(matchId, {
+        // No margin and no winner sent: both are derived server-side from the
+        // innings. Only the type (which the scorer may override) and the
+        // description (display text) come from here.
         resultType: finalResultType,
-        resultMargin: resultMargin
-          ? Number(resultMargin)
-          : autoResult?.resultMargin,
         resultDescription: resultDesc || autoResult?.resultDescription,
         playerOfMatchPublicId: motmPublicId || undefined,
         playerOfMatchNote: motmNote || undefined,
@@ -2405,12 +2394,14 @@ export default function LiveScorerPage() {
                       ? "Winning margin (runs)"
                       : "Winning margin (wickets)"}
                   </label>
+                  {/* Read-only: the margin is derived server-side from the
+                      innings and the real playing-XI size, so an 8-a-side match
+                      no longer reports wickets in hand as if it were 11. */}
                   <input
-                    type="number"
-                    className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm text-gray-900 outline-none"
-                    placeholder="Enter margin"
-                    value={resultMargin}
-                    onChange={(e) => setResultMargin(e.target.value)}
+                    type="text"
+                    readOnly
+                    className="w-full px-3 py-2.5 bg-gray-100 border border-gray-200 rounded-xl text-sm text-gray-500 outline-none"
+                    value={resultMargin || "—"}
                   />
                 </div>
               )}
