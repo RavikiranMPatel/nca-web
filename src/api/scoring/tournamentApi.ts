@@ -12,10 +12,47 @@ export const createTournament = (data: any) =>
 export const updateTournament = (publicId: string, data: any) =>
   api.put(`/admin/cricket/tournaments/${publicId}`, data).then((r) => r.data);
 
-export const updateTournamentStatus = (publicId: string, status: string) =>
+export interface TournamentResult {
+  publicId: string;
+  name: string;
+  status: string;
+  championTeamPublicId?: string | null;
+  championTeamName?: string | null;
+  runnerUpTeamPublicId?: string | null;
+  runnerUpTeamName?: string | null;
+  /** The final was played and tied, so there is deliberately no champion. */
+  finalTied: boolean;
+}
+
+// LIVE and COMPLETED are reached automatically from fixture results and are
+// refused here; the server returns 400 if one is requested by hand.
+export const updateTournamentStatus = (
+  publicId: string,
+  status: string,
+  reason?: string,
+) =>
   api
-    .patch(`/admin/cricket/tournaments/${publicId}/status`, { status })
+    .patch<TournamentResult>(`/admin/cricket/tournaments/${publicId}/status`, {
+      status,
+      reason,
+    })
     .then((r) => r.data);
+
+export const getTournamentResult = (publicId: string) =>
+  api
+    .get<TournamentResult>(`/admin/cricket/tournaments/${publicId}/result`)
+    .then((r) => r.data);
+
+/** Mark (or clear) the fixture whose result decides the tournament. */
+export const markFixtureFinal = (
+  publicId: string,
+  fixturePublicId: string,
+  isFinal: boolean,
+) =>
+  api.patch(
+    `/admin/cricket/tournaments/${publicId}/fixtures/${fixturePublicId}/final`,
+    { isFinal },
+  );
 
 export const listTeams = (publicId: string) =>
   api.get(`/admin/cricket/tournaments/${publicId}/teams`).then((r) => r.data);
@@ -61,10 +98,19 @@ export const getStandings = (publicId: string) =>
     .get(`/admin/cricket/tournaments/${publicId}/standings`)
     .then((r) => r.data);
 
-export const declareWinner = (publicId: string, winnerTeamPublicId: string) =>
+// SUPER_ADMIN only, and the reason is mandatory: this overrides a result the
+// backend derived from the final.
+export const declareWinner = (
+  publicId: string,
+  winnerTeamPublicId: string,
+  reason: string,
+  runnerUpTeamPublicId?: string,
+) =>
   api
-    .post(`/admin/cricket/tournaments/${publicId}/declare-winner`, {
+    .post<TournamentResult>(`/admin/cricket/tournaments/${publicId}/declare-winner`, {
       winnerTeamPublicId,
+      runnerUpTeamPublicId,
+      reason,
     })
     .then((r) => r.data);
 

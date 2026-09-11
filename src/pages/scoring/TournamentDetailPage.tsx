@@ -19,6 +19,9 @@ import {
   removeFromSquad,
   getAllTournamentPlayers,
   prepareMatchFromFixture,
+  getTournamentResult,
+  markFixtureFinal,
+  type TournamentResult,
 } from "../../api/scoring/tournamentApi";
 import { getBranchPlayers } from "../../api/scoring/matchApi";
 import api from "../../api/axios";
@@ -137,6 +140,12 @@ export default function TournamentDetailPage() {
   const [showAdvancePlayoffs, setShowAdvancePlayoffs] = useState(false);
   const [playoffTopN, setPlayoffTopN] = useState(4);
   const [playoffBracketType, setPlayoffBracketType] = useState("IPL");
+  // Champion / runner-up, and whether the final tied — the tie is not derivable
+  // from the tournament row, since "no champion" also describes a final not yet
+  // played.
+  const [result, setResult] = useState<TournamentResult | null>(null);
+  const [runnerUpTeam, setRunnerUpTeam] = useState("");
+  const [overrideReason, setOverrideReason] = useState("");
   const [winnerTeam, setWinnerTeam] = useState("");
 
   const [showEditFixture, setShowEditFixture] = useState(false);
@@ -206,15 +215,19 @@ export default function TournamentDetailPage() {
     if (!publicId) return;
     setLoading(true);
     try {
-      const [t, tm, st, fx, sd, tp] = await Promise.all([
+      const [t, tm, st, fx, sd, tp, res] = await Promise.all([
         getTournament(publicId),
         listTeams(publicId),
         listStages(publicId),
         listFixtures(publicId),
         getStandings(publicId),
         getAllTournamentPlayers(publicId),
+        // Tolerated separately: a result that fails to load should not blank the
+        // whole page, it should just hide the champion banner.
+        getTournamentResult(publicId).catch(() => null),
       ]);
       setTournament(t);
+      setResult(res);
       setTeams(tm);
       setStages(st);
       setFixtures(fx);
@@ -647,15 +660,37 @@ export default function TournamentDetailPage() {
   };
 
   const handleDeclareWinner = async () => {
-    if (!winnerTeam) return;
+    // The server requires both, and rejects the call without them. Checked here
+    // too so the button explains itself rather than round-tripping to a 400.
+    if (!winnerTeam || !overrideReason.trim()) return;
     setPosting(true);
     try {
-      await declareWinner(publicId!, winnerTeam);
+      await declareWinner(
+        publicId!,
+        winnerTeam,
+        overrideReason.trim(),
+        runnerUpTeam || undefined,
+      );
       setShowDeclareWinner(false);
+      setOverrideReason("");
+      setRunnerUpTeam("");
       await loadAll();
-      showToast("🏆 Winner declared!");
+      showToast("🏆 Result overridden");
     } catch (e: any) {
-      setError(e.response?.data?.message ?? "Failed to declare winner");
+      setError(e.response?.data?.message ?? "Failed to override the result");
+    } finally {
+      setPosting(false);
+    }
+  };
+
+  const handleMarkFinal = async (fixturePublicId: string, isFinal: boolean) => {
+    setPosting(true);
+    try {
+      await markFixtureFinal(publicId!, fixturePublicId, isFinal);
+      await loadAll();
+      showToast(isFinal ? "Marked as the final" : "No longer the final");
+    } catch (e: any) {
+      setError(e.response?.data?.message ?? "Failed to update the fixture");
     } finally {
       setPosting(false);
     }
@@ -832,29 +867,71 @@ export default function TournamentDetailPage() {
         <div className="flex gap-2 mt-2 overflow-x-auto pb-1">
           {tournament.status === "DRAFT" && (
             <button
-              onClick={() => handleStatusChange("ACTIVE")}
+              data-testid="tournament-publish"
+              onClick={() => handleStatusChange("UPCOMING")}
               className="flex-shrink-0 px-3 py-1.5 bg-green-600 text-white text-xs font-semibold rounded-lg active:scale-95"
             >
-              ▶ Activate
+              ▶ Publish
             </button>
           )}
-          {tournament.status === "ACTIVE" && (
-            <>
-              <button
-                onClick={() => setShowDeclareWinner(true)}
-                className="flex-shrink-0 px-3 py-1.5 bg-yellow-600 text-white text-xs font-semibold rounded-lg active:scale-95"
-              >
-                🏆 Declare Winner
-              </button>
-              <button
-                onClick={() => handleStatusChange("COMPLETED")}
-                className="flex-shrink-0 px-3 py-1.5 bg-blue-600 text-white text-xs font-semibold rounded-lg active:scale-95"
-              >
-                ✓ Complete
-              </button>
-            </>
+          {(tournament.status === "UPCOMING" || tournament.status === "LIVE") && (
+            <button
+              data-testid="tournament-suspend"
+              onClick={() => handleStatusChange("SUSPENDED")}
+              className="flex-shrink-0 px-3 py-1.5 bg-orange-600 text-white text-xs font-semibold rounded-lg active:scale-95"
+            >
+              ⏸ Suspend
+            </button>
+          )}
+          {tournament.status === "SUSPENDED" && (
+            <button
+              data-testid="tournament-resume"
+              onClick={() => handleStatusChange("LIVE")}
+              className="flex-shrink-0 px-3 py-1.5 bg-green-600 text-white text-xs font-semibold rounded-lg active:scale-95"
+            >
+              ▶ Resume
+            </button>
+          )}
+          {/* The override, not the ordinary path. A tournament completes itself
+              when the fixture marked as the final is decided; this is for when
+              that result is wrong or unreachable, and it is SUPER_ADMIN only. */}
+          {tournament.status !== "DRAFT" && tournament.status !== "CANCELLED" && (
+            <button
+              data-testid="tournament-declare-winner"
+              onClick={() => setShowDeclareWinner(true)}
+              className="flex-shrink-0 px-3 py-1.5 bg-yellow-600 text-white text-xs font-semibold rounded-lg active:scale-95"
+            >
+              🏆 Override Result
+            </button>
           )}
         </div>
+
+        {/* A final that ended tied leaves no champion on purpose. Without this
+            the tournament just sits at LIVE with an empty result and looks
+            stuck rather than undecided. */}
+        {result?.finalTied && (
+          <div
+            data-testid="tournament-final-tied"
+            className="mt-2 px-3 py-2 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl text-xs text-amber-700 dark:text-amber-400"
+          >
+            The final was tied, so no champion has been set. Play it again, or use
+            <strong> Override Result</strong> to decide it.
+          </div>
+        )}
+
+        {result?.championTeamName && (
+          <div
+            data-testid="tournament-champion"
+            className="mt-2 px-3 py-2 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-xl text-xs text-yellow-800 dark:text-yellow-400"
+          >
+            🏆 <strong>{result.championTeamName}</strong>
+            {result.runnerUpTeamName && (
+              <span className="text-yellow-700/80 dark:text-yellow-400/80">
+                {" "}· runner-up {result.runnerUpTeamName}
+              </span>
+            )}
+          </div>
+        )}
 
         <div className="flex gap-0 mt-3 border-b border-gray-100 dark:border-gray-800 -mx-4 px-4 overflow-x-auto">
           {TABS.map((t, i) => (
@@ -938,6 +1015,7 @@ export default function TournamentDetailPage() {
         {/* ── FIXTURES ── */}
         {tab === 5 && (
           <FixturesTab
+            handleMarkFinal={handleMarkFinal}
             fixtureGroundFilter={fixtureGroundFilter}
             fixtures={fixtures}
             handleAdvanceKnockout={handleAdvanceKnockout}
@@ -1711,13 +1789,23 @@ export default function TournamentDetailPage() {
       {showDeclareWinner && (
         <div className="fixed inset-0 z-[60] bg-black/60 flex items-center justify-center p-6">
           <div className="w-full max-w-sm bg-white dark:bg-gray-900 rounded-2xl p-5 max-h-[90vh] overflow-y-auto">
-            <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-4">
-              🏆 Declare Winner
+            <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-1">
+              🏆 Override Result
             </h3>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">
+              A tournament sets its own champion when the fixture marked as the
+              final is decided. Use this only to correct that, or when there is no
+              final to decide it. SUPER_ADMIN only, and recorded in the audit log.
+            </p>
+
+            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
+              Champion
+            </p>
             <div className="space-y-2 mb-4">
               {teams.map((t: any) => (
                 <button
                   key={t.publicId}
+                  data-testid={`override-champion-${t.publicId}`}
                   onClick={() => setWinnerTeam(t.publicId)}
                   className={`w-full p-3 rounded-xl border text-left transition-all ${winnerTeam === t.publicId ? "bg-yellow-50 border-yellow-400 dark:bg-yellow-900/20" : "bg-gray-50 border-gray-200 dark:bg-gray-800 dark:border-gray-700"}`}
                 >
@@ -1736,6 +1824,37 @@ export default function TournamentDetailPage() {
                 </button>
               ))}
             </div>
+            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
+              Runner-up <span className="font-normal normal-case">(optional)</span>
+            </p>
+            <select
+              data-testid="override-runner-up"
+              value={runnerUpTeam}
+              onChange={(e) => setRunnerUpTeam(e.target.value)}
+              className="w-full mb-4 px-3 py-2 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm text-gray-900 dark:text-gray-100"
+            >
+              <option value="">— none —</option>
+              {teams
+                .filter((t: any) => t.publicId !== winnerTeam)
+                .map((t: any) => (
+                  <option key={t.publicId} value={t.publicId}>
+                    {t.name}
+                  </option>
+                ))}
+            </select>
+
+            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
+              Reason <span className="text-red-500">*</span>
+            </p>
+            <textarea
+              data-testid="override-reason"
+              value={overrideReason}
+              onChange={(e) => setOverrideReason(e.target.value)}
+              rows={3}
+              placeholder="Why is the computed result being overridden?"
+              className="w-full mb-4 px-3 py-2 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm text-gray-900 dark:text-gray-100"
+            />
+
             <div className="flex gap-3">
               <button
                 onClick={() => setShowDeclareWinner(false)}
@@ -1744,8 +1863,9 @@ export default function TournamentDetailPage() {
                 Cancel
               </button>
               <button
+                data-testid="override-confirm"
                 onClick={handleDeclareWinner}
-                disabled={!winnerTeam || posting}
+                disabled={!winnerTeam || !overrideReason.trim() || posting}
                 className="flex-1 py-2.5 bg-yellow-600 text-white rounded-xl text-sm font-semibold disabled:opacity-40"
               >
                 Confirm

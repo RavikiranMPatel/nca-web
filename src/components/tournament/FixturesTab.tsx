@@ -16,6 +16,7 @@ interface Props {
   fixtureGroundFilter: ApiRecord;
   fixtures: ApiRecord[];
   handleAdvanceKnockout: ApiRecord;
+  handleMarkFinal: Handler;
   handleStartMatch: Handler;
   loadAll: Handler;
   navigate: Handler;
@@ -36,6 +37,7 @@ export default function FixturesTab({
   fixtureGroundFilter,
   fixtures,
   handleAdvanceKnockout,
+  handleMarkFinal,
   handleStartMatch,
   loadAll,
   navigate,
@@ -260,6 +262,26 @@ export default function FixturesTab({
                                         ? f.label
                                         : `Round ${f.roundNumber}`}
                                     </span>
+                                    {/* Marking the final is what lets the
+                                        tournament complete itself and set its
+                                        own champion, so it lives on the fixture
+                                        rather than in settings. */}
+                                    <button
+                                      data-testid={`fixture-final-${f.publicId}`}
+                                      title={
+                                        f.isFinal
+                                          ? "This fixture decides the tournament"
+                                          : "Mark as the final"
+                                      }
+                                      onClick={() => handleMarkFinal(f.publicId, !f.isFinal)}
+                                      className={`px-1.5 py-0.5 rounded-lg text-xs active:scale-90 ${
+                                        f.isFinal
+                                          ? "bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400 font-semibold"
+                                          : "bg-gray-100 dark:bg-gray-800 text-gray-400"
+                                      }`}
+                                    >
+                                      {f.isFinal ? "🏆 Final" : "🏆"}
+                                    </button>
                                     <button
                                       onClick={() => openEditFixture(f)}
                                       className="p-1 rounded-lg bg-gray-100 dark:bg-gray-800 text-gray-500 active:scale-90"
