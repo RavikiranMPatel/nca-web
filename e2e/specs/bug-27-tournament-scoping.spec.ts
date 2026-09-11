@@ -40,8 +40,23 @@ const VENUE_EPS = (t: string) => ({
     { method: "delete" as const, url: `/api/admin/cricket/tournaments/${t}/officials-pool/${crypto.randomUUID()}` },
   ],
 });
-const LEADERBOARDS = (t: string) =>
-  ["batting", "bowling", "mvp"].map((k) => `/api/admin/cricket/tournaments/${t}/stats/${k}`);
+/**
+ * Every tournament-scoped read Slice 5 leaves in place.
+ *
+ * `mvp` is gone: Slice 5 replaced it with the award candidate endpoints, which
+ * are what an MVP list was ever used for. `fielding` and `teams` are new, and
+ * `dashboard` is Phase 4's. All five go through the same TournamentAccessGuard,
+ * so all five belong in this spec.
+ */
+const LEADERBOARDS = (t: string) => [
+  ...["batting", "bowling", "fielding", "teams"].map(
+    (k) => `/api/admin/cricket/tournaments/${t}/stats/${k}`,
+  ),
+  `/api/admin/cricket/tournaments/${t}/dashboard`,
+  `/api/admin/cricket/tournaments/${t}/awards`,
+  `/api/admin/cricket/tournaments/${t}/awards/slots`,
+  `/api/admin/cricket/tournaments/${t}/awards/candidates`,
+];
 
 async function makeTournament(api: Api, name: string) {
   const r = await api.raw("post", "/api/admin/cricket/tournaments", {
