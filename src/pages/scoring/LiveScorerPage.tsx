@@ -336,6 +336,15 @@ export default function LiveScorerPage() {
     null,
   );
   const [fielder, setFielder] = useState<ScoringPlayer | null>(null);
+  // Run out only: the thrower is `fielder`, the receiver who breaks the stumps is
+  // `fielder2`. Optional, and disclosed only once the first is chosen.
+  const [fielder2, setFielder2] = useState<ScoringPlayer | null>(null);
+  const [showFielder2Select, setShowFielder2Select] = useState(false);
+  // An explicit "nobody effected this" for a run out — a deflection off the stumps or
+  // the non-striker with no fielder touching the ball. Deliberately a choice the scorer
+  // makes, not a field they can leave alone: 14 of 57 run outs credit nobody today
+  // because skipping cost less than answering.
+  const [noFielderRunOut, setNoFielderRunOut] = useState(false);
   const [pendingRuns, setPendingRuns] = useState(0);
   const [isFreeHit, setIsFreeHit] = useState(false);
   const [resultType, setResultType] = useState("");
@@ -761,15 +770,12 @@ export default function LiveScorerPage() {
         dismissalType: dismissalType.toUpperCase().replace(/ /g, "_"),
         dismissedPlayerPublicId: dismissedPlayer?.publicId,
         fielderPublicId: fielder?.publicId || undefined,
+        fielder2PublicId: fielder2?.publicId || undefined,
         isFreeHit,
       });
 
       setShowWicket(false);
-      setDismissalType("");
-      setDismissedPlayer(null);
-      setFielder(null);
-      setRunOutEnd(null);
-      setIsWideDelivery(false);
+      resetWicketSheet();
 
       // Wagon wheel for runs on wicket ball
       if (wagonWheelEnabled && state.lastDeliveryPublicId && pendingRuns > 0) {
@@ -1221,8 +1227,43 @@ export default function LiveScorerPage() {
     setShowBatterSelect(null);
     setShowBowlerSelect(false);
     setShowFielderSelect(false);
+    setShowFielder2Select(false);
     setShowPlayerSearch("");
   };
+
+  /** Everything the wicket sheet collects, cleared together. */
+  const resetWicketSheet = () => {
+    setDismissalType("");
+    setDismissedPlayer(null);
+    setFielder(null);
+    setFielder2(null);
+    setNoFielderRunOut(false);
+    setRunOutEnd(null);
+    setIsWideDelivery(false);
+  };
+
+  /**
+   * Which dismissals require a fielder before Confirm will enable.
+   *
+   * Caught always has one — a catch nobody took is not a catch, and the one existing
+   * unattributed CAUGHT row is simply missing data. Caught-and-bowled is not an
+   * exception: the bowler is the fielder, which is what the backend already stores.
+   *
+   * Run out is satisfied EITHER by a fielder or by the explicit "nobody" choice, because
+   * an unattributed run out is a real thing and should be recorded as a decision.
+   *
+   * Stumped auto-fills the keeper the moment the type is tapped, so it is already
+   * satisfied; it stays in this list so a side without a marked keeper cannot slip
+   * through unattributed.
+   *
+   * Bowled, LBW, hit wicket, retired and obstructing the field have no fielder at all
+   * and never show the row.
+   */
+  const fielderRequired = ["Caught", "Stumped", "Run Out"].includes(dismissalType);
+  const fielderSatisfied =
+    !fielderRequired ||
+    fielder !== null ||
+    (dismissalType === "Run Out" && noFielderRunOut);
 
   if (loading)
     return (
@@ -1768,6 +1809,22 @@ export default function LiveScorerPage() {
         })()}
 
       {/* ── FIELDER SELECTOR ── */}
+      {showFielder2Select && (
+        <PlayerSelector
+          title="Thrown to (second fielder)"
+          players={bowlingPlayers}
+          exclude={[fielder?.publicId ?? ""].filter(Boolean)}
+          searchValue={showPlayerSearch}
+          onSearchChange={setShowPlayerSearch}
+          onClose={closeSelector}
+          onSelect={(p) => {
+            setFielder2(p);
+            setShowFielder2Select(false);
+            setShowPlayerSearch("");
+          }}
+        />
+      )}
+
       {showFielderSelect && (
         <PlayerSelector
           title="Select Fielder"
@@ -1830,6 +1887,15 @@ export default function LiveScorerPage() {
                             if (["Stumped", "Run Out"].includes(dismissalType))
                               setIsWideDelivery(false);
                           }
+                          // A credit must never survive a change of dismissal type:
+                          // a keeper auto-filled for a stumping would otherwise be
+                          // carried into a caught, crediting the wrong player.
+                          if (d !== dismissalType) {
+                            setFielder2(null);
+                            setNoFielderRunOut(false);
+                            if (d !== "Stumped" && dismissalType !== "")
+                              setFielder(null);
+                          }
                         }}
                         className={`py-2.5 px-3 rounded-xl text-sm font-medium border transition-all active:scale-95 ${
                           blockedOnFreeHit
@@ -1873,11 +1939,65 @@ export default function LiveScorerPage() {
                     )}
                   </div>
                   <button
-                    onClick={() => setShowFielderSelect(true)}
-                    className={`w-full py-2.5 px-3 border rounded-xl text-sm text-left transition-all ${fielder ? "bg-teal-50 border-teal-200 text-teal-800" : "bg-gray-50 border-gray-200 text-gray-400"}`}
+                    onClick={() => {
+                      setNoFielderRunOut(false);
+                      setShowFielderSelect(true);
+                    }}
+                    className={`w-full py-2.5 px-3 border rounded-xl text-sm text-left transition-all ${
+                      fielder
+                        ? "bg-teal-50 border-teal-200 text-teal-800"
+                        : noFielderRunOut
+                          ? "bg-gray-50 border-gray-200 text-gray-400"
+                          : "bg-white border-red-200 text-gray-400"
+                    }`}
                   >
-                    {fielder?.displayName ?? "Tap to select fielder →"}
+                    {fielder?.displayName ??
+                      (dismissalType === "Run Out"
+                        ? "Who effected it? →"
+                        : "Who took the catch? →")}
                   </button>
+
+                  {/* Run out only. An unattributed run out is legitimate — a deflection
+                      off the stumps or the non-striker with nobody touching the ball —
+                      so it stays available, but as a deliberate choice. A wrong credit
+                      looks like a real one and is worse than a recorded gap. */}
+                  {dismissalType === "Run Out" && (
+                    <button
+                      onClick={() => {
+                        setNoFielderRunOut((prev) => !prev);
+                        setFielder(null);
+                        setFielder2(null);
+                      }}
+                      className={`mt-2 w-full py-2.5 px-3 border rounded-xl text-sm text-left transition-all flex items-center gap-3 ${
+                        noFielderRunOut
+                          ? "bg-gray-800 border-gray-800 text-white"
+                          : "bg-gray-50 border-gray-200 text-gray-500"
+                      }`}
+                    >
+                      <div
+                        className={`w-4 h-4 rounded border flex items-center justify-center flex-shrink-0 ${noFielderRunOut ? "bg-white border-white" : "border-gray-300"}`}
+                      >
+                        {noFielderRunOut && (
+                          <span className="text-gray-900 text-xs">✓</span>
+                        )}
+                      </div>
+                      Nobody / deflection
+                    </button>
+                  )}
+
+                  {/* Second fielder, run out only, disclosed once the first is set.
+                      Thrower is the fielder, receiver is fielder2. Optional — plenty of
+                      run outs are one person. */}
+                  {dismissalType === "Run Out" && fielder && (
+                    <button
+                      onClick={() => setShowFielder2Select(true)}
+                      className={`mt-2 w-full py-2.5 px-3 border rounded-xl text-sm text-left transition-all ${fielder2 ? "bg-teal-50 border-teal-200 text-teal-800" : "bg-gray-50 border-gray-200 text-gray-400"}`}
+                    >
+                      {fielder2
+                        ? `${fielder.displayName} → ${fielder2.displayName}`
+                        : "Thrown to someone? (optional) →"}
+                    </button>
+                  )}
                   {["Stumped", "Run Out"].includes(dismissalType) && (
                     <button
                       onClick={() => setIsWideDelivery((prev) => !prev)}
@@ -1937,7 +2057,12 @@ export default function LiveScorerPage() {
                 </div>
               </div>
               <button
-                disabled={!dismissalType || !dismissedPlayer || posting}
+                disabled={
+                  !dismissalType ||
+                  !dismissedPlayer ||
+                  !fielderSatisfied ||
+                  posting
+                }
                 onClick={confirmWicket}
                 className="w-full py-3.5 bg-red-500 text-white rounded-xl font-bold text-sm disabled:opacity-40 active:scale-95 transition-all"
               >
@@ -1946,10 +2071,7 @@ export default function LiveScorerPage() {
               <button
                 onClick={() => {
                   setShowWicket(false);
-                  setDismissalType("");
-                  setFielder(null);
-                  setRunOutEnd(null);
-                  setIsWideDelivery(false);
+                  resetWicketSheet();
                 }}
                 className="w-full py-2 text-gray-400 text-sm"
               >
