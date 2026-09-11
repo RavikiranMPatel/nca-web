@@ -13,6 +13,9 @@ import {
   updateTournamentStatus,
   declareWinner,
   advanceToKnockout,
+  getQualificationRules,
+  updateQualificationRules,
+  type QualificationRules,
   advanceToPlayoffs,
   getSquad,
   addToSquad,
@@ -79,6 +82,16 @@ export default function TournamentDetailPage() {
     role: "UMPIRE",
   });
 
+  // Qualification rules (Slice 4b) — their own DTO and their own endpoint, kept
+  // separate from settingsForm because they are a different concern with a
+  // different audit trail, not another scheduling parameter.
+  const [qualForm, setQualForm] = useState<QualificationRules>({
+    teamsAdvancingPerGroup: 2,
+    knockoutSeedingRule: "CROSS_GROUP",
+    tieBreakOrder: ["POINTS", "NRR", "WINS", "HEAD_TO_HEAD"],
+  });
+  const [savingQual, setSavingQual] = useState(false);
+
   const [settingsForm, setSettingsForm] = useState<SettingsForm>({
     oversPerInnings: 20,
     minsPerOver: 4.5,
@@ -127,7 +140,6 @@ export default function TournamentDetailPage() {
   const [showGenerate, setShowGenerate] = useState(false);
   const [genForm, setGenForm] = useState<GenForm>({
     teamsPerGroup: 4,
-    teamsAdvancingPerGroup: 2,
     scheduleStartDate: "",
     scheduleStartTime: "09:00",
     autoAssignVenues: true,
@@ -226,7 +238,7 @@ export default function TournamentDetailPage() {
     if (!publicId) return;
     setLoading(true);
     try {
-      const [t, tm, st, fx, sd, tp, res] = await Promise.all([
+      const [t, tm, st, fx, sd, tp, res, qual] = await Promise.all([
         getTournament(publicId),
         listTeams(publicId),
         listStages(publicId),
@@ -236,6 +248,9 @@ export default function TournamentDetailPage() {
         // Tolerated separately: a result that fails to load should not blank the
         // whole page, it should just hide the champion banner.
         getTournamentResult(publicId).catch(() => null),
+        // Same tolerance — the Settings tab falls back to the defaults rather
+        // than the whole page failing to load.
+        getQualificationRules(publicId).catch(() => null),
       ]);
       setTournament(t);
       setResult(res);
@@ -244,6 +259,7 @@ export default function TournamentDetailPage() {
       setFixtures(fx);
       setStandings(sd);
       setAllTournamentPlayers(tp);
+      if (qual) setQualForm(qual);
       setSettingsForm({
         oversPerInnings: t.oversPerInnings ?? 20,
         minsPerOver: t.minsPerOver ?? 4.5,
@@ -327,6 +343,19 @@ export default function TournamentDetailPage() {
       setError(e.response?.data?.message ?? "Failed to update venue");
     } finally {
       setPosting(false);
+    }
+  };
+
+  const handleSaveQualificationRules = async () => {
+    setSavingQual(true);
+    try {
+      const saved = await updateQualificationRules(publicId!, qualForm);
+      setQualForm(saved);
+      showToast("✓ Qualification rules saved");
+    } catch (e: any) {
+      setError(e.response?.data?.message ?? "Failed to save qualification rules");
+    } finally {
+      setSavingQual(false);
     }
   };
 
@@ -611,7 +640,6 @@ export default function TournamentDetailPage() {
     try {
       const payload: any = {
         teamsPerGroup: genForm.teamsPerGroup,
-        teamsAdvancingPerGroup: genForm.teamsAdvancingPerGroup,
         autoAssignVenues: genForm.autoAssignVenues,
         venueIds: genForm.selectedVenueIds,
         playDays: genForm.playDays,
@@ -758,7 +786,7 @@ export default function TournamentDetailPage() {
   const handleAdvanceKnockout = async () => {
     setPosting(true);
     try {
-      await advanceToKnockout(publicId!, genForm.teamsAdvancingPerGroup);
+      await advanceToKnockout(publicId!);
       await loadAll();
       showToast("✓ Knockout fixtures generated");
     } catch (e: any) {
@@ -1127,6 +1155,10 @@ export default function TournamentDetailPage() {
             computeMaxMatchesPerGround={computeMaxMatchesPerGround}
             computeSchedulePreview={computeSchedulePreview}
             handleSaveSettings={handleSaveSettings}
+            qualForm={qualForm}
+            setQualForm={setQualForm}
+            handleSaveQualificationRules={handleSaveQualificationRules}
+            savingQual={savingQual}
             posting={posting}
             setSettingsForm={setSettingsForm}
             settingsForm={settingsForm}
@@ -1476,24 +1508,9 @@ export default function TournamentDetailPage() {
                       }
                     />
                   </div>
-                  <div>
-                    <label className="text-xs text-gray-400 mb-1 block">
-                      Teams advancing per Group
-                    </label>
-                    <input
-                      type="number"
-                      min={1}
-                      max={4}
-                      className="w-full px-3 py-2.5 bg-gray-100 dark:bg-gray-800 rounded-xl text-sm outline-none"
-                      value={genForm.teamsAdvancingPerGroup}
-                      onChange={(e) =>
-                        setGenForm((p) => ({
-                          ...p,
-                          teamsAdvancingPerGroup: Number(e.target.value),
-                        }))
-                      }
-                    />
-                  </div>
+                  {/* "Teams advancing per Group" was here and did nothing: the
+                      generator only ever read teamsPerGroup. It is a stored
+                      qualification rule now, on the Settings tab. */}
                 </div>
               )}
 

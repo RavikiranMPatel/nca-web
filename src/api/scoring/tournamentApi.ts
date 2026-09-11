@@ -114,14 +114,35 @@ export const addManualFixture = (publicId: string, data: any) =>
     .post(`/admin/cricket/tournaments/${publicId}/fixtures/manual`, data)
     .then((r) => r.data);
 
-export const advanceToKnockout = (
-  publicId: string,
-  advancingPerGroup: number,
-) =>
+/**
+ * No body: how many teams advance and how the bracket is drawn are the
+ * tournament's stored qualification rules now (Slice 4b), set on the Settings
+ * tab, rather than a number passed with each invocation.
+ */
+export const advanceToKnockout = (publicId: string) =>
   api
-    .post(`/admin/cricket/tournaments/${publicId}/advance-knockout`, {
-      advancingPerGroup,
-    })
+    .post(`/admin/cricket/tournaments/${publicId}/advance-knockout`)
+    .then((r) => r.data);
+
+// ── Qualification rules ─────────────────────────────────────────────────────
+
+export interface QualificationRules {
+  teamsAdvancingPerGroup: number;
+  knockoutSeedingRule: "CROSS_GROUP" | "GLOBAL_SEED";
+  tieBreakOrder: string[];
+}
+
+export const getQualificationRules = (publicId: string): Promise<QualificationRules> =>
+  api
+    .get(`/admin/cricket/tournaments/${publicId}/qualification-rules`)
+    .then((r) => r.data);
+
+export const updateQualificationRules = (
+  publicId: string,
+  rules: QualificationRules,
+): Promise<QualificationRules> =>
+  api
+    .put(`/admin/cricket/tournaments/${publicId}/qualification-rules`, rules)
     .then((r) => r.data);
 
 export const getStandings = (publicId: string) =>

@@ -9,6 +9,15 @@
  */
 import type { Dispatch, SetStateAction } from "react";
 import type { ApiRecord, SchedulePreview, SettingsForm } from "./types";
+import type { QualificationRules } from "../../api/scoring/tournamentApi";
+
+/** Ruling 2's vocabulary, with the labels an admin would recognise. */
+const TIE_BREAKS: { key: string; label: string; hint: string }[] = [
+  { key: "POINTS", label: "Points", hint: "competition points" },
+  { key: "NRR", label: "Net run rate", hint: "Super Over excluded" },
+  { key: "WINS", label: "Wins", hint: "outright wins" },
+  { key: "HEAD_TO_HEAD", label: "Head-to-head", hint: "results between the tied teams" },
+];
 
 interface Props {
   computeMatchDuration: () => number;
@@ -18,6 +27,10 @@ interface Props {
   posting: ApiRecord;
   setSettingsForm: Dispatch<SetStateAction<SettingsForm>>;
   settingsForm: SettingsForm;
+  qualForm: QualificationRules;
+  setQualForm: Dispatch<SetStateAction<QualificationRules>>;
+  handleSaveQualificationRules: ApiRecord;
+  savingQual: boolean;
 }
 
 export default function SettingsTab({
@@ -28,7 +41,40 @@ export default function SettingsTab({
   posting,
   setSettingsForm,
   settingsForm,
+  qualForm,
+  setQualForm,
+  handleSaveQualificationRules,
+  savingQual,
 }: Props) {
+  const move = (key: string, delta: number) =>
+    setQualForm((p) => {
+      const order = [...p.tieBreakOrder];
+      const i = order.indexOf(key);
+      const j = i + delta;
+      if (i < 0 || j < 0 || j >= order.length) return p;
+      [order[i], order[j]] = [order[j], order[i]];
+      return { ...p, tieBreakOrder: order };
+    });
+
+  const toggle = (key: string) =>
+    setQualForm((p) => {
+      const on = p.tieBreakOrder.includes(key);
+      // The list must never empty out — the server refuses that, and a table with
+      // no ordering rule is not a table.
+      if (on && p.tieBreakOrder.length === 1) return p;
+      return {
+        ...p,
+        tieBreakOrder: on
+          ? p.tieBreakOrder.filter((k) => k !== key)
+          : [...p.tieBreakOrder, key],
+      };
+    });
+
+  const ordered = [
+    ...qualForm.tieBreakOrder,
+    ...TIE_BREAKS.map((t) => t.key).filter((k) => !qualForm.tieBreakOrder.includes(k)),
+  ];
+
   return (
       <div data-testid="tournament-panel-settings" className="space-y-5">
         {/* Match Format */}
@@ -272,6 +318,164 @@ export default function SettingsTab({
               </div>
             );
           })()}
+        </div>
+
+        {/* Qualification rules (Slice 4b) */}
+        <div
+          data-testid="qualification-rules"
+          className="bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 rounded-2xl p-4 space-y-4"
+        >
+          <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+            🥇 Qualification Rules
+          </h3>
+
+          <div>
+            <label
+              htmlFor="teams-advancing"
+              className="text-xs text-gray-400 mb-2 block"
+            >
+              Teams advancing per group
+            </label>
+            <input
+              id="teams-advancing"
+              data-testid="teams-advancing-per-group"
+              type="number"
+              min={1}
+              max={8}
+              value={qualForm.teamsAdvancingPerGroup}
+              onChange={(e) =>
+                setQualForm((p) => ({
+                  ...p,
+                  teamsAdvancingPerGroup: Number(e.target.value),
+                }))
+              }
+              className="w-full px-3 py-2 rounded-lg text-sm bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-900 dark:text-gray-100"
+            />
+          </div>
+
+          <div>
+            <span className="text-xs text-gray-400 mb-2 block">
+              Knockout bracket seeding
+            </span>
+            <div className="flex gap-2 flex-wrap">
+              {[
+                { key: "CROSS_GROUP", label: "Cross-group", hint: "A1 v B2, B1 v A2" },
+                { key: "GLOBAL_SEED", label: "Global seed", hint: "1 v N across all groups" },
+              ].map((o) => (
+                <button
+                  key={o.key}
+                  type="button"
+                  data-testid={`seeding-${o.key}`}
+                  aria-pressed={qualForm.knockoutSeedingRule === o.key}
+                  onClick={() =>
+                    setQualForm((p) => ({
+                      ...p,
+                      knockoutSeedingRule: o.key as QualificationRules["knockoutSeedingRule"],
+                    }))
+                  }
+                  className={`flex-1 min-w-[8rem] px-3 py-2 rounded-lg text-xs font-semibold border transition-all active:scale-95 text-left ${
+                    qualForm.knockoutSeedingRule === o.key
+                      ? "bg-blue-600 border-blue-600 text-white"
+                      : "bg-gray-100 dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300"
+                  }`}
+                >
+                  <span className="block">{o.label}</span>
+                  <span
+                    className={`block mt-0.5 font-normal ${
+                      qualForm.knockoutSeedingRule === o.key
+                        ? "text-blue-100"
+                        : "text-gray-400"
+                    }`}
+                  >
+                    {o.hint}
+                  </span>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <span className="text-xs text-gray-400 mb-2 block">
+              Tie-break order — most significant first
+            </span>
+            <div className="space-y-2" data-testid="tie-break-order">
+              {ordered.map((key) => {
+                const meta = TIE_BREAKS.find((t) => t.key === key)!;
+                const on = qualForm.tieBreakOrder.includes(key);
+                const pos = qualForm.tieBreakOrder.indexOf(key);
+                return (
+                  <div
+                    key={key}
+                    data-testid={`tie-break-${key}`}
+                    className={`flex items-center gap-2 px-3 py-2 rounded-lg border ${
+                      on
+                        ? "bg-gray-100 dark:bg-gray-800 border-gray-200 dark:border-gray-700"
+                        : "bg-gray-50 dark:bg-gray-900 border-dashed border-gray-200 dark:border-gray-800 opacity-60"
+                    }`}
+                  >
+                    <span className="w-5 text-xs font-bold text-gray-400 shrink-0">
+                      {on ? pos + 1 : "—"}
+                    </span>
+                    <span className="flex-1 min-w-0">
+                      <span className="block text-sm font-medium text-gray-900 dark:text-gray-100 truncate">
+                        {meta.label}
+                      </span>
+                      <span className="block text-xs text-gray-400 truncate">
+                        {meta.hint}
+                      </span>
+                    </span>
+                    <button
+                      type="button"
+                      aria-label={`Move ${meta.label} up`}
+                      data-testid={`tie-break-${key}-up`}
+                      disabled={!on || pos <= 0}
+                      onClick={() => move(key, -1)}
+                      className="px-2 py-1 rounded-md text-xs font-bold bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-200 disabled:opacity-30 active:scale-95"
+                    >
+                      ▲
+                    </button>
+                    <button
+                      type="button"
+                      aria-label={`Move ${meta.label} down`}
+                      data-testid={`tie-break-${key}-down`}
+                      disabled={!on || pos < 0 || pos >= qualForm.tieBreakOrder.length - 1}
+                      onClick={() => move(key, 1)}
+                      className="px-2 py-1 rounded-md text-xs font-bold bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-200 disabled:opacity-30 active:scale-95"
+                    >
+                      ▼
+                    </button>
+                    <button
+                      type="button"
+                      aria-label={`${on ? "Remove" : "Add"} ${meta.label}`}
+                      data-testid={`tie-break-${key}-toggle`}
+                      onClick={() => toggle(key)}
+                      className={`px-2 py-1 rounded-md text-xs font-semibold active:scale-95 ${
+                        on
+                          ? "bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300"
+                          : "bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300"
+                      }`}
+                    >
+                      {on ? "Remove" : "Add"}
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          <button
+            onClick={handleSaveQualificationRules}
+            disabled={savingQual}
+            data-testid="save-qualification-rules"
+            className="w-full py-3 bg-blue-600 text-white rounded-xl text-sm font-semibold disabled:opacity-40 active:scale-95 transition-all"
+          >
+            {savingQual ? "Saving..." : "💾 Save Qualification Rules"}
+          </button>
+
+          <p className="text-xs text-gray-400">
+            Used when advancing a group stage to the knockout. Changing them is
+            audited.
+          </p>
         </div>
 
         {/* Save */}

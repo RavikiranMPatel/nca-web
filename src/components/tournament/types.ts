@@ -39,7 +39,6 @@ export interface SettingsForm {
 
 export interface GenForm {
   teamsPerGroup: number;
-  teamsAdvancingPerGroup: number;
   scheduleStartDate: string;
   scheduleStartTime: string;
   autoAssignVenues: boolean;
