@@ -48,6 +48,7 @@ Severity scale: **critical** (data loss, cross-tenant, silent corruption) ·
 | BUG-28 | The kit list could revert an edit it had just saved | medium | **FIXED** — `376bcc0` |
 | BUG-29 | `getTeams` returns the two sides unordered, so positional callers can swap them | high | **FIXED** — `093f827` + `6225508` |
 | BUG-30 | A match created from a fixture never linked back, so standings stayed empty | high | **FIXED** — `8aaceb4` |
+| BUG-31 | The final-fixture flag was unreadable and unclearable through the API | medium | **FIXED** — `fb97d83` |
 
 ---
 
@@ -1730,3 +1731,48 @@ carries its fixture, a fixture still carries its match.
 counts towards the standings (BUG-30)", asserting `fixtures.match_id` is
 populated and that the winner is on `played 1, won 1, points 2` against the
 loser's `played 1, lost 1, points 0`.
+
+---
+
+## BUG-31 — The final-fixture flag was unreadable and unclearable through the API
+
+**Severity:** medium · **Status: FIXED** in `fb97d83` — introduced by Slice 3 and
+caught in Slice 4
+
+Lombok generates `isFinal()` / `setFinal()` for a boolean field named
+`isFinal`, and Jackson derives the JSON property from the accessor. So the
+property was **`final`**, not `isFinal`, in both directions — and nothing
+complained, because `JacksonConfig` sets `FAIL_ON_UNKNOWN_PROPERTIES` to false.
+
+Measured on the running app, on a fixture that had just been marked:
+
+```
+keys: academyId,awayTeam,branchId,byeTeam,createdAt,createdBy,final,homeTeam,
+      id,label,match,publicId,roundNumber,scheduledAt,stage,status,tournament,
+      updatedAt,updatedBy,venue,version
+one.isFinal = undefined    one.final = true
+after PATCH {"isFinal": false}, final = true
+```
+
+Two consequences, one in each direction:
+
+- **Reading.** `FixturesTab` renders its 🏆 toggle from `f.isFinal`, which was
+  always `undefined`, so a fixture marked as the final still displayed as
+  unmarked. The flag worked — the UI just never showed it.
+- **Writing.** `MarkFinalRequest.isFinal` bound from `"final"`, so a client
+  sending `{"isFinal": false}` matched no property and the field kept its `true`
+  initialiser. **Unmarking a fixture marked it.** The initialiser is deliberate —
+  a PATCH with no body means "mark" — which is exactly why the failure was
+  silent rather than a 400.
+
+**Fixed** by pinning the name with `@JsonProperty("isFinal")` on both
+`MarkFinalRequest` and the new `FixtureDto`.
+
+**Covered by** `tournament-status.spec.ts` — "fixtures come back as a DTO, and
+isFinal round-trips both ways (BUG-31)", which asserts the key is present under
+that name and absent under Lombok's, then marks, unmarks, and checks the row.
+
+**Worth remembering:** any boolean whose field name starts with `is` has this
+problem, and `FAIL_ON_UNKNOWN_PROPERTIES=false` guarantees the write half fails
+silently. `Innings.isSuperOver` and `CricketMatch.isDeleted`-style fields are the
+same shape; they happen not to be read by name from the client today.

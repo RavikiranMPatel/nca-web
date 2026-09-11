@@ -25,6 +25,16 @@ const RUN = `${Date.now() % 1000000}`;
 let seq = 0;
 const tag = () => `S3-${RUN}-${seq++}`;
 
+/**
+ * Every tournament this spec creates.
+ *
+ * Teardown used to find audit rows by joining back to `tournaments`, which works
+ * for every test but the one that deletes its tournament through the API: by
+ * then the row is gone and its audit rows outlive the run. Three were left
+ * behind before this was noticed.
+ */
+const created: string[] = [];
+
 interface Built {
   api: Api;
   tid: string;
@@ -49,6 +59,7 @@ async function build(api: Api, label: string): Promise<Built> {
   });
   expect(t.status, "create tournament").toBe(200);
   const tid = (t.body as any).publicId as string;
+  created.push(tid);
 
   const teams: any[] = [];
   for (const [n, short] of [["Titans", "TIT"], ["Rovers", "ROV"]]) {
@@ -131,8 +142,10 @@ test.afterAll(() => {
   dbExec(`DELETE FROM fixtures WHERE tournament_id IN ${tourneys}`);
   dbExec(`DELETE FROM tournament_teams WHERE tournament_id IN ${tourneys}`);
   dbExec(`DELETE FROM tournament_stages WHERE tournament_id IN ${tourneys}`);
-  dbExec(`DELETE FROM audit_logs WHERE entity_public_id IN
-            (SELECT public_id FROM tournaments WHERE name LIKE '%S3-${RUN}%')`);
+  if (created.length) {
+    const ids = created.map((id) => `'${id}'`).join(",");
+    dbExec(`DELETE FROM audit_logs WHERE entity_public_id IN (${ids})`);
+  }
   dbExec(`DELETE FROM tournaments WHERE name LIKE '%S3-${RUN}%'`);
 });
 
@@ -384,6 +397,84 @@ test.describe("Slice 3 — tournament status and result", () => {
     expect(loser.played, "loser played 1").toBe(1);
     expect(loser.lost, "loser lost 1").toBe(1);
     expect(loser.points, "loser has the loss points").toBe(0);
+
+    await api.dispose();
+  });
+
+  // ── The fixture DTO, and BUG-31 ─────────────────────────────────────────
+
+  test("fixtures come back as a DTO, and isFinal round-trips both ways (BUG-31)",
+    async () => {
+    const api = await Api.login(config().a);
+    const b = await build(api, "FixtureDto");
+
+    const listed = async () =>
+      ((await api.raw("get", `/api/admin/cricket/tournaments/${b.tid}/fixtures`))
+        .body as any[])[0];
+
+    const one = await listed();
+
+    // The entity used to be returned whole. These are the giveaways.
+    for (const leaked of ["academyId", "branchId", "tournament", "id", "version",
+                          "createdBy", "updatedBy", "isDeleted"]) {
+      expect(one, `${leaked} is not exposed`).not.toHaveProperty(leaked);
+    }
+    expect(one, "and the shape the UI reads is").toHaveProperty("publicId");
+    expect(one.homeTeam, "teams are shallow references").toHaveProperty("name");
+    expect(one.homeTeam, "and carry no tournament back-reference")
+      .not.toHaveProperty("tournament");
+
+    // BUG-31. Lombok names the accessor isFinal(), so Jackson bound the property
+    // "final" on both the response and the request body: the UI read
+    // f.isFinal as undefined, and {"isFinal": false} matched nothing, so an
+    // attempt to unmark a fixture left the field on its `true` initialiser.
+    expect(one.isFinal, "isFinal is present under that name").toBe(false);
+    expect(one, "and not under Lombok's").not.toHaveProperty("final");
+
+    await api.raw("patch",
+      `/api/admin/cricket/tournaments/${b.tid}/fixtures/${b.fixturePublicId}/final`,
+      { isFinal: true });
+    expect((await listed()).isFinal, "marking sticks").toBe(true);
+
+    await api.raw("patch",
+      `/api/admin/cricket/tournaments/${b.tid}/fixtures/${b.fixturePublicId}/final`,
+      { isFinal: false });
+    expect((await listed()).isFinal, "and unmarking is honoured, which it was not")
+      .toBe(false);
+    expect(dbOne(`SELECT is_final::text FROM fixtures WHERE public_id = '${b.fixturePublicId}'`),
+      "cleared in the row too").toBe("false");
+
+    await api.dispose();
+  });
+
+  test("updateFixture takes a DTO and stays scoped", async () => {
+    const api = await Api.login(config().a);
+    const b = await build(api, "UpdateFixture");
+    const other = await build(api, "UpdateFixtureOther");
+
+    const url = `/api/admin/cricket/tournaments/${b.tid}/fixtures/${b.fixturePublicId}`;
+
+    const ok = await api.raw("patch", url, { venue: "Reassigned Ground", roundNumber: 3 });
+    expect(ok.status, "a well-formed patch applies").toBe(200);
+    expect((ok.body as any).venue).toBe("Reassigned Ground");
+    expect((ok.body as any).roundNumber).toBe(3);
+
+    // Blank team ids are what the edit form sends for a BYE fixture; they must
+    // mean "leave it alone" rather than "find a team whose id is empty".
+    const blanks = await api.raw("patch", url,
+      { homeTeamPublicId: "", awayTeamPublicId: "", venue: "Still Here" });
+    expect(blanks.status, "blank ids are not looked up").toBe(200);
+    expect((blanks.body as any).homeTeam.publicId, "home side untouched")
+      .toBe(b.teams[0].publicId);
+
+    // A team from a different tournament is refused even though the actor owns
+    // both, which findByPublicIdAndAcademyId alone would have allowed.
+    const foreign = await api.raw("patch", url,
+      { homeTeamPublicId: other.teams[0].publicId });
+    expect(foreign.status, "a team from another tournament is refused").toBe(400);
+
+    const badDate = await api.raw("patch", url, { scheduledAt: "next tuesday" });
+    expect(badDate.status, "an unparseable date is a 400, not a 500").toBe(400);
 
     await api.dispose();
   });
