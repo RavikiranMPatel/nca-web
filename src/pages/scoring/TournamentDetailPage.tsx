@@ -32,17 +32,17 @@ import api from "../../api/axios";
 
 import {
   TABS,
-  ROLES,
-  ROLE_LABELS,
-  OFFICIAL_ROLES,
-  OFFICIAL_ROLE_LABELS,
-  DAY_LABELS,
   statusBadge,
 } from "../../components/tournament/constants";
 import type {
   SettingsForm,
   GenForm,
   EditFixtureForm,
+  TeamForm,
+  VenueForm,
+  OfficialForm,
+  ManualFixtureForm,
+  RescheduleForm,
 } from "../../components/tournament/types";
 import OverviewTab from "../../components/tournament/OverviewTab";
 import TeamsTab from "../../components/tournament/TeamsTab";
@@ -53,6 +53,18 @@ import FixturesTab from "../../components/tournament/FixturesTab";
 import StandingsTab from "../../components/tournament/StandingsTab";
 import StatsTab from "../../components/tournament/StatsTab";
 import SettingsTab from "../../components/tournament/SettingsTab";
+
+// Slice 5: the ten modals TournamentDetailPage used to hold inline, one file each.
+import AddOfficialModal from "../../components/tournament/modals/AddOfficialModal";
+import AddPlayerModal from "../../components/tournament/modals/AddPlayerModal";
+import AddTeamModal from "../../components/tournament/modals/AddTeamModal";
+import AddVenueModal from "../../components/tournament/modals/AddVenueModal";
+import AdvancePlayoffsModal from "../../components/tournament/modals/AdvancePlayoffsModal";
+import DeclareWinnerModal from "../../components/tournament/modals/DeclareWinnerModal";
+import EditFixtureModal from "../../components/tournament/modals/EditFixtureModal";
+import GenerateFixturesModal from "../../components/tournament/modals/GenerateFixturesModal";
+import ManualFixtureModal from "../../components/tournament/modals/ManualFixtureModal";
+import RescheduleModal from "../../components/tournament/modals/RescheduleModal";
 
 export default function TournamentDetailPage() {
   const { publicId } = useParams<{ publicId: string }>();
@@ -72,13 +84,13 @@ export default function TournamentDetailPage() {
   // Venues
   const [venues, setVenues] = useState<any[]>([]);
   const [showAddVenue, setShowAddVenue] = useState(false);
-  const [venueForm, setVenueForm] = useState({ name: "", maxMatchesPerDay: 2 });
+  const [venueForm, setVenueForm] = useState<VenueForm>({ name: "", maxMatchesPerDay: 2 });
   const [editingVenue, setEditingVenue] = useState<any>(null);
 
   // Officials pool
   const [officialsPool, setOfficialsPool] = useState<any[]>([]);
   const [showAddOfficial, setShowAddOfficial] = useState(false);
-  const [officialForm, setOfficialForm] = useState({
+  const [officialForm, setOfficialForm] = useState<OfficialForm>({
     name: "",
     role: "UMPIRE",
   });
@@ -105,7 +117,7 @@ export default function TournamentDetailPage() {
   const [setSettingsSaved] = useState(false);
 
   const [showAddTeam, setShowAddTeam] = useState(false);
-  const [teamForm, setTeamForm] = useState({
+  const [teamForm, setTeamForm] = useState<TeamForm>({
     name: "",
     shortName: "",
     colorHex: "#3b82f6",
@@ -132,7 +144,7 @@ export default function TournamentDetailPage() {
   // Reschedule / postpone (Slice 4). overrideReason is only sent when the server
   // has already refused the move for a clash and the actor is a SUPER_ADMIN.
   const [reschedulingFixture, setReschedulingFixture] = useState<any>(null);
-  const [rescheduleForm, setRescheduleForm] = useState({
+  const [rescheduleForm, setRescheduleForm] = useState<RescheduleForm>({
     date: "", time: "", reason: "", postpone: false,
   });
   const [rescheduleConflict, setRescheduleConflict] = useState("");
@@ -150,7 +162,7 @@ export default function TournamentDetailPage() {
   });
 
   const [showManualFixture, setShowManualFixture] = useState(false);
-  const [fixtureForm, setFixtureForm] = useState({
+  const [fixtureForm, setFixtureForm] = useState<ManualFixtureForm>({
     stagePublicId: "",
     homeTeamPublicId: "",
     awayTeamPublicId: "",
@@ -1195,1434 +1207,146 @@ export default function TournamentDetailPage() {
 
       {/* ── ADD TEAM MODAL ── */}
       {showAddTeam && (
-        <div className="fixed inset-0 z-[60] bg-black/60 flex items-end">
-          <div className="w-full bg-white dark:bg-gray-900 rounded-t-2xl p-5 max-h-[80vh] overflow-y-auto">
-            <div className="w-10 h-1 bg-gray-300 rounded-full mx-auto mb-4" />
-            <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-4">
-              Add Team
-            </h3>
-            <div className="space-y-3">
-              <div>
-                <label className="text-xs text-gray-400 mb-1 block">
-                  Team Name *
-                </label>
-                <input
-                  type="text"
-                  className="w-full px-3 py-2.5 bg-gray-100 dark:bg-gray-800 rounded-xl text-sm outline-none"
-                  placeholder="e.g. Team Alpha"
-                  value={teamForm.name}
-                  onChange={(e) =>
-                    setTeamForm((p) => ({ ...p, name: e.target.value }))
-                  }
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="text-xs text-gray-400 mb-1 block">
-                    Short Name
-                  </label>
-                  <input
-                    type="text"
-                    maxLength={5}
-                    className="w-full px-3 py-2.5 bg-gray-100 dark:bg-gray-800 rounded-xl text-sm outline-none"
-                    placeholder="ALP"
-                    value={teamForm.shortName}
-                    onChange={(e) =>
-                      setTeamForm((p) => ({ ...p, shortName: e.target.value }))
-                    }
-                  />
-                </div>
-                <div>
-                  <label className="text-xs text-gray-400 mb-1 block">
-                    Group (A/B/C)
-                  </label>
-                  <input
-                    type="text"
-                    maxLength={3}
-                    className="w-full px-3 py-2.5 bg-gray-100 dark:bg-gray-800 rounded-xl text-sm outline-none"
-                    placeholder="A"
-                    value={teamForm.groupName}
-                    onChange={(e) =>
-                      setTeamForm((p) => ({
-                        ...p,
-                        groupName: e.target.value.toUpperCase(),
-                      }))
-                    }
-                  />
-                </div>
-              </div>
-              <div>
-                <label className="text-xs text-gray-400 mb-1 block">
-                  Team Color
-                </label>
-                <div className="flex items-center gap-3">
-                  <input
-                    type="color"
-                    className="w-10 h-10 rounded-lg cursor-pointer border border-gray-200"
-                    value={teamForm.colorHex}
-                    onChange={(e) =>
-                      setTeamForm((p) => ({ ...p, colorHex: e.target.value }))
-                    }
-                  />
-                  <span className="text-sm text-gray-500">
-                    {teamForm.colorHex}
-                  </span>
-                </div>
-              </div>
-              <div className="flex gap-3 pt-2">
-                <button
-                  onClick={() => setShowAddTeam(false)}
-                  className="flex-1 py-2.5 bg-gray-100 dark:bg-gray-800 rounded-xl text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleAddTeam}
-                  disabled={posting || !teamForm.name.trim()}
-                  className="flex-1 py-2.5 bg-blue-600 text-white rounded-xl text-sm font-semibold disabled:opacity-40"
-                >
-                  Add Team
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
+        <AddTeamModal
+          handleAddTeam={handleAddTeam}
+          posting={posting}
+          setShowAddTeam={setShowAddTeam}
+          setTeamForm={setTeamForm}
+          teamForm={teamForm}
+        />
       )}
 
       {/* ── ADD PLAYER MODAL ── */}
       {showAddPlayer && (
-        <div className="fixed inset-0 z-[60] bg-black/70 flex items-end">
-          <div className="w-full bg-white dark:bg-gray-900 rounded-t-2xl max-h-[90vh] overflow-hidden flex flex-col">
-            <div className="p-4 border-b border-gray-100 dark:border-gray-800">
-              <div className="w-10 h-1 bg-gray-300 rounded-full mx-auto mb-3" />
-              <h3 className="text-sm font-semibold text-gray-900 dark:text-white text-center">
-                Add Player to Squad
-              </h3>
-              <div className="flex mt-3 bg-gray-100 dark:bg-gray-800 rounded-xl p-1">
-                <button
-                  onClick={() => setPlayerModalTab("academy")}
-                  className={`flex-1 py-1.5 text-xs font-semibold rounded-lg transition-all ${playerModalTab === "academy" ? "bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm" : "text-gray-500"}`}
-                >
-                  🏫 Academy Players
-                </button>
-                <button
-                  onClick={() => setPlayerModalTab("external")}
-                  className={`flex-1 py-1.5 text-xs font-semibold rounded-lg transition-all ${playerModalTab === "external" ? "bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm" : "text-gray-500"}`}
-                >
-                  👤 Guest / External
-                </button>
-              </div>
-            </div>
-            {playerModalTab === "academy" && (
-              <>
-                <div className="px-4 pt-3 pb-2">
-                  <p className="text-xs text-gray-400 text-center mb-2">
-                    {filteredPlayers.length} available · already in tournament
-                    are excluded
-                  </p>
-                  <input
-                    autoFocus
-                    type="text"
-                    className="w-full px-3 py-2 bg-gray-100 dark:bg-gray-800 rounded-xl text-sm outline-none"
-                    placeholder="Search players..."
-                    value={playerSearch}
-                    onChange={(e) => setPlayerSearch(e.target.value)}
-                  />
-                </div>
-                <div className="overflow-y-auto flex-1 px-3 pb-2 space-y-1.5">
-                  {filteredPlayers.slice(0, 50).map((p) => {
-                    const isSelected = selectedPlayers.some(
-                      (s) => s.publicId === p.publicId,
-                    );
-                    return (
-                      <button
-                        key={p.publicId}
-                        onClick={() =>
-                          setSelectedPlayers((prev) =>
-                            isSelected
-                              ? prev.filter((s) => s.publicId !== p.publicId)
-                              : [...prev, p],
-                          )
-                        }
-                        className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left transition-all ${isSelected ? "bg-blue-50 dark:bg-blue-900/30 border border-blue-300 dark:border-blue-700" : "bg-gray-50 dark:bg-gray-800 border border-transparent"}`}
-                      >
-                        <div
-                          className={`w-4 h-4 rounded border-2 flex-shrink-0 flex items-center justify-center ${isSelected ? "border-blue-600 bg-blue-600" : "border-gray-300"}`}
-                        >
-                          {isSelected && (
-                            <svg
-                              className="w-3 h-3 text-white"
-                              fill="none"
-                              stroke="currentColor"
-                              viewBox="0 0 24 24"
-                            >
-                              <path
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                                strokeWidth={3}
-                                d="M5 13l4 4L19 7"
-                              />
-                            </svg>
-                          )}
-                        </div>
-                        <div>
-                          <div className="text-sm font-medium text-gray-900 dark:text-gray-100">
-                            {p.displayName}
-                          </div>
-                          {p.battingStyle && (
-                            <div className="text-xs text-gray-400">
-                              {p.battingStyle}
-                            </div>
-                          )}
-                        </div>
-                      </button>
-                    );
-                  })}
-                  {filteredPlayers.length === 0 && (
-                    <div className="text-center py-8 text-sm text-gray-400">
-                      No available academy players
-                    </div>
-                  )}
-                </div>
-                {selectedPlayers.length > 0 && (
-                  <div className="border-t border-gray-100 dark:border-gray-800 px-4 py-3 space-y-3">
-                    <div className="text-xs font-semibold text-gray-500 uppercase">
-                      Role for {selectedPlayers.length} selected player
-                      {selectedPlayers.length > 1 ? "s" : ""}
-                    </div>
-                    <div className="grid grid-cols-4 gap-2">
-                      {ROLES.map((role) => (
-                        <button
-                          key={role}
-                          onClick={() => setSelectedRole(role)}
-                          className={`py-2 rounded-xl text-xs font-semibold border transition-all active:scale-95 ${selectedRole === role ? "bg-blue-600 border-blue-600 text-white" : "bg-gray-100 dark:bg-gray-800 border-transparent text-gray-600 dark:text-gray-400"}`}
-                        >
-                          {ROLE_LABELS[role]}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                )}
-                <div className="p-3 border-t border-gray-100 dark:border-gray-800 flex gap-3">
-                  <button
-                    onClick={closeAddPlayer}
-                    className="flex-1 py-2.5 bg-gray-100 dark:bg-gray-800 rounded-xl text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    onClick={handleAddToSquad}
-                    disabled={!selectedPlayers.length || posting}
-                    className="flex-1 py-2.5 bg-blue-600 text-white rounded-xl text-sm font-semibold disabled:opacity-40"
-                  >
-                    {posting
-                      ? "Adding..."
-                      : `Add ${selectedPlayers.length || ""} to Squad`.trim()}
-                  </button>
-                </div>
-              </>
-            )}
-            {playerModalTab === "external" && (
-              <>
-                <div className="flex-1 px-4 py-4 space-y-4">
-                  <div className="bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 rounded-xl px-3 py-2.5">
-                    <p className="text-xs text-orange-700 dark:text-orange-400">
-                      Guest players will <b>not appear</b> in the academy
-                      players list.
-                    </p>
-                  </div>
-                  <div>
-                    <label className="text-xs text-gray-400 mb-1 block">
-                      Player Name *
-                    </label>
-                    <input
-                      type="text"
-                      autoFocus
-                      className="w-full px-3 py-2.5 bg-gray-100 dark:bg-gray-800 rounded-xl text-sm outline-none"
-                      placeholder="e.g. Rahul Kumar"
-                      value={externalName}
-                      onChange={(e) => setExternalName(e.target.value)}
-                    />
-                  </div>
-                  <div>
-                    <label className="text-xs text-gray-400 mb-2 block">
-                      Gender
-                    </label>
-                    <div className="flex gap-2">
-                      {["MALE", "FEMALE", "OTHER"].map((g) => (
-                        <button
-                          key={g}
-                          onClick={() => setExternalGender(g)}
-                          className={`flex-1 py-2 rounded-xl text-xs font-semibold border transition-all active:scale-95 ${externalGender === g ? "bg-blue-600 border-blue-600 text-white" : "bg-gray-100 dark:bg-gray-800 border-transparent text-gray-600 dark:text-gray-400"}`}
-                        >
-                          {g === "MALE"
-                            ? "Male"
-                            : g === "FEMALE"
-                              ? "Female"
-                              : "Other"}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                  <div>
-                    <label className="text-xs text-gray-400 mb-2 block">
-                      Role
-                    </label>
-                    <div className="grid grid-cols-4 gap-2">
-                      {ROLES.map((role) => (
-                        <button
-                          key={role}
-                          onClick={() => setExternalRole(role)}
-                          className={`py-2 rounded-xl text-xs font-semibold border transition-all active:scale-95 ${externalRole === role ? "bg-blue-600 border-blue-600 text-white" : "bg-gray-100 dark:bg-gray-800 border-transparent text-gray-600 dark:text-gray-400"}`}
-                        >
-                          {ROLE_LABELS[role]}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-                <div className="p-3 border-t border-gray-100 dark:border-gray-800 flex gap-3">
-                  <button
-                    onClick={closeAddPlayer}
-                    className="flex-1 py-2.5 bg-gray-100 dark:bg-gray-800 rounded-xl text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    onClick={handleAddExternalPlayer}
-                    disabled={!externalName.trim() || posting}
-                    className="flex-1 py-2.5 bg-orange-600 text-white rounded-xl text-sm font-semibold disabled:opacity-40"
-                  >
-                    {posting ? "Adding..." : "Add Guest Player"}
-                  </button>
-                </div>
-              </>
-            )}
-          </div>
-        </div>
+        <AddPlayerModal
+          closeAddPlayer={closeAddPlayer}
+          externalGender={externalGender}
+          externalName={externalName}
+          externalRole={externalRole}
+          filteredPlayers={filteredPlayers}
+          handleAddExternalPlayer={handleAddExternalPlayer}
+          handleAddToSquad={handleAddToSquad}
+          playerModalTab={playerModalTab}
+          playerSearch={playerSearch}
+          posting={posting}
+          selectedPlayers={selectedPlayers}
+          selectedRole={selectedRole}
+          setExternalGender={setExternalGender}
+          setExternalName={setExternalName}
+          setExternalRole={setExternalRole}
+          setPlayerModalTab={setPlayerModalTab}
+          setPlayerSearch={setPlayerSearch}
+          setSelectedPlayers={setSelectedPlayers}
+          setSelectedRole={setSelectedRole}
+        />
       )}
 
       {/* ── GENERATE FIXTURES MODAL ── */}
       {showGenerate && (
-        <div className="fixed inset-0 z-[60] bg-black/60 flex items-end">
-          <div className="w-full bg-white dark:bg-gray-900 rounded-t-2xl max-h-[90vh] overflow-y-auto">
-            <div className="p-5">
-              <div className="w-10 h-1 bg-gray-300 rounded-full mx-auto mb-4" />
-              <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-1">
-                ⚡ Auto Generate Fixtures
-              </h3>
-              <p className="text-xs text-gray-400 mb-4">
-                Format: <b>{tournament.format?.replace(/_/g, " ")}</b> ·{" "}
-                {teams.length} teams
-              </p>
-              {tournament.format === "GROUP_KNOCKOUT" && (
-                <div className="space-y-3 mb-4">
-                  <div>
-                    <label className="text-xs text-gray-400 mb-1 block">
-                      Teams per Group
-                    </label>
-                    <input
-                      type="number"
-                      min={2}
-                      max={8}
-                      className="w-full px-3 py-2.5 bg-gray-100 dark:bg-gray-800 rounded-xl text-sm outline-none"
-                      value={genForm.teamsPerGroup}
-                      onChange={(e) =>
-                        setGenForm((p) => ({
-                          ...p,
-                          teamsPerGroup: Number(e.target.value),
-                        }))
-                      }
-                    />
-                  </div>
-                  {/* "Teams advancing per Group" was here and did nothing: the
-                      generator only ever read teamsPerGroup. It is a stored
-                      qualification rule now, on the Settings tab. */}
-                </div>
-              )}
-
-              <p className="text-xs text-red-400 mb-4">
-                ⚠ This will delete and regenerate all existing fixtures.
-              </p>
-              {/* Scheduling */}
-              <div className="space-y-4 mb-4">
-                <p className="text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wide">
-                  📅 Schedule
-                </p>
-                <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-100 dark:border-blue-900 rounded-xl px-3 py-2 text-xs text-blue-600 dark:text-blue-400">
-                  Leave dates blank to assign manually later.
-                </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="text-xs text-gray-400 mb-1 block">
-                      Start Date
-                    </label>
-                    <input
-                      type="date"
-                      className="w-full px-3 py-2.5 bg-gray-100 dark:bg-gray-800 rounded-xl text-sm outline-none"
-                      value={genForm.scheduleStartDate}
-                      onChange={(e) =>
-                        setGenForm((p) => ({
-                          ...p,
-                          scheduleStartDate: e.target.value,
-                        }))
-                      }
-                    />
-                  </div>
-                  <div>
-                    <label className="text-xs text-gray-400 mb-1 block">
-                      First Match Time
-                    </label>
-                    <input
-                      type="time"
-                      className="w-full px-3 py-2.5 bg-gray-100 dark:bg-gray-800 rounded-xl text-sm outline-none"
-                      value={genForm.scheduleStartTime}
-                      onChange={(e) =>
-                        setGenForm((p) => ({
-                          ...p,
-                          scheduleStartTime: e.target.value,
-                        }))
-                      }
-                    />
-                  </div>
-                </div>
-                <div>
-                  <label className="text-xs text-gray-400 mb-2 block">
-                    Play Days
-                  </label>
-                  <div className="flex gap-1.5 flex-wrap">
-                    {DAY_LABELS.map((label, idx) => {
-                      const day = idx + 1;
-                      const active = genForm.playDays.includes(day);
-                      return (
-                        <button
-                          key={day}
-                          onClick={() => togglePlayDay(day)}
-                          className={`px-2.5 py-1.5 rounded-lg text-xs font-semibold border transition-all active:scale-95 ${
-                            active
-                              ? "bg-blue-600 border-blue-600 text-white"
-                              : "bg-gray-100 dark:bg-gray-800 border-transparent text-gray-500"
-                          }`}
-                        >
-                          {label}
-                        </button>
-                      );
-                    })}
-                  </div>
-                  {genForm.playDays.length === 0 && (
-                    <p className="text-xs text-red-400 mt-1">
-                      Select at least one play day.
-                    </p>
-                  )}
-                </div>
-
-                {venues.length > 0 && (
-                  <div>
-                    <label className="text-xs text-gray-400 mb-2 block">
-                      Ground Assignment
-                    </label>
-                    <div className="grid grid-cols-2 gap-2 mb-3">
-                      <button
-                        onClick={() =>
-                          setGenForm((p) => ({ ...p, autoAssignVenues: true }))
-                        }
-                        className={`p-2.5 rounded-xl border text-left transition-all active:scale-95 ${
-                          genForm.autoAssignVenues
-                            ? "bg-blue-50 dark:bg-blue-900/20 border-blue-300 dark:border-blue-700"
-                            : "bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700"
-                        }`}
-                      >
-                        <div className="text-xs font-semibold text-gray-900 dark:text-gray-100">
-                          🔄 Auto
-                        </div>
-                        <div className="text-xs text-gray-400">
-                          Round-robin across grounds
-                        </div>
-                      </button>
-                      <button
-                        onClick={() =>
-                          setGenForm((p) => ({ ...p, autoAssignVenues: false }))
-                        }
-                        className={`p-2.5 rounded-xl border text-left transition-all active:scale-95 ${
-                          !genForm.autoAssignVenues
-                            ? "bg-blue-50 dark:bg-blue-900/20 border-blue-300 dark:border-blue-700"
-                            : "bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700"
-                        }`}
-                      >
-                        <div className="text-xs font-semibold text-gray-900 dark:text-gray-100">
-                          ✋ Manual
-                        </div>
-                        <div className="text-xs text-gray-400">
-                          Assign venues later
-                        </div>
-                      </button>
-                    </div>
-                    {genForm.autoAssignVenues && (
-                      <div className="space-y-1.5">
-                        {venues.map((v: any) => {
-                          const selected =
-                            genForm.selectedVenueIds.length === 0 ||
-                            genForm.selectedVenueIds.includes(v.id);
-                          return (
-                            <button
-                              key={v.id}
-                              onClick={() =>
-                                setGenForm((p) => ({
-                                  ...p,
-                                  selectedVenueIds: p.selectedVenueIds.includes(
-                                    v.id,
-                                  )
-                                    ? p.selectedVenueIds.filter(
-                                        (id) => id !== v.id,
-                                      )
-                                    : [...p.selectedVenueIds, v.id],
-                                }))
-                              }
-                              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl border text-left transition-all ${
-                                selected
-                                  ? "bg-blue-50 dark:bg-blue-900/20 border-blue-300 dark:border-blue-700"
-                                  : "bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700"
-                              }`}
-                            >
-                              <div
-                                className={`w-4 h-4 rounded border-2 flex-shrink-0 flex items-center justify-center ${selected ? "border-blue-600 bg-blue-600" : "border-gray-300"}`}
-                              >
-                                {selected && (
-                                  <svg
-                                    className="w-3 h-3 text-white"
-                                    fill="none"
-                                    stroke="currentColor"
-                                    viewBox="0 0 24 24"
-                                  >
-                                    <path
-                                      strokeLinecap="round"
-                                      strokeLinejoin="round"
-                                      strokeWidth={3}
-                                      d="M5 13l4 4L19 7"
-                                    />
-                                  </svg>
-                                )}
-                              </div>
-                              <div>
-                                <div className="text-sm font-medium text-gray-900 dark:text-gray-100">
-                                  {v.name}
-                                </div>
-                                <div className="text-xs text-gray-400">
-                                  Max {v.maxMatchesPerDay}/day
-                                </div>
-                              </div>
-                            </button>
-                          );
-                        })}
-                        {genForm.selectedVenueIds.length === 0 && (
-                          <p className="text-xs text-blue-500 px-1">
-                            All venues selected by default.
-                          </p>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-              <div className="flex gap-3">
-                <button
-                  onClick={() => setShowGenerate(false)}
-                  className="flex-1 py-2.5 bg-gray-100 dark:bg-gray-800 rounded-xl text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleGenerate}
-                  disabled={posting || genForm.playDays.length === 0}
-                  className="flex-1 py-2.5 bg-blue-600 text-white rounded-xl text-sm font-semibold disabled:opacity-40"
-                >
-                  Generate
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
+        <GenerateFixturesModal
+          genForm={genForm}
+          handleGenerate={handleGenerate}
+          posting={posting}
+          setGenForm={setGenForm}
+          setShowGenerate={setShowGenerate}
+          teams={teams}
+          togglePlayDay={togglePlayDay}
+          tournament={tournament}
+          venues={venues}
+        />
       )}
 
       {/* ── MANUAL FIXTURE MODAL ── */}
       {showManualFixture && (
-        <div className="fixed inset-0 z-[60] bg-black/60 flex items-end">
-          <div className="w-full bg-white dark:bg-gray-900 rounded-t-2xl p-5 max-h-[90vh] overflow-y-auto">
-            <div className="w-10 h-1 bg-gray-300 rounded-full mx-auto mb-4" />
-            <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-4">
-              Add Fixture
-            </h3>
-            <div className="space-y-3">
-              <div>
-                <label className="text-xs text-gray-400 mb-1 block">
-                  Stage
-                </label>
-                <select
-                  className="w-full px-3 py-2.5 bg-gray-100 dark:bg-gray-800 rounded-xl text-sm outline-none"
-                  value={fixtureForm.stagePublicId}
-                  onChange={(e) =>
-                    setFixtureForm((p) => ({
-                      ...p,
-                      stagePublicId: e.target.value,
-                    }))
-                  }
-                >
-                  <option value="">Select stage</option>
-                  {stages.map((s: any) => (
-                    <option key={s.publicId} value={s.publicId}>
-                      {s.stageName}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="text-xs text-gray-400 mb-1 block">
-                  Home Team
-                </label>
-                <select
-                  className="w-full px-3 py-2.5 bg-gray-100 dark:bg-gray-800 rounded-xl text-sm outline-none"
-                  value={fixtureForm.homeTeamPublicId}
-                  onChange={(e) =>
-                    setFixtureForm((p) => ({
-                      ...p,
-                      homeTeamPublicId: e.target.value,
-                    }))
-                  }
-                >
-                  <option value="">Select team</option>
-                  {teams.map((t: any) => (
-                    <option key={t.publicId} value={t.publicId}>
-                      {t.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="text-xs text-gray-400 mb-1 block">
-                  Away Team
-                </label>
-                <select
-                  className="w-full px-3 py-2.5 bg-gray-100 dark:bg-gray-800 rounded-xl text-sm outline-none"
-                  value={fixtureForm.awayTeamPublicId}
-                  onChange={(e) =>
-                    setFixtureForm((p) => ({
-                      ...p,
-                      awayTeamPublicId: e.target.value,
-                    }))
-                  }
-                >
-                  <option value="">Select team</option>
-                  {teams
-                    .filter(
-                      (t: any) => t.publicId !== fixtureForm.homeTeamPublicId,
-                    )
-                    .map((t: any) => (
-                      <option key={t.publicId} value={t.publicId}>
-                        {t.name}
-                      </option>
-                    ))}
-                </select>
-              </div>
-              <div>
-                <label className="text-xs text-gray-400 mb-1 block">
-                  Venue (optional)
-                </label>
-                <input
-                  type="text"
-                  className="w-full px-3 py-2.5 bg-gray-100 dark:bg-gray-800 rounded-xl text-sm outline-none"
-                  placeholder="e.g. NCA Ground B"
-                  value={fixtureForm.venue}
-                  onChange={(e) =>
-                    setFixtureForm((p) => ({ ...p, venue: e.target.value }))
-                  }
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="text-xs text-gray-400 mb-1 block">
-                    Date (optional)
-                  </label>
-                  <input
-                    type="date"
-                    className="w-full px-3 py-2.5 bg-gray-100 dark:bg-gray-800 rounded-xl text-sm outline-none"
-                    value={fixtureForm.scheduledDate}
-                    onChange={(e) =>
-                      setFixtureForm((p) => ({
-                        ...p,
-                        scheduledDate: e.target.value,
-                      }))
-                    }
-                  />
-                </div>
-                <div>
-                  <label className="text-xs text-gray-400 mb-1 block">
-                    Time (optional)
-                  </label>
-                  <input
-                    type="time"
-                    className="w-full px-3 py-2.5 bg-gray-100 dark:bg-gray-800 rounded-xl text-sm outline-none"
-                    value={fixtureForm.scheduledTime}
-                    onChange={(e) =>
-                      setFixtureForm((p) => ({
-                        ...p,
-                        scheduledTime: e.target.value,
-                      }))
-                    }
-                  />
-                </div>
-              </div>
-              <div className="flex gap-3 pt-2">
-                <button
-                  onClick={() => setShowManualFixture(false)}
-                  className="flex-1 py-2.5 bg-gray-100 dark:bg-gray-800 rounded-xl text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleManualFixture}
-                  disabled={posting}
-                  className="flex-1 py-2.5 bg-blue-600 text-white rounded-xl text-sm font-semibold disabled:opacity-40"
-                >
-                  Add Fixture
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
+        <ManualFixtureModal
+          fixtureForm={fixtureForm}
+          handleManualFixture={handleManualFixture}
+          posting={posting}
+          setFixtureForm={setFixtureForm}
+          setShowManualFixture={setShowManualFixture}
+          stages={stages}
+          teams={teams}
+        />
       )}
 
       {/* ── RESCHEDULE / POSTPONE MODAL ── */}
       {reschedulingFixture && (
-        <div className="fixed inset-0 z-[60] bg-black/60 flex items-center justify-center p-6">
-          <div
-            data-testid="reschedule-modal"
-            className="w-full max-w-sm bg-white dark:bg-gray-900 rounded-2xl p-5 max-h-[90vh] overflow-y-auto"
-          >
-            <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-1">
-              🕑 Reschedule
-            </h3>
-            <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">
-              {reschedulingFixture.homeTeam?.name ?? "TBD"} v{" "}
-              {reschedulingFixture.awayTeam?.name ?? "TBD"}
-            </p>
-
-            <label className="flex items-center gap-2 mb-4 text-xs text-gray-700 dark:text-gray-300">
-              <input
-                data-testid="reschedule-postpone"
-                type="checkbox"
-                checked={rescheduleForm.postpone}
-                onChange={(e) =>
-                  setRescheduleForm({ ...rescheduleForm, postpone: e.target.checked })
-                }
-              />
-              Postpone instead — give up the slot without setting a new one
-            </label>
-
-            {!rescheduleForm.postpone && (
-              <div className="flex gap-2 mb-4">
-                <input
-                  data-testid="reschedule-date"
-                  type="date"
-                  value={rescheduleForm.date}
-                  onChange={(e) =>
-                    setRescheduleForm({ ...rescheduleForm, date: e.target.value })
-                  }
-                  className="flex-1 px-3 py-2 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm text-gray-900 dark:text-gray-100"
-                />
-                <input
-                  data-testid="reschedule-time"
-                  type="time"
-                  value={rescheduleForm.time}
-                  onChange={(e) =>
-                    setRescheduleForm({ ...rescheduleForm, time: e.target.value })
-                  }
-                  className="w-28 px-3 py-2 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm text-gray-900 dark:text-gray-100"
-                />
-              </div>
-            )}
-
-            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
-              Reason <span className="text-red-500">*</span>
-            </p>
-            <textarea
-              data-testid="reschedule-reason"
-              value={rescheduleForm.reason}
-              onChange={(e) =>
-                setRescheduleForm({ ...rescheduleForm, reason: e.target.value })
-              }
-              rows={2}
-              placeholder="Why is it moving?"
-              className="w-full mb-4 px-3 py-2 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm text-gray-900 dark:text-gray-100"
-            />
-
-            {/* The server refused the slot. This is an answer, not an error — it
-                names what clashes, and only a SUPER_ADMIN can go ahead anyway. */}
-            {rescheduleConflict && (
-              <div
-                data-testid="reschedule-conflict"
-                className="mb-4 px-3 py-2 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl text-xs text-red-700 dark:text-red-400"
-              >
-                {rescheduleConflict}
-                <textarea
-                  data-testid="reschedule-override-reason"
-                  value={rescheduleOverride}
-                  onChange={(e) => setRescheduleOverride(e.target.value)}
-                  rows={2}
-                  placeholder="SUPER_ADMIN only — why schedule over it anyway?"
-                  className="w-full mt-2 px-3 py-2 bg-white dark:bg-gray-800 border border-red-200 dark:border-red-800 rounded-xl text-xs text-gray-900 dark:text-gray-100"
-                />
-                <button
-                  data-testid="reschedule-override-confirm"
-                  onClick={() => submitReschedule(true)}
-                  disabled={!rescheduleOverride.trim() || posting}
-                  className="w-full mt-2 py-2 bg-red-600 text-white rounded-xl text-xs font-semibold disabled:opacity-40"
-                >
-                  Schedule over the clash
-                </button>
-              </div>
-            )}
-
-            <div className="flex gap-3">
-              <button
-                onClick={() => setReschedulingFixture(null)}
-                className="flex-1 py-2.5 bg-gray-100 dark:bg-gray-800 rounded-xl text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700"
-              >
-                Cancel
-              </button>
-              <button
-                data-testid="reschedule-confirm"
-                onClick={() => submitReschedule(false)}
-                disabled={
-                  !rescheduleForm.reason.trim() ||
-                  posting ||
-                  (!rescheduleForm.postpone &&
-                    (!rescheduleForm.date || !rescheduleForm.time))
-                }
-                className="flex-1 py-2.5 bg-blue-600 text-white rounded-xl text-sm font-semibold disabled:opacity-40"
-              >
-                {rescheduleForm.postpone ? "Postpone" : "Move"}
-              </button>
-            </div>
-          </div>
-        </div>
+        <RescheduleModal
+          posting={posting}
+          rescheduleConflict={rescheduleConflict}
+          rescheduleForm={rescheduleForm}
+          rescheduleOverride={rescheduleOverride}
+          reschedulingFixture={reschedulingFixture}
+          setRescheduleForm={setRescheduleForm}
+          setRescheduleOverride={setRescheduleOverride}
+          setReschedulingFixture={setReschedulingFixture}
+          submitReschedule={submitReschedule}
+        />
       )}
 
       {/* ── DECLARE WINNER MODAL ── */}
       {showDeclareWinner && (
-        <div className="fixed inset-0 z-[60] bg-black/60 flex items-center justify-center p-6">
-          <div className="w-full max-w-sm bg-white dark:bg-gray-900 rounded-2xl p-5 max-h-[90vh] overflow-y-auto">
-            <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-1">
-              🏆 Override Result
-            </h3>
-            <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">
-              A tournament sets its own champion when the fixture marked as the
-              final is decided. Use this only to correct that, or when there is no
-              final to decide it. SUPER_ADMIN only, and recorded in the audit log.
-            </p>
-
-            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
-              Champion
-            </p>
-            <div className="space-y-2 mb-4">
-              {teams.map((t: any) => (
-                <button
-                  key={t.publicId}
-                  data-testid={`override-champion-${t.publicId}`}
-                  onClick={() => setWinnerTeam(t.publicId)}
-                  className={`w-full p-3 rounded-xl border text-left transition-all ${winnerTeam === t.publicId ? "bg-yellow-50 border-yellow-400 dark:bg-yellow-900/20" : "bg-gray-50 border-gray-200 dark:bg-gray-800 dark:border-gray-700"}`}
-                >
-                  <div className="flex items-center gap-2">
-                    <div
-                      className="w-5 h-5 rounded-full"
-                      style={{ backgroundColor: t.colorHex ?? "#3b82f6" }}
-                    />
-                    <span className="text-sm font-medium text-gray-900 dark:text-gray-100">
-                      {t.name}
-                    </span>
-                    {winnerTeam === t.publicId && (
-                      <span className="ml-auto text-yellow-500">🏆</span>
-                    )}
-                  </div>
-                </button>
-              ))}
-            </div>
-            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
-              Runner-up <span className="font-normal normal-case">(optional)</span>
-            </p>
-            <select
-              data-testid="override-runner-up"
-              value={runnerUpTeam}
-              onChange={(e) => setRunnerUpTeam(e.target.value)}
-              className="w-full mb-4 px-3 py-2 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm text-gray-900 dark:text-gray-100"
-            >
-              <option value="">— none —</option>
-              {teams
-                .filter((t: any) => t.publicId !== winnerTeam)
-                .map((t: any) => (
-                  <option key={t.publicId} value={t.publicId}>
-                    {t.name}
-                  </option>
-                ))}
-            </select>
-
-            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
-              Reason <span className="text-red-500">*</span>
-            </p>
-            <textarea
-              data-testid="override-reason"
-              value={overrideReason}
-              onChange={(e) => setOverrideReason(e.target.value)}
-              rows={3}
-              placeholder="Why is the computed result being overridden?"
-              className="w-full mb-4 px-3 py-2 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm text-gray-900 dark:text-gray-100"
-            />
-
-            <div className="flex gap-3">
-              <button
-                onClick={() => setShowDeclareWinner(false)}
-                className="flex-1 py-2.5 bg-gray-100 dark:bg-gray-800 rounded-xl text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700"
-              >
-                Cancel
-              </button>
-              <button
-                data-testid="override-confirm"
-                onClick={handleDeclareWinner}
-                disabled={!winnerTeam || !overrideReason.trim() || posting}
-                className="flex-1 py-2.5 bg-yellow-600 text-white rounded-xl text-sm font-semibold disabled:opacity-40"
-              >
-                Confirm
-              </button>
-            </div>
-          </div>
-        </div>
+        <DeclareWinnerModal
+          handleDeclareWinner={handleDeclareWinner}
+          overrideReason={overrideReason}
+          posting={posting}
+          runnerUpTeam={runnerUpTeam}
+          setOverrideReason={setOverrideReason}
+          setRunnerUpTeam={setRunnerUpTeam}
+          setShowDeclareWinner={setShowDeclareWinner}
+          setWinnerTeam={setWinnerTeam}
+          teams={teams}
+          winnerTeam={winnerTeam}
+        />
       )}
 
       {/* ── EDIT FIXTURE MODAL ── */}
       {showEditFixture && editingFixture && (
-        <div
-          data-testid="edit-fixture-modal"
-          className="fixed inset-0 z-[60] bg-black/70 flex items-end"
-        >
-          <div className="w-full bg-white dark:bg-gray-900 rounded-t-2xl p-5 max-h-[85vh] overflow-y-auto">
-            <div className="w-10 h-1 bg-gray-300 rounded-full mx-auto mb-4" />
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-sm font-semibold text-gray-900 dark:text-white">
-                ✏️ Edit Fixture
-              </h3>
-              <span className="text-xs text-gray-400">
-                Round {editingFixture.roundNumber} · {editingFixture.status}
-              </span>
-            </div>
-            <div className="space-y-3">
-              <div>
-                <label className="text-xs text-gray-400 mb-1 block">
-                  Round Number
-                </label>
-                <input
-                  type="number"
-                  min={1}
-                  className="w-full px-3 py-2.5 bg-gray-100 dark:bg-gray-800 rounded-xl text-sm outline-none"
-                  value={editFixtureForm.roundNumber}
-                  onChange={(e) =>
-                    setEditFixtureForm((p) => ({
-                      ...p,
-                      roundNumber: Number(e.target.value),
-                    }))
-                  }
-                />
-              </div>
-              <div>
-                <label className="text-xs text-gray-400 mb-1 block">
-                  Home Team
-                </label>
-                <select
-                  className="w-full px-3 py-2.5 bg-gray-100 dark:bg-gray-800 rounded-xl text-sm outline-none"
-                  value={editFixtureForm.homeTeamPublicId}
-                  onChange={(e) =>
-                    setEditFixtureForm((p) => ({
-                      ...p,
-                      homeTeamPublicId: e.target.value,
-                    }))
-                  }
-                >
-                  <option value="">Select team</option>
-                  {teams.map((t: any) => (
-                    <option key={t.publicId} value={t.publicId}>
-                      {t.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="text-xs text-gray-400 mb-1 block">
-                  Away Team
-                </label>
-                <select
-                  className="w-full px-3 py-2.5 bg-gray-100 dark:bg-gray-800 rounded-xl text-sm outline-none"
-                  value={editFixtureForm.awayTeamPublicId}
-                  onChange={(e) =>
-                    setEditFixtureForm((p) => ({
-                      ...p,
-                      awayTeamPublicId: e.target.value,
-                    }))
-                  }
-                >
-                  <option value="">Select team</option>
-                  {teams
-                    .filter(
-                      (t: any) =>
-                        t.publicId !== editFixtureForm.homeTeamPublicId,
-                    )
-                    .map((t: any) => (
-                      <option key={t.publicId} value={t.publicId}>
-                        {t.name}
-                      </option>
-                    ))}
-                </select>
-              </div>
-              <div>
-                <label className="text-xs text-gray-400 mb-1 block">
-                  Venue (optional)
-                </label>
-                {venues.length > 0 && (
-                  <select
-                    className="w-full px-3 py-2.5 bg-gray-100 dark:bg-gray-800 rounded-xl text-sm outline-none mb-2"
-                    value={editFixtureForm.venueId}
-                    onChange={(e) => {
-                      const v = venues.find(
-                        (vv: any) => vv.id === e.target.value,
-                      );
-                      setEditFixtureForm((p) => ({
-                        ...p,
-                        venueId: e.target.value,
-                        venue: v?.name ?? p.venue,
-                      }));
-                    }}
-                  >
-                    <option value="">Select from tournament venues...</option>
-                    {venues.map((v: any) => (
-                      <option key={v.id} value={v.id}>
-                        {v.name}
-                      </option>
-                    ))}
-                  </select>
-                )}
-                <input
-                  type="text"
-                  className="w-full px-3 py-2.5 bg-gray-100 dark:bg-gray-800 rounded-xl text-sm outline-none"
-                  placeholder="Or type venue name..."
-                  value={editFixtureForm.venue}
-                  onChange={(e) =>
-                    setEditFixtureForm((p) => ({ ...p, venue: e.target.value }))
-                  }
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="text-xs text-gray-400 mb-1 block">
-                    Date
-                  </label>
-                  <input
-                    type="date"
-                    className="w-full px-3 py-2.5 bg-gray-100 dark:bg-gray-800 rounded-xl text-sm outline-none"
-                    value={editFixtureForm.scheduledDate}
-                    onChange={(e) =>
-                      setEditFixtureForm((p) => ({
-                        ...p,
-                        scheduledDate: e.target.value,
-                      }))
-                    }
-                  />
-                </div>
-                <div>
-                  <label className="text-xs text-gray-400 mb-1 block">
-                    Time
-                  </label>
-                  <input
-                    type="time"
-                    className="w-full px-3 py-2.5 bg-gray-100 dark:bg-gray-800 rounded-xl text-sm outline-none"
-                    value={editFixtureForm.scheduledTime}
-                    onChange={(e) =>
-                      setEditFixtureForm((p) => ({
-                        ...p,
-                        scheduledTime: e.target.value,
-                      }))
-                    }
-                  />
-                </div>
-              </div>
-              <div>
-                <label className="text-xs text-gray-400 mb-1 block">
-                  Status Override
-                </label>
-                <div className="grid grid-cols-2 gap-2">
-                  {["SCHEDULED", "IN_PROGRESS", "COMPLETED", "CANCELLED"].map(
-                    (s) => (
-                      <button
-                        key={s}
-                        onClick={() =>
-                          setEditFixtureForm((p) => ({ ...p, status: s }))
-                        }
-                        className={`py-2 rounded-xl text-xs font-semibold border transition-all active:scale-95 ${editFixtureForm.status === s ? "bg-blue-600 border-blue-600 text-white" : "bg-gray-100 dark:bg-gray-800 border-transparent text-gray-600 dark:text-gray-400"}`}
-                      >
-                        {s}
-                      </button>
-                    ),
-                  )}
-                </div>
-              </div>
-              {/* ── Scheduling and officials (Slice 4b) ── */}
-              <div className="pt-2 border-t border-gray-100 dark:border-gray-800">
-                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3 mt-3">
-                  📋 Schedule Sheet
-                </p>
-                <div className="space-y-3">
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label
-                        htmlFor="fixture-match-number"
-                        className="text-xs text-gray-400 mb-1 block"
-                      >
-                        Match Number
-                      </label>
-                      <input
-                        id="fixture-match-number"
-                        data-testid="fixture-match-number"
-                        type="number"
-                        min={1}
-                        placeholder="e.g. 14"
-                        className="w-full px-3 py-2.5 bg-gray-100 dark:bg-gray-800 rounded-xl text-sm outline-none text-gray-900 dark:text-gray-100"
-                        value={editFixtureForm.matchNumber}
-                        onChange={(e) =>
-                          setEditFixtureForm((p) => ({
-                            ...p,
-                            matchNumber: e.target.value,
-                          }))
-                        }
-                      />
-                    </div>
-                    <div>
-                      <label
-                        htmlFor="fixture-city"
-                        className="text-xs text-gray-400 mb-1 block"
-                      >
-                        City
-                      </label>
-                      <input
-                        id="fixture-city"
-                        data-testid="fixture-city"
-                        placeholder="e.g. Mysuru"
-                        className="w-full px-3 py-2.5 bg-gray-100 dark:bg-gray-800 rounded-xl text-sm outline-none text-gray-900 dark:text-gray-100"
-                        value={editFixtureForm.city}
-                        onChange={(e) =>
-                          setEditFixtureForm((p) => ({ ...p, city: e.target.value }))
-                        }
-                      />
-                    </div>
-                  </div>
-
-                  {(
-                    [
-                      ["umpire1Name", "Umpire 1", "fixture-umpire1"],
-                      ["umpire2Name", "Umpire 2", "fixture-umpire2"],
-                      ["umpire3Name", "Third Umpire", "fixture-umpire3"],
-                      ["refereeName", "Match Referee", "fixture-referee"],
-                      ["scorerName", "Scorer", "fixture-scorer"],
-                    ] as const
-                  ).map(([field, label, testId]) => (
-                    <div key={field}>
-                      <label
-                        htmlFor={testId}
-                        className="text-xs text-gray-400 mb-1 block"
-                      >
-                        {label}
-                      </label>
-                      <input
-                        id={testId}
-                        data-testid={testId}
-                        placeholder="Name"
-                        className="w-full px-3 py-2.5 bg-gray-100 dark:bg-gray-800 rounded-xl text-sm outline-none text-gray-900 dark:text-gray-100"
-                        value={editFixtureForm[field]}
-                        onChange={(e) =>
-                          setEditFixtureForm((p) => ({
-                            ...p,
-                            [field]: e.target.value,
-                          }))
-                        }
-                      />
-                    </div>
-                  ))}
-
-                  <p className="text-xs text-gray-400 -mt-1">
-                    Officials are free text on the schedule. Naming a scorer here
-                    grants no access to the scorer page.
-                  </p>
-
-                  <div>
-                    <label
-                      htmlFor="fixture-notes"
-                      className="text-xs text-gray-400 mb-1 block"
-                    >
-                      Notes
-                    </label>
-                    <textarea
-                      id="fixture-notes"
-                      data-testid="fixture-notes"
-                      rows={2}
-                      maxLength={1000}
-                      placeholder="e.g. day/night, reserve day 12th"
-                      className="w-full px-3 py-2.5 bg-gray-100 dark:bg-gray-800 rounded-xl text-sm outline-none resize-none text-gray-900 dark:text-gray-100"
-                      value={editFixtureForm.notes}
-                      onChange={(e) =>
-                        setEditFixtureForm((p) => ({ ...p, notes: e.target.value }))
-                      }
-                    />
-                  </div>
-                </div>
-              </div>
-
-              <div className="flex gap-3 pt-2">
-                <button
-                  onClick={() => {
-                    setShowEditFixture(false);
-                    setEditingFixture(null);
-                  }}
-                  className="flex-1 py-2.5 bg-gray-100 dark:bg-gray-800 rounded-xl text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleEditFixture}
-                  disabled={posting}
-                  data-testid="fixture-save"
-                  className="flex-1 py-2.5 bg-blue-600 text-white rounded-xl text-sm font-semibold disabled:opacity-40"
-                >
-                  {posting ? "Saving..." : "Save Changes"}
-                </button>
-              </div>
-              {editingFixture.status === "SCHEDULED" && (
-                <button
-                  onClick={handleDeleteFixture}
-                  disabled={posting}
-                  className="w-full py-2.5 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 border border-red-200 dark:border-red-800 rounded-xl text-sm font-semibold disabled:opacity-40 active:scale-95 transition-all"
-                >
-                  🗑 Delete Fixture
-                </button>
-              )}
-            </div>
-          </div>
-        </div>
+        <EditFixtureModal
+          editFixtureForm={editFixtureForm}
+          editingFixture={editingFixture}
+          handleDeleteFixture={handleDeleteFixture}
+          handleEditFixture={handleEditFixture}
+          posting={posting}
+          setEditFixtureForm={setEditFixtureForm}
+          setEditingFixture={setEditingFixture}
+          setShowEditFixture={setShowEditFixture}
+          teams={teams}
+          venues={venues}
+        />
       )}
 
       {/* ── ADVANCE TO PLAYOFFS MODAL ── */}
       {showAdvancePlayoffs && (
-        <div className="fixed inset-0 z-[60] bg-black/60 flex items-center justify-center p-6">
-          <div className="w-full max-w-sm bg-white dark:bg-gray-900 rounded-2xl p-5 max-h-[90vh] overflow-y-auto">
-            <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-1">
-              🏆 Advance to Playoffs
-            </h3>
-            <p className="text-xs text-gray-400 mb-4">
-              Top teams from the league stage advance to playoffs.
-            </p>
-            <div className="space-y-4">
-              <div>
-                <label className="text-xs text-gray-400 mb-1 block">
-                  Teams advancing to playoffs
-                </label>
-                <div className="grid grid-cols-4 gap-2">
-                  {[2, 3, 4, 6].map((n) => (
-                    <button
-                      key={n}
-                      onClick={() => setPlayoffTopN(n)}
-                      className={`py-2 rounded-xl text-xs font-semibold border transition-all active:scale-95 ${
-                        playoffTopN === n
-                          ? "bg-blue-600 border-blue-600 text-white"
-                          : "bg-gray-100 dark:bg-gray-800 border-transparent text-gray-600 dark:text-gray-400"
-                      }`}
-                    >
-                      Top {n}
-                    </button>
-                  ))}
-                </div>
-              </div>
-              <div>
-                <label className="text-xs text-gray-400 mb-1 block">
-                  Bracket Type
-                </label>
-                <div className="grid grid-cols-2 gap-2">
-                  {[
-                    {
-                      val: "IPL",
-                      label: "🏏 IPL Fixed",
-                      desc: "Q1, Eliminator, Q2, Final",
-                    },
-                    {
-                      val: "CUSTOM",
-                      label: "⚙️ Custom",
-                      desc: "Admin sets each round",
-                    },
-                  ].map(({ val, label, desc }) => (
-                    <button
-                      key={val}
-                      onClick={() => setPlayoffBracketType(val)}
-                      className={`p-2.5 rounded-xl border text-left transition-all active:scale-95 ${
-                        playoffBracketType === val
-                          ? "bg-blue-50 dark:bg-blue-900/20 border-blue-300 dark:border-blue-700"
-                          : "bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700"
-                      }`}
-                    >
-                      <div className="text-xs font-semibold text-gray-900 dark:text-gray-100">
-                        {label}
-                      </div>
-                      <div className="text-xs text-gray-400 mt-0.5">{desc}</div>
-                    </button>
-                  ))}
-                </div>
-              </div>
-              {playoffTopN === 4 && playoffBracketType === "IPL" && (
-                <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-100 dark:border-blue-900 rounded-xl px-3 py-2.5 text-xs text-blue-600 dark:text-blue-400">
-                  <strong>IPL bracket:</strong> Qualifier 1 (1v2) + Eliminator
-                  (3v4) will be created. Q2 and Final are added after results.
-                </div>
-              )}
-              <div className="flex gap-3 pt-1">
-                <button
-                  onClick={() => setShowAdvancePlayoffs(false)}
-                  className="flex-1 py-2.5 bg-gray-100 dark:bg-gray-800 rounded-xl text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleAdvancePlayoffs}
-                  disabled={posting}
-                  className="flex-1 py-2.5 bg-purple-600 text-white rounded-xl text-sm font-semibold disabled:opacity-40"
-                >
-                  {posting ? "Generating..." : "Generate Playoffs"}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
+        <AdvancePlayoffsModal
+          handleAdvancePlayoffs={handleAdvancePlayoffs}
+          playoffBracketType={playoffBracketType}
+          playoffTopN={playoffTopN}
+          posting={posting}
+          setPlayoffBracketType={setPlayoffBracketType}
+          setPlayoffTopN={setPlayoffTopN}
+          setShowAdvancePlayoffs={setShowAdvancePlayoffs}
+        />
       )}
 
       {showAddVenue && (
-        <div className="fixed inset-0 z-[60] bg-black/60 flex items-end">
-          <div className="w-full bg-white dark:bg-gray-900 rounded-t-2xl p-5 max-h-[90vh] overflow-y-auto">
-            <div className="w-10 h-1 bg-gray-300 rounded-full mx-auto mb-4" />
-            <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-4">
-              🏟 Add Venue
-            </h3>
-            <div className="space-y-3">
-              <div>
-                <label className="text-xs text-gray-400 mb-1 block">
-                  Ground Name *
-                </label>
-                <input
-                  type="text"
-                  className="w-full px-3 py-2.5 bg-gray-100 dark:bg-gray-800 rounded-xl text-sm outline-none"
-                  placeholder="e.g. NCA Ground A"
-                  value={venueForm.name}
-                  onChange={(e) =>
-                    setVenueForm((p) => ({ ...p, name: e.target.value }))
-                  }
-                />
-              </div>
-              <div>
-                <label className="text-xs text-gray-400 mb-1 block">
-                  Max Matches per Day
-                </label>
-                <input
-                  type="number"
-                  min={1}
-                  max={10}
-                  className="w-full px-3 py-2.5 bg-gray-100 dark:bg-gray-800 rounded-xl text-sm outline-none text-center"
-                  value={venueForm.maxMatchesPerDay}
-                  onChange={(e) =>
-                    setVenueForm((p) => ({
-                      ...p,
-                      maxMatchesPerDay: Number(e.target.value),
-                    }))
-                  }
-                />
-              </div>
-              <div className="flex gap-3 pt-2">
-                <button
-                  onClick={() => setShowAddVenue(false)}
-                  className="flex-1 py-2.5 bg-gray-100 dark:bg-gray-800 rounded-xl text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleAddVenue}
-                  disabled={posting || !venueForm.name.trim()}
-                  className="flex-1 py-2.5 bg-blue-600 text-white rounded-xl text-sm font-semibold disabled:opacity-40"
-                >
-                  Add Venue
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
+        <AddVenueModal
+          handleAddVenue={handleAddVenue}
+          posting={posting}
+          setShowAddVenue={setShowAddVenue}
+          setVenueForm={setVenueForm}
+          venueForm={venueForm}
+        />
       )}
 
       {showAddOfficial && (
-        <div className="fixed inset-0 z-[60] bg-black/60 flex items-end">
-          <div className="w-full bg-white dark:bg-gray-900 rounded-t-2xl p-5 max-h-[90vh] overflow-y-auto">
-            <div className="w-10 h-1 bg-gray-300 rounded-full mx-auto mb-4" />
-            <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-4">
-              🦺 Add Match Official
-            </h3>
-            <div className="space-y-3">
-              <div>
-                <label className="text-xs text-gray-400 mb-1 block">
-                  Name *
-                </label>
-                <input
-                  type="text"
-                  className="w-full px-3 py-2.5 bg-gray-100 dark:bg-gray-800 rounded-xl text-sm outline-none"
-                  placeholder="e.g. Ravi Kumar"
-                  value={officialForm.name}
-                  onChange={(e) =>
-                    setOfficialForm((p) => ({ ...p, name: e.target.value }))
-                  }
-                />
-              </div>
-              <div>
-                <label className="text-xs text-gray-400 mb-2 block">Role</label>
-                <div className="grid grid-cols-3 gap-2">
-                  {OFFICIAL_ROLES.map((role) => (
-                    <button
-                      key={role}
-                      onClick={() => setOfficialForm((p) => ({ ...p, role }))}
-                      className={`py-2 rounded-xl text-xs font-semibold border transition-all active:scale-95 ${
-                        officialForm.role === role
-                          ? "bg-blue-600 border-blue-600 text-white"
-                          : "bg-gray-100 dark:bg-gray-800 border-transparent text-gray-600 dark:text-gray-400"
-                      }`}
-                    >
-                      {OFFICIAL_ROLE_LABELS[role]}
-                    </button>
-                  ))}
-                </div>
-              </div>
-              <div className="flex gap-3 pt-2">
-                <button
-                  onClick={() => setShowAddOfficial(false)}
-                  className="flex-1 py-2.5 bg-gray-100 dark:bg-gray-800 rounded-xl text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleAddOfficial}
-                  disabled={posting || !officialForm.name.trim()}
-                  className="flex-1 py-2.5 bg-blue-600 text-white rounded-xl text-sm font-semibold disabled:opacity-40"
-                >
-                  Add Official
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
+        <AddOfficialModal
+          handleAddOfficial={handleAddOfficial}
+          officialForm={officialForm}
+          posting={posting}
+          setOfficialForm={setOfficialForm}
+          setShowAddOfficial={setShowAddOfficial}
+        />
       )}
 
       {toast && (

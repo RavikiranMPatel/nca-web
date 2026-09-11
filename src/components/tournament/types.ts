@@ -89,3 +89,51 @@ export interface EditFixtureForm {
   scorerName: string;
   notes: string;
 }
+
+/**
+ * The four small forms the Slice 5 modal split pushed across a component
+ * boundary.
+ *
+ * Same reason SettingsForm, GenForm and EditFixtureForm above are named: a type
+ * inferred from a useState initialiser is fine while the JSX lives in the same
+ * function, but once the setter is a prop it can only be typed
+ * Dispatch<SetStateAction<ApiRecord>> — and ApiRecord is any, which silently
+ * strips the contextual type from every setForm((p) => ...) updater inside the
+ * modal. That is 37 implicit-any parameters across the ten files if these are
+ * left unnamed, measured rather than guessed.
+ */
+export interface TeamForm {
+  name: string;
+  shortName: string;
+  colorHex: string;
+  groupName: string;
+}
+
+export interface VenueForm {
+  name: string;
+  maxMatchesPerDay: number;
+}
+
+export interface OfficialForm {
+  name: string;
+  role: string;
+}
+
+/** The Add Fixture form — distinct from EditFixtureForm, which carries more. */
+export interface ManualFixtureForm {
+  stagePublicId: string;
+  homeTeamPublicId: string;
+  awayTeamPublicId: string;
+  venue: string;
+  venueId: string;
+  scheduledDate: string;
+  scheduledTime: string;
+}
+
+/** Reschedule / postpone. postpone true means "no new slot", not "move to now". */
+export interface RescheduleForm {
+  date: string;
+  time: string;
+  reason: string;
+  postpone: boolean;
+}
