@@ -63,6 +63,30 @@ export const getStandings = (publicId: string) =>
 
 // The champion is DERIVED from the fixtures. There is no winnerTeamPublicId:
 // declareWinner used to take one from a picker and the backend discarded it.
+// The six Overview figures that need the server. The other six are counted in
+// the browser from data loadAll already fetches.
+export type NamedFigure = {
+  playerPublicId: string;
+  playerName: string;
+  teamName: string;
+  value: number;
+};
+export const getOverview = (publicId: string) =>
+  api
+    .get<{
+      totalRuns: number;
+      totalWickets: number;
+      highestTeamScore: {
+        teamName: string;
+        runs: number;
+        wickets: number;
+      } | null;
+      highestIndividualScore: NamedFigure | null;
+      topRunScorer: NamedFigure | null;
+      topWicketTaker: NamedFigure | null;
+    }>(`/admin/cricket/tournaments/${publicId}/overview`)
+    .then((r) => r.data);
+
 export const getChampion = (publicId: string) =>
   api
     .get<{

@@ -12,6 +12,7 @@ import {
   getStandings,
   updateTournamentStatus,
   getChampion,
+  getOverview,
   completeTournament,
   advanceToKnockout,
   advanceToPlayoffs,
@@ -164,6 +165,7 @@ export default function TournamentDetailPage() {
     scheduledTime: "",
   });
 
+  const [overview, setOverview] = useState<any | null>(null);
   const [showComplete, setShowComplete] = useState(false);
   const [champion, setChampion] = useState<{
     championName: string | null;
@@ -253,13 +255,16 @@ export default function TournamentDetailPage() {
     if (!publicId) return;
     setLoading(true);
     try {
-      const [t, tm, st, fx, sd, tp] = await Promise.all([
+      const [t, tm, st, fx, sd, tp, ov] = await Promise.all([
         getTournament(publicId),
         listTeams(publicId),
         listStages(publicId),
         listFixtures(publicId),
         getStandings(publicId),
         getAllTournamentPlayers(publicId),
+        // Only the six figures that need the server; the other six cards are
+        // counted below from teams, fixtures and standings, already in hand.
+        getOverview(publicId).catch(() => null),
       ]);
       setTournament(t);
       setTeams(tm);
@@ -267,6 +272,7 @@ export default function TournamentDetailPage() {
       setFixtures(fx);
       setStandings(sd);
       setAllTournamentPlayers(tp);
+      setOverview(ov);
       setSettingsForm({
         oversPerInnings: t.oversPerInnings ?? 20,
         minsPerOver: t.minsPerOver ?? 4.5,
@@ -978,6 +984,123 @@ export default function TournamentDetailPage() {
         {/* ── OVERVIEW ── */}
         {tab === 0 && (
           <div className="space-y-4">
+            {/* ── DASHBOARD CARDS ──
+                Eight numeric tiles in a 2-col grid, then four full-width rows
+                for the cards that carry a NAME. Names do not fit a half-width
+                tile at 380px — the standings table already proved that
+                "Jayalakshmipuram Jaguars" needs room to wrap. */}
+            <div className="grid grid-cols-2 gap-2">
+              {(() => {
+                const byStatus = (...ss: string[]) =>
+                  fixtures.filter((f: any) => ss.includes(f.status)).length;
+                const hts = overview?.highestTeamScore;
+                return [
+                  { label: "Teams", value: teams.length },
+                  { label: "Matches", value: fixtures.length },
+                  { label: "Completed", value: byStatus("COMPLETED") },
+                  {
+                    label: "Upcoming",
+                    value: byStatus("SCHEDULED", "POSTPONED"),
+                  },
+                  { label: "Live", value: byStatus("IN_PROGRESS"), live: true },
+                  { label: "Total Runs", value: overview?.totalRuns ?? "—" },
+                  {
+                    label: "Total Wickets",
+                    value: overview?.totalWickets ?? "—",
+                  },
+                  {
+                    label: "Highest Team Score",
+                    value: hts ? `${hts.runs}/${hts.wickets}` : "—",
+                    sub: hts?.teamName,
+                  },
+                ].map((c: any) => (
+                  <div
+                    key={c.label}
+                    className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-800 px-3 py-2.5"
+                  >
+                    <div className="text-[10px] uppercase tracking-wide text-gray-400 leading-tight break-words">
+                      {c.label}
+                    </div>
+                    <div
+                      className={`text-xl font-bold tabular-nums mt-0.5 ${
+                        c.live && c.value > 0
+                          ? "text-red-500"
+                          : "text-gray-900 dark:text-white"
+                      }`}
+                    >
+                      {c.value}
+                    </div>
+                    {c.sub && (
+                      <div className="text-[11px] text-gray-400 leading-tight break-words">
+                        {c.sub}
+                      </div>
+                    )}
+                  </div>
+                ));
+              })()}
+            </div>
+
+            {/* Name-carrying cards: full width so a long player or team name
+                wraps instead of being clipped. */}
+            <div className="space-y-2">
+              {[
+                {
+                  label: "Current Leader",
+                  icon: "🥇",
+                  name: standings[0]?.teamName,
+                  sub: standings[0]
+                    ? `${standings[0].points} pts · NRR ${Number(standings[0].nrr).toFixed(3)}`
+                    : null,
+                },
+                {
+                  label: "Top Run Scorer",
+                  icon: "🏏",
+                  name: overview?.topRunScorer?.playerName,
+                  sub: overview?.topRunScorer
+                    ? `${overview.topRunScorer.value} runs · ${overview.topRunScorer.teamName}`
+                    : null,
+                },
+                {
+                  label: "Top Wicket Taker",
+                  icon: "🎯",
+                  name: overview?.topWicketTaker?.playerName,
+                  sub: overview?.topWicketTaker
+                    ? `${overview.topWicketTaker.value} wickets · ${overview.topWicketTaker.teamName}`
+                    : null,
+                },
+                {
+                  label: "Highest Individual Score",
+                  icon: "⭐",
+                  name: overview?.highestIndividualScore?.playerName,
+                  sub: overview?.highestIndividualScore
+                    ? `${overview.highestIndividualScore.value} runs · ${overview.highestIndividualScore.teamName}`
+                    : null,
+                },
+              ].map((c) => (
+                <div
+                  key={c.label}
+                  className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-800 px-3 py-2.5 flex items-start gap-2.5"
+                >
+                  <span className="text-lg leading-none mt-0.5 flex-shrink-0">
+                    {c.icon}
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <div className="text-[10px] uppercase tracking-wide text-gray-400">
+                      {c.label}
+                    </div>
+                    <div className="text-sm font-semibold text-gray-900 dark:text-white leading-tight break-words">
+                      {c.name ?? "—"}
+                    </div>
+                    {c.sub && (
+                      <div className="text-[11px] text-gray-400 leading-tight break-words">
+                        {c.sub}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+
             <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-800 divide-y divide-gray-100 dark:divide-gray-800">
               {[
                 {
