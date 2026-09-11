@@ -886,6 +886,7 @@ export default function TournamentDetailPage() {
           {TABS.map((t, i) => (
             <button
               key={t}
+              data-testid={`tournament-tab-${t.toLowerCase()}`}
               onClick={() => setTab(i)}
               className={`px-3 py-2 text-xs font-medium border-b-2 transition-colors flex-shrink-0 ${tab === i ? "border-blue-600 text-blue-600" : "border-transparent text-gray-500"}`}
             >
@@ -907,7 +908,7 @@ export default function TournamentDetailPage() {
       <div className="px-4 pt-4 max-w-2xl mx-auto">
         {/* ── OVERVIEW ── */}
         {tab === 0 && (
-          <div className="space-y-4">
+          <div data-testid="tournament-panel-overview" className="space-y-4">
             <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-800 divide-y divide-gray-100 dark:divide-gray-800">
               {[
                 {
@@ -946,7 +947,7 @@ export default function TournamentDetailPage() {
 
         {/* ── TEAMS ── */}
         {tab === 1 && (
-          <div className="space-y-3">
+          <div data-testid="tournament-panel-teams" className="space-y-3">
             <div className="flex justify-between items-center">
               <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
                 {teams.length} teams
@@ -1123,7 +1124,7 @@ export default function TournamentDetailPage() {
 
         {/* ── PLAYERS ── */}
         {tab === 2 && (
-          <div className="space-y-4">
+          <div data-testid="tournament-panel-players" className="space-y-4">
             <div className="flex items-center justify-between">
               <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
                 {allTournamentPlayers.length} players across {teams.length}{" "}
@@ -1202,7 +1203,7 @@ export default function TournamentDetailPage() {
 
         {/* ── VENUES ── */}
         {tab === 3 && (
-          <div className="space-y-3">
+          <div data-testid="tournament-panel-venues" className="space-y-3">
             <div className="flex justify-between items-center">
               <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
                 {venues.length} venue{venues.length !== 1 ? "s" : ""}
@@ -1338,7 +1339,7 @@ export default function TournamentDetailPage() {
 
         {/* ── MATCH OFFICIALS ── */}
         {tab === 4 && (
-          <div className="space-y-3">
+          <div data-testid="tournament-panel-officials" className="space-y-3">
             <div className="flex justify-between items-center">
               <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
                 {officialsPool.length} official
@@ -1415,7 +1416,7 @@ export default function TournamentDetailPage() {
 
         {/* ── FIXTURES ── */}
         {tab === 5 && (
-          <div className="space-y-4">
+          <div data-testid="tournament-panel-fixtures" className="space-y-4">
             <div className="flex gap-2 flex-wrap">
               <button
                 onClick={() => {
@@ -1728,7 +1729,7 @@ export default function TournamentDetailPage() {
 
         {/* ── STANDINGS ── */}
         {tab === 6 && (
-          <div>
+          <div data-testid="tournament-panel-standings">
             {standings.length === 0 ? (
               <div className="text-center py-12">
                 <div className="text-3xl mb-2">📊</div>
@@ -1817,7 +1818,7 @@ export default function TournamentDetailPage() {
 
         {/* ── STATS (NEW) ── */}
         {tab === 7 && (
-          <div className="space-y-4">
+          <div data-testid="tournament-panel-stats" className="space-y-4">
             {/* Sub-tab selector */}
             <div className="flex bg-gray-100 dark:bg-gray-800 rounded-xl p-1 gap-1">
               {(["batting", "bowling", "mvp"] as const).map((s) => (
@@ -2113,7 +2114,7 @@ export default function TournamentDetailPage() {
 
         {/* ── SETTINGS ── */}
         {tab === 8 && (
-          <div className="space-y-5">
+          <div data-testid="tournament-panel-settings" className="space-y-5">
             {/* Match Format */}
             <div className="bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 rounded-2xl p-4 space-y-4">
               <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
