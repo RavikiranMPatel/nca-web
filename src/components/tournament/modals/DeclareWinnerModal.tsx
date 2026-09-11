@@ -37,7 +37,10 @@ export default function DeclareWinnerModal({
   winnerTeam,
 }: Props) {
   return (
-      <div className="fixed inset-0 z-[60] bg-black/60 flex items-center justify-center p-6">
+      <div
+        data-testid="declare-winner-modal"
+        className="fixed inset-0 z-[60] bg-black/60 flex items-center justify-center p-6"
+      >
         <div className="w-full max-w-sm bg-white dark:bg-gray-900 rounded-2xl p-5 max-h-[90vh] overflow-y-auto">
           <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-1">
             🏆 Override Result

@@ -28,7 +28,10 @@ export default function AddOfficialModal({
   setShowAddOfficial,
 }: Props) {
   return (
-      <div className="fixed inset-0 z-[60] bg-black/60 flex items-end">
+      <div
+        data-testid="add-official-modal"
+        className="fixed inset-0 z-[60] bg-black/60 flex items-end"
+      >
         <div className="w-full bg-white dark:bg-gray-900 rounded-t-2xl p-5 max-h-[90vh] overflow-y-auto">
           <div className="w-10 h-1 bg-gray-300 rounded-full mx-auto mb-4" />
           <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-4">

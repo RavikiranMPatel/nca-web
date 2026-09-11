@@ -71,6 +71,7 @@ export default function FixturesTab({
       <div data-testid="tournament-panel-fixtures" className="space-y-4">
         <div className="flex gap-2 flex-wrap">
           <button
+            data-testid="tournament-generate-fixtures"
             onClick={() => {
               setGenForm((p) => ({
                 ...p,
@@ -116,6 +117,7 @@ export default function FixturesTab({
             </button>
           )}
           <button
+            data-testid="tournament-add-fixture-manual"
             onClick={() => setShowManualFixture(true)}
             className="px-3 py-1.5 bg-gray-700 text-white text-xs font-semibold rounded-xl active:scale-95"
           >
@@ -151,6 +153,7 @@ export default function FixturesTab({
               return (
                 <div className="flex flex-col items-start gap-1">
                   <button
+                    data-testid="tournament-advance-playoffs"
                     onClick={() => {
                       if (!allLeagueCompleted) return;
                       setShowAdvancePlayoffs(true);

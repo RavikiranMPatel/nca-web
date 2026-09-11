@@ -56,7 +56,10 @@ export default function AddPlayerModal({
   setSelectedRole,
 }: Props) {
   return (
-      <div className="fixed inset-0 z-[60] bg-black/70 flex items-end">
+      <div
+        data-testid="add-player-modal"
+        className="fixed inset-0 z-[60] bg-black/70 flex items-end"
+      >
         <div className="w-full bg-white dark:bg-gray-900 rounded-t-2xl max-h-[90vh] overflow-hidden flex flex-col">
           <div className="p-4 border-b border-gray-100 dark:border-gray-800">
             <div className="w-10 h-1 bg-gray-300 rounded-full mx-auto mb-3" />

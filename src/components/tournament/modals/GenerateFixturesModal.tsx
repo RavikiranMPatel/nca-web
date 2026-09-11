@@ -36,7 +36,10 @@ export default function GenerateFixturesModal({
   venues,
 }: Props) {
   return (
-      <div className="fixed inset-0 z-[60] bg-black/60 flex items-end">
+      <div
+        data-testid="generate-fixtures-modal"
+        className="fixed inset-0 z-[60] bg-black/60 flex items-end"
+      >
         <div className="w-full bg-white dark:bg-gray-900 rounded-t-2xl max-h-[90vh] overflow-y-auto">
           <div className="p-5">
             <div className="w-10 h-1 bg-gray-300 rounded-full mx-auto mb-4" />

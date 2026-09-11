@@ -30,6 +30,7 @@ export default function OfficialsTab({
             {officialsPool.length !== 1 ? "s" : ""} in pool
           </span>
           <button
+            data-testid="tournament-add-official"
             onClick={() => setShowAddOfficial(true)}
             className="px-3 py-1.5 bg-blue-600 text-white text-xs font-semibold rounded-xl active:scale-95"
           >

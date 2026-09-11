@@ -39,6 +39,7 @@ export default function TeamsTab({
             {teams.length} teams
           </span>
           <button
+            data-testid="tournament-add-team"
             onClick={() => setShowAddTeam(true)}
             className="px-3 py-1.5 bg-blue-600 text-white text-xs font-semibold rounded-xl active:scale-95"
           >
@@ -122,6 +123,7 @@ export default function TeamsTab({
                       Squad ({squad.length}/20)
                     </span>
                     <button
+                      data-testid={`tournament-add-player-${team.publicId}`}
                       onClick={() => openAddPlayer(team.publicId)}
                       className="px-2.5 py-1 bg-blue-600 text-white text-xs font-semibold rounded-lg active:scale-95"
                     >
