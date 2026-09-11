@@ -1868,3 +1868,145 @@ be incremented by the database in one statement — `UPDATE … SET value =
 (value::int + 1)::text WHERE … RETURNING value` — or held under a real row lock.
 That is a change in the player/settings module, not the tournament one, which is
 why it is logged here rather than fixed in passing.
+
+---
+
+## BUG-34 — see PROGRESS.md
+
+Recorded in `nextgen-cricket-academy/docs/tournament/PROGRESS.md` under Slice 4b:
+the Lombok/Jackson `is*` boolean naming trap, audited across both repos. Noted
+here only so the numbering does not appear to skip.
+
+---
+
+## BUG-35 — A player's career statistics were readable by anyone, from any academy
+
+**Found:** Slice 5 pre-work, reading `TournamentStatsService` before editing it.
+**Status:** fixed — the endpoint is deleted.
+
+`GET /api/public/players/{playerPublicId}/career-stats` returned a player's full
+batting, bowling and fielding career figures with **no token at all**.
+`SecurityConfig:68` permits `/api/public/**` wholesale, and the handler —
+`TournamentStatsController:57` → `TournamentStatsService.getPlayerCareerStats(String)`
+— took no `User` and performed no academy check. Its three siblings in the same
+class all went through `TournamentAccessGuard.requireParticipant`.
+
+Measured, not inferred: a `curl` with no `Authorization` header returned `200`
+and a complete body.
+
+It also had **zero consumers**. `PlayerStatsPage.tsx:471-473` reads
+`/admin/cricket-stats/{id}`, `/admin/players/{id}/info` and
+`/public/cricket-stats/player/{id}` — all served by `CareerStatsService`, a
+separate implementation that resolves the player properly first. Nothing in
+`nca-web/src` or `nca-web/e2e` referenced `career-stats` at all.
+
+So it was a dead duplicate that leaked across tenants, and CLAUDE.md hard rule 2
+says to delete an unscoped method once its callers are gone rather than leave it
+declared. Deleted with the user's explicit agreement, since removing a public
+HTTP endpoint is an API-surface decision.
+
+---
+
+## BUG-36 — The points table cost one extra query per match played
+
+**Found:** Slice 5, by the query-count guard written for the dashboard.
+**Status:** fixed.
+
+`InningsRepository.findAllByMatchIdIn` returned innings with `battingTeam` and
+`bowlingTeam` LAZY, and **every** consumer immediately asks which tournament team
+an innings belongs to — `TournamentService.playsAs` for the points table,
+`TournamentStatisticsService.teamRows` for the team leaderboard. Each of those is
+one query per `CricketTeam`.
+
+Measured by `TournamentDashboardQueryCountTest` on its first run with innings
+seeded:
+
+| tournament | statements |
+|---|---|
+| 2 teams, 1 fixture | 13 |
+| 10 teams, 20 fixtures | **51** |
+
+51 − 13 = 38, which is exactly the 38 additional `cricket_teams` rows. With a
+`LEFT JOIN FETCH` of both sides and their `tournamentTeam`, both are **11**.
+
+This predates Slice 5 by a long way — the points table has always paid it — and
+it was invisible because nothing counted queries. The test asserts *invariance*
+first (same count at either size) and pins the exact number second, so the
+regression cannot return quietly.
+
+---
+
+## BUG-37 — `save()` returns a copy, so a just-created entity has no publicId
+
+**Found:** Slice 5, building the awards endpoints.
+**Status:** fixed in the award service; **the trap is codebase-wide and unaudited.**
+
+`POST /awards` returned `{"publicId": null, ...}` while the row in the database
+had a `public_id`, and the audit row was written with a null `entityId`. The
+client therefore could not address the award it had just created.
+
+`BaseEntity` declares `@Version private Integer version = 0` — a **boxed** type
+with a **non-null initialiser**. Spring Data's `JpaMetamodelEntityInformation`
+decides whether an entity is new from the version when one is present, sees `0`
+rather than `null`, concludes the entity is **not** new, and calls `em.merge()`.
+`merge()` returns a managed **copy** and leaves the instance it was handed
+detached — so the id and publicId that `BaseEntity.@PrePersist` generates land on
+the copy, and the original still reads null.
+
+Fixed by using the return value: `award = awardRepo.saveAndFlush(award)`.
+
+**The wider risk is not fixed.** Any service in this codebase that calls
+`save()` on a `BaseEntity` subclass and then reads the id or publicId off the
+*argument* has the same defect. It is invisible on an update path — there the
+entity came from the database already carrying both — which is exactly why it
+survives. Worth a grep-and-audit of its own.
+
+---
+
+## BUG-38 — Twenty-eight response DTOs put a tenant id or a user's email on the wire
+
+**Found:** Slice 5, by `ResponseDtoLeakTest` on its first run.
+**Status:** reported, **not fixed**. Pinned so it cannot grow.
+
+`BaseEntity` fills `createdBy` and `updatedBy` from the authentication
+principal's name, which in this codebase is an **email address**. Twenty-three
+response DTOs across the club, enquiry, player-development, CMS and season
+modules serialise one or both, so each publishes the address of whoever last
+touched the row to anyone who can read it. Five more carry `branchId` on
+responses that are already academy-scoped — an unnecessary internal id rather
+than a cross-tenant leak.
+
+Thirteen further hits are legitimate and listed as `ALLOWED` with reasons:
+request bodies (a tenant id on the way *in* is not a leak), platform-level
+surfaces where the academy *is* the subject, `AuthResponse` telling a caller its
+own identity back, and `AuditLogDTO`, which exists to show these columns.
+
+Not fixed here because the fix spans five modules with nothing to do with
+tournaments and would have made Slice 5 unreviewable. `KNOWN_PRE_EXISTING` in
+`ResponseDtoLeakTest` holds the list, a second test asserts it only ever gets
+**shorter**, and anything new fails immediately.
+
+---
+
+## BUG-39 — An unmapped URL returns 500, not 404
+
+**Found:** Slice 5, verifying that BUG-35's endpoint was gone.
+**Status:** reported, not fixed.
+
+Requesting a path with no handler produces
+`org.springframework.web.servlet.resource.NoResourceFoundException`, which
+`GlobalExceptionHandler` has no specific handler for, so it falls through to the
+catch-all `@ExceptionHandler(Exception.class)` and becomes **500 Internal Server
+Error** with "Something went wrong" — plus a full stack trace in the log for
+every typo'd URL.
+
+Confirmed against the running app: `GET /api/public/players/{id}/career-stats`
+after its deletion returned `500`, and the log line is
+`Unhandled exception: No static resource api/public/players/…/career-stats.`
+
+The same family as the `ResponseStatusException` problem `multi-tenancy.md`
+already records ("Confirm error paths return the right status"). The fix is a
+two-line `@ExceptionHandler(NoResourceFoundException.class)` returning 404, but
+it changes the response of **every** unmapped URL in the application, so it
+belongs in its own change with its own check of what currently asserts 500 —
+not bundled into a tournament slice.
