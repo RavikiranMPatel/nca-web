@@ -1,16 +1,32 @@
-import api from "../../api/axios";
+import api, { SCORING_WRITE_TIMEOUT_MS } from "../../api/axios";
 import type { BallRequest, BallResponse, Delivery } from "../../types/scoring";
 
 const BASE = (matchId: string) => `/admin/cricket/matches/${matchId}/scoring`;
 
+// 12s, not the 30s default: a scorer mid-over needs an answer, and LiveScorerPage
+// reconciles against GET /state on failure, so timing out early yields a correct
+// answer rather than the old "did that land?" ambiguity.
 export const postBall = (matchId: string, req: BallRequest) =>
-  api.post<BallResponse>(`${BASE(matchId)}/ball`, req).then((r) => r.data);
+  api
+    .post<BallResponse>(`${BASE(matchId)}/ball`, req, {
+      timeout: SCORING_WRITE_TIMEOUT_MS,
+    })
+    .then((r) => r.data);
 
 export const undoLastBall = (matchId: string) =>
-  api.delete<BallResponse>(`${BASE(matchId)}/ball/last`).then((r) => r.data);
+  api
+    .delete<BallResponse>(`${BASE(matchId)}/ball/last`, {
+      timeout: SCORING_WRITE_TIMEOUT_MS,
+    })
+    .then((r) => r.data);
 
+// The reconcile read. Same short budget — it runs when the scorer is already waiting.
 export const getScoringState = (matchId: string) =>
-  api.get<BallResponse>(`${BASE(matchId)}/state`).then((r) => r.data);
+  api
+    .get<BallResponse>(`${BASE(matchId)}/state`, {
+      timeout: SCORING_WRITE_TIMEOUT_MS,
+    })
+    .then((r) => r.data);
 
 export const getThisOver = (matchId: string) =>
   api.get<Delivery[]>(`${BASE(matchId)}/this-over`).then((r) => r.data);

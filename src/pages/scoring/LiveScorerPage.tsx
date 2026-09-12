@@ -258,6 +258,20 @@ export default function LiveScorerPage() {
   const [loading, setLoading] = useState(true);
   const [posting, setPosting] = useState(false);
   const [error, setError] = useState("");
+  /**
+   * How a failed write was resolved against the server.
+   *
+   * A failed post used to leave the scorer with an unchanged score and a message that
+   * could mean either "the server never got it" or "the server recorded it and the
+   * reply was lost". Those look identical and the natural response to both is to tap
+   * again — which posts a second ball that the backend accepts as a legitimate next
+   * delivery (sequence_number is a fresh global nextval, so no constraint catches it).
+   *
+   * After a failure we now ask the server what it actually holds and say which happened.
+   */
+  const [errorKind, setErrorKind] = useState<
+    "plain" | "not-recorded" | "recorded" | "unknown"
+  >("plain");
   const [toast, setToast] = useState<string | null>(null);
   const [lastOverNumber, setLastOverNumber] = useState(1);
   const [showPenalty, setShowPenalty] = useState(false);
@@ -514,7 +528,7 @@ export default function LiveScorerPage() {
         /* no innings yet */
       }
     } catch {
-      setError("Failed to load match");
+      showError("Failed to load match");
     } finally {
       setLoading(false);
       loadingRef.current = false;
@@ -599,6 +613,49 @@ export default function LiveScorerPage() {
     }
   };
 
+  /**
+   * Did the innings move? Every kind of ball advances at least one of these:
+   * a dot advances totalBalls, a wide adds a run without advancing balls, a wicket
+   * advances wickets. So a change here means the server took the delivery.
+   */
+  /**
+   * Every error goes through here so errorKind can never describe a previous failure.
+   * The reconcile paths set the kind explicitly; everything else is a plain message.
+   */
+  const showError = (msg: string) => {
+    setErrorKind("plain");
+    setError(msg);
+  };
+
+  const inningsFingerprint = (s: InningsState | null | undefined) =>
+    s ? `${s.totalRuns}/${s.totalWickets}/${s.totalBalls}` : "none";
+
+  /**
+   * Ask the server what it actually holds, adopt it, and report which of the three
+   * things happened. GET /state returns the same DTO postBall does and its own comment
+   * says it is for reconnect — loadAll() already adopts it wholesale on mount, bfcache
+   * restore, innings close and substitute. The one trigger it was missing is this one:
+   * the moment the client knows its picture may be wrong.
+   *
+   * Never guesses. If the reconcile itself fails the scorer is told that, because
+   * "I could not check" and "it did not happen" are different facts.
+   */
+  const reconcileAfterFailedWrite = async (
+    before: string,
+  ): Promise<"recorded" | "not-recorded" | "unknown"> => {
+    if (!matchId) return "unknown";
+    try {
+      const fresh = await getScoringState(matchId);
+      applyState(fresh);
+      await refreshOver();
+      return inningsFingerprint(fresh.inningsState) !== before
+        ? "recorded"
+        : "not-recorded";
+    } catch {
+      return "unknown";
+    }
+  };
+
   const refreshOver = useCallback(async () => {
     if (!matchId) return;
     try {
@@ -613,7 +670,7 @@ export default function LiveScorerPage() {
 
   const score = async (runs: number, extra?: string, extraRuns = 1) => {
     if (!matchId || !striker || !nonStriker || !bowler) {
-      setError(
+      showError(
         overJustEnded
           ? "Over complete — select a new bowler before continuing"
           : "Set striker, non-striker and bowler first",
@@ -623,6 +680,9 @@ export default function LiveScorerPage() {
     if (posting) return;
     setPosting(true);
     setError("");
+    setErrorKind("plain");
+    // Snapshot before the write so a failure can be resolved against the server.
+    const before = inningsFingerprint(innings);
 
     const isLegalBall = !extra || !["WIDE", "NO_BALL"].includes(extra);
     const prevOverNumber = innings?.overNumber ?? 1;
@@ -706,7 +766,24 @@ export default function LiveScorerPage() {
           ? e.message
           : ((e as { response?: { data?: { message?: string } } })?.response
               ?.data?.message ?? "Failed to post ball");
-      setError(msg);
+
+      // A 4xx is the server answering, not a lost reply — it explained why it refused
+      // and nothing was written, so there is nothing to reconcile against.
+      const status = (e as { response?: { status?: number } })?.response?.status;
+      if (status && status >= 400 && status < 500) {
+        setErrorKind("plain");
+        showError(msg);
+      } else {
+        const outcome = await reconcileAfterFailedWrite(before);
+        setErrorKind(outcome);
+        setError(
+          outcome === "recorded"
+            ? "That ball WAS recorded. The score below is correct — do not tap again."
+            : outcome === "not-recorded"
+              ? "Not recorded — tap again."
+              : "Couldn't reach the server to check. Do not tap again until the score refreshes.",
+        );
+      }
     } finally {
       setPosting(false);
     }
@@ -714,7 +791,7 @@ export default function LiveScorerPage() {
 
   const openWicket = (runs = 0) => {
     if (!striker || !nonStriker || !bowler) {
-      setError(
+      showError(
         overJustEnded
           ? "Over complete — select a new bowler before continuing"
           : "Set striker, non-striker and bowler first",
@@ -728,15 +805,15 @@ export default function LiveScorerPage() {
 
   const confirmWicket = async () => {
     if (!dismissalType) {
-      setError("Select dismissal type");
+      showError("Select dismissal type");
       return;
     }
     if (!striker || !nonStriker) {
-      setError("Select striker and non-striker first");
+      showError("Select striker and non-striker first");
       return;
     }
     if (!bowler) {
-      setError("Select bowler first");
+      showError("Select bowler first");
       return;
     }
     if (!matchId) return;
@@ -758,6 +835,9 @@ export default function LiveScorerPage() {
 
     setPosting(true);
     setError("");
+    setErrorKind("plain");
+    // Snapshot before the write so a failure can be resolved against the server.
+    const before = inningsFingerprint(innings);
     try {
       const state = await postBall(matchId, {
         bowlerPublicId: bowler.publicId,
@@ -822,7 +902,24 @@ export default function LiveScorerPage() {
       const msg =
         (e as { response?: { data?: { message?: string } } })?.response?.data
           ?.message ?? "Failed to record wicket";
-      setError(msg);
+
+      // A 4xx is the server answering, not a lost reply — it explained why it refused
+      // and nothing was written, so there is nothing to reconcile against.
+      const status = (e as { response?: { status?: number } })?.response?.status;
+      if (status && status >= 400 && status < 500) {
+        setErrorKind("plain");
+        showError(msg);
+      } else {
+        const outcome = await reconcileAfterFailedWrite(before);
+        setErrorKind(outcome);
+        setError(
+          outcome === "recorded"
+            ? "That ball WAS recorded. The score below is correct — do not tap again."
+            : outcome === "not-recorded"
+              ? "Not recorded — tap again."
+              : "Couldn't reach the server to check. Do not tap again until the score refreshes.",
+        );
+      }
     } finally {
       setPosting(false);
     }
@@ -841,7 +938,7 @@ export default function LiveScorerPage() {
       const msg =
         (e as { response?: { data?: { message?: string } } })?.response?.data
           ?.message ?? "Nothing to undo";
-      setError(msg);
+      showError(msg);
     } finally {
       setPosting(false);
     }
@@ -883,7 +980,7 @@ export default function LiveScorerPage() {
       const msg =
         (e as { response?: { data?: { message?: string } } })?.response?.data
           ?.message ?? "Failed to close innings";
-      setError(msg);
+      showError(msg);
     } finally {
       setPosting(false);
     }
@@ -948,7 +1045,7 @@ export default function LiveScorerPage() {
       const msg =
         (e as { response?: { data?: { message?: string } } })?.response?.data
           ?.message ?? "Failed to record result";
-      setError(msg);
+      showError(msg);
     } finally {
       setPosting(false);
     }
@@ -957,7 +1054,7 @@ export default function LiveScorerPage() {
   const handleAbandon = async () => {
     if (!matchId) return;
     if (abandonReason === "OTHER" && !abandonNote.trim()) {
-      setError("A note is required when the reason is Other");
+      showError("A note is required when the reason is Other");
       return;
     }
     setAbandonPosting(true);
@@ -968,7 +1065,7 @@ export default function LiveScorerPage() {
       const msg =
         (e as { response?: { data?: { message?: string } } })?.response?.data
           ?.message ?? "Failed to abandon match";
-      setError(msg);
+      showError(msg);
     } finally {
       setAbandonPosting(false);
     }
@@ -984,7 +1081,7 @@ export default function LiveScorerPage() {
       setShowPauseInput(false);
       setPauseInputValue("");
     } catch (e: unknown) {
-      setError(
+      showError(
         (e as { response?: { data?: { message?: string } } })?.response?.data
           ?.message ?? "Failed to pause match",
       );
@@ -1000,7 +1097,7 @@ export default function LiveScorerPage() {
       const updated = await resumeMatch(matchId);
       setPauseReason(updated.pauseReason ?? null);
     } catch (e: unknown) {
-      setError(
+      showError(
         (e as { response?: { data?: { message?: string } } })?.response?.data
           ?.message ?? "Failed to resume match",
       );
@@ -1458,9 +1555,50 @@ export default function LiveScorerPage() {
       </div>
 
       {/* ── ALERTS ── */}
+      {/* Read mid-over, one-handed, in bad light. The three post-failure outcomes carry
+          different consequences — tap again / definitely do not / we don't know — so
+          each gets its own colour and a heading readable without focusing, not an
+          11px line the scorer has to squint at and parse. */}
       {error && (
-        <div className="mx-3 mt-2 px-3 py-2 bg-red-50 border border-red-200 rounded-xl text-xs text-red-600">
-          {error}
+        <div
+          className={`mx-3 mt-2 px-4 py-3 rounded-xl border-2 ${
+            errorKind === "recorded"
+              ? "bg-emerald-50 border-emerald-400"
+              : errorKind === "unknown"
+                ? "bg-amber-50 border-amber-400"
+                : "bg-red-50 border-red-400"
+          }`}
+          role="alert"
+          aria-live="assertive"
+        >
+          {errorKind !== "plain" && (
+            <div
+              className={`text-sm font-extrabold uppercase tracking-wide mb-0.5 ${
+                errorKind === "recorded"
+                  ? "text-emerald-800"
+                  : errorKind === "unknown"
+                    ? "text-amber-900"
+                    : "text-red-700"
+              }`}
+            >
+              {errorKind === "recorded"
+                ? "✓ Ball recorded"
+                : errorKind === "unknown"
+                  ? "⚠ Couldn't check"
+                  : "✗ Not recorded"}
+            </div>
+          )}
+          <div
+            className={`text-sm font-medium leading-snug ${
+              errorKind === "recorded"
+                ? "text-emerald-900"
+                : errorKind === "unknown"
+                  ? "text-amber-900"
+                  : "text-red-800"
+            }`}
+          >
+            {error}
+          </div>
         </div>
       )}
       {overJustEnded && !bowler && (
@@ -1520,7 +1658,7 @@ export default function LiveScorerPage() {
               disabled={posting}
               onClick={() => {
                 if (!striker || !nonStriker || !bowler) {
-                  setError(
+                  showError(
                     overJustEnded
                       ? "Over complete — select a new bowler before continuing"
                       : "Set striker, non-striker and bowler first",
@@ -1556,7 +1694,7 @@ export default function LiveScorerPage() {
               disabled={posting}
               onClick={() => {
                 if (!striker || !nonStriker || !bowler) {
-                  setError(
+                  showError(
                     overJustEnded
                       ? "Over complete — select a new bowler before continuing"
                       : "Set striker, non-striker and bowler first",
@@ -2341,7 +2479,7 @@ export default function LiveScorerPage() {
                     showToast("✓ 5 penalty runs awarded");
                     setShowPenalty(false);
                   } catch {
-                    setError("Failed to award penalty");
+                    showError("Failed to award penalty");
                   } finally {
                     setPosting(false);
                   }
@@ -2364,7 +2502,7 @@ export default function LiveScorerPage() {
                     showToast("✓ 5 penalty runs awarded");
                     setShowPenalty(false);
                   } catch {
-                    setError("Failed to award penalty");
+                    showError("Failed to award penalty");
                   } finally {
                     setPosting(false);
                   }
