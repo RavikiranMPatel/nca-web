@@ -85,7 +85,7 @@ export class Api {
     await this.ctx.dispose();
   }
 
-  private async json(method: "get" | "post" | "delete" | "patch", url: string, data?: unknown) {
+  private async json(method: "get" | "post" | "put" | "delete" | "patch", url: string, data?: unknown) {
     const res = await this.ctx[method](url, data === undefined ? undefined : { data });
     const text = await res.text();
     const body = text ? JSON.parse(text) : null;
@@ -96,7 +96,9 @@ export class Api {
   }
 
   /** Raw call that does NOT throw — for negative/security assertions. */
-  async raw(method: "get" | "post" | "delete" | "patch", url: string, data?: unknown) {
+  // "put" added by Slice 7: the tournament update endpoint is a PUT, and it had
+  // no caller anywhere — in the app or in a test — before this slice.
+  async raw(method: "get" | "post" | "put" | "delete" | "patch", url: string, data?: unknown) {
     const res = await this.ctx[method](url, data === undefined ? undefined : { data });
     const text = await res.text();
     let body: any = null;
