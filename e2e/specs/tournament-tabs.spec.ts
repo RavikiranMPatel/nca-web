@@ -1,7 +1,7 @@
 import { test, expect, type Page } from "@playwright/test";
 import { Api } from "../fixtures/api";
 import { config } from "../fixtures/env";
-import { dbExec } from "../fixtures/db";
+import { dbExec, dbOne } from "../fixtures/db";
 
 /**
  * Slice 2 — coverage of every existing tab on `TournamentDetailPage`, written
@@ -215,6 +215,64 @@ test.describe("TournamentDetailPage — tabs", () => {
     await tabButton(page, "settings").click();
     const settings = panel(page, "settings");
     await expect(settings.locator("input, select").first()).toBeVisible();
+  });
+
+  /**
+   * Saving the Settings tab reports success, and actually saves.
+   *
+   * Added after a one-line defect that made a *successful* save look like a
+   * failed one: the page had `const [setSettingsSaved] = useState(false)`, which
+   * binds the STATE to that name rather than the setter, so
+   * `setSettingsSaved(true)` threw `TypeError: setSettingsSaved is not a
+   * function` immediately after the PATCH resolved. The throw was caught by the
+   * same handler's `catch`, which set the error banner — so the tournament was
+   * saved and the admin was told "Failed to save settings".
+   *
+   * That is why this asserts THREE things rather than one. The toast alone would
+   * have passed before the fix only if the throw came after it (it came before),
+   * and the absence of the error banner alone would not prove the PATCH landed.
+   * Together: success is reported, failure is NOT reported, and the row changed.
+   */
+  test("saving Settings reports success and persists the change", async ({ page }) => {
+    await openTournament(page);
+    await tabButton(page, "settings").click();
+
+    const before = Number(
+      dbOne(`SELECT innings_break_mins FROM tournaments
+             WHERE name = '${tournamentName}'`),
+    );
+    const after = before === 25 ? 30 : 25;
+
+    const field = panel(page, "settings").getByTestId("settings-innings-break");
+    await expect(field).toHaveValue(String(before));
+    await field.fill(String(after));
+    await panel(page, "settings").getByTestId("save-settings").click();
+
+    // 1. Success is reported.
+    await expect(
+      page.getByTestId("tournament-toast"),
+      "the save toast is shown",
+    ).toContainText("Settings saved");
+
+    // 2. Failure is NOT reported. The defect produced both a saved row and this
+    // banner, so a spec that only checked the row would have passed against it.
+    await expect(
+      page.getByTestId("tournament-error"),
+      "no error banner on a successful save",
+    ).toHaveCount(0);
+
+    // 3. The row actually changed — read from the database, not from the form,
+    // which still holds the typed value whether or not the PATCH landed.
+    expect(
+      Number(dbOne(`SELECT innings_break_mins FROM tournaments
+                    WHERE name = '${tournamentName}'`)),
+      "innings_break_mins persisted",
+    ).toBe(after);
+
+    // Put it back, so the two projects do not depend on each other's order.
+    await field.fill(String(before));
+    await panel(page, "settings").getByTestId("save-settings").click();
+    await expect(page.getByTestId("tournament-toast")).toContainText("Settings saved");
   });
 
   test("the selected tab survives a reload of the page", async ({ page }) => {

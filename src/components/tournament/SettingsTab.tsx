@@ -153,6 +153,7 @@ export default function SettingsTab({
                 type="number"
                 min={5}
                 max={60}
+                data-testid="settings-innings-break"
                 className="w-full px-3 py-2.5 bg-gray-100 dark:bg-gray-800 rounded-xl text-sm outline-none"
                 value={settingsForm.inningsBreakMins}
                 onChange={(e) =>
@@ -482,6 +483,7 @@ export default function SettingsTab({
         <button
           onClick={handleSaveSettings}
           disabled={posting}
+          data-testid="save-settings"
           className="w-full py-3 bg-blue-600 text-white rounded-xl text-sm font-semibold disabled:opacity-40 active:scale-95 transition-all"
         >
           {posting ? "Saving..." : "💾 Save Settings"}

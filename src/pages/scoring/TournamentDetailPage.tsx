@@ -127,7 +127,6 @@ export default function TournamentDetailPage() {
     dayEndTime: "18:30",
     maxMatchesPerDay: 2,
   });
-  const [setSettingsSaved] = useState(false);
 
   const [showAddTeam, setShowAddTeam] = useState(false);
   const [teamForm, setTeamForm] = useState<TeamForm>({
@@ -397,8 +396,6 @@ export default function TournamentDetailPage() {
         settingsForm,
       );
       await loadAll();
-      setSettingsSaved(true);
-      setTimeout(() => setSettingsSaved(false), 2500);
       showToast("✓ Settings saved");
     } catch (e: any) {
       setError(e.response?.data?.message ?? "Failed to save settings");
@@ -1073,7 +1070,9 @@ export default function TournamentDetailPage() {
       </div>
 
       {error && (
-        <div className="mx-4 mt-3 px-3 py-2 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl text-xs text-red-600 dark:text-red-400">
+        <div
+          data-testid="tournament-error"
+          className="mx-4 mt-3 px-3 py-2 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl text-xs text-red-600 dark:text-red-400">
           {error}
           <button onClick={() => setError("")} className="ml-2 font-bold">
             ✕
@@ -1362,7 +1361,9 @@ export default function TournamentDetailPage() {
       )}
 
       {toast && (
-        <div className="fixed bottom-20 left-1/2 -translate-x-1/2 z-[100] bg-gray-800 border border-green-600 text-green-400 text-sm font-semibold px-6 py-2.5 rounded-full shadow-xl pointer-events-none">
+        <div
+          data-testid="tournament-toast"
+          className="fixed bottom-20 left-1/2 -translate-x-1/2 z-[100] bg-gray-800 border border-green-600 text-green-400 text-sm font-semibold px-6 py-2.5 rounded-full shadow-xl pointer-events-none">
           {toast}
         </div>
       )}
