@@ -1827,8 +1827,9 @@ as flaky tests and were defects in what the query promised.
 
 ## BUG-33 — Player ID generation loses its lock before it commits
 
-**Severity:** medium · **Status: open** — found during the Slice 4 full-suite run;
-outside that slice's scope, so reported rather than fixed
+**Severity:** medium · **Status: FIXED in Slice 5b** (backend `9fa8bce`, spec
+`0bbe0b2`) — found during the Slice 4 full-suite run, left to the player/settings
+module, and closed there
 
 `AcademySettingsService.generateNextPlayerId` guards a read-modify-write with
 `synchronized`, on a `@Transactional` method:
@@ -1868,6 +1869,35 @@ be incremented by the database in one statement — `UPDATE … SET value =
 (value::int + 1)::text WHERE … RETURNING value` — or held under a real row lock.
 That is a change in the player/settings module, not the tournament one, which is
 why it is logged here rather than fixed in passing.
+
+**Fixed 2026-09-12, Slice 5b.** One statement, as above: `INSERT INTO
+academy_settings … ON CONFLICT (academy_id, setting_key) DO UPDATE SET
+setting_value = CAST(CAST(… AS bigint) + 1 AS text) … RETURNING setting_value`.
+Postgres takes the row lock for the `DO UPDATE` and a concurrent writer re-reads
+the committed value, so callers serialise on the counter row and each gets a
+distinct number — and a caller that rolls back leaves no gap, because the
+increment rolls back with it. The `INSERT` half matters: onboarding seeds
+`PLAYER_ID_PREFIX` but not a counter, so the row may genuinely not exist and two
+first-uses must not both insert. `generateNextEnquiryId` moves onto the same
+helper. `synchronized` is gone.
+
+Not a Postgres sequence: `player_seq` and friends are global, and these counters
+are per-academy by design — each academy numbers its own players from 1.
+
+`bug-33-player-id-race.spec.ts` issues twenty creates with `Promise.all` and
+asserts no 409, twenty distinct ids, twenty rows, the counter advanced by exactly
+twenty, and that the ids ARE the counter's values (`@PrePersist` would otherwise
+generate distinct UUIDs and satisfy "all distinct" while proving nothing).
+**Proven to have teeth**: with the old implementation restored and rebuilt, the
+same spec fails with 2 × 409.
+
+`createPlayer()`'s six-attempt 409 retry is removed in the same commit, so the
+suite would fail rather than paper over a return of the race.
+
+**CAST, not `::`.** Hibernate scans a native query for `:name` parameters before
+Postgres sees it, so `::text` arrives as `:text` and fails with `syntax error at
+or near ":"`. Every player create returned 500 until all three casts were
+rewritten. Recorded in `.claude/rules/gotchas.md`.
 
 ---
 
@@ -1961,6 +1991,42 @@ Fixed by using the return value: `award = awardRepo.saveAndFlush(award)`.
 entity came from the database already carrying both — which is exactly why it
 survives. Worth a grep-and-audit of its own.
 
+**Audited in Slice 5b** (backend `510bfe8`, spec `ba252de`). **26 call sites**
+discard `save()`'s return and then read `getPublicId()` or `getId()` off the
+argument in the same method. All 26 now read the saved instance.
+
+Twenty-three were harmless — update paths, where the value read was already set
+before the save. **Three were live defects:**
+
+| Site | What it produced |
+|---|---|
+| `SuperAdminFeeCorrectionService.reversePayment` | every `FEE_PAYMENT_REVERSED` audit row recorded `"reversalPublicId": null` — a correction flagged `"critical": true` with no link to the row it created |
+| `FeeInstallmentService.recordPayment` | the create response carried `"id": null` |
+| `FeeInstallmentService.recordDirectPlanPayment` | the same |
+
+Both fee-installment methods **return** the payment and `FeeInstallmentController`
+serialises it. Their publicId is assigned by hand from a sequence, which is what
+hid them: the log line printed a real id while the response did not.
+
+Three call sites needed a **new local** rather than a reassignment because a
+lambda captures the original (`TournamentResultService.markFinal` and
+`.applyFinalResult`). The compiler found those, which is the argument for fixing
+all 26 uniformly rather than only the ones reasoned to matter — "provably
+harmless" is the reasoning that let this survive from the beginning.
+
+**`SaveReturnDiscardedTest`** makes the audit permanent: it scans
+`src/main/java` for the shape and fails on the next one, with the historical
+`SuperAdminFeeCorrectionService` code as its control. `bug-37-save-return.spec.ts`
+proves one instance end to end, against the persisted row.
+
+**The root cause is a ruling, not a fix, and is deliberately left.** `BaseEntity`
+could declare `@Version private Integer version;` with no initialiser. `isNew()`
+would then be true for a new entity, `save()` would call `persist()`, and the
+argument itself would be the managed instance — closing the whole class at the
+root instead of site by site. It changes the persistence behaviour of **every**
+entity in the application, so it needs its own decision and its own regression
+pass. See `nextgen-cricket-academy/docs/tournament/PROGRESS.md`, Slice 5b.
+
 ---
 
 ## BUG-38 — Twenty-eight response DTOs put a tenant id or a user's email on the wire
@@ -1991,7 +2057,7 @@ tournaments and would have made Slice 5 unreviewable. `KNOWN_PRE_EXISTING` in
 ## BUG-39 — An unmapped URL returns 500, not 404
 
 **Found:** Slice 5, verifying that BUG-35's endpoint was gone.
-**Status:** reported, not fixed.
+**Status: FIXED in Slice 5b** (backend `b68bac2`, spec `5bcf56f`).
 
 Requesting a path with no handler produces
 `org.springframework.web.servlet.resource.NoResourceFoundException`, which
@@ -2010,6 +2076,21 @@ two-line `@ExceptionHandler(NoResourceFoundException.class)` returning 404, but
 it changes the response of **every** unmapped URL in the application, so it
 belongs in its own change with its own check of what currently asserts 500 —
 not bundled into a tournament slice.
+
+**Fixed 2026-09-12, Slice 5b.** `@ExceptionHandler({NoResourceFoundException,
+NoHandlerFoundException})` returning 404 with the **standard** error body —
+`timestamp / status / error / message`, the shape every other handler in the
+class produces, so a client parsing `message` does not need a second one.
+Logged at DEBUG rather than ERROR: a 404 on an unmapped path is routine and
+logging it at ERROR is what makes a real fault harder to find.
+
+The check that was asked for first: nothing in `e2e/specs` asserted 500 for an
+unmapped URL. The only `500` in the suite is `section-05.spec.ts:282`'s
+`toBeLessThan(500)`, which this can only help.
+
+Verified live before and after on the running app, and by
+`bug-39-unmapped-url.spec.ts` over three shapes of unmapped path — under `/api`,
+outside it, and a real controller with a path it does not map.
 
 ---
 
@@ -2066,3 +2147,67 @@ response body, which PLAN.md standing constraint 3 forbids for new code. That is
 also how BUG-38's tenant and audit columns reach the browser on this endpoint.
 Converting it is a change to Slice 3's verified result path and belongs in its
 own slice.
+
+**Root cause closed 2026-09-12, Slice 5b** (backend `7226d9c`, spec `11686b4`).
+`recordResult` returns `MatchResultDto` — flat, ids and names only, so no nested
+entity can close a cycle here however the mapping changes later. The
+`@JsonIgnore` stays: it is the correct fix for the mapping, and other endpoints
+still return `CricketTeam`.
+
+The existing result and champion specs are the regression proof and are
+unchanged. One test is added, on a **final's** result because that is the call
+that sets the champion and therefore the only shape that ever recursed: none of
+`academyId`, `branchId`, `createdBy`, `updatedBy` appears at any depth, the
+internal row `id` is not on the wire, and everything the DTO exists to carry
+still is.
+
+`coinFlip` and several other `MatchController` endpoints still return
+`CricketMatch`. They are not on the champion path, so they did not recurse, but
+they do carry the tenant and audit columns — see PROGRESS.md, Slice 5b, "found
+while working".
+
+---
+
+## BUG-41 — `/api/super-admin/fees/reverse` cannot work, and never could
+
+**Found:** Slice 5b, 2026-09-12, while writing a test for BUG-37 against
+`SuperAdminFeeCorrectionService.reversePayment`.
+**Severity:** low (there is a working duplicate) · **Status:** reported, not fixed.
+
+```java
+@PostMapping("/reverse")
+public ResponseEntity<Void> reversePayment(
+        @RequestParam String paymentPublicId,
+        @RequestParam String reason,
+        @RequestAttribute("user") User actor   // <-- never set by anything
+) {
+```
+
+`@RequestAttribute("user")` requires a filter or interceptor to have called
+`request.setAttribute("user", …)`. **Nothing in `src/main/java` does** — grep for
+`setAttribute("user"` returns zero hits. Every other controller in the codebase
+resolves the actor from `Authentication`.
+
+So the endpoint raises `ServletRequestBindingException: Missing request
+attribute 'user' of type User` before the method body ever runs, and returns
+**500** to any caller, always. Confirmed live against the running app on
+`nca_scoring_test` with a valid SUPER_ADMIN token.
+
+**There is a working duplicate**, which is presumably why nobody noticed:
+`POST /api/admin/fees/reverse` (`AdminFeeController:427`) takes `Authentication`,
+checks `ROLE_SUPER_ADMIN` explicitly, and calls
+`FeePaymentService.reversePayment` — a different implementation of the same
+operation. That one sets the reversal's publicId by hand and does **not** read it
+back off a discarded `save()`, so it never had BUG-37.
+
+Two questions for whoever picks this up, neither of which belongs in a tournament
+slice:
+
+1. Should the endpoint be fixed, or **deleted**? Two reversal implementations for
+   one operation is worse than either. `SuperAdminFeeCorrectionService` also
+   writes a richer audit row than `FeePaymentService` does.
+2. The dead path's BUG-37 defect is fixed regardless (Slice 5b), so fixing the
+   binding will not resurrect a null `reversalPublicId`.
+
+A test asserting 500 here would enshrine the bug, so none was written. This entry
+is the record.
