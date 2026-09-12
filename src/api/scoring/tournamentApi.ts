@@ -250,3 +250,30 @@ export const advanceToPlayoffs = (
       bracketType,
     })
     .then((r) => r.data);
+
+// ── Fixture conflicts ──
+// Detection and warning only; neither endpoint blocks anything. Both are scoped to the
+// tournament, not the academy's grounds — see FixtureConflictService for why.
+
+/** Every clash currently in the tournament, for the summary panel. */
+export const getFixtureConflicts = (publicId: string) =>
+  api
+    .get(`/admin/cricket/tournaments/${publicId}/fixtures/conflicts`)
+    .then((r) => r.data);
+
+/** What a candidate date/venue would clash with, for the inline note. */
+export const checkFixtureCandidate = (
+  publicId: string,
+  params: {
+    scheduledAt?: string;
+    venueId?: string;
+    excludeFixturePublicId?: string;
+    homeTeamPublicId?: string;
+    awayTeamPublicId?: string;
+  },
+) =>
+  api
+    .get(`/admin/cricket/tournaments/${publicId}/fixtures/conflict-check`, {
+      params,
+    })
+    .then((r) => r.data);

@@ -8,6 +8,8 @@ import {
   listStages,
   listFixtures,
   generateFixtures,
+  getFixtureConflicts,
+  checkFixtureCandidate,
   addManualFixture,
   getStandings,
   updateTournamentStatus,
@@ -185,6 +187,21 @@ export default function TournamentDetailPage() {
     scheduledTime: "",
   });
 
+  /**
+   * Scheduling clashes the system noticed. Warning only — nothing here blocks a save,
+   * gates on a role or asks for a reason. Scoped to this tournament: venue ids are
+   * per-tournament, so a cross-tournament check would mean matching free-text ground
+   * names and would quietly miss whatever somebody typed differently.
+   */
+  const [conflicts, setConflicts] = useState<{
+    conflicts: any[];
+    byFixture: Record<string, any[]>;
+    durationBasis: string;
+    scope: string;
+  } | null>(null);
+  /** Clashes the date currently typed into a sheet would create. */
+  const [candidateConflicts, setCandidateConflicts] = useState<any[]>([]);
+
   const [overview, setOverview] = useState<any | null>(null);
   const [awards, setAwards] = useState<any[]>([]);
   const [awardCands, setAwardCands] = useState<any | null>(null);
@@ -224,6 +241,86 @@ export default function TournamentDetailPage() {
     scheduledDate: "",
     scheduledTime: "",
   });
+
+  /**
+   * Re-checks as the admin types a date. Debounced because a date input fires on every
+   * keystroke. Never blocks the confirm button and never throws into the UI — a failed
+   * check shows nothing rather than an error over a half-filled form.
+   */
+  useEffect(() => {
+    const onEdit = showEditFixture && editingFixture;
+    const onRain = rainFixture && rainMode === "reschedule";
+    if (!onEdit && !onRain) {
+      setCandidateConflicts([]);
+      return;
+    }
+    const iso = onEdit
+      ? editFixtureForm.scheduledDate && editFixtureForm.scheduledTime
+        ? new Date(
+            `${editFixtureForm.scheduledDate}T${editFixtureForm.scheduledTime}:00`,
+          ).toISOString()
+        : ""
+      : rainDate && rainTime
+        ? new Date(`${rainDate}T${rainTime}:00`).toISOString()
+        : "";
+    if (!iso) {
+      setCandidateConflicts([]);
+      return;
+    }
+    const params = onEdit
+      ? {
+          scheduledAt: iso,
+          venueId: editFixtureForm.venueId || undefined,
+          excludeFixturePublicId: editingFixture.publicId,
+          homeTeamPublicId: editFixtureForm.homeTeamPublicId || undefined,
+          awayTeamPublicId: editFixtureForm.awayTeamPublicId || undefined,
+        }
+      : {
+          scheduledAt: iso,
+          venueId: rainVenueId || undefined,
+          excludeFixturePublicId: rainFixture.publicId,
+          homeTeamPublicId: rainFixture.homeTeam?.publicId,
+          awayTeamPublicId: rainFixture.awayTeam?.publicId,
+        };
+    const id = setTimeout(() => {
+      checkFixtureCandidate(publicId!, params)
+        .then((r: any) => setCandidateConflicts(r.conflicts ?? []))
+        .catch(() => setCandidateConflicts([]));
+    }, 350);
+    return () => clearTimeout(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    showEditFixture,
+    editingFixture,
+    editFixtureForm.scheduledDate,
+    editFixtureForm.scheduledTime,
+    editFixtureForm.venueId,
+    editFixtureForm.homeTeamPublicId,
+    editFixtureForm.awayTeamPublicId,
+    rainFixture,
+    rainMode,
+    rainDate,
+    rainTime,
+    rainVenueId,
+  ]);
+
+  /**
+   * Two lines maximum, by construction: the first clash then a count of the rest.
+   * The reschedule sheet had little headroom when it was measured at 380px in the
+   * Phase A pass, and a list of clashing fixtures in there pushes confirm below the fold.
+   */
+  const ConflictNote = () =>
+    candidateConflicts.length === 0 ? null : (
+      <div className="rounded-xl border border-amber-300 bg-amber-50 dark:bg-amber-950/30 dark:border-amber-800 px-3 py-2">
+        <div className="text-xs text-amber-900 dark:text-amber-300 leading-snug">
+          ⚠ {candidateConflicts[0].message}
+          {candidateConflicts.length > 1
+            ? ` +${candidateConflicts.length - 1} more`
+            : ""}
+        </div>
+      </div>
+    );
+
 
   // ── STATS STATE (NEW) ─────────────────────────────────────────────────────
   const [statsSubTab, setStatsSubTab] = useState<"batting" | "bowling" | "mvp">(
@@ -294,6 +391,10 @@ export default function TournamentDetailPage() {
       setTeams(tm);
       setStages(st);
       setFixtures(fx);
+      // Warning data — a failure here must never stop the page loading.
+      getFixtureConflicts(publicId!)
+        .then(setConflicts)
+        .catch(() => setConflicts(null));
       setStandings(sd);
       setAllTournamentPlayers(tp);
       setOverview(ov);
@@ -1783,6 +1884,45 @@ export default function TournamentDetailPage() {
                 })()}
             </div>
 
+            {/* ── CONFLICT SUMMARY ──
+                One panel, not a toast per fixture: generation makes 28 at once. Each row
+                taps through to the edit sheet. States its own scope and where the duration
+                came from, because both are easy to assume wrongly. */}
+            {conflicts && conflicts.conflicts.length > 0 && (
+              <div className="rounded-2xl border-2 border-amber-300 bg-amber-50 dark:bg-amber-950/30 dark:border-amber-800 p-4 space-y-2">
+                <div className="text-sm font-bold text-amber-900 dark:text-amber-300">
+                  ⚠ {Object.keys(conflicts.byFixture).length} fixture
+                  {Object.keys(conflicts.byFixture).length !== 1 ? "s" : ""} to
+                  look at
+                </div>
+                <div className="space-y-1.5">
+                  {Object.entries(conflicts.byFixture).map(([fxId, list]) => {
+                    const fx = fixtures.find((f: any) => f.publicId === fxId);
+                    if (!fx) return null;
+                    const items = list as any[];
+                    return (
+                      <button
+                        key={fxId}
+                        onClick={() => openEditFixture(fx)}
+                        className="w-full text-left bg-white dark:bg-gray-900 rounded-xl px-3 py-2 active:scale-[0.99] transition-transform"
+                      >
+                        <div className="text-sm font-medium text-gray-900 dark:text-gray-100 break-words">
+                          {fx.homeTeam?.name} v {fx.awayTeam?.name}
+                        </div>
+                        <div className="text-xs text-amber-800 dark:text-amber-400 break-words">
+                          {items[0].message}
+                          {items.length > 1 ? ` +${items.length - 1} more` : ""}
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+                <p className="text-[11px] text-amber-800/80 dark:text-amber-500/80 leading-snug">
+                  {conflicts.scope} {conflicts.durationBasis}
+                </p>
+              </div>
+            )}
+
             {/* ── GROUND FILTER ──
                 Horizontal scroll strip, not a <select>: one thumb, no dropdown to aim at,
                 and the same -mx-4 px-4 overflow-x-auto pattern the tab strip already uses
@@ -3168,7 +3308,7 @@ export default function TournamentDetailPage() {
                     <label className="text-xs text-gray-400 mb-2 block">
                       Gender
                     </label>
-                    <div className="flex gap-2">
+              <div className="flex gap-2">
                       {["MALE", "FEMALE", "OTHER"].map((g) => (
                         <button
                           key={g}
@@ -3914,6 +4054,9 @@ export default function TournamentDetailPage() {
                   />
                 )}
 
+                {/* Between the inputs and the button, never on it. */}
+                {rainMode === "reschedule" && <ConflictNote />}
+
                 <button
                   disabled={rainPosting}
                   onClick={() => {
@@ -4159,6 +4302,9 @@ export default function TournamentDetailPage() {
                   ))}
                 </div>
               </div>
+              {/* Between the inputs and the buttons, never on them. */}
+              <ConflictNote />
+
               <div className="flex gap-3 pt-2">
                 <button
                   onClick={() => {
