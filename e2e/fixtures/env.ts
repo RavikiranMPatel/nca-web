@@ -13,6 +13,13 @@ export interface E2EEnv {
   /** Non-admin roles in academy A, seeded for the role-boundary specs. */
   aCoach: Tenant;
   aSuperAdmin: Tenant;
+  /**
+   * Academy B's SUPER_ADMIN. Needed by the tenant matrix: a handful of endpoints
+   * are SUPER_ADMIN-only and refuse an ADMIN with 403 before they ever look the
+   * tournament up, so probing them as B's ADMIN proves the ROLE gate and says
+   * nothing about the TENANT one. The credentials were already in `.env.test`.
+   */
+  bSuperAdmin: Tenant;
   db: { name: string; user: string; host: string; port: string };
 }
 export interface Tenant {
@@ -86,6 +93,12 @@ export function config(): E2EEnv {
       origin: need("E2E_B_ORIGIN"),
       email: need("E2E_B_EMAIL"),
       password: need("E2E_B_PASSWORD"),
+    },
+    bSuperAdmin: {
+      slug: need("E2E_B_SLUG"),
+      origin: need("E2E_B_ORIGIN"),
+      email: need("E2E_B_SUPERADMIN_EMAIL"),
+      password: need("E2E_B_SUPERADMIN_PASSWORD"),
     },
     db: {
       name: need("E2E_DB_NAME"),

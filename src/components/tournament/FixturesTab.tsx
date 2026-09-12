@@ -428,6 +428,7 @@ export default function FixturesTab({
                                     f.homeTeam &&
                                     f.awayTeam && (
                                       <button
+                                        data-testid={`fixture-start-match-${f.publicId}`}
                                         onClick={() => handleStartMatch(f)}
                                         className="px-3 py-1.5 bg-green-600 text-white text-xs font-semibold rounded-lg active:scale-95"
                                       >
@@ -437,6 +438,7 @@ export default function FixturesTab({
                                   {f.status === "IN_PROGRESS" &&
                                     f.match && (
                                       <button
+                                        data-testid={`fixture-live-scorer-${f.publicId}`}
                                         onClick={() =>
                                           navigate(
                                             `/admin/cricket/matches/${f.match.publicId}/score`,
@@ -449,6 +451,7 @@ export default function FixturesTab({
                                     )}
                                   {f.status === "COMPLETED" && f.match && (
                                     <button
+                                      data-testid={`fixture-scorecard-${f.publicId}`}
                                       onClick={() =>
                                         navigate(
                                           `/match/${f.match.publicId}/scorecard`,
