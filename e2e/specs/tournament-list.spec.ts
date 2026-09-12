@@ -768,9 +768,20 @@ test.describe("the list page", () => {
     await page.getByTestId("tournament-filter-format").selectOption("KNOCKOUT");
     await page.getByTestId("tournament-search").fill(T.tag);
 
+    // Wait for the URL to carry BOTH before capturing it. The search box is
+    // debounced into the URL, and the rows cannot be used as the signal that it
+    // landed: the format filter alone already narrows this fixture to one row,
+    // so polling the rows succeeds while `search` is still only in component
+    // state. That is exactly how this test failed in the full suite while
+    // passing on its own — the link it captured had no search in it.
+    await expect
+      .poll(() => new URL(page.url()).searchParams.get("search"))
+      .toBe(T.tag);
     await expect.poll(() => visibleNames(page)).toEqual(["Zephyr Shield"]);
+
     const shared = page.url();
     expect(new URL(shared).searchParams.get("format")).toBe("KNOCKOUT");
+    expect(new URL(shared).searchParams.get("search")).toBe(T.tag);
 
     // Open the URL cold in a fresh page: the controls must come back set, and
     // the rows must match. PlayersListPage reads its status param once and never
