@@ -1187,8 +1187,17 @@ export default function TournamentDetailPage() {
           />
         )}
 
-        {/* ── REPORTS (a stub; Slice 6 builds it) ── */}
-        {tab === "reports" && <ReportsTab />}
+        {/* ── REPORTS (Phases 20–23) ── */}
+        {tab === "reports" && (
+          <ReportsTab
+            publicId={publicId!}
+            teams={teams}
+            stages={stages}
+            fixtures={fixtures}
+            showToast={showToast}
+            setError={setError}
+          />
+        )}
 
         {/* ── SETTINGS ── */}
         {tab === "settings" && (

@@ -389,3 +389,56 @@ export const giveAward = (
 
 export const revokeAward = (publicId: string, awardPublicId: string) =>
   api.delete(`/admin/cricket/tournaments/${publicId}/awards/${awardPublicId}`);
+
+// ── Reports (Slice 6, Phases 20–23) ──────────────────────────────────────────
+
+/** The ten report slugs the backend's TournamentReportType accepts. */
+export type ReportType =
+  | "summary"
+  | "fixtures"
+  | "points-table"
+  | "results"
+  | "team-performance"
+  | "batting"
+  | "bowling"
+  | "fielding"
+  | "awards"
+  | "complete";
+
+/**
+ * The filters a fixtures or results report respects (Phase 22).
+ *
+ * The same filters the Fixtures tab offers, sent to the server so the PDF is
+ * generated from the filtered set rather than filtered after the fact. A blank
+ * or absent value is no constraint.
+ */
+export interface ReportFilters {
+  status?: string;
+  stagePublicId?: string;
+  groupName?: string;
+  teamPublicId?: string;
+  venuePublicId?: string;
+}
+
+/**
+ * Fetches one report as a PDF blob.
+ *
+ * Returns the blob rather than downloading it, so the caller decides — the tab
+ * downloads, and a test can read the bytes.
+ */
+export const getTournamentReport = (
+  publicId: string,
+  type: ReportType,
+  filters: ReportFilters = {},
+): Promise<Blob> => {
+  const params: Record<string, string> = {};
+  for (const [k, v] of Object.entries(filters)) {
+    if (v !== undefined && v !== null && String(v).trim() !== "") params[k] = String(v);
+  }
+  return api
+    .get(`/admin/cricket/tournaments/${publicId}/reports/${type}`, {
+      params,
+      responseType: "blob",
+    })
+    .then((r) => r.data as Blob);
+};
