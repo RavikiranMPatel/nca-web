@@ -11,6 +11,7 @@ import type {
   TeamChecklist,
   TeamPerformanceComments,
   IndividualObservation,
+  MatchResult,
 } from "../../types/match";
 
 const BASE = "/admin/cricket/matches";
@@ -55,7 +56,7 @@ export const recordResult = (
     playerOfMatchNote?: string;
   },
 ) =>
-  api.post<CricketMatch>(`${BASE}/${publicId}/result`, req).then((r) => r.data);
+  api.post<MatchResult>(`${BASE}/${publicId}/result`, req).then((r) => r.data);
 
 // ── Players list for team selection ──────────────────────────────────────────
 export const getBranchPlayers = () =>

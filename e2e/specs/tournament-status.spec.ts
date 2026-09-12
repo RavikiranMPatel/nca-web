@@ -110,7 +110,7 @@ async function playFixture(b: Built, winnerIndex: number | null, resultType: str
 
   const res = await b.api.raw("post", `/api/admin/cricket/matches/${matchPublicId}/result`, body);
   expect(res.status, "record result").toBe(200);
-  return matchPublicId;
+  return { matchPublicId, result: res.body as Record<string, unknown> };
 }
 
 const status = async (api: Api, tid: string) =>
@@ -261,6 +261,48 @@ test.describe("Slice 3 — tournament status and result", () => {
                        WHERE entity_public_id = '${b.tid}' AND action = 'TOURNAMENT_COMPLETED'`);
     expect(row).toContain(b.teams[0].publicId);
     expect(row, "recorded as automatic, not an operator action").toContain("automatic");
+
+    await api.dispose();
+  });
+
+  test("the result response is a DTO, not the match entity (Slice 5b)", async () => {
+    const api = await Api.login(config().a);
+    const b = await build(api, "ResultShape");
+
+    // The FINAL is the shape that matters: recording a final sets the champion,
+    // which is the mapping that closed BUG-40's Jackson cycle when this endpoint
+    // returned the entity. A non-final result never reached the cycle at all.
+    const mark = await api.raw("patch",
+      `/api/admin/cricket/tournaments/${b.tid}/fixtures/${b.fixturePublicId}/final`,
+      { isFinal: true });
+    expect(mark.status, "mark the final").toBeLessThan(400);
+
+    const { result: body } = await playFixture(b, 0, "WON_BY_RUNS");
+    const keys = Object.keys(body);
+
+    // 1. No tenant id and no audit email, asserted on the real wire payload.
+    //    ResponseDtoLeakTest asserts the same thing on the class; this asserts it
+    //    on what the server actually sent, which is the half reflection cannot see.
+    for (const forbidden of ["academyId", "branchId", "createdBy", "updatedBy"]) {
+      expect(keys, `${forbidden} must not reach the browser`).not.toContain(forbidden);
+    }
+
+    // 2. Nor anywhere nested — the DTO is flat by design, so a nested entity
+    //    appearing at all is the regression this guards against.
+    expect(JSON.stringify(body)).not.toMatch(/"(academyId|branchId|createdBy|updatedBy)"/);
+
+    // 3. And it is the entity that is gone, not the information. These are the
+    //    fields the DTO exists to carry.
+    expect(body.publicId, "the match's own id").toBeTruthy();
+    expect(body.status).toBe("COMPLETED");
+    expect(body.resultType).toBe("WON_BY_RUNS");
+    expect(body.winnerTeamPublicId, "the winning side, as a link").toBeTruthy();
+    expect(body.fixturePublicId, "the fixture this completed").toBe(b.fixturePublicId);
+    expect(body.tournamentPublicId).toBe(b.tid);
+
+    // 4. The entity's own primary key is not on the wire either: `id` is the
+    //    internal UUID, and the DTO deliberately publishes `publicId` only.
+    expect(keys, "the internal row id stays internal").not.toContain("id");
 
     await api.dispose();
   });

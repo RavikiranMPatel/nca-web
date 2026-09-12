@@ -203,3 +203,26 @@ export interface TossRequest {
   winnerTeamPublicId: string;
   decision: TossDecision;
 }
+
+/**
+ * What POST /matches/{publicId}/result returns.
+ *
+ * Not `CricketMatch`: the endpoint used to return the entity, which is what made
+ * BUG-40's Jackson cycle possible once a tournament had a champion. Slice 5b
+ * replaced it with a flat DTO carrying ids and names only.
+ */
+export interface MatchResult {
+  publicId: string;
+  title: string | null;
+  status: MatchStatus;
+  resultType: string | null;
+  resultMargin: number | null;
+  resultDescription: string | null;
+  winnerTeamPublicId: string | null;
+  winnerTeamName: string | null;
+  playerOfMatchPublicId: string | null;
+  playerOfMatchName: string | null;
+  playerOfMatchNote: string | null;
+  fixturePublicId: string | null;
+  tournamentPublicId: string | null;
+}
