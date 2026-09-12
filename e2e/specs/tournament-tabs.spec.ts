@@ -206,9 +206,9 @@ test.describe("TournamentDetailPage — tabs", () => {
     await expect(awards).toContainText("Man of the Series");
     await expect(awards).toContainText("No completed matches yet");
 
-    // ── Reports: a stub until Slice 6, and it says so.
+    // ── Reports: the ten reports Slice 6 built, where Slice 5 had a stub.
     await tabButton(page, "reports").click();
-    await expect(panel(page, "reports")).toContainText("Reports are not built yet");
+    await expect(panel(page, "reports")).toContainText("Complete Tournament Report");
 
     // ── Settings: the editable form, holding the values the tournament was
     // created with.

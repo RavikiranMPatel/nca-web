@@ -51,6 +51,12 @@ export interface ScoredTournament {
   matchPublicId: string;
   homeTeamPublicId: string;
   awayTeamPublicId: string;
+  /** The two sides' names, which is what a rendered report prints. */
+  homeTeamName: string;
+  awayTeamName: string;
+  /** Set when built with `markFinal`, so Slice 3's automation decided a champion. */
+  championTeamName?: string;
+  runnerUpTeamName?: string;
   /** The home opener — top run scorer and highest individual score. */
   opener: { publicId: string; displayName: string };
   /** The home bowler who took the wicket — top wicket taker. */
@@ -64,7 +70,7 @@ let counter = 0;
 const PER_SIDE = 11;
 
 export async function createScoredTournament(
-  opts: { tenant?: Tenant; label?: string } = {},
+  opts: { tenant?: Tenant; label?: string; markFinal?: boolean } = {},
 ): Promise<ScoredTournament> {
   const env = config();
   const api = await Api.login(opts.tenant ?? env.a);
@@ -73,7 +79,7 @@ export async function createScoredTournament(
   const tournamentName = `${label} ${tag}`;
 
   try {
-    return await build(api, tag, label, tournamentName);
+    return await build(api, tag, label, tournamentName, opts.markFinal === true);
   } catch (e) {
     // If setup throws part-way, the caller never receives a fixture and can never
     // call destroy() — so everything created up to the failure would be left in
@@ -123,7 +129,8 @@ async function removeEverything(api: Api, tag: string, label: string,
 }
 
 async function build(api: Api, tag: string, label: string,
-                     tournamentName: string): Promise<ScoredTournament> {
+                     tournamentName: string,
+                     markFinal: boolean): Promise<ScoredTournament> {
 
   // ── a batch and 22 real players ───────────────────────────────────────────
   const batch = await api.raw("post", "/api/admin/batches", {
@@ -264,6 +271,20 @@ async function build(api: Api, tag: string, label: string,
   await api.raw("post", `/api/admin/cricket/matches/${matchPublicId}/innings/close`,
     { reason: "ALL_OUT" });
 
+  // ── mark it the final BEFORE the result, when asked ───────────────────────
+  //
+  // Order matters: Slice 3 decides the champion in `onFixtureCompleted`, which
+  // runs when the result is recorded. Marking the fixture afterwards sets a flag
+  // nothing re-reads, and the tournament would stay LIVE with no champion —
+  // which looks like the tied-final case and proves the opposite of what a
+  // champion assertion wants.
+  if (markFinal) {
+    const mark = await api.raw("patch",
+      `/api/admin/cricket/tournaments/${tournamentPublicId}/fixtures/${fixturePublicId}/final`,
+      { isFinal: true });
+    expect(mark.status, "mark the fixture as the final").toBeLessThan(400);
+  }
+
   // ── result, which is what moves the fixture to COMPLETED ──────────────────
   const res = await api.raw("post",
     `/api/admin/cricket/matches/${matchPublicId}/result`, {
@@ -280,6 +301,12 @@ async function build(api: Api, tag: string, label: string,
     api, tag, tournamentPublicId, tournamentName, fixturePublicId, matchPublicId,
     homeTeamPublicId: homeTeam.publicId,
     awayTeamPublicId: awayTeam.publicId,
+    homeTeamName: homeTeam.name,
+    awayTeamName: awayTeam.name,
+    // TEAM_A is the home side (setTeams above) and TEAM_A wins, so when this
+    // fixture is the final the champion is home and the runner-up is away.
+    championTeamName: markFinal ? homeTeam.name : undefined,
+    runnerUpTeamName: markFinal ? awayTeam.name : undefined,
     opener: home[0],
     wicketTaker: home[7],
     catcher: home[3],

@@ -229,10 +229,14 @@ test.describe("Slice 5 in the browser", () => {
 
   // ── REPORTS ─────────────────────────────────────────────────────────────
 
-  test("the Reports tab is an honest stub", async ({ page }) => {
+  // Slice 5 asserted this tab was an honest stub. Slice 6 built it, so the
+  // assertion is now that the ten reports are there — `tournament-reports.spec.ts`
+  // covers the documents themselves.
+  test("the Reports tab offers the reports", async ({ page }) => {
     await openTab(page, "reports");
     const panel = page.getByTestId("tournament-panel-reports");
-    await expect(panel).toContainText("Reports are not built yet");
-    await expect(panel, "it says what is coming").toContainText("Points table");
+    await expect(panel, "no longer a stub").not.toContainText("Reports are not built yet");
+    await expect(panel).toContainText("Points Table");
+    await expect(page.getByTestId("report-download-complete")).toBeVisible();
   });
 });
