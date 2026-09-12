@@ -144,7 +144,23 @@ export default function TournamentDetailPage() {
   const [externalGender, setExternalGender] = useState("MALE");
   const [externalRole, setExternalRole] = useState("ALL_ROUNDER");
 
-  const [fixtureGroundFilter] = useState<string>("ALL");
+  /**
+   * Team sheet: one team's fixtures and their standings row together.
+   *
+   * A team's fixtures ARE their results, and those lived in two places that never met —
+   * the fixture list (upcoming) and the standings row (played). Opened from a tap on
+   * Teams or Standings rather than a sixth view mode, and built entirely from state the
+   * page has already loaded, so it costs no request.
+   */
+  const [teamSheet, setTeamSheet] = useState<{
+    publicId: string;
+    name: string;
+  } | null>(null);
+
+  // Had no setter, so the filter block below it could never be anything but "ALL" —
+  // a control that looked live in the code and did nothing on screen.
+  const [fixtureGroundFilter, setFixtureGroundFilter] =
+    useState<string>("ALL");
 
   const [showGenerate, setShowGenerate] = useState(false);
   const [genForm, setGenForm] = useState({
@@ -1244,6 +1260,18 @@ export default function TournamentDetailPage() {
                       </svg>
                     </button>
                     <button
+                      onClick={() =>
+                        setTeamSheet({
+                          publicId: team.publicId,
+                          name: team.name,
+                        })
+                      }
+                      className="px-2.5 py-1.5 text-xs font-medium rounded-lg bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 active:scale-95 ml-2 flex-shrink-0"
+                      title="Fixtures and record"
+                    >
+                      Record
+                    </button>
+                    <button
                       onClick={() => handleRemoveTeam(team.publicId)}
                       className="p-2 text-red-400 active:scale-90 ml-2"
                     >
@@ -1755,47 +1783,128 @@ export default function TournamentDetailPage() {
                 })()}
             </div>
 
+            {/* ── GROUND FILTER ──
+                Horizontal scroll strip, not a <select>: one thumb, no dropdown to aim at,
+                and the same -mx-4 px-4 overflow-x-auto pattern the tab strip already uses
+                so wide content scrolls inside its own container rather than the page. */}
+            {venues.length > 1 && (
+              <div className="flex gap-2 -mx-4 px-4 overflow-x-auto pb-1">
+                {[
+                  { id: "ALL", name: "All grounds" },
+                  ...venues.map((v: any) => ({ id: v.id, name: v.name })),
+                ].map((g: any) => {
+                  const count =
+                    g.id === "ALL"
+                      ? fixtures.length
+                      : fixtures.filter(
+                          (f: any) =>
+                            f.venueId === g.id || f.tournamentVenue?.id === g.id,
+                        ).length;
+                  return (
+                    <button
+                      key={g.id}
+                      onClick={() => setFixtureGroundFilter(g.id)}
+                      className={`flex-shrink-0 px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${
+                        fixtureGroundFilter === g.id
+                          ? "bg-blue-600 border-blue-600 text-white"
+                          : "bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300"
+                      }`}
+                    >
+                      {g.name}
+                      <span className="ml-1.5 opacity-60">{count}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+
             {/* ── DATE+GROUND VIEW ── */}
             {(() => {
-              // Group fixtures by date
+              // Ground filter first — it applies to every section below.
+              const visible = fixtures.filter(
+                (f: any) =>
+                  fixtureGroundFilter === "ALL" ||
+                  f.venueId === fixtureGroundFilter ||
+                  f.tournamentVenue?.id === fixtureGroundFilter,
+              );
+
+              // POSTPONED fixtures get their own bucket at the top. postponeFixture does
+              // NOT clear scheduled_at, so before this they sat under the day they were
+              // originally meant to be played — a fixture postponed three weeks ago read
+              // as part of that day's programme forever. original_scheduled_at (V66) lets
+              // the card still say what the date was.
+              const postponed = visible.filter(
+                (f: any) => f.status === "POSTPONED",
+              );
+              const rest = visible.filter((f: any) => f.status !== "POSTPONED");
+
+              // Bucket by date. The key is a sortable yyyy-mm-dd built from the parts of
+              // the local date — never toISOString(), which would convert to UTC and put
+              // anything before 05:30 IST on the previous day (Rule 6).
+              const dayKeyOf = (iso: string) => {
+                const d = new Date(iso);
+                const mm = String(d.getMonth() + 1).padStart(2, "0");
+                const dd = String(d.getDate()).padStart(2, "0");
+                return `${d.getFullYear()}-${mm}-${dd}`;
+              };
+
               const byDate: Record<string, any[]> = {};
-              fixtures.forEach((f: any) => {
-                const dateKey = f.scheduledAt
-                  ? new Date(f.scheduledAt).toLocaleDateString("en-IN", {
-                      day: "2-digit",
-                      month: "short",
-                      year: "numeric",
-                      weekday: "short",
-                    })
-                  : "Unscheduled";
-                if (!byDate[dateKey]) byDate[dateKey] = [];
-                byDate[dateKey].push(f);
+              rest.forEach((f: any) => {
+                const key = f.scheduledAt ? dayKeyOf(f.scheduledAt) : "9999-99-99";
+                if (!byDate[key]) byDate[key] = [];
+                byDate[key].push(f);
               });
 
-              // Apply ground filter
-              const filteredByDate: Record<string, any[]> = {};
-              Object.entries(byDate).forEach(([date, dayFixtures]) => {
-                const filtered = dayFixtures.filter((f: any) => {
-                  if (
-                    fixtureGroundFilter !== "ALL" &&
-                    f.tournamentVenue?.id !== fixtureGroundFilter
-                  )
-                    return false;
-                  return true;
-                });
-                if (filtered.length > 0) filteredByDate[date] = filtered;
-              });
+              // Sorted explicitly. The list used to rely on object insertion order, which
+              // followed the server's ORDER BY roundNumber — chronological only while
+              // nothing had moved, and Phase A made fixtures reschedulable.
+              const dateSections = Object.keys(byDate)
+                .sort()
+                .map((key) => ({
+                  key,
+                  title:
+                    key === "9999-99-99"
+                      ? "📅 No date set"
+                      : "📅 " +
+                        new Date(byDate[key][0].scheduledAt).toLocaleDateString(
+                          "en-IN",
+                          {
+                            day: "2-digit",
+                            month: "short",
+                            year: "numeric",
+                            weekday: "short",
+                          },
+                        ),
+                  fixtures: byDate[key],
+                }));
 
-              if (Object.keys(filteredByDate).length === 0)
+              const sections = [
+                ...(postponed.length
+                  ? [
+                      {
+                        key: "POSTPONED",
+                        title: "⏸ Awaiting a new date",
+                        fixtures: postponed,
+                      },
+                    ]
+                  : []),
+                ...dateSections,
+              ];
+
+              if (sections.length === 0)
                 return (
                   <div className="text-center py-12">
                     <div className="text-3xl mb-2">📅</div>
-                    <p className="text-sm text-gray-400">No fixtures yet.</p>
+                    <p className="text-sm text-gray-400">
+                      {fixtures.length === 0
+                        ? "No fixtures yet."
+                        : "No fixtures at this ground."}
+                    </p>
                   </div>
                 );
 
-              return Object.entries(filteredByDate).map(
-                ([dateStr, dayFixtures]) => {
+              return sections.map(
+                ({ key: dateStr, title, fixtures: dayFixtures }) => {
                   // Group by ground within the day
                   const byGround: Record<string, any[]> = {};
                   dayFixtures.forEach((f: any) => {
@@ -1806,14 +1915,20 @@ export default function TournamentDetailPage() {
 
                   return (
                     <div key={dateStr} className="space-y-2">
-                      {/* Date header */}
+                      {/* Section header — a date, or the postponed bucket */}
                       <div className="flex items-center gap-2 mt-2">
-                        <div className="h-px flex-1 bg-gray-100 dark:bg-gray-800" />
-                        <span className="text-xs font-semibold text-gray-500 dark:text-gray-400 px-2">
-                          📅 {dateStr} · {dayFixtures.length} match
+                        <div
+                          className={`h-px flex-1 ${dateStr === "POSTPONED" ? "bg-amber-200 dark:bg-amber-800" : "bg-gray-100 dark:bg-gray-800"}`}
+                        />
+                        <span
+                          className={`text-xs font-semibold px-2 ${dateStr === "POSTPONED" ? "text-amber-700 dark:text-amber-400" : "text-gray-500 dark:text-gray-400"}`}
+                        >
+                          {title} · {dayFixtures.length} match
                           {dayFixtures.length !== 1 ? "es" : ""}
                         </span>
-                        <div className="h-px flex-1 bg-gray-100 dark:bg-gray-800" />
+                        <div
+                          className={`h-px flex-1 ${dateStr === "POSTPONED" ? "bg-amber-200 dark:bg-amber-800" : "bg-gray-100 dark:bg-gray-800"}`}
+                        />
                       </div>
 
                       {/* Per-ground columns */}
@@ -1890,17 +2005,36 @@ export default function TournamentDetailPage() {
                                       </div>
                                     </div>
 
-                                    {f.scheduledAt && (
-                                      <div className="text-xs text-gray-400 mb-1">
-                                        🕐{" "}
+                                    {f.status === "POSTPONED" ? (
+                                      /* In the postponed bucket there is no date to show,
+                                         so say what it WAS — V66 keeps original_scheduled_at
+                                         on the first move, and scheduledAt still holds the
+                                         old value because postponeFixture leaves it alone. */
+                                      <div className="text-xs text-amber-700 dark:text-amber-400 mb-1">
+                                        ⏸ Was{" "}
                                         {new Date(
-                                          f.scheduledAt,
-                                        ).toLocaleTimeString("en-IN", {
-                                          hour: "2-digit",
-                                          minute: "2-digit",
-                                          hour12: true,
+                                          f.originalScheduledAt ?? f.scheduledAt,
+                                        ).toLocaleDateString("en-IN", {
+                                          day: "2-digit",
+                                          month: "short",
                                         })}
+                                        {f.postponementReason
+                                          ? ` · ${f.postponementReason.replace(/_/g, " ").toLowerCase()}`
+                                          : ""}
                                       </div>
+                                    ) : (
+                                      f.scheduledAt && (
+                                        <div className="text-xs text-gray-400 mb-1">
+                                          🕐{" "}
+                                          {new Date(
+                                            f.scheduledAt,
+                                          ).toLocaleTimeString("en-IN", {
+                                            hour: "2-digit",
+                                            minute: "2-digit",
+                                            hour12: true,
+                                          })}
+                                        </div>
+                                      )
                                     )}
 
                                     <div className="flex gap-2 mt-1">
@@ -2024,7 +2158,13 @@ export default function TournamentDetailPage() {
                       {standings.map((s: any, i: number) => (
                         <tr
                           key={s.teamPublicId}
-                          className="border-b border-gray-50 dark:border-gray-800/50 hover:bg-gray-50 dark:hover:bg-gray-800/30"
+                          onClick={() =>
+                            setTeamSheet({
+                              publicId: s.teamPublicId,
+                              name: s.teamName,
+                            })
+                          }
+                          className="border-b border-gray-50 dark:border-gray-800/50 hover:bg-gray-50 dark:hover:bg-gray-800/30 cursor-pointer active:bg-gray-100 dark:active:bg-gray-800/60"
                         >
                           <td className="py-2.5 px-2 text-gray-400 text-xs">
                             {i + 1}
@@ -4261,6 +4401,161 @@ export default function TournamentDetailPage() {
           </div>
         </div>
       )}
+
+      {/* ── TEAM SHEET: fixtures and record together ── */}
+      {teamSheet &&
+        (() => {
+          const mine = fixtures.filter(
+            (f: any) =>
+              f.homeTeam?.publicId === teamSheet.publicId ||
+              f.awayTeam?.publicId === teamSheet.publicId,
+          );
+          const played = mine.filter((f: any) => f.status === "COMPLETED");
+          const upcoming = mine.filter(
+            (f: any) => !["COMPLETED", "ABANDONED"].includes(f.status),
+          );
+          const row = standings.find(
+            (r: any) => r.teamPublicId === teamSheet.publicId,
+          );
+          const opponentOf = (f: any) =>
+            f.homeTeam?.publicId === teamSheet.publicId
+              ? (f.awayTeam?.name ?? "TBD")
+              : (f.homeTeam?.name ?? "TBD");
+
+          return (
+            <div
+              className="fixed inset-0 z-50 bg-black/60 flex items-end"
+              onClick={() => setTeamSheet(null)}
+            >
+              <div
+                className="w-full bg-white dark:bg-gray-900 rounded-t-2xl max-h-[85dvh] overflow-y-auto"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className="p-4 border-b border-gray-100 dark:border-gray-800">
+                  <div className="w-10 h-1 bg-gray-300 dark:bg-gray-700 rounded-full mx-auto mb-3" />
+                  <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100 text-center break-words">
+                    {teamSheet.name}
+                  </h3>
+                </div>
+
+                <div className="p-4 space-y-4">
+                  {/* The standings row, in words rather than a table — a table of one
+                      row at 380px is all header and no information. */}
+                  {row ? (
+                    <div className="grid grid-cols-4 gap-2">
+                      {[
+                        { k: "Played", v: row.played },
+                        { k: "Won", v: row.won },
+                        { k: "Lost", v: row.lost },
+                        { k: "Points", v: row.points },
+                      ].map((c) => (
+                        <div
+                          key={c.k}
+                          className="bg-gray-50 dark:bg-gray-800 rounded-xl px-2 py-2 text-center"
+                        >
+                          <div className="text-base font-bold text-gray-900 dark:text-gray-100">
+                            {c.v}
+                          </div>
+                          <div className="text-[11px] text-gray-400">{c.k}</div>
+                        </div>
+                      ))}
+                      <div className="col-span-4 text-xs text-gray-400 text-center">
+                        NRR {Number(row.netRunRate ?? 0).toFixed(3)}
+                      </div>
+                    </div>
+                  ) : (
+                    <p className="text-xs text-gray-400 text-center">
+                      No standings row yet.
+                    </p>
+                  )}
+
+                  <div>
+                    <div className="text-xs text-gray-400 uppercase mb-2">
+                      Played · {played.length}
+                    </div>
+                    {played.length === 0 ? (
+                      <p className="text-xs text-gray-400">
+                        No matches played yet.
+                      </p>
+                    ) : (
+                      <div className="space-y-1.5">
+                        {played.map((f: any) => (
+                          <div
+                            key={f.publicId}
+                            className="flex items-start gap-2 bg-gray-50 dark:bg-gray-800 rounded-xl px-3 py-2"
+                          >
+                            <span className="text-sm flex-shrink-0">🏏</span>
+                            <div className="min-w-0 flex-1">
+                              <div className="text-sm text-gray-900 dark:text-gray-100 break-words">
+                                v {opponentOf(f)}
+                              </div>
+                              <div className="text-xs text-gray-400 break-words">
+                                {f.label ?? `Round ${f.roundNumber}`}
+                                {f.match?.resultDescription
+                                  ? ` · ${f.match.resultDescription}`
+                                  : ""}
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  <div>
+                    <div className="text-xs text-gray-400 uppercase mb-2">
+                      Upcoming · {upcoming.length}
+                    </div>
+                    {upcoming.length === 0 ? (
+                      <p className="text-xs text-gray-400">
+                        Nothing scheduled.
+                      </p>
+                    ) : (
+                      <div className="space-y-1.5">
+                        {upcoming.map((f: any) => (
+                          <div
+                            key={f.publicId}
+                            className="flex items-start gap-2 bg-gray-50 dark:bg-gray-800 rounded-xl px-3 py-2"
+                          >
+                            <span className="text-sm flex-shrink-0">
+                              {f.status === "POSTPONED" ? "⏸" : "📅"}
+                            </span>
+                            <div className="min-w-0 flex-1">
+                              <div className="text-sm text-gray-900 dark:text-gray-100 break-words">
+                                v {opponentOf(f)}
+                              </div>
+                              <div className="text-xs text-gray-400 break-words">
+                                {f.status === "POSTPONED"
+                                  ? "Awaiting a new date"
+                                  : f.scheduledAt
+                                    ? new Date(
+                                        f.scheduledAt,
+                                      ).toLocaleDateString("en-IN", {
+                                        day: "2-digit",
+                                        month: "short",
+                                        weekday: "short",
+                                      })
+                                    : "No date set"}
+                                {f.venue ? ` · ${f.venue}` : ""}
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  <button
+                    onClick={() => setTeamSheet(null)}
+                    className="w-full py-2.5 text-sm font-medium text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-800 rounded-xl active:scale-95"
+                  >
+                    Close
+                  </button>
+                </div>
+              </div>
+            </div>
+          );
+        })()}
 
       {toast && (
         <div className="fixed bottom-20 left-1/2 -translate-x-1/2 z-[100] bg-gray-800 border border-green-600 text-green-400 text-sm font-semibold px-6 py-2.5 rounded-full shadow-xl pointer-events-none">
