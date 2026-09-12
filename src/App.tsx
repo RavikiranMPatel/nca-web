@@ -454,6 +454,21 @@ function App() {
           </ProtectedRoute>
         }
       />
+      {/* Edit reuses TournamentCreatePage — same Phase 2 form, and the route's
+          publicId is what tells it which mode it is in. Declared BEFORE the
+          detail route so /:publicId/edit is not read as a tournament called
+          "edit"; react-router v6 ranks by specificity rather than order, but
+          the ordering keeps the intent readable. */}
+      <Route
+        path="/admin/cricket/tournaments/:publicId/edit"
+        element={
+          <ProtectedRoute roles={["ROLE_ADMIN", "ROLE_SUPER_ADMIN"]}>
+            <AppLayout>
+              <TournamentCreatePage />
+            </AppLayout>
+          </ProtectedRoute>
+        }
+      />
       <Route
         path="/admin/cricket/tournaments/:publicId"
         element={

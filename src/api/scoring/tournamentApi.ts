@@ -1,15 +1,165 @@
 import api from "../axios";
 
-export const listTournaments = () =>
-  api.get("/admin/cricket/tournaments").then((r) => r.data);
+/**
+ * The tournament list: paged, filtered and sorted by the SERVER (Slice 7).
+ *
+ * Every filter is a query parameter rather than a body, which is what lets the
+ * list page put its whole state in the URL and makes a filtered view a link
+ * someone can send.
+ */
+export interface TournamentListQuery {
+  search?: string;
+  year?: number | string;
+  status?: string;
+  format?: string;
+  type?: string;
+  team?: string;
+  venue?: string;
+  fromDate?: string;
+  toDate?: string;
+  sort?: TournamentSortKey;
+  direction?: "asc" | "desc";
+  /** 1-indexed — PageableConfig sets setOneIndexedParameters(true). */
+  page?: number;
+  size?: number;
+}
+
+/** The seven columns Phase 3 sorts on. Anything else is a 400 from the server. */
+export type TournamentSortKey =
+  | "name"
+  | "year"
+  | "startDate"
+  | "endDate"
+  | "status"
+  | "teams"
+  | "matches";
+
+/** One row of the list. Narrower than the entity the endpoint used to return. */
+export interface TournamentSummary {
+  publicId: string;
+  name: string;
+  shortName?: string | null;
+  format: string;
+  tournamentType: string;
+  status: string;
+  startDate?: string | null;
+  endDate?: string | null;
+  /** Derived from startDate by the server (ruling 11). Null when there is none. */
+  year?: number | null;
+  /** "2026", or "2026-27" when the season crosses a year boundary. */
+  seasonLabel?: string | null;
+  organizer?: string | null;
+  venue?: string | null;
+  logoUrl?: string | null;
+  defaultOvers?: number | null;
+  teamCount: number;
+  matchCount: number;
+  championTeamName?: string | null;
+}
+
+/** Spring's Page shape, narrowed to the fields the list actually reads. */
+export interface Paged<T> {
+  content: T[];
+  totalElements: number;
+  totalPages: number;
+  /** 0-indexed in the RESPONSE even though the request parameter is 1-indexed. */
+  number: number;
+  size: number;
+  first: boolean;
+  last: boolean;
+  empty: boolean;
+}
+
+/** What the dropdowns offer. Academy-scoped by the server. */
+export interface TournamentFilterOptions {
+  years: number[];
+  statuses: string[];
+  formats: string[];
+  types: string[];
+  teams: string[];
+  venues: string[];
+  sortFields: TournamentSortKey[];
+}
+
+/** Everything a tournament's create/edit form can set (Phase 2). */
+export interface TournamentInput {
+  name: string;
+  shortName?: string;
+  format?: string;
+  tournamentType?: string;
+  startDate?: string | null;
+  endDate?: string | null;
+  organizer?: string;
+  venue?: string;
+  description?: string;
+  logoUrl?: string;
+  defaultOvers?: number;
+  winPoints?: number;
+  tiePoints?: number;
+  noResultPoints?: number;
+  lossPoints?: number;
+}
+
+/** What create and update return — a DTO now, not the entity. */
+export interface TournamentDetails extends TournamentInput {
+  publicId: string;
+  status: string;
+  year?: number | null;
+  seasonLabel?: string | null;
+}
+
+/** Drops blank and undefined values, so an unset filter is simply absent. */
+const params = (q: TournamentListQuery): Record<string, string> => {
+  const out: Record<string, string> = {};
+  for (const [k, v] of Object.entries(q)) {
+    if (v === undefined || v === null || String(v).trim() === "") continue;
+    out[k] = String(v);
+  }
+  return out;
+};
+
+export const listTournaments = (
+  query: TournamentListQuery = {},
+): Promise<Paged<TournamentSummary>> =>
+  api
+    .get("/admin/cricket/tournaments", { params: params(query) })
+    .then((r) => r.data);
+
+export const getTournamentFilterOptions = (): Promise<TournamentFilterOptions> =>
+  api.get("/admin/cricket/tournaments/filter-options").then((r) => r.data);
+
+/**
+ * The filtered list as a PDF blob.
+ *
+ * Sends the FILTERS, not the rows on screen, so the document covers the whole
+ * filtered set and the server prints the filter description it actually applied.
+ * Returns the blob rather than downloading it — the same division
+ * getTournamentReport uses, so a test can read the bytes.
+ */
+export const exportTournamentListPdf = (
+  query: TournamentListQuery = {},
+): Promise<Blob> => {
+  const { page: _page, size: _size, ...filters } = query;
+  return api
+    .get("/admin/cricket/tournaments/export/pdf", {
+      params: params(filters),
+      responseType: "blob",
+    })
+    .then((r) => r.data as Blob);
+};
 
 export const getTournament = (publicId: string) =>
   api.get(`/admin/cricket/tournaments/${publicId}`).then((r) => r.data);
 
-export const createTournament = (data: any) =>
+export const createTournament = (
+  data: TournamentInput,
+): Promise<TournamentDetails> =>
   api.post("/admin/cricket/tournaments", data).then((r) => r.data);
 
-export const updateTournament = (publicId: string, data: any) =>
+export const updateTournament = (
+  publicId: string,
+  data: TournamentInput,
+): Promise<TournamentDetails> =>
   api.put(`/admin/cricket/tournaments/${publicId}`, data).then((r) => r.data);
 
 export interface TournamentResult {
