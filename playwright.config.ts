@@ -25,6 +25,10 @@ for (const [name, url] of [
 export default defineConfig({
   testDir: "./e2e/specs",
   outputDir: "./e2e/.artifacts",
+  // Fails the run if a fixture left a PLAYER_CREATED audit row whose player it
+  // already deleted. audit_logs has no FK to players, so those rows are immortal
+  // — 10,491 had piled up before this existed. See e2e/global-teardown.ts.
+  globalTeardown: "./e2e/global-teardown.ts",
   fullyParallel: false,       // scoring is stateful per match; keep runs deterministic
   workers: 2,
   forbidOnly: !!process.env.CI,
