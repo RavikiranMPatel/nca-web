@@ -10,6 +10,8 @@ export interface BallRequest {
   dismissedPlayerPublicId?: string;
   fielderPublicId?: string;
   fielder2PublicId?: string;
+  /** Idempotency key, unique per innings. Optional — an old client sends none (V74). */
+  clientBallId?: string;
   isFreeHit?: boolean;
 }
 

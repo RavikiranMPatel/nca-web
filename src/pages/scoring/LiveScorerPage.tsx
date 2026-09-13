@@ -3,6 +3,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import {
   postBall,
   undoLastBall,
+  swapBatters,
   getScoringState,
   getThisOver,
   recordResult,
@@ -29,6 +30,12 @@ import type {
 } from "../../types/scoring";
 import type { CricketMatch, CricketTeam } from "../../types/match";
 import api from "../../api/axios";
+import {
+  newBallId,
+  rememberPendingBall,
+  readPendingBall,
+  clearPendingBall,
+} from "../../utils/ballId";
 import WagonWheelModal from "./WagonWheelModal";
 
 const fmtOvers = (balls: number, perOver = 6) =>
@@ -270,7 +277,7 @@ export default function LiveScorerPage() {
    * After a failure we now ask the server what it actually holds and say which happened.
    */
   const [errorKind, setErrorKind] = useState<
-    "plain" | "not-recorded" | "recorded" | "unknown"
+    "plain" | "not-recorded" | "recorded" | "unknown" | "stale"
   >("plain");
   const [toast, setToast] = useState<string | null>(null);
   const [lastOverNumber, setLastOverNumber] = useState(1);
@@ -414,6 +421,11 @@ export default function LiveScorerPage() {
     useState<ScoringPlayer | null>(null);
 
   const loadingRef = useRef(false);
+  /**
+   * The key for the write currently in flight. Held across a retry so the second tap
+   * carries the same id, and cleared once the server has acknowledged.
+   */
+  const pendingBallIdRef = useRef<string | null>(null);
   // True when the batter picker is opened by the post-wicket flow, not initial setup.
   const postWicketSelectRef = useRef(false);
 
@@ -443,6 +455,11 @@ export default function LiveScorerPage() {
   useEffect(() => {
     if (!matchId) return;
     loadAll();
+    // A key left behind means a write was in flight when the page went away — a refresh
+    // mid-over is the likeliest route to a re-tap. Reusing it means the next tap either
+    // records the ball or gets back the state the server already holds; it cannot double.
+    const pending = readPendingBall(matchId);
+    if (pending) pendingBallIdRef.current = pending.ballId;
   }, [matchId]);
 
   // bfcache restore: React effects don't re-fire when the browser restores a
@@ -537,6 +554,12 @@ export default function LiveScorerPage() {
 
   const applyState = (state: BallResponse, ballsPerOverOverride?: number) => {
     setInnings(state.inningsState);
+
+    // Every response carries it, including GET /state, so this is always the delivery the
+    // screen is showing. It used to be set only on the wagon-wheel path — fine for a shot
+    // zone, useless as the ball undo names, because it would be stale or unset most of
+    // the time and produce 409s for no reason.
+    setLastDeliveryPublicId(state.lastDeliveryPublicId ?? null);
 
     // Players — resolved from server publicIds against the local roster
     setStriker(
@@ -683,6 +706,12 @@ export default function LiveScorerPage() {
     setErrorKind("plain");
     // Snapshot before the write so a failure can be resolved against the server.
     const before = inningsFingerprint(innings);
+    // Minted per tap and persisted BEFORE the post. If the reply is lost and the scorer
+    // taps again, the server recognises the key and returns the state it already holds
+    // rather than writing a second delivery. Reused across a retry, cleared on success.
+    const ballId = pendingBallIdRef.current ?? newBallId();
+    pendingBallIdRef.current = ballId;
+    rememberPendingBall(matchId, ballId);
 
     const isLegalBall = !extra || !["WIDE", "NO_BALL"].includes(extra);
     const prevOverNumber = innings?.overNumber ?? 1;
@@ -722,6 +751,7 @@ export default function LiveScorerPage() {
 
     try {
       const state = await postBall(matchId, {
+        clientBallId: ballId,
         bowlerPublicId: bowler.publicId,
         batsmanPublicId: striker.publicId,
         nonStrikerPublicId: nonStriker.publicId,
@@ -758,6 +788,9 @@ export default function LiveScorerPage() {
         setThisOver((prev) => [...prev, currentBallForSummary]);
       }
 
+      // Acknowledged: the write is no longer in flight, so the key must not be reused.
+      pendingBallIdRef.current = null;
+      clearPendingBall(matchId);
       applyState(state);
       showToast("✓ Ball saved");
     } catch (e: unknown) {
@@ -838,11 +871,18 @@ export default function LiveScorerPage() {
     setErrorKind("plain");
     // Snapshot before the write so a failure can be resolved against the server.
     const before = inningsFingerprint(innings);
+    // Minted per tap and persisted BEFORE the post. If the reply is lost and the scorer
+    // taps again, the server recognises the key and returns the state it already holds
+    // rather than writing a second delivery. Reused across a retry, cleared on success.
+    const ballId = pendingBallIdRef.current ?? newBallId();
+    pendingBallIdRef.current = ballId;
+    rememberPendingBall(matchId, ballId);
     try {
       const state = await postBall(matchId, {
         bowlerPublicId: bowler.publicId,
         batsmanPublicId: striker.publicId,
         nonStrikerPublicId: nonStriker.publicId,
+        clientBallId: ballId,
         runsBatsman: isWideDelivery ? 0 : pendingRuns,
         runsExtras: isWideDelivery ? 1 : 0,
         extraType: isWideDelivery ? "WIDE" : null,
@@ -878,6 +918,8 @@ export default function LiveScorerPage() {
         setThisOver((prev) => [...prev, wicketBallForSummary]);
       }
 
+      pendingBallIdRef.current = null;
+      clearPendingBall(matchId);
       applyState(state);
       showToast("✓ Wicket saved");
 
@@ -929,16 +971,30 @@ export default function LiveScorerPage() {
     if (!matchId || posting) return;
     setPosting(true);
     setError("");
+    setErrorKind("plain");
     try {
-      const state = await undoLastBall(matchId);
+      // Names the ball on screen. A 409 means the last delivery is no longer that one —
+      // someone else scored, or an earlier post landed after all.
+      const state = await undoLastBall(matchId, lastDeliveryPublicId ?? undefined);
       await refreshOver();
       applyState(state);
       showToast("✓ Undone");
     } catch (e: unknown) {
+      const status = (e as { response?: { status?: number } })?.response?.status;
       const msg =
         (e as { response?: { data?: { message?: string } } })?.response?.data
           ?.message ?? "Nothing to undo";
-      showError(msg);
+      if (status === 409) {
+        // Not a failure — the screen is behind. Adopt the server's picture so the over
+        // strip shows what actually happened, then say why nothing was undone. Reuses
+        // the "couldn't check" styling: amber, because it needs reading, not alarm.
+        await reconcileAfterFailedWrite(inningsFingerprint(innings));
+        // Not "couldn't check" — the server answered clearly. The screen was behind.
+        setErrorKind("stale");
+        setError(msg);
+      } else {
+        showError(msg);
+      }
     } finally {
       setPosting(false);
     }
@@ -974,6 +1030,9 @@ export default function LiveScorerPage() {
       setBatterStatsMap({});
       setPartnershipRuns(0);
       setPartnershipBalls(0);
+      // A key is unique per innings; one left behind could collide in the next one.
+      pendingBallIdRef.current = null;
+      clearPendingBall(matchId!);
       await loadAll();
       showToast("✓ Innings closed");
     } catch (e: unknown) {
@@ -1121,11 +1180,18 @@ export default function LiveScorerPage() {
     setMorePicking(true);
     setMoreError("");
     try {
-      const state = await api
-        .post<BallResponse>(
-          `/admin/cricket/matches/${matchId}/scoring/swap-batters`,
-        )
-        .then((r) => r.data);
+      // The intended end state, not a flip: the two batters with the ends exchanged.
+      // Sending state rather than an instruction makes a retry a no-op instead of an
+      // undo. Guarded because the server refuses ids that are not at the crease.
+      if (!striker || !nonStriker) {
+        setMoreError("Both batters must be set before swapping");
+        return;
+      }
+      const state = await swapBatters(
+        matchId,
+        nonStriker.publicId,
+        striker.publicId,
+      );
       applyState(state);
       closeMore();
       showToast("✓ Batters swapped");
@@ -1564,7 +1630,7 @@ export default function LiveScorerPage() {
           className={`mx-3 mt-2 px-4 py-3 rounded-xl border-2 ${
             errorKind === "recorded"
               ? "bg-emerald-50 border-emerald-400"
-              : errorKind === "unknown"
+              : errorKind === "unknown" || errorKind === "stale"
                 ? "bg-amber-50 border-amber-400"
                 : "bg-red-50 border-red-400"
           }`}
@@ -1576,7 +1642,7 @@ export default function LiveScorerPage() {
               className={`text-sm font-extrabold uppercase tracking-wide mb-0.5 ${
                 errorKind === "recorded"
                   ? "text-emerald-800"
-                  : errorKind === "unknown"
+                  : errorKind === "unknown" || errorKind === "stale"
                     ? "text-amber-900"
                     : "text-red-700"
               }`}
@@ -1585,14 +1651,16 @@ export default function LiveScorerPage() {
                 ? "✓ Ball recorded"
                 : errorKind === "unknown"
                   ? "⚠ Couldn't check"
-                  : "✗ Not recorded"}
+                  : errorKind === "stale"
+                    ? "⚠ Nothing undone"
+                    : "✗ Not recorded"}
             </div>
           )}
           <div
             className={`text-sm font-medium leading-snug ${
               errorKind === "recorded"
                 ? "text-emerald-900"
-                : errorKind === "unknown"
+                : errorKind === "unknown" || errorKind === "stale"
                   ? "text-amber-900"
                   : "text-red-800"
             }`}

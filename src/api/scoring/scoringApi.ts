@@ -13,11 +13,34 @@ export const postBall = (matchId: string, req: BallRequest) =>
     })
     .then((r) => r.data);
 
-export const undoLastBall = (matchId: string) =>
+/**
+ * expectedDeliveryPublicId names the ball the client is showing. The server refuses with
+ * 409 if the last delivery is no longer that one — which is what makes undo safe against
+ * a retry AND against a second scorer, neither of which an idempotency key would cover.
+ */
+export const undoLastBall = (
+  matchId: string,
+  expectedDeliveryPublicId?: string,
+) =>
   api
     .delete<BallResponse>(`${BASE(matchId)}/ball/last`, {
       timeout: SCORING_WRITE_TIMEOUT_MS,
+      params: expectedDeliveryPublicId ? { expectedDeliveryPublicId } : undefined,
     })
+    .then((r) => r.data);
+
+/** The intended end state, not a flip — applying it twice is a no-op. */
+export const swapBatters = (
+  matchId: string,
+  strikerPublicId: string,
+  nonStrikerPublicId: string,
+) =>
+  api
+    .post<BallResponse>(
+      `${BASE(matchId)}/swap-batters`,
+      { strikerPublicId, nonStrikerPublicId },
+      { timeout: SCORING_WRITE_TIMEOUT_MS },
+    )
     .then((r) => r.data);
 
 // The reconcile read. Same short budget — it runs when the scorer is already waiting.
