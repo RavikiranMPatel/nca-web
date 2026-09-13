@@ -8,9 +8,35 @@ import type { ApiRecord } from "./types";
  * prop: the split was about the size of one 3,559-line file, not about moving
  * where the state sits, and keeping the data flow identical is what lets
  * tournament-tabs.spec.ts prove the refactor by passing unchanged.
+ *
+ * The closeout slice added the two columns the API had been sending all along.
+ * `/standings` has carried `nrr` and `noResult` on every row since Phase 12, and
+ * this table rendered neither — so Phase 12's net run rate was computed, stored,
+ * RANKED ON and printed into the PDF while being invisible on the screen Phase
+ * 11 names, and a side whose match was abandoned read `P=3 W=1 L=1 T=0`, which
+ * does not add up because the column that explains it was missing.
+ *
+ * Nine columns now, and 375px is the viewport that has to hold them, so the
+ * table scrolls inside its own `overflow-x-auto` wrapper rather than widening
+ * the document: a body that scrolls sideways is the overflow the mobile check
+ * forbids.
  */
 interface Props {
   standings: ApiRecord[];
+}
+
+/**
+ * Net run rate, signed, to three decimal places.
+ *
+ * Signed because a run rate of -0.05 is not "0.05" and the sign is the whole
+ * point of the number; three places because that is how a run rate is quoted,
+ * and because it is what `TournamentReportPdfService.nrr` already prints — the
+ * screen and the printed table must not disagree about the same figure.
+ */
+function nrr(value: unknown): string {
+  const n = Number(value ?? 0);
+  if (!Number.isFinite(n)) return "+0.000";
+  return `${n < 0 ? "-" : "+"}${Math.abs(n).toFixed(3)}`;
 }
 
 export default function StandingsTab({
@@ -25,7 +51,8 @@ export default function StandingsTab({
           </div>
         ) : (
           <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-800 overflow-hidden">
-            <table className="w-full text-sm">
+            <div className="overflow-x-auto">
+            <table className="w-full text-sm min-w-[34rem]">
               <thead>
                 <tr className="border-b border-gray-100 dark:border-gray-800">
                   <th className="py-2.5 px-3 text-xs font-medium text-gray-400 text-left">
@@ -46,8 +73,20 @@ export default function StandingsTab({
                   <th className="py-2.5 px-2 text-xs font-medium text-gray-400 text-center">
                     T
                   </th>
+                  <th
+                    className="py-2.5 px-2 text-xs font-medium text-gray-400 text-center"
+                    title="No result — abandoned or washed out"
+                  >
+                    NR
+                  </th>
                   <th className="py-2.5 px-2 text-xs font-medium text-gray-400 text-center font-bold">
                     Pts
+                  </th>
+                  <th
+                    className="py-2.5 px-2 text-xs font-medium text-gray-400 text-center"
+                    title="Net run rate"
+                  >
+                    NRR
                   </th>
                 </tr>
               </thead>
@@ -55,6 +94,7 @@ export default function StandingsTab({
                 {standings.map((s: any, i: number) => (
                   <tr
                     key={s.teamPublicId}
+                    data-testid={`standings-row-${s.teamPublicId}`}
                     className="border-b border-gray-50 dark:border-gray-800/50 hover:bg-gray-50 dark:hover:bg-gray-800/30"
                   >
                     <td className="py-2.5 px-3 text-gray-400 text-xs">
@@ -80,25 +120,57 @@ export default function StandingsTab({
                         </div>
                       </div>
                     </td>
-                    <td className="py-2.5 px-2 text-center text-gray-500">
+                    <td
+                      data-testid="standings-played"
+                      className="py-2.5 px-2 text-center text-gray-500"
+                    >
                       {s.played}
                     </td>
-                    <td className="py-2.5 px-2 text-center text-green-600">
+                    <td
+                      data-testid="standings-won"
+                      className="py-2.5 px-2 text-center text-green-600"
+                    >
                       {s.won}
                     </td>
-                    <td className="py-2.5 px-2 text-center text-red-500">
+                    <td
+                      data-testid="standings-lost"
+                      className="py-2.5 px-2 text-center text-red-500"
+                    >
                       {s.lost}
                     </td>
-                    <td className="py-2.5 px-2 text-center text-gray-400">
+                    <td
+                      data-testid="standings-tied"
+                      className="py-2.5 px-2 text-center text-gray-400"
+                    >
                       {s.tied}
                     </td>
-                    <td className="py-2.5 px-2 text-center font-bold text-gray-900 dark:text-white">
+                    <td
+                      data-testid="standings-no-result"
+                      className="py-2.5 px-2 text-center text-gray-400"
+                    >
+                      {s.noResult ?? 0}
+                    </td>
+                    <td
+                      data-testid="standings-points"
+                      className="py-2.5 px-2 text-center font-bold text-gray-900 dark:text-white"
+                    >
                       {s.points}
+                    </td>
+                    <td
+                      data-testid="standings-nrr"
+                      className={`py-2.5 px-2 text-center tabular-nums whitespace-nowrap ${
+                        Number(s.nrr ?? 0) < 0
+                          ? "text-red-500"
+                          : "text-gray-600 dark:text-gray-300"
+                      }`}
+                    >
+                      {nrr(s.nrr)}
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
+            </div>
           </div>
         )}
       </div>
