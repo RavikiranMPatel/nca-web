@@ -22,6 +22,14 @@ first thing a new session reads was silently missing nine bugs, one of them a
 critical cross-tenant one. Rebuilt by the closeout slice and checked against the
 `## BUG-` headings rather than against memory. If you add an entry, add its row.
 
+**This is now checked, not remembered — `npm run register:check`.** It fails if
+an entry states no Status, if the index and the body disagree about whether a bug
+is open, if either side has an entry the other lacks, if the severities differ,
+or if the index is out of order. Telling people the convention is what we did
+before, twice; BUG-11 still spent a day marked open after it was fixed. The
+script is `scripts/check-bug-register.mjs`, has no dependencies and needs no
+backend.
+
 | ID | Title | Severity | Status |
 |----|-------|----------|--------|
 | BUG-01 | Strike inverted on EVERY wide and no ball | critical | **FIXED** — `e748bec` |
@@ -34,7 +42,7 @@ critical cross-tenant one. Rebuilt by the closeout slice and checked against the
 | BUG-08 | `ROLE_COACH` cannot load the live scorer page | medium | open — not fixed by instruction |
 | BUG-09 | `docker-compose.yml` DB does not match reality | low | open — docs/infra |
 | BUG-10 | A started match can never be deleted (FK violation) | high | **FIXED** — `b9a58a5` |
-| BUG-11 | Match public id collides under concurrent creation | medium | open — reproduced by the suite |
+| BUG-11 | Match public id collides under concurrent creation | medium | **FIXED** — backend `9f6d2d4`, spec `049426e` |
 | BUG-12 | Undo of the last remaining delivery loses the batters and bowler | medium | **FIXED** — `ab34118` |
 | BUG-13 | Undo omits a crease batter from `batterStats` | low | **FIXED** — `ab34118` |
 | BUG-14 | Consecutive-over rule enforced only in the UI | medium | **FIXED** — `c8c05a8` |
@@ -592,7 +600,8 @@ individually. Findings:
 
 ## BUG-07 — `ROLE_SCORER` cannot reach any scoring endpoint
 
-**Severity:** medium · **Not fixed — explicitly out of scope by instruction.**
+**Severity:** medium · **Status:** open — not fixed, explicitly out of scope by
+instruction.
 
 The service layer accepts the role —
 `ScoringService.java:1352`:
@@ -626,7 +635,8 @@ anyone adds it to `SecurityConfig`.
 
 ## BUG-08 — `ROLE_COACH` cannot load the live scorer page
 
-**Severity:** medium · **Not fixed — explicitly out of scope by instruction.**
+**Severity:** medium · **Status:** open — not fixed, explicitly out of scope by
+instruction.
 
 `SecurityConfig.java:113` deliberately grants `ROLE_COACH` access to
 `/scoring/**`, with a comment saying so. But the scorer page cannot start
@@ -658,7 +668,8 @@ run as ADMIN.**
 
 ## BUG-09 — `docker-compose.yml` DB does not match reality
 
-**Severity:** low · **Docs/infra — not fixed, noted by instruction.**
+**Severity:** low · **Status:** open — docs/infra, not fixed, noted by
+instruction.
 
 `codebase/docker-compose.yml` declares:
 
@@ -779,7 +790,8 @@ marked expected-fail any more.
 
 ## BUG-11 — Match public id collides under concurrent creation
 
-**Severity:** medium · **Found by:** the suite, running two Playwright workers
+**Severity:** medium · **Status: FIXED** — backend `9f6d2d4`, spec `049426e`
+(2026-09-13) · **Found by:** the suite, running two Playwright workers
 
 **What happens.** `POST /api/admin/cricket/matches` intermittently returns 400:
 
@@ -816,12 +828,27 @@ so the match generator looks like an oversight rather than a decision.
 with two Playwright workers; a real pair of admins would hit it rarely, and there
 is no retry, so the second admin sees a 400 with a raw constraint name.
 
-**Suite handling.** `createScoringMatch` retries up to five times, with a comment
-pointing here. Retried rather than serialised on purpose — running the suite
-single-worker would hide the defect instead of recording it.
+**Suite handling, while it was open.** `createScoringMatch` retried up to five
+times, with a comment pointing here. Retried rather than serialised on purpose —
+running the suite single-worker would have hidden the defect instead of recording
+it. **Both retries were removed in `049426e`**: with the generator fixed, a
+collision is a real regression and must fail the run rather than be absorbed.
 
-**Note since `b9a58a5`:** the API no longer returns the constraint name, so the
-retry matches on the generic "already exists" message instead. Match creation has
+**The fix.** `MatchService.generateMatchPublicId` no longer reads the clock:
+
+```java
+String generateMatchPublicId() {
+    return "MCH-NCA-" + UUID.randomUUID().toString()
+            .replace("-", "").substring(0, 12).toUpperCase();
+}
+```
+
+Twelve hex characters of a random UUID. Measured against the old generator: **7
+collisions in 24 concurrent creates**; none with this one.
+
+**Note from while it was open (`b9a58a5`):** the API no longer returns the
+constraint name, so the retry matched on the generic "already exists" message
+instead. Match creation has
 only one unique constraint a caller can trip, so that is unambiguous here — but it
 does mean **a client can no longer tell which constraint failed**. If callers ever
 need to branch on that, the right answer is a stable machine-readable error code,
@@ -1051,7 +1078,8 @@ re-stamped with `now()` — both asserted in
 
 ## BUG-18 — `postBall` has no idempotency key, so a retry double-scores
 
-**Severity:** high · **Found by:** section 14 (T20-348, EDGE-27)
+**Severity:** high · **Status:** open — logged by instruction, not fixed ·
+**Found by:** section 14 (T20-348, EDGE-27)
 
 **What happens.** Posting the identical delivery payload twice records it twice:
 
@@ -1101,7 +1129,8 @@ positively in the same file.
 
 ## BUG-19 — `extra_type` is unvalidated, so unknown values silently lose runs
 
-**Severity:** high · **Found by:** section 16 (EDGE-04, EDGE-36)
+**Severity:** high · **Status:** open — logged by instruction, not fixed ·
+**Found by:** section 16 (EDGE-04, EDGE-36)
 
 **What happens.** `postBall` stores whatever `extraType` string it is given:
 
@@ -1930,9 +1959,13 @@ rewritten. Recorded in `.claude/rules/gotchas.md`.
 
 ## BUG-34 — see PROGRESS.md
 
-Recorded in `nextgen-cricket-academy/docs/tournament/PROGRESS.md` under Slice 4b:
-the Lombok/Jackson `is*` boolean naming trap, audited across both repos. Noted
-here only so the numbering does not appear to skip.
+**Severity:** medium · **Status: FIXED** in `1f01f1a`
+
+Recorded in full in `nextgen-cricket-academy/docs/tournament/PROGRESS.md` under
+Slice 4b: the Lombok/Jackson `is*` boolean naming trap, audited across both
+repos. The entry is kept here so the numbering does not appear to skip, and so
+the index has a body to agree with — a pointer entry still needs a Status, or
+the register cannot answer "is this open?" without opening another file.
 
 ---
 
