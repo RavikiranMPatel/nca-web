@@ -79,6 +79,16 @@ const REPORTS = [
 
 type Report = (typeof REPORTS)[number];
 
+/**
+ * The academy the reports are generated for.
+ *
+ * Seeded on both test academies via `PUT /api/admin/settings/ACADEMY_NAME` and
+ * recorded in SESSION-HANDOFF.md's seeded-data table, because nothing in the
+ * suite creates it and a report with no academy name is what the suite silently
+ * asserted for its whole life.
+ */
+const ACADEMY_NAME = "Test Academy A";
+
 const url = (tid: string, type: string, query = "") =>
   `/api/admin/cricket/tournaments/${tid}/reports/${type}${query}`;
 
@@ -116,6 +126,19 @@ test.describe("Slice 6 — tournament reports", () => {
 
       // The text, which is the assertion that matters.
       expect(flat(r.text), `${type}: names its tournament`).toContain(T.tournamentName);
+
+      // And the academy, which every page carries twice — the header title and
+      // the confidentiality footer.
+      //
+      // This went unasserted because it was EMPTY: neither test academy had an
+      // ACADEMY_NAME setting, so getAcademyName() returned "" and every report
+      // rendered a blank header and a footer that began "  •  ". The header read
+      // "— Results", which looks like a dash belonging to the title rather than
+      // a missing name, which is why nobody saw it. The setting is now set on
+      // both academies through the settings API, the way platform onboarding
+      // would have set it.
+      expect(flat(r.text), `${type}: names the academy in its header and footer`)
+        .toContain(ACADEMY_NAME);
     }
   });
 
