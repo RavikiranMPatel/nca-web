@@ -3,6 +3,7 @@ import { Api } from "./api";
 import { config, type Tenant } from "./env";
 import { dbExec } from "./db";
 import { createPlayer } from "./createPlayer";
+import { newFixtureTag, newPhoneTrunk, fixturePhone } from "./tag";
 
 /**
  * A tournament with one COMPLETED, really-scored fixture — built from REAL
@@ -66,7 +67,6 @@ export interface ScoredTournament {
   destroy(): Promise<void>;
 }
 
-let counter = 0;
 const PER_SIDE = 11;
 
 export async function createScoredTournament(
@@ -74,7 +74,10 @@ export async function createScoredTournament(
 ): Promise<ScoredTournament> {
   const env = config();
   const api = await Api.login(opts.tenant ?? env.a);
-  const tag = `${Date.now() % 1000000}${(counter++).toString().padStart(2, "0")}`;
+  // Random, not clock+counter: both halves of the old scheme were per-process, so
+  // two workers starting in the same millisecond tagged their rows identically and
+  // the first teardown deleted the other's data (BUG-54).
+  const tag = newFixtureTag();
   const label = opts.label ?? "Scored";
   const tournamentName = `${label} ${tag}`;
 
@@ -132,6 +135,11 @@ async function build(api: Api, tag: string, label: string,
                      tournamentName: string,
                      markFinal: boolean): Promise<ScoredTournament> {
 
+  // One trunk per fixture; the player index is what separates the 22 numbers.
+  // The old scheme built the phone from the tag and truncated to ten characters,
+  // which cut the index off and gave 22 players three phone numbers between them.
+  const phoneTrunk = newPhoneTrunk();
+
   // ── a batch and 22 real players ───────────────────────────────────────────
   const batch = await api.raw("post", "/api/admin/batches", {
     name: `${label} Batch ${tag}`,
@@ -146,7 +154,7 @@ async function build(api: Api, tag: string, label: string,
     const { publicId } = await createPlayer(api, {
       displayName, gender: "MALE", profession: "STUDENT",
       dob: `2010-01-${String((i % 28) + 1).padStart(2, "0")}`,
-      phone: `9${tag}${String(i).padStart(2, "0")}`.slice(0, 10),
+      phone: fixturePhone(phoneTrunk, i),
       joiningDate: "2026-01-15", batchIds: [batchId],
     }, displayName);
     players.push({ publicId, displayName });

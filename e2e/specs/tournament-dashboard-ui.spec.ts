@@ -25,7 +25,9 @@ test.beforeAll(async ({}, testInfo) => {
   // fixture is a full scored match — three of them is a minute of setup for one
   // more Chromium viewport.
   if (testInfo.project.name === "mobile-chrome") return;
-  s = await createScoredTournament({ label: `UI${testInfo.project.name === "mobile" ? "M" : "D"}` });
+  // A plain label: the fixture's tag is random per call (BUG-54), so two projects
+  // running this file at once no longer need the label to tell them apart.
+  s = await createScoredTournament({ label: "UI" });
 });
 
 test.afterAll(async () => {

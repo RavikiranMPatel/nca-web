@@ -33,27 +33,22 @@ let T: ScoredTournament;
 /**
  * This run's abandoned match, named so teardown can address exactly it.
  *
- * Off the TOURNAMENT name rather than off `T.tag`: the tag is
- * `Date.now() % 1000000` plus a per-PROCESS counter, so two projects that start
- * in the same millisecond get the same tag, and a title built from the tag alone
- * named both projects' matches. The first teardown then tried to delete the
- * other project's match while its fixture still referenced it, which Postgres
- * refuses — so neither was cleaned up. The tournament name carries the
- * worker-unique label.
+ * Off the TOURNAMENT name, which carries the fixture's tag and is therefore
+ * unique to this fixture (BUG-54). It used to need more care than that: the tag
+ * was a per-process clock+counter, so a title built from it named two projects'
+ * matches at once and the first teardown tried to delete a match another
+ * project's fixture still referenced.
  */
 const ABANDONED_TITLE = () => `${T.tournamentName} abandoned`;
 let seed: Record<string, string>;
 let standings: any[];
 
-test.beforeAll(async ({ }, workerInfo) => {
-  // The label is worker-unique on purpose. `createScoredTournament` tags its
-  // rows with `Date.now() % 1000000` and tears down by MATCHING ON THE NAME, so
-  // two projects that start in the same millisecond build identically-named
-  // tournaments, players and batches — and the first teardown deletes the other
-  // project's rows out from under it. That is the same hazard championship.ts
-  // records and solves by keying teardown on the public id. Seen here as a 404
-  // adding a player to a squad that had just been created.
-  T = await createScoredTournament({ label: `NRRUI${workerInfo.workerIndex}` });
+test.beforeAll(async () => {
+  // A plain label. It used to be suffixed with the worker index to work around
+  // BUG-54 — `createScoredTournament` tore down by matching on a name built from
+  // a per-process clock+counter, so two projects starting together deleted each
+  // other's rows. The tag is random now, so the fixture is unique on its own.
+  T = await createScoredTournament({ label: "NRRUI" });
   seed = T.api.storageSeed();
 
   // ── a second fixture, abandoned ──────────────────────────────────────────
