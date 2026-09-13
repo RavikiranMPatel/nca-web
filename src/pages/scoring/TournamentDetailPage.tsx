@@ -956,7 +956,9 @@ export default function TournamentDetailPage() {
       schedTime = "";
     if (f.scheduledAt) {
       const d = new Date(f.scheduledAt);
-      schedDate = d.toISOString().split("T")[0];
+      // Rule 6: built from local parts, never toISOString(), which converts to UTC and
+      // pre-filled yesterday's date between 00:00 and 05:29 IST.
+      schedDate = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
       schedTime = d.toTimeString().substring(0, 5);
     }
     setEditFixtureForm({
