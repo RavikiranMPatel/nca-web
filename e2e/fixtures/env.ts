@@ -20,6 +20,14 @@ export interface E2EEnv {
    * nothing about the TENANT one. The credentials were already in `.env.test`.
    */
   bSuperAdmin: Tenant;
+  /**
+   * The PLATFORM_ADMIN, for tenant provisioning only.
+   *
+   * roles.md limits this role to academy onboarding and player-count billing, so
+   * it is used by exactly one spec — BUG-22's, which has to create real academies
+   * to prove their player-id prefixes cannot collide.
+   */
+  platform: Tenant;
   db: { name: string; user: string; host: string; port: string };
 }
 export interface Tenant {
@@ -75,6 +83,12 @@ export function config(): E2EEnv {
         ? need("E2E_A_SUPERADMIN_EMAIL") : need("E2E_A_EMAIL"),
       password: process.env.E2E_AS_SUPER_ADMIN === "1"
         ? need("E2E_A_SUPERADMIN_PASSWORD") : need("E2E_A_PASSWORD"),
+    },
+    platform: {
+      slug: "platform",
+      origin: need("E2E_PLATFORM_ORIGIN"),
+      email: need("E2E_PLATFORM_EMAIL"),
+      password: need("E2E_PLATFORM_PASSWORD"),
     },
     aCoach: {
       slug: need("E2E_A_SLUG"),
