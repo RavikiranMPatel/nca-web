@@ -11,6 +11,7 @@ import type { Dispatch, SetStateAction } from "react";
 import type { ApiRecord, GenForm, Handler } from "./types";
 import { fixtureStatusColor } from "./constants";
 import api from "../../api/axios";
+import { formatFixtureDate, formatFixtureTime } from "../../utils/date";
 
 /** Phase 18's four ways of looking at the same fixture list. */
 const FIXTURE_VIEWS = [
@@ -203,15 +204,12 @@ export default function FixturesTab({
         </div>
 
         {(() => {
+          // In the ground's zone, not the reader's: formatting an instant with
+          // no timeZone renders it against whatever clock the browser is set to,
+          // so a 09:30 IST fixture read from New York became "12:00 am" on the
+          // day before. A fixture's slot belongs to the ground.
           const dateOf = (f: any) =>
-            f.scheduledAt
-              ? new Date(f.scheduledAt).toLocaleDateString("en-IN", {
-                  day: "2-digit",
-                  month: "short",
-                  year: "numeric",
-                  weekday: "short",
-                })
-              : "Unscheduled";
+            f.scheduledAt ? formatFixtureDate(f.scheduledAt) : "Unscheduled";
 
           const teamNames = (f: any) =>
             f.byeTeam
@@ -413,13 +411,7 @@ export default function FixturesTab({
                                 {f.scheduledAt && (
                                   <div className="text-xs text-gray-400 mb-1">
                                     🕐{" "}
-                                    {new Date(
-                                      f.scheduledAt,
-                                    ).toLocaleTimeString("en-IN", {
-                                      hour: "2-digit",
-                                      minute: "2-digit",
-                                      hour12: true,
-                                    })}
+                                    {formatFixtureTime(f.scheduledAt)}
                                   </div>
                                 )}
 
