@@ -41,7 +41,25 @@ import { randomInt } from "node:crypto";
  * million, which is ample for rows that live for one spec file.
  */
 export function makeTagger(_now: () => number = Date.now): () => string {
-  return () => String(randomInt(10_000_000, 100_000_000));
+  // The issued set makes within-process uniqueness a guarantee rather than a
+  // probability. Eight digits is 9x10^7 values, and the birthday bound over 5000
+  // draws is a 13% chance of at least one repeat — which is not a rounding error,
+  // it is a test that fails one run in eight. (It did: bug-54's own
+  // "a worker's own tags never repeat" failed on mobile-chrome in the full run.)
+  //
+  // Widening the tag is not available — eight DIGITS is what the PDF column
+  // widths were built against, see above. So the draw is retried instead, which
+  // costs nothing at these counts and turns a statistical claim into a real one.
+  const issued = new Set<string>();
+  return () => {
+    for (;;) {
+      const tag = String(randomInt(10_000_000, 100_000_000));
+      if (!issued.has(tag)) {
+        issued.add(tag);
+        return tag;
+      }
+    }
+  };
 }
 
 export const newFixtureTag = makeTagger();

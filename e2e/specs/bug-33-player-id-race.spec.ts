@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { newPhoneTrunk, fixturePhone } from "../fixtures/tag";
 import { Api } from "../fixtures/api";
 import { config } from "../fixtures/env";
 import { dbOne, dbCount, dbExec } from "../fixtures/db";
@@ -28,6 +29,7 @@ import { dbOne, dbCount, dbExec } from "../fixtures/db";
  * Desktop only: an API and database contract with no viewport dimension.
  */
 
+const PHONE_TRUNK = newPhoneTrunk();
 const RUN = `${Date.now() % 1000000}`;
 const LABEL = `BUG33 ${RUN}`;
 const N = 20;
@@ -36,6 +38,10 @@ test.afterAll(() => {
   const ids = `(SELECT id FROM players WHERE display_name LIKE '${LABEL}%')`;
   dbExec(`DELETE FROM player_career_stats WHERE player_id IN ${ids}`);
   dbExec(`DELETE FROM player_batches WHERE player_id IN ${ids}`);
+  // audit_logs has no FK to players, so a PLAYER_CREATED row outlives the
+  // player it describes — 10,491 had accumulated before anything checked.
+  // Deleted here, BEFORE the players, while the ids still resolve.
+  dbExec(`DELETE FROM audit_logs WHERE entity_id IN ${ids}`);
   dbExec(`DELETE FROM players WHERE display_name LIKE '${LABEL}%'`);
   dbExec(`DELETE FROM batches WHERE name = '${LABEL} Batch'`);
 });
@@ -71,7 +77,9 @@ test(`BUG-33 ${N} players created at once get ${N} distinct ids and no 409`,
       gender: "MALE",
       profession: "STUDENT",
       dob: "2010-06-15",
-      phone: `8${RUN}${String(i).padStart(2, "0")}`.slice(0, 10),
+      // Truncating the index away gave ten players one number; V105 makes a
+      // player's phone unique within an academy, so that is now unsaveable.
+      phone: fixturePhone(PHONE_TRUNK, i),
       joiningDate: "2026-01-15",
       batchIds: [batchId],
     };

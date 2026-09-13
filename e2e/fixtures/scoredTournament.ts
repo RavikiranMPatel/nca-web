@@ -127,6 +127,11 @@ async function removeEverything(api: Api, tag: string, label: string,
             (SELECT id FROM players WHERE display_name LIKE '${like}')`);
   dbExec(`DELETE FROM player_batches WHERE player_id IN
             (SELECT id FROM players WHERE display_name LIKE '${like}')`);
+  // audit_logs has no FK to players, so a PLAYER_CREATED row outlives the
+  // player it describes — 10,491 had accumulated before anything checked.
+  // Deleted here, BEFORE the players, while the ids still resolve.
+  dbExec(`DELETE FROM audit_logs WHERE entity_id IN
+            (SELECT id FROM players WHERE display_name LIKE '${like}')`);
   dbExec(`DELETE FROM players WHERE display_name LIKE '${like}'`);
   dbExec(`DELETE FROM batches WHERE name = '${label} Batch ${tag}'`);
 }

@@ -44,6 +44,10 @@ test.afterAll(() => {
   dbExec(`DELETE FROM fee_installment_plans WHERE player_id IN ${players}`);
   dbExec(`DELETE FROM player_career_stats WHERE player_id IN ${players}`);
   dbExec(`DELETE FROM player_batches WHERE player_id IN ${players}`);
+  // audit_logs has no FK to players, so a PLAYER_CREATED row outlives the
+  // player it describes — 10,491 had accumulated before anything checked.
+  // Deleted here, BEFORE the players, while the ids still resolve.
+  dbExec(`DELETE FROM audit_logs WHERE entity_id IN ${players}`);
   dbExec(`DELETE FROM players WHERE display_name LIKE '${LABEL}%'`);
   dbExec(`DELETE FROM batches WHERE name = '${LABEL} Batch'`);
 });

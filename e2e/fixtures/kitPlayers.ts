@@ -3,6 +3,7 @@ import { Api } from "./api";
 import { config, type Tenant } from "./env";
 import { dbExec } from "./db";
 import { createPlayer } from "./createPlayer";
+import { newPhoneTrunk, fixturePhone } from "./tag";
 
 /**
  * A self-contained set of players for the kit specs.
@@ -73,6 +74,10 @@ function removeEverything(tag: string, label: string): void {
   dbExec(`DELETE FROM player_kit_details WHERE player_id IN ${ids}`);
   dbExec(`DELETE FROM player_career_stats WHERE player_id IN ${ids}`);
   dbExec(`DELETE FROM player_batches WHERE player_id IN ${ids}`);
+  // audit_logs has no FK to players, so a PLAYER_CREATED row outlives the
+  // player it describes — 10,491 had accumulated before anything checked.
+  // Deleted here, BEFORE the players, while the ids still resolve.
+  dbExec(`DELETE FROM audit_logs WHERE entity_id IN ${ids}`);
   dbExec(`DELETE FROM players WHERE display_name LIKE '${like}'`);
   dbExec(`DELETE FROM batches WHERE name = '${label} Batch ${tag}'`);
 }
@@ -86,14 +91,21 @@ async function build(
   expect(batch.status, `create batch for ${tag}`).toBeLessThan(400);
   const batchId = (batch.body as any).id as string;
 
+  const phoneTrunk = newPhoneTrunk();
   const players: KitPlayer[] = [];
   for (let i = 0; i < count; i++) {
     const displayName = `${label} ${tag} P${String(i + 1).padStart(2, "0")}`;
     const { publicId } = await createPlayer(api, {
       displayName, gender: "MALE", profession: "STUDENT",
       dob: `2010-01-${String((i % 28) + 1).padStart(2, "0")}`,
-      // Phone is unique per academy; the tag keeps runs from colliding.
-      phone: `9${tag}${String(i).padStart(2, "0")}`.slice(0, 10),
+      // One trunk per fixture, the player index on the end (BUG-54 / V105).
+      //
+      // This was `9${tag}${i}`.slice(0, 10), which truncated the INDEX away and
+      // gave every ten players the same number. Nothing enforced phone
+      // uniqueness, so it passed — until V105 made a player's phone unique
+      // within an academy and the eleventh player in a kit fixture became
+      // unsaveable.
+      phone: fixturePhone(phoneTrunk, i),
       joiningDate: "2026-01-15", batchIds: [batchId],
     }, displayName);
     players.push({ publicId, displayName });
