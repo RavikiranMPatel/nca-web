@@ -277,3 +277,42 @@ export const checkFixtureCandidate = (
       params,
     })
     .then((r) => r.data);
+
+// ── Fixture officials ──
+// Assignable before a match exists. Slot roles (UMPIRE_1, UMPIRE_2, REFEREE, SCORER)
+// matching match_officials; the assignment is COPIED onto the match at createMatch.
+
+export const listFixtureOfficials = (publicId: string, fixturePublicId: string) =>
+  api
+    .get(
+      `/admin/cricket/tournaments/${publicId}/fixtures/${fixturePublicId}/officials`,
+    )
+    .then((r) => r.data);
+
+export const assignFixtureOfficial = (
+  publicId: string,
+  fixturePublicId: string,
+  officialPublicId: string,
+  role: string,
+) =>
+  api
+    .post(
+      `/admin/cricket/tournaments/${publicId}/fixtures/${fixturePublicId}/officials`,
+      { officialPublicId, role },
+    )
+    .then((r) => r.data);
+
+export const removeFixtureOfficial = (
+  publicId: string,
+  fixturePublicId: string,
+  role: string,
+) =>
+  api.delete(
+    `/admin/cricket/tournaments/${publicId}/fixtures/${fixturePublicId}/officials/${role}`,
+  );
+
+/** The register, filtered to active. Not tournament_officials_pool — see the open item. */
+export const searchOfficials = (search: string) =>
+  api
+    .get(`/admin/cricket/officials`, { params: { search } })
+    .then((r) => r.data);

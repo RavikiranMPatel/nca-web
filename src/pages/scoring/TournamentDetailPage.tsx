@@ -9,6 +9,10 @@ import {
   listFixtures,
   generateFixtures,
   getFixtureConflicts,
+  listFixtureOfficials,
+  assignFixtureOfficial,
+  removeFixtureOfficial,
+  searchOfficials,
   checkFixtureCandidate,
   addManualFixture,
   getStandings,
@@ -199,6 +203,31 @@ export default function TournamentDetailPage() {
     durationBasis: string;
     scope: string;
   } | null>(null);
+  /**
+   * Officials on the fixture being edited, keyed by slot. Slots not capabilities:
+   * cricket_officials.default_role says UMPIRE for everyone, and nothing derives which
+   * umpire is UMPIRE_1.
+   */
+  // Named apart from the module-scope OFFICIAL_ROLES, which is the CAPABILITY list the
+  // tournament officials-pool UI uses (UMPIRE, THIRD_UMPIRE, ...). These are the SLOTS
+  // match_officials and fixture_officials key on. Shadowing the other would have broken
+  // the pool UI silently.
+  const FIXTURE_OFFICIAL_SLOTS = [
+    { key: "UMPIRE_1", label: "Umpire 1" },
+    { key: "UMPIRE_2", label: "Umpire 2" },
+    { key: "REFEREE", label: "Referee" },
+    { key: "SCORER", label: "Scorer" },
+  ];
+  const [fixtureOfficials, setFixtureOfficials] = useState<
+    Record<string, { publicId: string; name: string }>
+  >({});
+  /** The officials sheet, one level between the edit sheet and the picker. */
+  const [showOfficialsSheet, setShowOfficialsSheet] = useState(false);
+  /** Which slot the picker is open for, or null. */
+  const [officialPicker, setOfficialPicker] = useState<string | null>(null);
+  const [officialSearch, setOfficialSearch] = useState("");
+  const [officialResults, setOfficialResults] = useState<any[]>([]);
+
   /** Clashes the date currently typed into a sheet would create. */
   const [candidateConflicts, setCandidateConflicts] = useState<any[]>([]);
 
@@ -238,6 +267,7 @@ export default function TournamentDetailPage() {
     venue: "",
     venueId: "",
     status: "SCHEDULED",
+    notes: "",
     scheduledDate: "",
     scheduledTime: "",
   });
@@ -952,6 +982,22 @@ export default function TournamentDetailPage() {
 
   const openEditFixture = (f: any) => {
     setEditingFixture(f);
+    // Officials live on their own table, so they load when the sheet opens rather than
+    // riding along with the fixture list.
+    setFixtureOfficials({});
+    listFixtureOfficials(publicId!, f.publicId)
+      .then((rows: any[]) => {
+        const map: Record<string, { publicId: string; name: string }> = {};
+        rows.forEach((r) => {
+          if (r.official)
+            map[r.role] = {
+              publicId: r.official.publicId,
+              name: r.official.name,
+            };
+        });
+        setFixtureOfficials(map);
+      })
+      .catch(() => setFixtureOfficials({}));
     let schedDate = "",
       schedTime = "";
     if (f.scheduledAt) {
@@ -968,6 +1014,7 @@ export default function TournamentDetailPage() {
       venue: f.venue ?? "",
       venueId: f.tournamentVenue?.id ?? "",
       status: f.status,
+      notes: f.notes ?? "",
       scheduledDate: schedDate,
       scheduledTime: schedTime,
     });
@@ -4304,10 +4351,57 @@ export default function TournamentDetailPage() {
                   ))}
                 </div>
               </div>
+              {/* Officials — ONE summary row, not four.
+                  Four rows measured 222px and pushed Save 396px below the fold on the
+                  surface with the least headroom. Same two-level pattern the fielder
+                  picker uses, one level deeper: this row opens a sheet of four slots,
+                  each of which opens the search. */}
+              <div>
+                <label className="text-xs text-gray-400 uppercase">
+                  Officials
+                </label>
+                <button
+                  onClick={() => setShowOfficialsSheet(true)}
+                  className={`mt-1 w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-sm border ${
+                    Object.keys(fixtureOfficials).length > 0
+                      ? "bg-teal-50 dark:bg-teal-950/30 border-teal-200 dark:border-teal-800 text-teal-800 dark:text-teal-300"
+                      : "bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-400"
+                  }`}
+                >
+                  <span className="truncate">
+                    {Object.keys(fixtureOfficials).length === 0
+                      ? "None assigned"
+                      : `${Object.keys(fixtureOfficials).length} assigned`}
+                  </span>
+                  <span className="flex-shrink-0 ml-2">→</span>
+                </button>
+              </div>
+
+              {/* A note on the plan — the ground is wet, a team is arriving late. Copied
+                  to cricket_matches.notes when the match is created. */}
+              <div>
+                <label className="text-xs text-gray-400 uppercase">Note</label>
+                <input
+                  type="text"
+                  maxLength={500}
+                  value={editFixtureForm.notes}
+                  onChange={(e) =>
+                    setEditFixtureForm((p) => ({ ...p, notes: e.target.value }))
+                  }
+                  placeholder="Ground wet, team arriving late…"
+                  className="mt-1 w-full px-3 py-2.5 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm text-gray-900 dark:text-gray-100 outline-none"
+                />
+              </div>
+
               {/* Between the inputs and the buttons, never on them. */}
               <ConflictNote />
 
-              <div className="flex gap-3 pt-2">
+              {/* Sticky, so Save is reachable whatever the sheet grows to.
+                  Collapsing officials to one row took 150px off, but this sheet carries
+                  eleven controls and Save still sat 246px below the fold. Shaving fields
+                  fights the content; pinning the action does not. -mx-4 px-4 cancels the
+                  parent's padding so the bar spans the full sheet width. */}
+              <div className="sticky bottom-0 -mx-4 px-4 pt-2 pb-3 bg-white dark:bg-gray-900 border-t border-gray-100 dark:border-gray-800 flex gap-3">
                 <button
                   onClick={() => {
                     setShowEditFixture(false);
@@ -4545,6 +4639,183 @@ export default function TournamentDetailPage() {
                   Add Official
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── OFFICIALS SHEET ──
+          The middle level. Four slots live here rather than in the edit sheet, which
+          measured 1109 of 697 with them inline — Save 396px below the fold on the surface
+          with the least headroom. z-[65] sits under the picker's z-[70] so the search
+          opens over this rather than replacing it. */}
+      {showOfficialsSheet && editingFixture && (
+        <div
+          className="fixed inset-0 z-[65] bg-black/60 flex items-end"
+          onClick={() => setShowOfficialsSheet(false)}
+        >
+          <div
+            className="w-full bg-white dark:bg-gray-900 rounded-t-2xl max-h-[85dvh] overflow-y-auto"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="p-4 border-b border-gray-100 dark:border-gray-800">
+              <div className="w-10 h-1 bg-gray-300 dark:bg-gray-700 rounded-full mx-auto mb-3" />
+              <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100 text-center">
+                Officials
+              </h3>
+              <p className="text-xs text-gray-400 text-center mt-1 break-words">
+                {editingFixture.homeTeam?.name} v {editingFixture.awayTeam?.name}
+              </p>
+            </div>
+            <div className="p-4 space-y-2">
+              {FIXTURE_OFFICIAL_SLOTS.map((slot) => {
+                const assigned = fixtureOfficials[slot.key];
+                return (
+                  <div key={slot.key} className="flex items-center gap-2">
+                    <span className="text-xs text-gray-500 dark:text-gray-400 w-16 flex-shrink-0">
+                      {slot.label}
+                    </span>
+                    <button
+                      onClick={() => {
+                        setOfficialPicker(slot.key);
+                        setOfficialSearch("");
+                        searchOfficials("")
+                          .then(setOfficialResults)
+                          .catch(() => setOfficialResults([]));
+                      }}
+                      className={`flex-1 min-w-0 text-left px-3 py-2.5 rounded-xl text-sm border truncate ${
+                        assigned
+                          ? "bg-teal-50 dark:bg-teal-950/30 border-teal-200 dark:border-teal-800 text-teal-800 dark:text-teal-300"
+                          : "bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-400"
+                      }`}
+                    >
+                      {assigned ? assigned.name : "Tap to assign →"}
+                    </button>
+                    {assigned && (
+                      <button
+                        onClick={() =>
+                          removeFixtureOfficial(
+                            publicId!,
+                            editingFixture.publicId,
+                            slot.key,
+                          ).then(() =>
+                            setFixtureOfficials((p) => {
+                              const n = { ...p };
+                              delete n[slot.key];
+                              return n;
+                            }),
+                          )
+                        }
+                        className="text-red-400 px-1.5 flex-shrink-0 active:scale-90"
+                      >
+                        ×
+                      </button>
+                    )}
+                  </div>
+                );
+              })}
+              <p className="text-[11px] text-gray-400 leading-snug pt-1">
+                Copied onto the match when it is created. Changing them afterwards
+                changes the plan, not what happened.
+              </p>
+              <button
+                onClick={() => setShowOfficialsSheet(false)}
+                className="w-full py-2.5 text-sm font-medium text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-800 rounded-xl active:scale-95"
+              >
+                Done
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── OFFICIAL PICKER ──
+          Full-height search sheet over cricket_officials, the register that assignments
+          actually resolve against. NOT tournament_officials_pool: that holds five
+          free-text names with no FK to the register, disjoint from all eight officials
+          in it, and match_officials.pool_id is NULL on every existing assignment. */}
+      {officialPicker && (
+        <div
+          className="fixed inset-0 z-[70] bg-black/70 flex items-end"
+          onClick={() => setOfficialPicker(null)}
+        >
+          <div
+            className="w-full bg-gray-900 rounded-t-2xl max-h-[85dvh] overflow-hidden flex flex-col"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="p-4 border-b border-gray-800">
+              <div className="w-10 h-1 bg-gray-600 rounded-full mx-auto mb-3" />
+              <h3 className="text-sm font-semibold text-white text-center">
+                {FIXTURE_OFFICIAL_SLOTS.find((r) => r.key === officialPicker)
+                  ?.label ?? "Official"}
+              </h3>
+              <input
+                autoFocus
+                className="mt-3 w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-xl text-sm text-white placeholder-gray-500 outline-none"
+                placeholder="Search…"
+                value={officialSearch}
+                onChange={(e) => {
+                  setOfficialSearch(e.target.value);
+                  searchOfficials(e.target.value)
+                    .then(setOfficialResults)
+                    .catch(() => setOfficialResults([]));
+                }}
+              />
+            </div>
+            <div className="overflow-y-auto flex-1 p-3 space-y-2">
+              {officialResults.length === 0 && (
+                <div className="text-center py-8 text-sm text-gray-500">
+                  No officials found.
+                </div>
+              )}
+              {officialResults.map((o: any) => (
+                <button
+                  key={o.publicId}
+                  onClick={() => {
+                    assignFixtureOfficial(
+                      publicId!,
+                      editingFixture.publicId,
+                      o.publicId,
+                      officialPicker,
+                    )
+                      .then(() => {
+                        setFixtureOfficials((p) => ({
+                          ...p,
+                          [officialPicker]: {
+                            publicId: o.publicId,
+                            name: o.name,
+                          },
+                        }));
+                        setOfficialPicker(null);
+                        setOfficialSearch("");
+                      })
+                      .catch(() => setOfficialPicker(null));
+                  }}
+                  className="w-full flex items-center gap-3 px-3 py-3 bg-gray-800 rounded-xl text-left active:scale-95 transition-all"
+                >
+                  <div className="w-8 h-8 bg-gray-700 rounded-full flex items-center justify-center text-xs font-bold text-white flex-shrink-0">
+                    {(o.name ?? "?").charAt(0)}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="text-sm font-medium text-white break-words">
+                      {o.name}
+                    </div>
+                    {o.kscaId && (
+                      <div className="text-xs text-gray-400">
+                        KSCA {o.kscaId}
+                      </div>
+                    )}
+                  </div>
+                </button>
+              ))}
+            </div>
+            <div className="p-3 border-t border-gray-800">
+              <button
+                onClick={() => setOfficialPicker(null)}
+                className="w-full py-2.5 text-sm text-gray-400"
+              >
+                Cancel
+              </button>
             </div>
           </div>
         </div>
