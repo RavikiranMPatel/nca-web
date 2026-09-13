@@ -16,6 +16,12 @@ Severity scale: **critical** (data loss, cross-tenant, silent corruption) ·
 **high** (wrong score/stat persisted) · **medium** (wrong display, missing data)
 · **low** (docs/infra).
 
+**The index covers every entry in this file.** It used to stop at BUG-33 while
+the file ran to BUG-41, and BUG-42 was recorded only in `PROGRESS.md` — so the
+first thing a new session reads was silently missing nine bugs, one of them a
+critical cross-tenant one. Rebuilt by the closeout slice and checked against the
+`## BUG-` headings rather than against memory. If you add an entry, add its row.
+
 | ID | Title | Severity | Status |
 |----|-------|----------|--------|
 | BUG-01 | Strike inverted on EVERY wide and no ball | critical | **FIXED** — `e748bec` |
@@ -50,7 +56,28 @@ Severity scale: **critical** (data loss, cross-tenant, silent corruption) ·
 | BUG-30 | A match created from a fixture never linked back, so standings stayed empty | high | **FIXED** — `8aaceb4` |
 | BUG-31 | The final-fixture flag was unreadable and unclearable through the API | medium | **FIXED** — `fb97d83` |
 | BUG-32 | Team order was undetermined, so fixture generation was not deterministic | medium | **FIXED** — Slice 4 |
-| BUG-33 | Player ID generation loses its lock before it commits, so concurrent creates collide | medium | open — found in the Slice 4 suite run |
+| BUG-33 | Player ID generation loses its lock before it commits, so concurrent creates collide | medium | **FIXED** — backend `9fa8bce`, spec `0bbe0b2` (Slice 5b) |
+| BUG-34 | Lombok's `is*` accessor drops the prefix, so `isForeign` reached the client as `foreign` | medium | **FIXED** — `1f01f1a` |
+| BUG-35 | A player's career statistics were readable by anyone, from any academy | critical | **FIXED** — endpoint deleted |
+| BUG-36 | The points table cost one extra query per match played | low | **FIXED** — Slice 5 |
+| BUG-37 | `save()`'s return discarded, so a just-created entity has no publicId | medium | **FIXED** — `510bfe8`, audited across 26 sites |
+| BUG-38 | 28 response DTOs put a tenant id or a user's email on the wire | medium | open — pinned by `ResponseDtoLeakTest`, cannot grow |
+| BUG-39 | An unmapped URL returns 500, not 404 | low | **FIXED** — backend `b68bac2`, spec `5bcf56f` |
+| BUG-40 | Recording a final's result returned a broken response mid-body | high | **FIXED** — `b7d3432` |
+| BUG-41 | `/api/super-admin/fees/reverse` cannot work, and never could | low | open — reported, a working duplicate exists |
+| BUG-42 | `generateFixtures` resolved venue ids scoped by nothing — not academy, not tournament | critical | **FIXED** — `743aa44` |
+| BUG-43 | A successful Settings save reported failure | medium | **FIXED** — `3a2496a` |
+| BUG-44 | The Points Table rendered neither NRR nor No Result, though the API sends both | medium | **FIXED** — `7a3620d` |
+| BUG-45 | A slot booked at `09:30+05:30` was reported as `04:00` | medium | **FIXED** — backend `b88adfa`, frontend `4e8f24a` |
+| BUG-46 | `PATCH /fixtures/{id}` did no conflict detection, so the Edit form bypassed ruling 4 | medium | **FIXED** — backend `43e9a13`, spec `a404d85` |
+| BUG-47 | Seven tournament endpoints returned JPA entities — academyId, branchId and an admin's email on the wire | medium | **FIXED** — `6b0bee1` |
+| BUG-48 | `updateSettings` and `PUT /{id}` have no service-layer role check | low | open — defence in depth only; a real COACH token gets 403 |
+| BUG-49 | The points table counts knockout fixtures, so a three-match group reads P=5 | low | open — undefined by Phase 11, needs a ruling |
+| BUG-50 | `createExternalPlayer`'s phone and email uniqueness checks are unscoped by academy | medium | open — **backlog, needs a product ruling** (below) |
+| BUG-51 | No endpoint advances to the next knockout round | low | open |
+| BUG-52 | `addManualFixture` numbers the round by fixture count, so the final becomes round 3 | low | open |
+| BUG-53 | `linkMatchToFixture` failure is swallowed in `MatchSetupPage` | low | open |
+| BUG-54 | `createScoredTournament` tags its rows with a clock that two workers can share | low | open — test-fixture flake, worked around per-spec |
 
 ---
 
@@ -2211,3 +2238,379 @@ slice:
 
 A test asserting 500 here would enshrine the bug, so none was written. This entry
 is the record.
+
+---
+
+## BUG-42 — `generateFixtures` resolved venue ids scoped by nothing
+
+**Found:** Slice 7, 2026-09-12, while editing the file for an unrelated change.
+**Severity:** critical (cross-tenant) · **Status: FIXED** — `743aa44`.
+
+Recorded in `nextgen-cricket-academy/docs/tournament/PROGRESS.md` and, until the
+closeout slice, **nowhere in this register** — which is how a critical
+cross-tenant bug came to be invisible to anyone reading the bug list first.
+
+`TournamentService.generateFixtures` resolved the request's `venueIds` with
+`tournamentVenueRepo.findAllById(...)`: not scoped by academy, and not even by
+tournament. An admin supplying another academy's venue ids had those rows loaded
+and scheduled against their own fixtures, leaking the other academy's ground
+names and `maxMatchesPerDay` and writing a foreign `venue_id` into their own
+`fixtures` rows. Hard rule 2 made it a fix rather than a report, because the file
+was already being edited.
+
+Replaced with `findAllByIdInAndTournamentIdAndAcademyId`, proved both ways
+against the live database: the removed query returned A's "A SECRET GROUND" to B;
+the replacement returns zero rows, B's generated fixture carries a null
+`venue_id`, and the reschedule path answers 404. Siblings audited in the same
+pass — see PROGRESS.md for which were already sound and which two list reads are
+deliberately unscoped, with the reason.
+
+---
+
+## BUG-43 — A successful Settings save reported failure
+
+**Found:** Phases 31–34 closing pass. **Severity:** medium ·
+**Status: FIXED** — `3a2496a` (`nca-web`).
+
+`TournamentDetailPage.tsx:130` was `const [setSettingsSaved] = useState(false)`,
+which binds the STATE to that name, not the setter. `setSettingsSaved(true)` on
+the line after a resolved PATCH therefore threw
+`TypeError: setSettingsSaved is not a function`, the throw landed in the same
+handler's `catch`, and the catch set the error banner. **The tournament was
+saved and the admin was told "Failed to save settings".**
+
+TypeScript had been reporting it all along — `TS2349 This expression is not
+callable` at `:400` and `:401` — inside an 88-error baseline where two more read
+as noise.
+
+Proven by reverting the line: `tournament-tabs.spec.ts` → "saving Settings
+reports success and persists the change" fails with `Failed to save settings`
+rendered on the page. The test asserts three things, because any one of them
+passes against the defect: success is reported, failure is **not** reported, and
+the row changed.
+
+---
+
+## BUG-44 — The Points Table rendered neither NRR nor No Result
+
+**Found:** Phases 31–34 closing pass. **Severity:** medium ·
+**Status: FIXED** in the closeout slice — `7a3620d` (`nca-web`).
+
+`/standings` has carried `nrr` and `noResult` on every row since Phase 12.
+`StandingsTab`'s columns were `# · Team · P · W · L · T · Pts`.
+
+Two consequences. Phase 12's net run rate was computed, stored, **ranked on** and
+printed into the PDF — and invisible on the screen Phase 11 names. And a side
+whose match was abandoned read
+
+```
+3 Pakistan Group B 4 2 2 0 4     4 Australia Group A 3 1 1 0 3
+```
+
+Australia: three played, one won, one lost, none tied — and three points. The
+column that explains it was absent.
+
+**Fixed:** NR after T, NRR after Pts, signed to three decimal places (`%+.3f`,
+the format `TournamentReportPdfService.nrr` already prints, so screen and paper
+cannot disagree). Nine columns do not fit 375px, so the table scrolls inside its
+own `overflow-x-auto` wrapper rather than widening the document body.
+
+`tournament-standings-nrr-ui.spec.ts` builds a really-scored fixture (12 all-run
+vs 2/1, so the two rows carry opposite-signed NRRs) plus a second fixture
+recorded NO_RESULT, then compares every rendered cell to the `/standings` row it
+came from, on desktop and iPhone 14. Without the fix it fails on both projects
+with the NRR columnheader not found.
+
+---
+
+## BUG-45 — A slot booked at `09:30+05:30` was reported as `04:00`
+
+**Found:** Phases 31–34 closing pass. **Severity:** medium ·
+**Status: FIXED** in the closeout slice — backend `b88adfa`, frontend `4e8f24a`.
+
+`fixtures.scheduled_at` is a PostgreSQL `timestamptz`, which stores an instant
+and **not** the offset it was written in, and Hibernate reads such a column back
+normalised to UTC. One PATCH and one GET against the running backend locate the
+conversion exactly:
+
+```
+PATCH response scheduledAt : 2026-05-10T09:30:00+05:30   <- the value just set, in memory
+GET  read-back scheduledAt : 2026-05-10T04:00:00Z        <- the same row, read from the DB
+```
+
+So the defect was invisible on the write and present on every read after it.
+`FixtureConflictDto.when()` formatted that value as it stood and told an admin
+
+```
+VF Ground 1 is already hosting Round 1 at 10 May, 04:00
+```
+
+about a fixture they had booked for half past nine. Ruling 4's `describe()`
+exists because "conflict detected" is not actionable, and a wrong time is worse
+than no time.
+
+**Fixed at the point the offset is chosen**, not at each sentence.
+`AcademyZone` is the single answer to "which offset is a scheduled time written
+in"; `FixtureConflictDto` (the message AND the structured `scheduledAt`, which
+disagreed with each other), `FixtureDto` and the report all go through it. A
+per-tournament zone would mean storing the offset, which is a column and a
+migration — this puts the decision the schedulers and reminder jobs already
+hard-code in one place instead of seven. On the frontend, `FixturesTab`
+formatted with no `timeZone` at all, so the time rendered against the VIEWER's
+clock; `formatFixtureDate`/`formatFixtureTime` pin it to the ground's.
+
+The printed schedule also gained the time it never had: `scheduledOn` was the
+date alone, so the one number the conflict rules are built around never reached
+the page.
+
+`tournament-fixture-timezone.spec.ts` runs the page under
+`timezoneId: "America/New_York"` on purpose — this machine is in IST, so a
+viewer-zone render passes against the defect. Unfixed it shows `🕐 12:00 am`.
+
+---
+
+## BUG-46 — `PATCH /fixtures/{id}` did no conflict detection
+
+**Found:** Phases 31–34 closing pass. **Severity:** medium ·
+**Status: FIXED** in the closeout slice — backend `43e9a13`, spec `a404d85`.
+
+`FixtureScheduleService.reschedule` implemented ruling 4 in full: refuse with
+409, SUPER_ADMIN override only with a reason, audited. `TournamentService.
+updateFixture` — what the **Edit Fixture** form posts to — set `scheduledAt` and
+`tournamentVenue` with no conflict check at all. Verified against the running
+backend, same tournament, same ground, same slot, one after the other:
+
+```
+PATCH  /tournaments/{t}/fixtures/{f1}  -> ground G1, 2026-05-10T09:30:00+05:30 : 200
+PATCH  /tournaments/{t}/fixtures/{f2}  -> THE SAME ground and slot             : 200
+POST   /tournaments/{t}/fixtures/{f2}/reschedule -> the same ground and slot   : 409
+```
+
+So the same clash was refused through one form and accepted through the other,
+and ruling 4's refusal, its SUPER_ADMIN-only override and its mandatory reason
+were all bypassed by choosing the Edit form.
+
+**Fixed by extracting the rule, not copying it.** `conflictsFor` gained an
+overload taking the two sides explicitly — the Edit form can swap either side, so
+the question must be asked about the fixture the edit WOULD produce, and asked
+before anything is mutated, since a conflict query run after an assignment
+flushes it. `enforceRuling4` is the refusal itself and both paths call it, which
+makes "the same message" structural. `UpdateFixtureRequest` gained
+`overrideConflicts` and `overrideReason`, and an override taken on this path is
+audited as `FIXTURE_UPDATED`.
+
+---
+
+## BUG-47 — Seven tournament endpoints returned JPA entities
+
+**Found:** Phases 31–34 closing pass (four of the seven probed on the wire).
+**Severity:** medium · **Status: FIXED** in the closeout slice — `6b0bee1`.
+
+```
+GET   /tournaments/{id}          academyId branchId createdBy updatedBy version id
+GET   /tournaments/{id}/teams    academyId branchId createdBy updatedBy version id
+GET   /tournaments/{id}/stages   academyId branchId createdBy updatedBy version id
+PATCH /tournaments/{id}/settings academyId branchId createdBy updatedBy version id
+```
+
+`BaseEntity` fills `createdBy` from the authentication principal's name, which in
+this codebase is an EMAIL ADDRESS — `admin-a@example.com` in the test academy, a
+member of staff's real address in production. So every load of the tournament
+page published it. This is BUG-38's exposure by a second route, and PLAN standing
+constraint 3.
+
+The three siblings on the same return types — `addTeam`, `getSquad`,
+`addToSquad` — were converted with them. `getSquad` was the worst: it serialised
+a whole `Player` per squad entry, which is a date of birth and a guardian's phone
+number on a list that needs a name and a role.
+
+**The guard could not have caught any of it.** `ResponseDtoLeakTest` enumerates
+`com.nca.cricket.dto`, and an entity is not in that package — which is how seven
+endpoints leaked while it reported clean. It now also walks every
+`@RestController` handler, unwrapping `ResponseEntity`/`List`/`Page`/`Set`/
+`Optional`, and fails on a JPA entity. **105 handlers elsewhere still return
+entities**, listed as debt by module (fees, players and batches, live scoring,
+CMS, expenses, summer camp, enquiries, platform) under the same contract as the
+DTO list: it may only ever get shorter. The tournament seven are deliberately NOT
+listed, which is what makes the guard enforce them.
+
+---
+
+## BUG-48 — `updateSettings` and `PUT /{id}` have no service-layer role check
+
+**Found:** Phases 31–34 closing pass. **Severity:** low ·
+**Status:** open — defence in depth only.
+
+`TournamentService.updateSettings` resolves the tournament with `getTournament`
+(academy-scoped, correct) and then writes, with no role assertion — unlike its
+neighbours, which call `validateAdminOrSuperAdmin`. `PUT /{id}` has the same
+shape.
+
+**Checked, and the answer came back negative:** a real `ROLE_COACH` token gets
+**403** on `PATCH /settings`, on `PUT /{id}` and on `POST /{id}/teams`, and the
+tournament's name, `oversPerInnings` and `maxMatchesPerDay` were unchanged
+afterwards. `SecurityConfig`'s `/api/admin/**` rule blocks it. So this is not
+exploitable today — but that route rule is then the single point of failure on a
+write, which is what `.claude/rules/multi-tenancy.md` says not to rely on, and
+every neighbouring method in the same service does assert the role.
+
+---
+
+## BUG-49 — The points table counts knockout fixtures
+
+**Found:** Phases 31–34 closing pass. **Severity:** low ·
+**Status:** open — **needs a ruling before it is a bug.**
+
+`standingsOf` walks `fixtureRepo.findCompletedByTournamentId` with no stage
+filter, so once the semis and the final are played the **group** table includes
+them: in the closing run's championship the two finalists finish on `P=5` in a
+three-match group.
+
+Arguably correct for a league and wrong for a group-and-knockout tournament, and
+**undefined by Phase 11** — which is why this is a finding rather than a fix. The
+decision is whether a points table means "the group" or "everything played".
+
+---
+
+## BUG-50 — `createExternalPlayer`'s uniqueness checks are unscoped by academy
+
+**Found:** Phases 31–34 closing pass. **Severity:** medium ·
+**Status:** open — **backlog item, needs a product ruling.** See the backlog
+section at the end of this file.
+
+`AdminPlayerService.createExternalPlayer` (`:351`, `:363`):
+
+```java
+playerRepo.findByPhone(req.getPhone()).ifPresent(p -> { throw 409; });
+playerRepo.findByEmailIgnoreCase(req.getEmail()).ifPresent(p -> { throw 409; });
+```
+
+Neither takes `academyId`. Verified:
+
+```
+academy A: POST /api/admin/players/external  phone 9100022254  -> 200
+academy B: POST /api/admin/players/external  phone 9100022254  -> 409
+           {"message":"A player with this phone already exists"}
+```
+
+Academy B has no player with that phone. It was told one exists because academy A
+has one — a cross-tenant **existence oracle**, and the hard-rule-2 bug class.
+
+It is listed as backlog rather than fixed because the fix is not only a scoping
+change: adding `academyId` to both lookups also **changes the product rule** from
+"a phone is unique across the platform" to "a phone is unique within an academy",
+and that is a decision about whether siblings at two academies, or a shared family
+address, may be registered twice. See the backlog entry for what has to be decided
+and what is true either way.
+
+---
+
+## BUG-51 — No endpoint advances to the next knockout round
+
+**Found:** Phases 31–34 closing pass. **Severity:** low · **Status:** open.
+
+`advanceToKnockout` always re-seeds **round 1** from the group standings. There
+is no "advance the bracket" call, so after the semis the final must be added as a
+**manual fixture** and flagged with `PATCH .../final`. That is what the Fixtures
+tab offers and what the closing spec does, so the flow works — but it is a manual
+step in an otherwise automatic bracket, and an operator who expects the final to
+appear will not find it.
+
+---
+
+## BUG-52 — `addManualFixture` numbers the round by fixture count
+
+**Found:** Phases 31–34 closing pass. **Severity:** low · **Status:** open.
+
+```java
+int round = fixtureRepo.findAllByStageIdOrderByRoundNumberAsc(stage.getId()).size() + 1;
+```
+
+After two semi-finals — both correctly round 1, being simultaneous — the final
+added to the same stage becomes **round 3**, not round 2. The same defect class
+`FixtureGeneratorTest` found in the knockout generator, surviving in the manual
+path.
+
+---
+
+## BUG-53 — `linkMatchToFixture` failure is swallowed
+
+**Found:** Phases 31–34 closing pass. **Severity:** low · **Status:** open.
+
+`MatchSetupPage.handleStartMatch`:
+
+```ts
+try { await linkMatchToFixture(tournamentId, fixtureId, createdMatch.publicId); }
+catch { /* non-fatal */ }
+```
+
+`link-match` is the **only** thing that moves a fixture to `IN_PROGRESS`, and a
+fixture that is not `IN_PROGRESS` never offers "Live Scorer" — it keeps offering
+"Start Match", which would create a second match and rebind `fixtures.match_id`
+to it, orphaning the first scored match. Calling that non-fatal turns a
+recoverable failure into a silently broken fixture. It should at least warn.
+
+---
+
+## BUG-54 — `createScoredTournament` tags its rows with a clock two workers can share
+
+**Found:** the closeout slice, writing BUG-44's spec. **Severity:** low (test
+infrastructure) · **Status:** open — worked around per-spec, not fixed in the
+fixture.
+
+`e2e/fixtures/scoredTournament.ts` tags everything it creates with
+`${Date.now() % 1000000}` plus a per-PROCESS counter, and tears down by MATCHING
+ON THE NAME. Two Playwright projects that start in the same millisecond therefore
+build identically-named tournaments, players and batches — and the first teardown
+deletes the other project's rows out from under it. Seen as a 404 adding a player
+to a squad that had just been created, and as
+
+```
+ERROR: update or delete on table "cricket_matches" violates foreign key
+constraint "fixtures_match_id_fkey" on table "fixtures"
+```
+
+when one project's teardown reached the other's still-linked match.
+
+`championship.ts` already solves this by keying teardown on the tournament's
+**public id** rather than its name, and says why in a comment. The closeout slice
+worked around it inside its own spec — a worker-unique label, and a teardown key
+built from the tournament name rather than the tag — rather than changing a
+fixture five other specs depend on. The fixture itself should adopt
+`championship.ts`'s pattern.
+
+**This is not an application bug.** It is recorded because it produces failures
+that read like application bugs, and it has now cost two sessions time.
+
+---
+
+## Backlog — needs a product ruling before it is code
+
+### Is a phone number unique to an academy, or to the platform? (BUG-50)
+
+**What has to be decided.** `createExternalPlayer` refuses a phone or an email
+that exists **anywhere on the platform**. Scoping those two lookups by
+`academyId` — which hard rule 2 otherwise requires without discussion — also
+changes the product rule to "unique within an academy". That is a business
+decision, not a code-style one:
+
+- **Unique per academy** (the scoping fix): siblings at two academies, or two
+  families sharing one contact number, can both be registered. Two rows then
+  exist for one phone, and anything that looks a player up BY phone — a future
+  parent portal, an SMS reply handler, a WhatsApp integration — has to say which
+  academy it means.
+- **Unique per platform** (today's behaviour): one phone, one player, ever. Clean
+  for lookups, and wrong for the legitimate case above. It is also the rule that
+  produces the leak below.
+
+**What is true either way, and is not up for decision:** the current
+implementation is a cross-tenant **existence oracle**. Academy B learns whether a
+phone or an email is registered at academy A by watching for the 409, and the
+message says which field matched. Whichever rule wins, B must not be able to
+discover A's data — a platform-wide rule can be enforced with a database
+constraint and a message that does not confirm what matched, rather than with a
+cross-tenant read whose result is handed back.
+
+**When it is picked up:** grep the whole of `AdminPlayerService` for siblings in
+the same pass. That step has found more almost every time it has been run in this
+project.
