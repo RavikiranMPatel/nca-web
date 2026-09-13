@@ -85,6 +85,7 @@ export const PlayerCard = ({
       {isSelected && (
         <div className="flex gap-1.5 ml-2 flex-wrap justify-end">
           <button
+            data-testid="player-role-captain"
             onClick={() => onRoleToggle("isCaptain")}
             className={`text-xs px-2 py-1 rounded-lg font-medium transition-colors ${
               sel!.isCaptain
@@ -95,6 +96,7 @@ export const PlayerCard = ({
             C
           </button>
           <button
+            data-testid="player-role-wicketkeeper"
             onClick={() => onRoleToggle("isWicketkeeper")}
             className={`text-xs px-2 py-1 rounded-lg font-medium transition-colors ${
               sel!.isWicketkeeper

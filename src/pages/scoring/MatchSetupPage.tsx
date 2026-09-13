@@ -11,6 +11,7 @@ import {
   getMatch,
 } from "../../api/scoring/matchApi";
 import { linkMatchToFixture } from "../../api/scoring/tournamentApi";
+import { toast } from "react-hot-toast";
 import type {
   CricketMatch,
   CricketTeam,
@@ -586,8 +587,39 @@ export default function MatchSetupPage() {
             fixtureId,
             createdMatch.publicId,
           );
-        } catch {
-          /* non-fatal */
+        } catch (linkErr: any) {
+          // BUG-53. This was `catch { /* non-fatal */ }`, and it is not
+          // non-fatal: link-match is the ONLY thing that moves a fixture to
+          // IN_PROGRESS, and a fixture that is not IN_PROGRESS never offers
+          // "Live Scorer" — it keeps offering "Start Match". Taking that offer
+          // creates a SECOND match and rebinds fixtures.match_id to it,
+          // orphaning the one that is about to be scored.
+          //
+          // The match itself is created and startable, so this does not abort
+          // the flow — swapping a silent failure for a dead end would not be an
+          // improvement. It warns, and it says what to do, because the recovery
+          // (link it from the Fixtures tab) is easy and the silent version of
+          // this is not recoverable at all once a second match exists.
+          toast.error(
+            (t) => (
+              <span data-testid="fixture-link-failed">
+                Match created, but it could not be linked to its fixture
+                {linkErr?.response?.data?.message
+                  ? `: ${linkErr.response.data.message}`
+                  : "."}{" "}
+                The fixture will still show “Start Match” — link it from the
+                Fixtures tab rather than starting it again, which would create a
+                second match.
+                <button
+                  onClick={() => toast.dismiss(t.id)}
+                  className="ml-2 underline font-medium"
+                >
+                  Dismiss
+                </button>
+              </span>
+            ),
+            { duration: 30000, id: "fixture-link-failed" },
+          );
         }
       }
       localStorage.setItem("nca_ww_enabled", String(wagonWheelEnabled));
@@ -1013,11 +1045,13 @@ export default function MatchSetupPage() {
                     }
                     setError("");
                   }}
+                  data-testid="match-setup-select-all"
                   className="text-xs font-semibold px-2.5 py-1 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 active:scale-95 transition-all"
                 >
                   {currentPlayers.length > 0 ? "Clear All" : "Select All"}
                 </button>
                 <span
+                  data-testid="match-setup-xi-count"
                   className={`text-xs font-semibold px-2.5 py-1 rounded-full ${currentPlayers.length === 11 ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400" : "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400"}`}
                 >
                   {currentPlayers.length}/11
@@ -1276,6 +1310,7 @@ export default function MatchSetupPage() {
               {teams.map((team) => (
                 <button
                   key={team.publicId}
+                  data-testid={`match-setup-toss-winner-${team.publicId}`}
                   onClick={() => setTossWinner(team.publicId)}
                   className={`w-full p-4 rounded-xl border text-left transition-all active:scale-95 ${
                     tossWinner === team.publicId
@@ -1305,6 +1340,7 @@ export default function MatchSetupPage() {
                   {(["BAT", "FIELD"] as const).map((dec) => (
                     <button
                       key={dec}
+                      data-testid={`match-setup-toss-${dec}`}
                       onClick={() => setTossDecision(dec)}
                       className={`py-4 rounded-xl border font-semibold transition-all active:scale-95 ${
                         tossDecision === dec
@@ -1591,6 +1627,7 @@ export default function MatchSetupPage() {
           </button>
         )}
         <button
+          data-testid="match-setup-primary"
           disabled={loading}
           onClick={
             step === 0
