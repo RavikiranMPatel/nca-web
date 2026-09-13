@@ -202,6 +202,7 @@ export default function TournamentDetailPage() {
     byFixture: Record<string, any[]>;
     durationBasis: string;
     scope: string;
+    scopeByKind?: Record<string, string>;
   } | null>(null);
   /**
    * Officials on the fixture being edited, keyed by slot. Slots not capabilities:
@@ -1966,9 +1967,23 @@ export default function TournamentDetailPage() {
                     );
                   })}
                 </div>
-                <p className="text-[11px] text-amber-800/80 dark:text-amber-500/80 leading-snug">
-                  {conflicts.scope} {conflicts.durationBasis}
-                </p>
+                <div className="text-[11px] text-amber-800/80 dark:text-amber-500/80 leading-snug space-y-0.5">
+                  <p>{conflicts.scope}</p>
+                  {/* Per kind, and only the kinds actually present — grounds cannot be
+                      compared across tournaments and officials can, so one sentence would
+                      be wrong about one of them. Academy-wide official clashes and ones
+                      against matches with no fixture appear in the inline note when
+                      editing, not here: this list's whole affordance is tapping through
+                      to fix, and it can only open fixtures in this tournament. */}
+                  {Object.entries(conflicts.scopeByKind ?? {})
+                    .filter(([k]) =>
+                      conflicts.conflicts.some((c: any) => c.kind === k),
+                    )
+                    .map(([k, text]) => (
+                      <p key={k}>{text}</p>
+                    ))}
+                  <p>{conflicts.durationBasis}</p>
+                </div>
               </div>
             )}
 
