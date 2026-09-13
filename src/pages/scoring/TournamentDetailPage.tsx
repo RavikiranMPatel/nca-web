@@ -14,6 +14,7 @@ import {
   updateTournamentStatus,
   declareWinner,
   advanceToKnockout,
+  advanceKnockoutRound,
   getQualificationRules,
   updateQualificationRules,
   type QualificationRules,
@@ -813,6 +814,29 @@ export default function TournamentDetailPage() {
     }
   };
 
+  /**
+   * BUG-51 — move the bracket on a round.
+   *
+   * The backend refuses rather than guesses: an unfinished round, an undecided
+   * tie or a bracket that is already down to one winner all come back as a 409
+   * naming the reason, and those messages are worth showing verbatim — "Round 1
+   * is not finished: FIX-123" tells an operator exactly what to do, which a
+   * generic failure string would not.
+   */
+  const handleAdvanceRound = async () => {
+    setPosting(true);
+    try {
+      const created = await advanceKnockoutRound(publicId!);
+      await loadAll();
+      const isFinal = Array.isArray(created) && created.some((f: any) => f.isFinal);
+      showToast(isFinal ? "✓ The final is set" : "✓ Next round generated");
+    } catch (e: any) {
+      setError(e.response?.data?.message ?? "Failed to advance the bracket");
+    } finally {
+      setPosting(false);
+    }
+  };
+
   const handleAdvancePlayoffs = async () => {
     setPosting(true);
     try {
@@ -1148,6 +1172,7 @@ export default function TournamentDetailPage() {
             openReschedule={openReschedule}
             fixtures={fixtures}
             handleAdvanceKnockout={handleAdvanceKnockout}
+            handleAdvanceRound={handleAdvanceRound}
             handleStartMatch={handleStartMatch}
             loadAll={loadAll}
             navigate={navigate}

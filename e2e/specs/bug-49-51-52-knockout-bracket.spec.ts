@@ -42,6 +42,11 @@ let beforeKnockout: any[];
 // Published for the BUG-52 describe below, which needs the same bracket.
 let semis: any[];
 let knockoutStagePublicId: string;
+// The semi BUG-49 played, so BUG-51 only has to play the other one.
+let playedSemiIds: string[] = [];
+// Fixtures BUG-52 adds by hand, removed again so BUG-51 sees the bracket as the
+// semis left it — the three bugs share one championship on purpose.
+const manualFixtureIds: string[] = [];
 
 /** The table as a comparable value — every row, every column, in order. */
 const snapshot = (rows: any[]) =>
@@ -132,6 +137,7 @@ test.describe("BUG-49 — knockout results stay out of the points table", () => 
     const played = await playFixture(C.api, C.tournamentPublicId, f, home, away,
       win(30, 6), "2026-03-28");
     expect(played.winner, "the semi-final has a winner").not.toBeNull();
+    playedSemiIds.push(f.publicId);
 
     // The fixture really is COMPLETED — otherwise this asserts nothing, because
     // standingsOf only ever looked at completed fixtures.
@@ -206,6 +212,7 @@ test.describe("BUG-52 — manual fixture round numbering", () => {
       });
     expect(add.status, "add the final by hand").toBeLessThan(400);
 
+    manualFixtureIds.push((add.body as any).publicId);
     expect((add.body as any).roundNumber,
       "two round-1 semis exist, so the final is round 2 — counting fixtures made it 3")
       .toBe(2);
@@ -225,8 +232,119 @@ test.describe("BUG-52 — manual fixture round numbering", () => {
         roundNumber: 2,
       });
     expect(add.status, "add a third-place play-off alongside the final").toBeLessThan(400);
+    manualFixtureIds.push((add.body as any).publicId);
     expect((add.body as any).roundNumber,
       "an explicit round is honoured — a simultaneous tie joins the round it belongs to")
       .toBe(2);
+  });
+
+  test("the hand-added fixtures are removed, leaving the bracket as the semis left it", async () => {
+    // BUG-51's describe below advances this same bracket, and it must advance
+    // from the SEMIS. Leaving two unplayed round-2 fixtures here would make it
+    // refuse with "Round 2 is not finished" — correctly, but about this test's
+    // litter rather than about anything BUG-51 is asserting.
+    for (const id of manualFixtureIds) {
+      const del = await C.api.raw("delete",
+        `/api/admin/cricket/tournaments/${C.tournamentPublicId}/fixtures/${id}`, {});
+      expect(del.status, `delete the hand-added fixture ${id}`).toBeLessThan(400);
+    }
+
+    const list = await C.api.raw("get",
+      `/api/admin/cricket/tournaments/${C.tournamentPublicId}/fixtures`);
+    const knockout = (list.body as any[]).filter((f) => f.stage?.stageType === "KNOCKOUT");
+    expect(knockout.length, "only the two semi-finals remain").toBe(2);
+    expect(Math.max(...knockout.map((f: any) => f.roundNumber)),
+      "and the stage's highest round is 1 again").toBe(1);
+  });
+});
+
+/**
+ * BUG-51 — the bracket advances itself; the final is not a manual fixture.
+ *
+ * `advanceToKnockout` always re-seeds ROUND ONE from the group standings, and
+ * nothing moved a bracket forward. After the semis the final had to be added as a
+ * MANUAL fixture and flagged with `PATCH .../final` — which works, and which is a
+ * manual step in an otherwise automatic bracket. An operator expecting the final
+ * to appear did not find it.
+ *
+ * A four-team knockout, played through: two semis, advance, one final, and the
+ * champion derived from its result. The final assertion is the point — the
+ * fixture the endpoint creates carries `isFinal`, because that flag is what makes
+ * Slice 3's champion derivation fire, and having to set it by hand is the whole
+ * of BUG-51.
+ */
+test.describe("BUG-51 — advancing the knockout bracket", () => {
+  test.beforeEach(async ({}, testInfo) => {
+    test.skip(testInfo.project.name !== "desktop", "one championship per run");
+  });
+
+  test("an unfinished round is refused, and it names what is outstanding", async () => {
+    // One semi is played (BUG-49's describe), the other is not.
+    const r = await C.api.raw("post",
+      `/api/admin/cricket/tournaments/${C.tournamentPublicId}/advance-round`, {});
+    expect(r.status, "the bracket must not advance past a live round").toBe(409);
+    expect(JSON.stringify(r.body), "and it says which fixture is outstanding")
+      .toContain("not finished");
+  });
+
+  test("with both semis played, the final is created and flagged as the final", async () => {
+    test.setTimeout(600_000);
+
+    const other = semis.find((f: any) => !playedSemiIds.includes(f.publicId));
+    expect(other, "the second semi-final").toBeTruthy();
+    const p = await playFixture(C.api, C.tournamentPublicId, other,
+      C.sideByName.get(other.homeTeam.name)!, C.sideByName.get(other.awayTeam.name)!,
+      win(28, 8), "2026-03-29");
+    expect(p.winner, "the second semi has a winner").not.toBeNull();
+
+    const adv = await C.api.raw("post",
+      `/api/admin/cricket/tournaments/${C.tournamentPublicId}/advance-round`, {});
+    expect(adv.status, `advance the bracket: ${JSON.stringify(adv.body)}`).toBe(200);
+
+    const created = adv.body as any[];
+    expect(created.length, "two winners make exactly one tie").toBe(1);
+
+    const final = created[0];
+    expect(final.roundNumber, "the round after the semis").toBe(2);
+    expect(final.stage.stageType, "still the knockout stage").toBe("KNOCKOUT");
+    expect(final.isFinal,
+      "flagged as the final — this is what makes the champion derivation fire, and " +
+      "having to set it by hand is the whole of BUG-51").toBe(true);
+
+    // The two sides are the semi winners, not whoever the database returned first.
+    const winners = [p.winner!.name].concat(
+      semis.filter((f: any) => playedSemiIds.includes(f.publicId))
+        .map(() => null as unknown as string)).filter(Boolean);
+    const finalists = [final.homeTeam.name, final.awayTeam.name];
+    for (const w of winners) {
+      expect(finalists, `${w} won a semi, so it is in the final`).toContain(w);
+    }
+  });
+
+  test("advancing again is refused — there is nothing left to advance to", async () => {
+    const again = await C.api.raw("post",
+      `/api/admin/cricket/tournaments/${C.tournamentPublicId}/advance-round`, {});
+    expect(again.status, "the final exists and is unplayed").toBe(409);
+  });
+
+  test("playing the final decides the champion", async () => {
+    test.setTimeout(600_000);
+    const list = await C.api.raw("get",
+      `/api/admin/cricket/tournaments/${C.tournamentPublicId}/fixtures`);
+    const final = (list.body as any[]).find((f: any) => f.isFinal);
+    expect(final, "the final is in the fixture list").toBeTruthy();
+
+    const p = await playFixture(C.api, C.tournamentPublicId, final,
+      C.sideByName.get(final.homeTeam.name)!, C.sideByName.get(final.awayTeam.name)!,
+      win(33, 11), "2026-04-02");
+    expect(p.winner, "the final has a winner").not.toBeNull();
+
+    const t = await C.api.raw("get",
+      `/api/admin/cricket/tournaments/${C.tournamentPublicId}`);
+    expect(t.status).toBe(200);
+    const champion = (t.body as any).championTeamName ?? (t.body as any).champion?.name;
+    expect(champion,
+      "the champion is derived from the final this endpoint created — no manual " +
+      "fixture and no manual flag anywhere in this test").toBe(p.winner!.name);
   });
 });

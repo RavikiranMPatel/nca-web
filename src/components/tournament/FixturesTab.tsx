@@ -27,6 +27,7 @@ interface Props {
   setFixtureView: Dispatch<SetStateAction<ApiRecord>>;
   fixtures: ApiRecord[];
   handleAdvanceKnockout: ApiRecord;
+  handleAdvanceRound: Handler;
   handleMarkFinal: Handler;
   handleStartMatch: Handler;
   loadAll: Handler;
@@ -51,6 +52,7 @@ export default function FixturesTab({
   setFixtureView,
   fixtures,
   handleAdvanceKnockout,
+  handleAdvanceRound,
   handleMarkFinal,
   handleStartMatch,
   loadAll,
@@ -126,11 +128,31 @@ export default function FixturesTab({
           </button>
           {tournament.format === "GROUP_KNOCKOUT" && (
             <button
+              data-testid="tournament-advance-knockout"
               onClick={handleAdvanceKnockout}
               disabled={posting}
               className="px-3 py-1.5 bg-purple-600 text-white text-xs font-semibold rounded-xl active:scale-95 disabled:opacity-40"
             >
               🏆 Advance to Knockout
+            </button>
+          )}
+          {/*
+            BUG-51 — move the bracket on a round.
+
+            Shown once a knockout round exists, which is the only state it can
+            act on; before that "Advance to Knockout" is the button that applies.
+            It is deliberately NOT hidden while the round is unfinished: the
+            server's refusal names the fixture that is still outstanding, which
+            is more use to an operator than a button that has quietly vanished.
+          */}
+          {fixtures.some((f: any) => f.stage?.stageType === "KNOCKOUT") && (
+            <button
+              data-testid="tournament-advance-round"
+              onClick={handleAdvanceRound}
+              disabled={posting}
+              className="px-3 py-1.5 bg-indigo-600 text-white text-xs font-semibold rounded-xl active:scale-95 disabled:opacity-40"
+            >
+              ⏭ Advance Round
             </button>
           )}
           {tournament.format === "LEAGUE_PLAYOFFS" &&

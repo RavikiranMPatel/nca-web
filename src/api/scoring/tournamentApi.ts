@@ -269,6 +269,19 @@ export const addManualFixture = (publicId: string, data: any) =>
  * tournament's stored qualification rules now (Slice 4b), set on the Settings
  * tab, rather than a number passed with each invocation.
  */
+/**
+ * Advance the knockout bracket one round — BUG-51.
+ *
+ * Distinct from `advanceToKnockout`, which always re-seeds ROUND ONE from the
+ * group standings. This pairs the winners of the last completed round into the
+ * next one, so the final appears by itself rather than having to be added as a
+ * manual fixture and flagged by hand.
+ */
+export const advanceKnockoutRound = (publicId: string) =>
+  api
+    .post(`/admin/cricket/tournaments/${publicId}/advance-round`)
+    .then((r) => r.data);
+
 export const advanceToKnockout = (publicId: string) =>
   api
     .post(`/admin/cricket/tournaments/${publicId}/advance-knockout`)
