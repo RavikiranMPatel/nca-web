@@ -53,7 +53,7 @@ backend.
 | BUG-19 | `extra_type` is unvalidated, so unknown values silently lose runs | high | open — reproduced by the suite |
 | BUG-20 | Production cannot reach `smtp.gmail.com:587` — app mail is dead | high | open — found during the 2026-09-04 deploy |
 | BUG-21 | The mail health indicator has no timeout, so `/actuator/health` takes ~2 minutes | medium | open — found during the 2026-09-04 deploy |
-| BUG-22 | Player public ids collide across academies when two share a prefix | medium | open — found building the Kit module |
+| BUG-22 | Player public ids collide across academies when two share a prefix | medium | **FIXED** — backend `2d69536`, spec `e1e6393` |
 | BUG-23 | "Add New Season" on the Kit tab silently inherits another season's kit | medium | **FIXED** — `d55015b` |
 | BUG-24 | A role-denied request returns 401 "Session expired", not 403 | medium | **FIXED** — `127e8b5` |
 | BUG-25 | A branchless user cannot write a live annotation — hard 400 | high | open — the branch-resolver failure, reproduced |
@@ -79,13 +79,13 @@ backend.
 | BUG-45 | A slot booked at `09:30+05:30` was reported as `04:00` | medium | **FIXED** — backend `b88adfa`, frontend `4e8f24a` |
 | BUG-46 | `PATCH /fixtures/{id}` did no conflict detection, so the Edit form bypassed ruling 4 | medium | **FIXED** — backend `43e9a13`, spec `a404d85` |
 | BUG-47 | Seven tournament endpoints returned JPA entities — academyId, branchId and an admin's email on the wire | medium | **FIXED** — `6b0bee1` |
-| BUG-48 | `updateSettings` and `PUT /{id}` have no service-layer role check | low | open — defence in depth only; a real COACH token gets 403 |
-| BUG-49 | The points table counts knockout fixtures, so a three-match group reads P=5 | low | open — undefined by Phase 11, needs a ruling |
-| BUG-50 | `createExternalPlayer`'s phone and email uniqueness checks are unscoped by academy | medium | open — **backlog, needs a product ruling** (below) |
-| BUG-51 | No endpoint advances to the next knockout round | low | open |
-| BUG-52 | `addManualFixture` numbers the round by fixture count, so the final becomes round 3 | low | open |
-| BUG-53 | `linkMatchToFixture` failure is swallowed in `MatchSetupPage` | low | open |
-| BUG-54 | `createScoredTournament` tags its rows with a clock that two workers can share | low | open — test-fixture flake, worked around per-spec |
+| BUG-48 | `updateSettings` and `PUT /{id}` have no service-layer role check | low | **FIXED** — backend `4f2282b`, spec `c5b3e9a`; eleven methods, not two |
+| BUG-49 | The points table counts knockout fixtures, so a three-match group reads P=5 | low | **FIXED** — backend `449f8c2`, spec `acecd3e`; ruling given |
+| BUG-50 | `createExternalPlayer`'s phone and email uniqueness checks are unscoped by academy | medium | **FIXED** — backend `12e111f` (V105), spec `a46fe79`; ruling given |
+| BUG-51 | No endpoint advances to the next knockout round | low | **FIXED** — backend `a00c85e`, frontend `a641535` |
+| BUG-52 | `addManualFixture` numbers the round by fixture count, so the final becomes round 3 | low | **FIXED** — backend `449f8c2`, spec `acecd3e` |
+| BUG-53 | `linkMatchToFixture` failure is swallowed in `MatchSetupPage` | low | **FIXED** — `7db2727` |
+| BUG-54 | `createScoredTournament` tags its rows with a clock that two workers can share | low | **FIXED** — `ae20cde` |
 
 ---
 
@@ -1258,7 +1258,12 @@ unreachable mail host.
 
 ## BUG-22 — Player public ids collide across academies when two share a prefix
 
-**Severity:** medium · **Status:** open — logged, not fixed.
+**Severity:** medium · **Status: FIXED** — backend `2d69536`, spec `e1e6393`
+(2026-09-13). Onboarding now refuses a blank prefix (400) and one another academy
+already holds (409); `defaultPlayerIdPrefix` is the single source of the
+derivation, so the value validated and the value seeded cannot drift apart.
+Proven by removing the guard: provisioning into a held prefix returned 200 and
+created the tenant.
 
 `players.public_id` is globally unique, but the id is generated from a
 **per-academy** counter:
@@ -2472,7 +2477,10 @@ listed, which is what makes the guard enforce them.
 ## BUG-48 — `updateSettings` and `PUT /{id}` have no service-layer role check
 
 **Found:** Phases 31–34 closing pass. **Severity:** low ·
-**Status:** open — defence in depth only.
+**Status: FIXED** — backend `4f2282b`, spec `c5b3e9a`. The sibling sweep found
+**eleven** write methods with no service-layer role check, not the two recorded
+here; `PUT /{id}` already had one. `listFixtures` is deliberately exempt — its
+write is a self-heal, and gating it would 403 a coach's fixture list.
 
 `TournamentService.updateSettings` resolves the tournament with `getTournament`
 (academy-scoped, correct) and then writes, with no role assertion — unlike its
@@ -2492,7 +2500,11 @@ every neighbouring method in the same service does assert the role.
 ## BUG-49 — The points table counts knockout fixtures
 
 **Found:** Phases 31–34 closing pass. **Severity:** low ·
-**Status:** open — **needs a ruling before it is a bug.**
+**Status: FIXED** — backend `449f8c2`, spec `acecd3e`. **Ruling given: a knockout
+result never affects the points table.** LEAGUE and GROUP count; KNOCKOUT and
+PLAYOFFS do not. Applied to both points tables and to the two ranking calls that
+pick qualifiers, since seeding a bracket from a ranking that already counted it
+is circular. NOT applied to the statistics boards, which are a separate decision.
 
 `standingsOf` walks `fixtureRepo.findCompletedByTournamentId` with no stage
 filter, so once the semis and the final are played the **group** table includes
@@ -2508,7 +2520,13 @@ decision is whether a points table means "the group" or "everything played".
 ## BUG-50 — `createExternalPlayer`'s uniqueness checks are unscoped by academy
 
 **Found:** Phases 31–34 closing pass. **Severity:** medium ·
-**Status:** open — **backlog item, needs a product ruling.** See the backlog
+**Status: FIXED** — backend `12e111f` (migration **V105**), spec `a46fe79`.
+**Ruling given: a phone belongs to an academy, not to the platform.** The sweep
+found EIGHT unscoped call sites across three files, not one — including
+`/check-email` and `/check-phone`, which answered for any academy and took no
+authentication at all, and `SummerCampEnrollmentService`, whose unscoped email
+match could enrol ANOTHER academy's player: a cross-tenant write, not an oracle.
+The four unscoped repository methods are deleted. See the backlog
 section at the end of this file.
 
 `AdminPlayerService.createExternalPlayer` (`:351`, `:363`):
@@ -2540,7 +2558,12 @@ and what is true either way.
 
 ## BUG-51 — No endpoint advances to the next knockout round
 
-**Found:** Phases 31–34 closing pass. **Severity:** low · **Status:** open.
+**Found:** Phases 31–34 closing pass. **Severity:** low ·
+**Status: FIXED** — backend `a00c85e`, frontend `a641535`.
+`POST /{id}/advance-round` pairs the last completed round's winners into the next
+using `FixtureGenerator.knockout`, and flags a two-winner tie as the final —
+which is what makes the champion derivation fire. It refuses rather than guesses
+on an unfinished round, an undecided tie, or a bracket already decided.
 
 `advanceToKnockout` always re-seeds **round 1** from the group standings. There
 is no "advance the bracket" call, so after the semis the final must be added as a
@@ -2553,7 +2576,10 @@ appear will not find it.
 
 ## BUG-52 — `addManualFixture` numbers the round by fixture count
 
-**Found:** Phases 31–34 closing pass. **Severity:** low · **Status:** open.
+**Found:** Phases 31–34 closing pass. **Severity:** low ·
+**Status: FIXED** — backend `449f8c2`, spec `acecd3e`. The round is now
+`max(roundNumber) + 1`, with an explicit `roundNumber` honoured so a second
+simultaneous tie can join round 1. Shown failing first: Expected 2, Received 3.
 
 ```java
 int round = fixtureRepo.findAllByStageIdOrderByRoundNumberAsc(stage.getId()).size() + 1;
@@ -2568,7 +2594,10 @@ path.
 
 ## BUG-53 — `linkMatchToFixture` failure is swallowed
 
-**Found:** Phases 31–34 closing pass. **Severity:** low · **Status:** open.
+**Found:** Phases 31–34 closing pass. **Severity:** low ·
+**Status: FIXED** — `7db2727`. It now raises a 30-second error toast carrying the
+server's reason and the recovery, without aborting the flow — the match is
+created and startable, so a dead end would not be an improvement.
 
 `MatchSetupPage.handleStartMatch`:
 
@@ -2588,8 +2617,12 @@ recoverable failure into a silently broken fixture. It should at least warn.
 ## BUG-54 — `createScoredTournament` tags its rows with a clock two workers can share
 
 **Found:** the closeout slice, writing BUG-44's spec. **Severity:** low (test
-infrastructure) · **Status:** open — worked around per-spec, not fixed in the
-fixture.
+infrastructure) · **Status: FIXED** — `ae20cde`. The tag is 8 random DIGITS
+(`e2e/fixtures/tag.ts`) and the per-spec workarounds are gone. Digits, not hex:
+team names are printed into PDF columns sized in points, and a variable-width
+tag failed two runs in three while reading as a flaky fixture.
+Until then it was worked around inside each spec rather than in the fixture the
+five of them share.
 
 `e2e/fixtures/scoredTournament.ts` tags everything it creates with
 `${Date.now() % 1000000}` plus a per-PROCESS counter, and tears down by MATCHING
