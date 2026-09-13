@@ -1,5 +1,6 @@
 import { test as base, expect, type Page } from "@playwright/test";
 import { Api } from "./api";
+import { createMatch } from "./playFixture";
 import { config, type Tenant } from "./env";
 
 // Workbook baseline (WORKBOOK-EXTRACTED.md § Preamble):
@@ -66,39 +67,17 @@ export async function createScoringMatch(
   const env = config();
   const api = await Api.login(opts.tenant ?? env.a);
 
-  // Retry on the known public-id collision — BUGS-FOUND.md BUG-11.
-  // MatchService.generateMatchPublicId() is "MCH-NCA-" + currentTimeMillis(), so
-  // two matches created in the same millisecond violate the global unique
-  // constraint. Two Playwright workers hit this routinely; two real admins would
-  // hit it rarely. Retried here rather than serialising the suite, because
-  // serialising would hide a real defect behind a slower test run.
-  //
-  // Matched on the generic message, not a constraint name: since b9a58a5 the API
-  // no longer returns raw schema detail. Match creation has exactly one unique
-  // constraint that a caller can trip, so "already exists" here is unambiguous —
-  // but it does mean a client can no longer tell which constraint failed. Noted
-  // against BUG-11.
-  let match: any = null;
-  for (let attempt = 0; attempt < 5; attempt++) {
-    try {
-      match = await api.createMatch({
-        title: `E2E T20 ${Date.now()}`,
-        matchDate: new Date().toISOString().slice(0, 10),
-        matchType: "INTERNAL",
-        totalOvers: opts.totalOvers ?? 20,
-        venue: "E2E Test Ground",
-      });
-      break;
-    } catch (e) {
-      const msg = String(e);
-      const isCollision =
-        msg.includes("cricket_matches_public_id_key") ||        // pre-b9a58a5 wording
-        (msg.includes("400") && msg.includes("already exists")); // current wording
-      if (!isCollision) throw e;
-      await new Promise((r) => setTimeout(r, 15 + attempt * 10));
-    }
-  }
-  if (!match) throw new Error("createMatch kept colliding on public_id (BUG-11)");
+  // No retry. BUG-11 is fixed — `generateMatchPublicId()` draws from a random
+  // UUID rather than `System.currentTimeMillis()` — so a create that fails with
+  // "already exists" is a REGRESSION and has to stop the run, not be absorbed by
+  // a backoff. `createMatch` reports it as such.
+  const match = await createMatch(api, {
+    title: `E2E T20 ${Date.now()}`,
+    matchDate: new Date().toISOString().slice(0, 10),
+    matchType: "INTERNAL",
+    totalOvers: opts.totalOvers ?? 20,
+    venue: "E2E Test Ground",
+  });
   const matchPublicId: string = match.publicId;
 
   await api.setTeams(matchPublicId, {

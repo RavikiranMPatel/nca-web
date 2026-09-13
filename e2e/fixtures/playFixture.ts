@@ -149,43 +149,51 @@ export async function playInnings(api: Api, match: string, batTeamPublicId: stri
 }
 
 /**
- * How many times BUG-11 was hit this run, so the report can say so rather than
- * the retry quietly absorbing it.
+ * How many times BUG-11 was hit this run.
+ *
+ * Kept after the fix, and now expected to be ZERO. It used to be the count the
+ * retry was absorbing; it is now the count a spec asserts, so "no collisions"
+ * is a claim the run makes rather than an absence nobody looked for.
  */
 export const bug11 = { collisions: 0 };
 
+/** True for the 400 a public-id collision produces. */
+export function isPublicIdCollision(e: unknown): boolean {
+  const msg = String(e);
+  // Matched on the generic message rather than a constraint name — since
+  // `b9a58a5` the API no longer returns raw schema detail, and match creation
+  // has exactly one unique constraint a caller can trip.
+  return msg.includes("cricket_matches_public_id_key")          // pre-b9a58a5 wording
+    || (msg.includes("400") && msg.includes("already exists")); // current wording
+}
+
 /**
- * `POST /matches`, retrying the known public-id collision — BUGS-FOUND.md BUG-11.
+ * `POST /matches`, once — BUGS-FOUND.md BUG-11.
  *
- * `MatchService.generateMatchPublicId()` is `"MCH-NCA-" + currentTimeMillis()` and
- * `cricket_matches.public_id` is globally unique, so two matches created in the
- * same millisecond anywhere on the platform collide. Two Playwright projects
- * running at once hit it routinely; two real admins would hit it rarely, and
- * there is no retry in the product.
+ * This used to retry with a bounded backoff, because
+ * `MatchService.generateMatchPublicId()` was
+ * `"MCH-NCA-" + System.currentTimeMillis()` and `cricket_matches.public_id` is
+ * globally unique: two matches created in the same millisecond anywhere on the
+ * platform collided, and two Playwright projects running at once hit it
+ * routinely. The product had no retry, so the suite's retry was the only thing
+ * making the defect survivable — and it was counted rather than absorbed for
+ * exactly that reason.
  *
- * Retried here rather than serialising the projects, which is the convention
- * `createScoringMatch` already set for exactly this bug: serialising would hide a
- * real defect behind a slower test run. Counted, so it is reported rather than
- * silently absorbed.
- *
- * Matched on the generic message rather than a constraint name — since `b9a58a5`
- * the API no longer returns raw schema detail, and match creation has exactly one
- * unique constraint a caller can trip.
+ * The generator now draws from a random UUID, so there is nothing left to retry.
+ * A collision here is a REGRESSION: it is counted and rethrown with a message
+ * that says so, rather than slept through.
  */
-export async function createMatchRetrying(api: Api, body: Record<string, unknown>) {
-  for (let attempt = 0; attempt < 6; attempt++) {
-    try {
-      return await api.createMatch(body);
-    } catch (e) {
-      const msg = String(e);
-      const collision = msg.includes("cricket_matches_public_id_key")
-        || (msg.includes("400") && msg.includes("already exists"));
-      if (!collision) throw e;
-      bug11.collisions++;
-      await new Promise((r) => setTimeout(r, 20 + attempt * 15));
-    }
+export async function createMatch(api: Api, body: Record<string, unknown>) {
+  try {
+    return await api.createMatch(body);
+  } catch (e) {
+    if (!isPublicIdCollision(e)) throw e;
+    bug11.collisions++;
+    throw new Error(
+      "BUG-11 REGRESSION: POST /matches collided on public_id. The generator is "
+      + "supposed to be a random UUID; a collision means it is back on the clock "
+      + "or the suffix has been shortened. Original: " + String(e));
   }
-  throw new Error("createMatch kept colliding on public_id (BUG-11)");
 }
 
 /** Every innings of a match, read back from the rows the scoring engine wrote. */
@@ -253,7 +261,7 @@ export async function playFixture(
   }));
 
   // ── 2. the match, linked to the tournament and the fixture ────────────────
-  const m = await createMatchRetrying(api, {
+  const m = await createMatch(api, {
     title: (prep.body as any).suggestedTitle,
     matchDate,
     matchType: "INTERNAL",

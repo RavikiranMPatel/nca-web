@@ -11,7 +11,7 @@ import {
 } from "../fixtures/championship";
 import {
   playFixture, playInnings, withCatch, nrrOf, pointsOf, inningsOf,
-  createMatchRetrying, bug11,
+  createMatch, bug11,
   type Played, type FixtureScript,
 } from "../fixtures/playFixture";
 
@@ -187,6 +187,14 @@ test.afterAll(async () => {
   writeFileSync(path.join(dir, `tournament-e2e-runtime-${WORKER}.txt`),
     `worker=${WORKER} runtimeMs=${runtimeMs} runtime=${(runtimeMs / 1000).toFixed(1)}s `
     + `bug11Collisions=${bug11.collisions}\n`);
+
+  // BUG-11 is fixed, so this run — two projects creating matches through the
+  // real API at the same time, which is how the bug was reproduced in the first
+  // place — must see none. It used to be two on the first such run.
+  if (bug11.collisions > 0) {
+    errors.push(`BUG-11 REGRESSION: ${bug11.collisions} public-id collision(s) `
+      + `during this run; the generator is expected to be a random UUID`);
+  }
 
   if (errors.length) throw new Error(`teardown: ${errors.join(" | ")}`);
 });
@@ -1471,7 +1479,7 @@ async function startOnly(f: any, home: Side, away: Side, _script: FixtureScript)
     `/api/admin/cricket/tournaments/${A.tournamentPublicId}/fixtures/${f.publicId}/prepare-match`);
   expect(prep.status, "prepare-match").toBe(200);
 
-  const m = await createMatchRetrying(A.api, {
+  const m = await createMatch(A.api, {
     title: (prep.body as any).suggestedTitle,
     matchDate: (f.scheduledAt ?? "2026-03-10T00:00:00Z").slice(0, 10),
     matchType: "INTERNAL", totalOvers: 20, venue: "RKMP Main Ground",
