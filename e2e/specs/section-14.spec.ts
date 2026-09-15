@@ -155,24 +155,103 @@ test.describe("§14 Crash / Logout / Refresh / Sync", () => {
     expect(seen.currentStrikerPublicId).toBe(expected.currentStrikerPublicId);
   });
 
-  test("T20-348 / EDGE-27 an identical delivery posted twice is scored twice", async ({ scoringMatch }) => {
-    test.fail(true, "BUG-18: postBall has no idempotency key, so a retried request double-scores");
+  test("T20-348 / EDGE-27 a retried delivery — same deliveryClientId — is scored once", async ({ scoringMatch }) => {
+    // BUG-18, fixed: V106 adds a partial unique index on
+    // (innings_id, delivery_client_id); ScoringService.postBall returns the
+    // existing delivery unchanged when the id repeats, rather than creating a
+    // second one. This is the one case Api.postBall's own auto-generated id
+    // does not cover — a genuine retry reusing the SAME id — so the id is
+    // supplied explicitly here, standing in for "the scorer UI's stored id for
+    // this tap, resent unchanged."
     const m = scoringMatch;
     const s = await m.api.state(m.matchPublicId);
+    const deliveryClientId = crypto.randomUUID();
     const payload = {
       bowlerPublicId: s.currentBowlerPublicId!,
       batsmanPublicId: s.currentStrikerPublicId!,
       nonStrikerPublicId: s.currentNonStrikerPublicId!,
       runsBatsman: 4,
+      deliveryClientId,
     };
-    await m.api.postBall(m.matchPublicId, payload);
-    await m.api.postBall(m.matchPublicId, { ...payload });
+    const first = await m.api.postBall(m.matchPublicId, payload);
+    const second = await m.api.postBall(m.matchPublicId, { ...payload });
 
     // Workbook T20-348: "Idempotency prevents duplicate." EDGE-27: "No duplicate score."
     expect(deliveryCount(m.matchPublicId), "the same delivery must not be recorded twice").toBe(1);
     const after = await m.api.state(m.matchPublicId);
     expect(after.inningsState.totalRuns, "and must not be scored twice").toBe(4);
+
+    // The second response is not merely "also 200" — it is the SAME state,
+    // because nothing was scored the second time. Compared field by field
+    // rather than deep-equal on the whole object: the two are independently
+    // constructed BallResponseDTOs (buildBallResponse runs twice, once for
+    // each call), so incidental map-ordering differences in batterStats /
+    // bowlerStats must not fail a check that is really about content.
+    expect(second.inningsState, "the second response reports the identical innings state")
+      .toEqual(first.inningsState);
+    expect(second.lastDeliveryPublicId, "and names the SAME delivery, not a new one")
+      .toBe(first.lastDeliveryPublicId);
+    expect(second.currentStrikerPublicId).toBe(first.currentStrikerPublicId);
+    expect(second.currentBowlerPublicId).toBe(first.currentBowlerPublicId);
+    expect(second.overComplete).toBe(first.overComplete);
+    expect(second.inningsComplete).toBe(first.inningsComplete);
   });
+
+  test("two DIFFERENT deliveryClientIds score two separate deliveries, as normal", async ({ scoringMatch }) => {
+    // The converse of T20-348: distinct ids must never be treated as a
+    // collision just because the payload otherwise matches — two dot balls in
+    // a row are legitimately identical requests. This is also, incidentally,
+    // what every OTHER test in this suite already proves as a side effect of
+    // Api.postBall generating a fresh id per call; this test says so directly
+    // rather than leaving it implicit.
+    const m = scoringMatch;
+    const s = await m.api.state(m.matchPublicId);
+    const base = {
+      bowlerPublicId: s.currentBowlerPublicId!,
+      batsmanPublicId: s.currentStrikerPublicId!,
+      nonStrikerPublicId: s.currentNonStrikerPublicId!,
+      runsBatsman: 0,
+    };
+    await m.api.postBall(m.matchPublicId, { ...base, deliveryClientId: crypto.randomUUID() });
+    await m.api.postBall(m.matchPublicId, { ...base, deliveryClientId: crypto.randomUUID() });
+
+    expect(deliveryCount(m.matchPublicId), "two different ids, two deliveries").toBe(2);
+    const after = await m.api.state(m.matchPublicId);
+    expect(after.inningsState.totalBalls, "both legal balls counted").toBe(2);
+  });
+
+  test("undo frees the id — reposting it after an undo scores a NEW delivery, not a stale duplicate",
+    async ({ scoringMatch }) => {
+      // "Replay/undo unaffected" cuts both ways: undo must still work exactly
+      // as before (nothing here changes replayInnings, which never reads or
+      // writes delivery_client_id), and the id it deleted must not leave a
+      // phantom lock behind. Reposting the SAME id after an undo is a
+      // genuinely new event — the delivery it named no longer exists — and
+      // must succeed as a fresh delivery, not be silently absorbed as if it
+      // were the one that was just undone.
+      const m = scoringMatch;
+      const s = await m.api.state(m.matchPublicId);
+      const deliveryClientId = crypto.randomUUID();
+      const payload = {
+        bowlerPublicId: s.currentBowlerPublicId!,
+        batsmanPublicId: s.currentStrikerPublicId!,
+        nonStrikerPublicId: s.currentNonStrikerPublicId!,
+        runsBatsman: 2,
+        deliveryClientId,
+      };
+      const first = await m.api.postBall(m.matchPublicId, payload);
+      expect(deliveryCount(m.matchPublicId)).toBe(1);
+
+      await m.api.undo(m.matchPublicId);
+      expect(deliveryCount(m.matchPublicId), "undo removed it").toBe(0);
+
+      const second = await m.api.postBall(m.matchPublicId, { ...payload });
+      expect(deliveryCount(m.matchPublicId), "reposting the freed id creates a real delivery").toBe(1);
+      expect(second.lastDeliveryPublicId, "a DIFFERENT delivery from the undone one")
+        .not.toBe(first.lastDeliveryPublicId);
+      const after = await m.api.state(m.matchPublicId);
+      expect(after.inningsState.totalRuns, "scored for real, not silently ignored").toBe(2);
+    });
 
   test("T20-349 / EDGE-28 two clients scoring at once are serialised, not interleaved", async ({ scoringMatch }) => {
     const m = scoringMatch;

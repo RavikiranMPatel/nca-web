@@ -1,10 +1,55 @@
+import axios from "axios";
 import api from "../../api/axios";
 import type { BallRequest, BallResponse, Delivery, DeliveryRecord, EditDeliveryRequest } from "../../types/scoring";
 
 const BASE = (matchId: string) => `/admin/cricket/matches/${matchId}/scoring`;
 
-export const postBall = (matchId: string, req: BallRequest) =>
-  api.post<BallResponse>(`${BASE(matchId)}/ball`, req).then((r) => r.data);
+/**
+ * A response that never arrived, not a response that said no. axios sets
+ * `request` but leaves `response` undefined when the request went out and
+ * nothing came back — a dropped connection, a proxy timeout, a tab backgrounded
+ * mid-flight. That is exactly the case BUG-18 is about: the write may well have
+ * committed on the server; the client just has no way to know. A real HTTP
+ * error (4xx/5xx) is a definite answer and must not be retried here.
+ */
+function isUnanswered(e: unknown): boolean {
+  return axios.isAxiosError(e) && !e.response && !!e.request;
+}
+
+/**
+ * BUG-18. One id per call — one per tap — reused only if THIS call needs an
+ * automatic retry, never generated fresh for a retry of the same tap.
+ *
+ * The one retry here is deliberately narrow: it fires only on a response that
+ * never arrived, exactly once, with the identical payload including the same
+ * deliveryClientId. If the delivery already landed, postBall's idempotency
+ * check (ScoringService, V106) returns it unchanged instead of scoring it
+ * again; if it never landed, this creates it, same as any first attempt.
+ *
+ * A manual re-tap by the scorer after seeing an error is a NEW call to
+ * postBall with its own fresh id, by design — that is a new decision by a
+ * human, not a replay of one that already happened. See
+ * docs/architecture/event-idempotency.md for what this does and does not
+ * cover — in particular, it is not a defence against two click handlers for
+ * the SAME tap both dispatching (a UI-dispatch race, not a network one); the
+ * `posting` guard and each button's own `disabled` state are what prevent that.
+ */
+export const postBall = async (matchId: string, req: BallRequest) => {
+  const payload: BallRequest = {
+    ...req,
+    deliveryClientId: req.deliveryClientId ?? crypto.randomUUID(),
+  };
+  try {
+    return await postBallOnce(matchId, payload);
+  } catch (e) {
+    if (!isUnanswered(e)) throw e;
+    return await postBallOnce(matchId, payload);
+  }
+};
+
+function postBallOnce(matchId: string, payload: BallRequest) {
+  return api.post<BallResponse>(`${BASE(matchId)}/ball`, payload).then((r) => r.data);
+}
 
 export const undoLastBall = (matchId: string) =>
   api.delete<BallResponse>(`${BASE(matchId)}/ball/last`).then((r) => r.data);

@@ -14,6 +14,16 @@ export interface BallRequest {
   fielderPublicId?: string;
   fielder2PublicId?: string;
   isFreeHit?: boolean;
+  noBallRunsType?: "BAT" | "BYE" | "LEG_BYE";
+  /**
+   * BUG-18. Optional here on purpose — a caller that omits it (T20-349/EDGE-28
+   * uses `.raw()` directly, bypassing `postBall()` below, specifically to send
+   * none) gets today's unprotected behaviour. `postBall()` fills one in when
+   * absent so every OTHER test in the suite still gets a distinct id per call,
+   * the way a real tap always would, without every one of ~250 call sites
+   * needing to know this field exists.
+   */
+  deliveryClientId?: string;
 }
 
 /** Thin authenticated API client for one academy. */
@@ -117,8 +127,14 @@ export class Api {
     this.raw("delete", `/api/admin/cricket/matches/${m}?confirmDeletePerformances=true`);
 
   // ── scoring ───────────────────────────────────────────────────────────────
+  // BUG-18: a distinct id per call, the way a real tap always has one, unless
+  // the caller supplied its own (a genuine retry reusing the same id, or a
+  // test deliberately proving the idempotency behaviour itself).
   postBall = (m: string, b: BallRequest) =>
-    this.json("post", `/api/admin/cricket/matches/${m}/scoring/ball`, b);
+    this.json("post", `/api/admin/cricket/matches/${m}/scoring/ball`, {
+      deliveryClientId: crypto.randomUUID(),
+      ...b,
+    });
   state = (m: string) => this.json("get", `/api/admin/cricket/matches/${m}/scoring/state`);
   selectBatter = (m: string, batterPublicId: string, position: "striker" | "nonstriker") =>
     this.json("post", `/api/admin/cricket/matches/${m}/scoring/select-batter`, {
