@@ -72,7 +72,7 @@ backend.
 | BUG-38 | 28 response DTOs put a tenant id or a user's email on the wire | medium | open — pinned by `ResponseDtoLeakTest`, cannot grow |
 | BUG-39 | An unmapped URL returns 500, not 404 | low | **FIXED** — backend `b68bac2`, spec `5bcf56f` |
 | BUG-40 | Recording a final's result returned a broken response mid-body | high | **FIXED** — `b7d3432` |
-| BUG-41 | `/api/super-admin/fees/reverse` cannot work, and never could | low | open — reported, a working duplicate exists |
+| BUG-41 | `/api/super-admin/fees/reverse` cannot work, and never could | low | **FIXED** — consolidated, not deleted-and-lost; backend `6526c66`, spec `ab36eba` |
 | BUG-42 | `generateFixtures` resolved venue ids scoped by nothing — not academy, not tournament | critical | **FIXED** — `743aa44` |
 | BUG-43 | A successful Settings save reported failure | medium | **FIXED** — `3a2496a` |
 | BUG-44 | The Points Table rendered neither NRR nor No Result, though the API sends both | medium | **FIXED** — `7a3620d` |
@@ -2237,7 +2237,8 @@ while working".
 
 **Found:** Slice 5b, 2026-09-12, while writing a test for BUG-37 against
 `SuperAdminFeeCorrectionService.reversePayment`.
-**Severity:** low (there is a working duplicate) · **Status:** reported, not fixed.
+**Severity:** low (there is a working duplicate) ·
+**Status: FIXED** — consolidated into the surviving endpoint, 2026-09-14.
 
 ```java
 @PostMapping("/reverse")
@@ -2274,8 +2275,41 @@ slice:
 2. The dead path's BUG-37 defect is fixed regardless (Slice 5b), so fixing the
    binding will not resurrect a null `reversalPublicId`.
 
-A test asserting 500 here would enshrine the bug, so none was written. This entry
-is the record.
+**Ruling, 2026-09-14: consolidate, don't delete.** Deleting the dead endpoint was
+caller-safe — nothing referenced it — but it was not a subset of the live one.
+It had a double-reversal guard the live path lacked (nothing stopped the same
+NORMAL payment being reversed twice through `/api/admin/fees/reverse`, only a
+UI button hiding once reversed — the BUG-14 class), and its audit row was the
+only place that could name the reversal a correction created (`originalAmount`,
+`originalPaidOn`, `originalPublicId`, `reversalPublicId`, `critical: true`,
+against the live path's bare `reason`). Both are now in `FeePaymentService
+.reversePayment` (`/api/admin/fees/reverse`, the surviving endpoint), plus the
+negation the dead path also had and the live one didn't — the reversal is a
+true contra entry now, not a copy of the original amount. Checked before
+negating: no backend query sums `FeePayment.amount` across a player's rows, and
+the only UI list of payments already filters `type !== "REVERSAL"` out, so
+nothing was reading the old, wrong sign.
+
+One thing the dead path could not do that the fix needed to: it ran as a
+branchless SUPER_ADMIN would (both academy A's and B's seeded SUPER_ADMIN test
+accounts are deliberately branchless, per the branch-resolver census in
+SESSION-HANDOFF), and `fee_payments.branch_id` is NOT NULL with no fallback —
+the BUG-25 failure shape, hit live while writing the test for this fix. Closed
+narrowly, for this one write: the reversal's `branchId` is now set explicitly
+from the ORIGINAL payment's branch, not the acting SUPER_ADMIN's — which is
+also the more correct rule regardless of BUG-25, since a SUPER_ADMIN's whole
+reason to exist is acting across branches, and a reversal belongs to the branch
+of what it reverses. This does not touch the general branch resolver BUG-25 is
+still waiting on.
+
+All three additions were shown failing first, one at a time, each isolated by
+reverting only that one line and rebuilding: the guard alone (`Expected: 409,
+Received: 200`), the audit alone (`Expected: "FPM_44", Received: undefined`),
+the negation alone (`Expected: -1000, Received: 1000`).
+
+`SuperAdminFeeCorrectionService` and `SuperAdminFeeCorrectionController` are
+deleted. `/api/super-admin/fees/reverse` now returns a clean 404 (confirmed
+live), not the 500 this entry originally reported.
 
 ---
 
