@@ -49,7 +49,7 @@ backend.
 | BUG-15 | Obstructing the field credited to the bowler | medium | **FIXED** — `8cb9fcd` |
 | BUG-16 | Undone dismissal leaves a stale `crease_exited_at` | medium | **FIXED** — `ab34118` |
 | BUG-17 | A replay erases penalty runs | high | **FIXED** — `8549c47` |
-| BUG-18 | `postBall` has no idempotency key, so a retry double-scores | high | open — reproduced by the suite |
+| BUG-18 | `postBall` has no idempotency key, so a retry double-scores | high | **FIXED** — backend `a00b5e7` (V106), spec `612c2d6` |
 | BUG-19 | `extra_type` is unvalidated, so unknown values silently lose runs | high | open — reproduced by the suite |
 | BUG-20 | Production cannot reach `smtp.gmail.com:587` — app mail is dead | high | open — found during the 2026-09-04 deploy |
 | BUG-21 | The mail health indicator has no timeout, so `/actuator/health` takes ~2 minutes | medium | open — found during the 2026-09-04 deploy |
@@ -1078,7 +1078,9 @@ re-stamped with `now()` — both asserted in
 
 ## BUG-18 — `postBall` has no idempotency key, so a retry double-scores
 
-**Severity:** high · **Status:** open — logged by instruction, not fixed ·
+**Severity:** high ·
+**Status: FIXED** — backend `a00b5e7` (migration **V106**), spec `612c2d6`
+(2026-09-15) ·
 **Found by:** section 14 (T20-348, EDGE-27)
 
 **What happens.** Posting the identical delivery payload twice records it twice:
@@ -1116,14 +1118,49 @@ that is missing. The workbook's separate ask for "version/conflict handling"
 (T20-349) is still absent — the second client's ball is appended rather than
 flagged.
 
-**Fix sketch (not applied).** Accept a client-generated idempotency key on
-`BallRequest`, store it on `deliveries` with a unique index per innings, and return
-the existing delivery when a key repeats. That also gives the offline queue the
-primitive it needs.
+**Fix applied.** `BallRequest.deliveryClientId` — a UUID string the caller mints
+once per tap. V106 adds a partial unique index,
+`(innings_id, delivery_client_id) WHERE delivery_client_id IS NOT NULL` — nullable
+and partial so callers that send none (see below) and every row written before
+this migration are unaffected. `ScoringService.postBall` checks for an existing
+delivery with that id BEFORE any player resolution or business validation — a
+retry is a request to confirm what already happened, not a request to redo checks
+the original call already passed — and returns it unchanged, rebuilt from the
+current (unchanged) innings state, rather than scoring again.
 
-**Suite handling.** `test.fail()` in `section-14.spec.ts` asserting the workbook's
-expectation ("Idempotency prevents duplicate"). The serialisation half is asserted
-positively in the same file.
+Proven failing first: with only the lookup removed (the parsed id still stored),
+the SECOND identical post did not silently double-score — it hit the DB
+constraint directly and returned `400 "A record with these details already
+exists."` This is worth stating plainly: the constraint alone turns "double-scores
+silently" into "the second attempt errors out," which is safer but not the
+same as what was asked for; the application-level check is what makes a retry
+transparent rather than merely non-corrupting.
+
+The frontend (`src/api/scoring/scoringApi.ts`) generates the id when the caller
+doesn't supply one and performs exactly ONE automatic retry, reusing the same id,
+when a request gets no response at all (`axios.isAxiosError(e) && !e.response &&
+e.request` — a real 4xx/5xx is a definite answer and is never retried). A manual
+re-tap by the scorer after seeing an error is a NEW call with its own fresh id,
+by design — a conscious human decision, not a replay. Design note:
+`docs/architecture/event-idempotency.md`, written to generalise the pattern for
+other accumulating writes (`awardPenalty` is named as the next candidate)
+without needing to re-derive it.
+
+**Deliberately NOT required.** `deliveryClientId` is optional, not `@NotBlank`.
+T20-349/EDGE-28 (the concurrency test, same file) posts two genuinely concurrent,
+identical-payload requests via `.raw()` with NO id at all, specifically to prove
+the pessimistic lock on the innings row serialises them — a DIFFERENT, already-
+correct mechanism from this one. Making the field required would have forced
+that test to change to accommodate a field it isn't about; nullable-and-partial
+means it didn't have to.
+
+**Suite handling.** `test.fail()` removed from `section-14.spec.ts`; T20-348 /
+EDGE-27 now asserts the fix directly, including that the SECOND response matches
+the first field-for-field. Two more tests added alongside it: distinct ids still
+score two separate deliveries (the converse case), and undo frees an id — a
+repost of the same id after an undo is a genuinely new delivery, not silently
+absorbed as a stale duplicate. The serialisation test (T20-349/EDGE-28) is
+unchanged and still passes, confirming it was unaffected.
 
 ---
 
