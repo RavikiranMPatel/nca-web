@@ -696,6 +696,7 @@ function PlayerFeesTab() {
                         <>
                           <tr
                             key={p.publicId}
+                            data-testid={`fee-row-${p.publicId}`}
                             className={`hover:bg-slate-50 transition ${reversal ? "opacity-60" : ""}`}
                           >
                             <td className="px-5 py-3 text-sm text-slate-700">
@@ -776,11 +777,17 @@ function PlayerFeesTab() {
                             </td>
                             <td className="px-5 py-3">
                               {reversal ? (
-                                <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-red-100 text-red-600">
+                                <span
+                                  data-testid={`fee-status-${p.publicId}`}
+                                  className="text-xs font-semibold px-2.5 py-1 rounded-full bg-red-100 text-red-600"
+                                >
                                   ⊘ Reversed
                                 </span>
                               ) : (
-                                <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-700">
+                                <span
+                                  data-testid={`fee-status-${p.publicId}`}
+                                  className="text-xs font-semibold px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-700"
+                                >
                                   Paid
                                 </span>
                               )}
@@ -801,6 +808,7 @@ function PlayerFeesTab() {
                                       Edit Date
                                     </button>
                                     <button
+                                      data-testid={`fee-reverse-desktop-${p.publicId}`}
                                       onClick={() => handleReverse(p.publicId)}
                                       className="text-xs text-red-500 hover:text-red-700 font-medium hover:underline"
                                     >
@@ -864,6 +872,7 @@ function PlayerFeesTab() {
                   return (
                     <div
                       key={p.publicId}
+                      data-testid={`fee-row-mobile-${p.publicId}`}
                       className={reversal ? "bg-red-50/30" : ""}
                     >
                       <div className="p-4">
@@ -874,11 +883,17 @@ function PlayerFeesTab() {
                             {formatDate(p.paidOn)}
                           </span>
                           {reversal ? (
-                            <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-red-100 text-red-600">
+                            <span
+                              data-testid={`fee-status-mobile-${p.publicId}`}
+                              className="text-xs font-semibold px-2 py-0.5 rounded-full bg-red-100 text-red-600"
+                            >
                               ⊘ Reversed
                             </span>
                           ) : (
-                            <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700">
+                            <span
+                              data-testid={`fee-status-mobile-${p.publicId}`}
+                              className="text-xs font-semibold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700"
+                            >
                               Paid
                             </span>
                           )}
@@ -963,6 +978,7 @@ function PlayerFeesTab() {
                                   Edit Date
                                 </button>
                                 <button
+                                  data-testid={`fee-reverse-mobile-${p.publicId}`}
                                   onClick={() => handleReverse(p.publicId)}
                                   className="text-xs text-red-500 font-medium"
                                 >
