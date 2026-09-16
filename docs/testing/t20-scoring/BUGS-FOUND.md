@@ -2129,6 +2129,44 @@ root instead of site by site. It changes the persistence behaviour of **every**
 entity in the application, so it needs its own decision and its own regression
 pass. See `nextgen-cricket-academy/docs/tournament/PROGRESS.md`, Slice 5b.
 
+**Root cause fixed.** `BaseEntity.version` no longer initialises to `0` —
+`private Integer version;` stays null until JPA sets it on first insert.
+Verified from `spring-data-jpa` 3.2.5 source (`JpaMetamodelEntityInformation
+.isNew()`): a non-primitive `@Version` attribute is decided purely on whether
+its runtime value is null, so `isNew()` is now correctly `true` on create and
+`save()` takes the `persist()` branch — which per the JPA/Spring Data contract
+returns the exact same reference it was given.
+
+Checked for every entity in the app whether this changes UPDATE-path
+optimistic locking (the one behaviour this could not be allowed to break): no.
+73 `BaseEntity` subclasses use the inherited field directly and are unaffected
+on the update path — only the create-time `isNew()` outcome was ever wrong.
+The 20 entities that don't extend `BaseEntity` have no `@Version` at all and
+are untouched. Two call sites (`BroadcastLog`, `BroadcastRecipient`) manually
+assign a fresh random UUID id before saving a new row — safe under `persist()`.
+One entity, `SummerCampFeeRule`, shadows `BaseEntity.version` with its own
+domain field and was and remains independently broken for an unrelated reason
+— see **BUG-55**, filed rather than fixed here.
+
+New tests: `SaveReturnsPersistedInstanceOnCreateTest` asserts `save(x) == x`
+and `x.getPublicId()` is populated on create, for one entity from each of 8
+unrelated modules (attendance, enquiries, fees, inventory, representative
+honors, tournaments, summer camps ×2, users). `OptimisticLockingRegressionTest`
+opens two genuinely separate `EntityManager`s against the same `FeePayment` row
+and the same `Tournament` row, updates both, commits the first, and asserts the
+second throws `OptimisticLockException` — the concurrent-edit detection this
+change could have silently broken. Full `mvn test`: 190/190 passing, including
+both new tests and the original `SaveReturnDiscardedTest`. Full Playwright
+suite (desktop, iPhone 14, Pixel 7) and smoke also green — see the commit for
+the exact run. A fresh-install boot against a truncated scratch database ran
+all 105 Flyway migrations cleanly to v106 and started with no errors, confirming
+no migration or seed data depends on `version` defaulting to `0`.
+
+`SaveReturnDiscardedTest` is kept permanently, unchanged — it was already a
+general source scan with no site-specific allowlist to remove. It still
+guards against the discard-then-read *shape* regardless of root cause, which
+matters again the day someone reintroduces a non-null `@Version` default.
+
 ---
 
 ## BUG-38 — Twenty-eight response DTOs put a tenant id or a user's email on the wire
@@ -2718,6 +2756,55 @@ fixture five other specs depend on. The fixture itself should adopt
 
 **This is not an application bug.** It is recorded because it produces failures
 that read like application bugs, and it has now cost two sessions time.
+
+---
+
+## BUG-55 — `SummerCampFeeRule.version` is both a domain counter and Hibernate's optimistic-lock field
+
+**Found:** investigating BUG-37's root-cause fix, checking every entity for
+whether leaving `@Version` null-until-persist could break optimistic locking.
+**Status:** filed, not fixed — pre-existing, unrelated to BUG-37, and out of
+scope for that change ("do not touch anything else").
+
+`SummerCampFeeRule` declares its own plain `private Integer version = 1;` — a
+genuine business field, the fee-rule revision number, part of the real unique
+constraint `(camp_id, batch_count, version)`. It shadows `BaseEntity`'s
+`@Version`-annotated field **by name**.
+
+Confirmed empirically (a throwaway JUnit test against the live Hibernate
+metamodel, since the two plausible guesses disagree and only one is right):
+Hibernate's metamodel still reports `isVersion=true` for this entity —
+inherited from `BaseEntity`'s original `@Version` declaration — but the
+**runtime value read and written is the subclass's own field**, confirmed
+against the live DB column default (`1`, matching the subclass initialiser,
+not BaseEntity's `0`).
+
+Root cause is a migration-ordering collision, not application code:
+`V9__summer_camps.sql` created `summer_camp_fee_rules.version` as a domain
+column (`DEFAULT 1`) before `BaseEntity.@Version` existed. `V17__version.sql`'s
+later blanket `ADD COLUMN IF NOT EXISTS version ... DEFAULT 0` rollout across
+~29 tables was a silent no-op here — the column already existed — leaving one
+physical column to serve two conflicting purposes once the entity started
+extending `BaseEntity`.
+
+Two consequences, checked against the entity's actual usage
+(`SummerCampService`'s fee-rule creation loop):
+
+- **No observable create-time symptom today.** The loop sets `publicId`
+  explicitly before `save()` and never reads `.getId()`/`.getPublicId()` back
+  off the discarded return, so it does not trip `SaveReturnDiscardedTest` and
+  BUG-37's root-cause fix neither improves nor worsens it — this entity's own
+  `isNew()` was already, and remains, incorrectly `false` on create for an
+  unrelated reason (its own non-null field, not `BaseEntity`'s).
+- **Live risk on the update path.** Hibernate's optimistic-lock mechanism will
+  auto-increment this column on *any* field update to an existing row — not
+  only on an intentional fee-rule revision — which can desync the "revision
+  number" from its intended meaning and collide with the unique constraint.
+
+Not fixed here: needs its own decision (rename the domain column, or give the
+entity an explicit `@Version` on a separate physical column) and its own
+regression pass, the same reasoning BUG-37 applied to leaving its own root
+cause for a dedicated slice.
 
 ---
 
