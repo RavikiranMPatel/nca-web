@@ -35,7 +35,9 @@ function PlayerOverviewPage() {
   const activeTab = location.pathname.includes("/stats")
     ? "Stats"
     // : location.pathname.includes("/analysis") ? "Analysis" // disabled 2026-07-30
-    : location.pathname.includes("/fees")
+    : location.pathname.includes("/attendance-report")
+      ? "Attendance"
+      : location.pathname.includes("/fees")
         ? "Fees"
         // : location.pathname.includes("/media") ? "Media"       // disabled 2026-07-31
         // : location.pathname.includes("/coaching") ? "Coaching" // disabled 2026-07-31
@@ -129,6 +131,15 @@ function PlayerOverviewPage() {
                 Fees
               </TabButton>
             )}
+
+            <TabButton
+              active={activeTab === "Attendance"}
+              onClick={() =>
+                navigate(`/admin/players/${playerPublicId}/attendance-report`)
+              }
+            >
+              Attendance
+            </TabButton>
 
             {/* Media tab disabled 2026-07-31 — hidden pending content strategy
             <TabButton

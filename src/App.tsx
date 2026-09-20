@@ -52,6 +52,7 @@ import PlayerAttendanceHistoryPage from "./pages/regular-camp-attendance/PlayerA
 // import PlayerAnalysisPage from "./pages/player/PlayerAnalysisPage"; // disabled 2026-07-30 — Analysis tab hidden pending redesign
 import PlayerAssessmentDashboardPage from "./pages/player/PlayerAssessmentDashboardPage";
 import PlayerFeesTab from "./pages/player/PlayerFeesTab";
+import PlayerAttendanceReportTab from "./pages/player/PlayerAttendanceReportTab";
 // import PlayerMediaPage from "./pages/player/PlayerMediaPage"; // disabled 2026-07-31 — Media tab hidden pending content strategy
 import OnboardingPage from "./pages/OnboardingPage";
 import { checkOnboardingStatus } from "./api/auth.api";
@@ -574,6 +575,7 @@ function App() {
         <Route path="info" element={<PlayerInfoPage />} />
         <Route path="stats" element={<PlayerStatsPage />} />
         {/* <Route path="analysis" element={<PlayerAnalysisPage />} /> */}{/* disabled 2026-07-30 */}
+        <Route path="attendance-report" element={<PlayerAttendanceReportTab />} />
         <Route
           path="fees"
           element={
