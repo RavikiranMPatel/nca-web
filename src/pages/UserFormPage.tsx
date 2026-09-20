@@ -182,13 +182,17 @@ function UserFormPage() {
         });
         showToast("User updated successfully", "success");
       } else {
+        // BUG-25. SUPER_ADMIN is academy-wide by definition — omit branchId
+        // for it rather than forcing on the new account whatever branch (or
+        // lack of one) the CREATING super admin happens to have. Every other
+        // role still needs a branch, so it keeps inheriting the creator's.
         await api.post("/admin/users", {
           name: form.name,
           email: form.email,
           phone: form.phone,
           password: form.password,
           role: form.role,
-          branchId: branchId,
+          branchId: form.role === "ROLE_SUPER_ADMIN" ? undefined : branchId,
         });
         showToast("User created successfully", "success");
       }
