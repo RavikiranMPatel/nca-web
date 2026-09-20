@@ -56,7 +56,7 @@ backend.
 | BUG-22 | Player public ids collide across academies when two share a prefix | medium | **FIXED** — backend `2d69536`, spec `e1e6393` |
 | BUG-23 | "Add New Season" on the Kit tab silently inherits another season's kit | medium | **FIXED** — `d55015b` |
 | BUG-24 | A role-denied request returns 401 "Session expired", not 403 | medium | **FIXED** — `127e8b5` |
-| BUG-25 | A branchless user cannot write a live annotation — hard 400 | high | open — the branch-resolver failure, reproduced |
+| BUG-25 | A branchless user cannot write a live annotation — hard 400 | high | **FIXED** — backend `6ca45f4`..`d3ab0d6`, frontend `771c189` |
 | BUG-26 | Brevo API key revoked — **every** production email is failing, not just deploy mail | critical | open — live production issue |
 | BUG-27 | Tournament venues, officials and leaderboards reachable by any academy | critical | **FIXED** — `204bf21` |
 | BUG-28 | The kit list could revert an edit it had just saved | medium | **FIXED** — `376bcc0` |
@@ -1480,7 +1480,7 @@ surviving session rather than a manufactured toast.
 
 ## BUG-25 — A branchless user cannot write a live annotation — hard 400
 
-**Severity:** high · **Status:** open — this is the branch-resolver failure, reproduced.
+**Severity:** high · **Status: FIXED**, 2026-09-16 — the branch resolver landed.
 
 Running the smoke suite as a `ROLE_SUPER_ADMIN` with `branch_id IS NULL` fails at
 the live-note step:
@@ -1515,6 +1515,38 @@ rule, so this is specific to inserts that depend on `@PrePersist` for `branchId`
 
 See the branch-reachability section at the top of the branch-resolver entry in
 SESSION-HANDOFF.md for who can actually be branchless.
+
+**Fixed.** Ruling: academy-wide admins are a supported concept — SUPER_ADMIN is
+academy-wide by definition, so requiring a branch at creation was the bug, not
+the null branch. One centralized `BranchResolutionService.resolveBranchId(actor,
+academyId[, relatedEntityBranchId])`: the actor's own branch, else a related
+entity's branch where the caller has one in scope, else the academy's main
+branch, else a clear `BusinessException`. Wired into every unsafe site found —
+more than the originally-recorded 35, since re-verifying the schema before
+wiring turned up `players`/`enquiries`/`enquiry_follow_ups` mis-categorized as
+"already safe" (a mechanical false match on an unrelated DTO-mapping line) and
+one genuinely new site added since the audit
+(`AdminPlayerController.createTournamentGuestPlayer`). `BaseEntity` gained an
+opt-in `requiresBranchId()` override, applied to all 26 live NOT-NULL entities,
+so a future miss throws a named `BusinessException` instead of writing null or
+hitting a raw constraint violation. `MatchLiveAnnotation` and
+`WicketkeeperChange` don't extend `BaseEntity`, so the backstop doesn't reach
+them — they already fail loudly by construction, and the resolver call at their
+two sites is the complete fix. `AdminUserController`/`UserService.createAdmin`
+and the admin-creation form now allow a null branch for `ROLE_SUPER_ADMIN`
+specifically.
+
+Verified: `superadmin-a@example.com` now completes the full smoke suite via
+`E2E_AS_SUPER_ADMIN=1`, including this exact repro — `POST .../scoring/
+annotations` now 200, and the written row's `branch_id` confirmed by direct
+query to be the academy's actual main branch. A batch created the same way was
+confirmed to appear in the main-branch-filtered `active batches` view, not
+dropped. Full Playwright suite (all three projects) and smoke green as the
+normal actor too; full `mvn test` 190/190.
+
+`wip/branch-resolver` is deleted — fully superseded. It never reached this
+exact repro site, checked only `AcademyContext` rather than the actor, and
+referenced `SuperAdminFeeCorrectionService`, which BUG-41 had already deleted.
 
 ---
 
