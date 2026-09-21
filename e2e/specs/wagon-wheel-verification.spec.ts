@@ -31,15 +31,21 @@ const xiGuests = (prefix: string, count: number, startOrder: number) =>
  * A scoring match whose team-A opener (battingOrder 1, the one who will face
  * every ball in these tests) is a REAL academy player, not a guest.
  *
- * Needed specifically for the public-scorecard render-separation check:
- * ScorecardService.buildBattingCard/resolvePublicId returns playerPublicId
- * null for a guest MatchTeamPlayer (mtp.getPlayer() == null), and
- * DeliveryRepository.findShotsForBatterInInnings INNER JOINs
- * match_team_players -> players — a guest's shots can never be returned by
- * that query regardless of what id is passed. Every other spec in this suite
- * uses guests (createScoringMatch), which is why this gap was never seen
- * before. Filed as a separate finding, not fixed here — this fixture works
- * around it for the one test that needs a real per-batter shot view.
+ * This used to be a forced workaround: DeliveryRepository.findShotsForBatterInInnings
+ * INNER JOINed match_team_players -> players, and ScorecardService's
+ * battingCard resolved playerPublicId to null for a guest MatchTeamPlayer
+ * (mtp.getPlayer() == null) — so a guest's shots could never be looked up on
+ * the public scorecard regardless of what id was passed, and this was the
+ * only way to get a real per-batter shot view at all.
+ *
+ * Fixed: the shots endpoint and the repository query now key on
+ * matchTeamPlayerPublicId (MatchTeamPlayer's own public id, always set —
+ * guest or real), not playerPublicId. A guest's shots resolve correctly now
+ * too (verified directly via curl/SQL, not just here). This fixture keeps
+ * using a real player anyway — that's the normal, common case in production,
+ * not a bug-driven exception — while every other spec in this suite
+ * (createScoringMatch) deliberately uses guests, for its own good reasons
+ * (faster setup, no batch/Player cleanup).
  */
 async function createRealPlayerMatch() {
   const env = config();
@@ -204,8 +210,11 @@ test.describe("Wagon wheel — capture, render separation, boundary rendering", 
 
       // Now the public scorecard — genuinely public, no session needed —
       // rendering the real player's wagon wheel via the merged component.
+      // The row is keyed on matchTeamPlayerPublicId, not playerPublicId —
+      // that's what the fix changed, and it's what's always set (guest or
+      // real), unlike playerPublicId.
       await page.goto(`/match/${m.matchPublicId}/scorecard`);
-      await page.getByTestId(`batter-row-${m.strikerPlayerPublicId}`).click();
+      await page.getByTestId(`batter-row-${m.striker.mtpPublicId}`).click();
       await expect(page.getByTestId("public-wagon-wheel-modal")).toBeVisible();
 
       // The shot-position markers are the r=6 circles FieldSVG draws per

@@ -8,7 +8,11 @@ import { useAuth } from "../../auth/useAuth";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 interface BattingLine {
-  playerPublicId: string;
+  // null for a guest/external batter — they have no linked Player row. Use
+  // matchTeamPlayerPublicId (always set, guest or real) for anything that
+  // needs to look this batter up per-match, e.g. their wagon-wheel shots.
+  playerPublicId: string | null;
+  matchTeamPlayerPublicId: string;
   playerName: string;
   battingOrder: number;
   runs: number;
@@ -332,14 +336,17 @@ const WagonWheelModal = ({
   // changed. Without a content key, WagonWheel's fetch effect (which reads
   // this array by reference) would re-fetch shots every 15s while the modal
   // sits open — the old single-batter modal never did that, since its own
-  // effect depended only on matchId/playerPublicId/inningsNumber.
+  // effect depended only on matchId/matchTeamPlayerPublicId/inningsNumber.
   const battersKey = battingCard
-    .map((b) => `${b.playerPublicId}:${b.playerName}:${b.battingStyle ?? ""}`)
+    .map((b) => `${b.matchTeamPlayerPublicId}:${b.playerName}:${b.battingStyle ?? ""}`)
     .join("|");
+  // matchTeamPlayerPublicId, not playerPublicId: a guest/external batter has
+  // no Player row, so playerPublicId is null for them — matchTeamPlayerPublicId
+  // is always set (guest or real) and is what the shots endpoint keys on.
   const batters: WagonWheelBatter[] = useMemo(
     () =>
       battingCard.map((b) => ({
-        publicId: b.playerPublicId,
+        publicId: b.matchTeamPlayerPublicId,
         name: b.playerName,
         battingStyle: b.battingStyle,
       })),
@@ -348,9 +355,9 @@ const WagonWheelModal = ({
   );
 
   const fetchShots = useCallback(
-    async (batterPublicId: string): Promise<ShotDot[]> => {
+    async (matchTeamPlayerPublicId: string): Promise<ShotDot[]> => {
       const res = await publicApi.get(
-        `/public/scorecard/${matchId}/shots/${batterPublicId}?innings=${inningsNumber}`,
+        `/public/scorecard/${matchId}/shots/${matchTeamPlayerPublicId}?innings=${inningsNumber}`,
       );
       return res.data ?? [];
     },
@@ -390,7 +397,7 @@ const WagonWheelModal = ({
         <div className="px-4 py-3 bg-gray-900">
           <WagonWheel
             batters={batters}
-            initialBatterId={batter.playerPublicId}
+            initialBatterId={batter.matchTeamPlayerPublicId}
             fetchShots={fetchShots}
             primaryColor={primaryColor}
           />
@@ -617,8 +624,11 @@ const InningsCard = ({
         <tbody>
           {inn.battingCard.map((b) => (
             <tr
-              key={b.playerPublicId}
-              data-testid={`batter-row-${b.playerPublicId}`}
+              // matchTeamPlayerPublicId, not playerPublicId: several guest
+              // batters would otherwise all share key/testid "null" —
+              // matchTeamPlayerPublicId is always unique, guest or real.
+              key={b.matchTeamPlayerPublicId}
+              data-testid={`batter-row-${b.matchTeamPlayerPublicId}`}
               onClick={() => onBatterClick(b)}
               className="border-b border-gray-50 dark:border-gray-800/50 hover:bg-gray-50 dark:hover:bg-gray-800/50 cursor-pointer active:bg-gray-100 transition-colors"
             >
