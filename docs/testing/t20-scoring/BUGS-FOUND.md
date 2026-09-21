@@ -38,8 +38,8 @@ backend.
 | BUG-04 | `extras_penalty` missing from `InningsStateDTO` | medium | **FIXED** — `8549c47` |
 | BUG-05 | Free hit cleared by a wide | high | **FIXED** — `6e2ced0` |
 | BUG-06 | `ScoringService.findMTP()` unscoped by academy | critical | **FIXED** — `e849f60`, proven by stashing the fix |
-| BUG-07 | `ROLE_SCORER` cannot reach any scoring endpoint | medium | **FIXED** — backend `b758682`, frontend `[PENDING]` |
-| BUG-08 | `ROLE_COACH` cannot load the live scorer page | medium | **FIXED** — backend `b758682`, frontend `[PENDING]` |
+| BUG-07 | `ROLE_SCORER` cannot reach any scoring endpoint | medium | **FIXED** — backend `b758682`, frontend `fe310ef` |
+| BUG-08 | `ROLE_COACH` cannot load the live scorer page | medium | **FIXED** — backend `b758682`, frontend `fe310ef` |
 | BUG-09 | `docker-compose.yml` DB does not match reality | low | open — docs/infra |
 | BUG-10 | A started match can never be deleted (FK violation) | high | **FIXED** — `b9a58a5` |
 | BUG-11 | Match public id collides under concurrent creation | medium | **FIXED** — backend `9f6d2d4`, spec `049426e` |
