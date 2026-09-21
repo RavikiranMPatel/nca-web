@@ -86,6 +86,7 @@ backend.
 | BUG-52 | `addManualFixture` numbers the round by fixture count, so the final becomes round 3 | low | **FIXED** — backend `449f8c2`, spec `acecd3e` |
 | BUG-53 | `linkMatchToFixture` failure is swallowed in `MatchSetupPage` | low | **FIXED** — `7db2727` |
 | BUG-54 | `createScoredTournament` tags its rows with a clock that two workers can share | low | **FIXED** — `ae20cde` |
+| BUG-55 | `SummerCampFeeRule.version` is both a domain counter and Hibernate's optimistic-lock field | medium | open — filed, not fixed |
 
 ---
 
