@@ -150,7 +150,7 @@ export default function MatchSetupPage() {
     scheduledStartTime: "",
     inningsIntervalMinutes: 20 as number | "",
   });
-  const [allowExtendedSquad, setAllowExtendedSquad] = useState(false);
+  const [playingXiSize, setPlayingXiSize] = useState<11 | 12 | 13>(11);
 
   const [createdMatch, setCreatedMatch] = useState<CricketMatch | null>(null);
   const [teams, setTeams_] = useState<CricketTeam[]>([]);
@@ -378,7 +378,7 @@ export default function MatchSetupPage() {
     selected: PlayerSelection[],
     setSelected: (s: PlayerSelection[]) => void,
     squadForeignIds: Set<string>,
-  ) => doTogglePlayer(player, selected, setSelected, squadForeignIds, setError, allowExtendedSquad);
+  ) => doTogglePlayer(player, selected, setSelected, squadForeignIds, setError, playingXiSize);
 
   const removePlayer = (
     publicId: string,
@@ -392,7 +392,7 @@ export default function MatchSetupPage() {
   const addExternalPlayerToTeamA = () => {
     const name = teamAExternalName.trim();
     if (!name) return;
-    const cap = allowExtendedSquad ? 12 : 11;
+    const cap = playingXiSize;
     if (teamAPlayers.length >= cap) {
       setError(`Team A already has ${cap} players`);
       return;
@@ -416,7 +416,7 @@ export default function MatchSetupPage() {
   const addExternalPlayerToTeamB = () => {
     const name = teamBExternalName.trim();
     if (!name) return;
-    const cap = allowExtendedSquad ? 12 : 11;
+    const cap = playingXiSize;
     if (teamBPlayers.length >= cap) {
       setError(`Team B already has ${cap} players`);
       return;
@@ -476,7 +476,7 @@ export default function MatchSetupPage() {
       const match = await createMatch({
         ...matchDetails,
         tournamentPublicId: tournamentId ?? undefined,
-        allowExtendedSquad,
+        playingXiSize,
         scheduledStartTime: matchDetails.scheduledStartTime || undefined,
         inningsIntervalMinutes: matchDetails.inningsIntervalMinutes !== "" ? Number(matchDetails.inningsIntervalMinutes) : undefined,
       });
@@ -901,23 +901,33 @@ export default function MatchSetupPage() {
               </div>
             )}
           {matchDetails.dataSource === "BALL_BY_BALL" && (
-            <div className="flex items-center justify-between p-4 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl">
-              <div>
-                <div className="text-sm font-semibold text-gray-900 dark:text-gray-100">
-                  Allow more than 11 players?
-                </div>
-                <div className="text-xs text-gray-400 mt-0.5">
-                  Practice / Training — raises Playing XI cap to 12
-                </div>
+            <div className="p-4 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl">
+              <div className="text-sm font-semibold text-gray-900 dark:text-gray-100">
+                Playing XI size
               </div>
-              <button
-                onClick={() => setAllowExtendedSquad((prev) => !prev)}
-                className={`w-12 h-6 rounded-full transition-all relative flex-shrink-0 ${allowExtendedSquad ? "bg-blue-600" : "bg-gray-300 dark:bg-gray-600"}`}
+              <div className="text-xs text-gray-400 mt-0.5 mb-3">
+                12 or 13 — Practice / Training, raises the cap for batting and bowling
+              </div>
+              <div
+                data-testid="playing-xi-size"
+                className="grid grid-cols-3 gap-2"
               >
-                <div
-                  className={`w-5 h-5 bg-white rounded-full absolute top-0.5 shadow transition-all ${allowExtendedSquad ? "left-6" : "left-0.5"}`}
-                />
-              </button>
+                {([11, 12, 13] as const).map((size) => (
+                  <button
+                    key={size}
+                    type="button"
+                    data-testid={`playing-xi-size-${size}`}
+                    onClick={() => setPlayingXiSize(size)}
+                    className={`py-2 rounded-lg text-sm font-semibold transition-all ${
+                      playingXiSize === size
+                        ? "bg-blue-600 text-white"
+                        : "bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300"
+                    }`}
+                  >
+                    {size === 11 ? "Standard (11)" : size}
+                  </button>
+                ))}
+              </div>
             </div>
           )}
         </div>
@@ -1007,10 +1017,10 @@ export default function MatchSetupPage() {
                   step === 1
                     ? !teamAExternalName.trim() ||
                       addingExternalA ||
-                      teamAPlayers.length >= (allowExtendedSquad ? 12 : 11)
+                      teamAPlayers.length >= playingXiSize
                     : !teamBExternalName.trim() ||
                       addingExternal ||
-                      teamBPlayers.length >= (allowExtendedSquad ? 12 : 11)
+                      teamBPlayers.length >= playingXiSize
                 }
                 className="px-3 py-2.5 bg-blue-600 text-white text-sm font-bold rounded-xl disabled:opacity-40 active:scale-95 transition-all flex-shrink-0"
               >
@@ -1033,7 +1043,7 @@ export default function MatchSetupPage() {
                       setCurrentPlayers([]);
                     } else {
                       setCurrentPlayers(
-                        currentFiltered.slice(0, allowExtendedSquad ? 12 : 11).map((p, idx) => ({
+                        currentFiltered.slice(0, playingXiSize).map((p, idx) => ({
                           playerPublicId: p.publicId,
                           battingOrder: idx + 1,
                           isCaptain: false,

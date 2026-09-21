@@ -88,8 +88,8 @@ export interface CricketMatch {
   // Pause state (Stage 5) — null when not paused; match stays IN_PROGRESS during a pause
   pauseReason?: string;
   pausedAt?: string;
-  // Item 4: when true, Playing XI cap is 12 instead of 11
-  allowExtendedSquad?: boolean;
+  // Item 4: Standard (11), or 12/13 for practice/training matches.
+  playingXiSize?: number;
   // Match clock (V86) — all optional; no clock display when scheduledStartTime is absent
   scheduledStartTime?: string;       // "HH:MM:SS" from DB TIME column
   inningsIntervalMinutes?: number;   // per-match override; null = use overs-derived default
@@ -160,8 +160,8 @@ export interface CreateMatchRequest {
   dataSource?: DataSource;
   tournamentPublicId?: string;
   notes?: string;
-  // Item 4: when true, Playing XI cap is raised to 12
-  allowExtendedSquad?: boolean;
+  // Item 4: Standard (11), or 12/13 for practice/training matches.
+  playingXiSize?: number;
   // Match clock — both optional
   scheduledStartTime?: string;     // "HH:MM" sent to backend
   inningsIntervalMinutes?: number;

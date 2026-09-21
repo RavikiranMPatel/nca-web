@@ -801,7 +801,7 @@ export default function MatchReportPage() {
   const teamA = teams.find((t) => t.teamType === "TEAM_A");
   const teamB = teams.find((t) => t.teamType === "TEAM_B");
   const isExternal = match.dataSource === "EXTERNAL";
-  const cap = match.allowExtendedSquad ? 12 : 11;
+  const cap = match.playingXiSize ?? 11;
 
   const filteredA = allPlayers
     .filter((p) => !pickerBPlayers.some((s) => s.playerPublicId === p.publicId))
@@ -1374,7 +1374,7 @@ export default function MatchReportPage() {
                       key={p.publicId}
                       player={p}
                       selected={pickerAPlayers}
-                      onToggle={() => doTogglePlayer(p, pickerAPlayers, setPickerAPlayers, new Set(), setPickerError, match.allowExtendedSquad)}
+                      onToggle={() => doTogglePlayer(p, pickerAPlayers, setPickerAPlayers, new Set(), setPickerError, cap)}
                       onRoleToggle={(role) => doToggleRole(p.publicId, role, pickerAPlayers, setPickerAPlayers)}
                       onForeignToggle={() => doToggleForeign(p.publicId, pickerAPlayers, setPickerAPlayers)}
                     />
@@ -1454,7 +1454,7 @@ export default function MatchReportPage() {
                       key={p.publicId}
                       player={p}
                       selected={pickerBPlayers}
-                      onToggle={() => doTogglePlayer(p, pickerBPlayers, setPickerBPlayers, new Set(), setPickerError, match.allowExtendedSquad)}
+                      onToggle={() => doTogglePlayer(p, pickerBPlayers, setPickerBPlayers, new Set(), setPickerError, cap)}
                       onRoleToggle={(role) => doToggleRole(p.publicId, role, pickerBPlayers, setPickerBPlayers)}
                       onForeignToggle={() => doToggleForeign(p.publicId, pickerBPlayers, setPickerBPlayers)}
                     />
