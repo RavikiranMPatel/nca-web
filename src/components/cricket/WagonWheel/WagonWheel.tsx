@@ -332,7 +332,7 @@ function FieldSVG({
       </g>
 
       {shots.map((shot, i) => {
-        const { px, py } = zoneToPixel(shot.zone, isRHB, battingFromTop, batterStumpY);
+        const { px, py } = zoneToPixel(shot.zone, isRHB, battingFromTop, batterStumpY, shot.runs);
         const color = runColor(shot.runs);
         return (
           <g key={i}>

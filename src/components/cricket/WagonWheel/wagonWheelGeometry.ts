@@ -128,6 +128,23 @@ const ZONE_POLAR: Record<string, [angleDeg: number, radius: number]> = {
 
 const DEFAULT_POLAR: [number, number] = [0, 0.6];
 
+/**
+ * The zone model's near/far split (`deep = r > 0.6` in deriveZone, baked
+ * into distinct zone names like "Cover" vs "Deep Cover") is about where on
+ * the ground the ball went, not how many runs it went for — a firmly
+ * placed 4 and a straightforward 6 hit in the same direction can land in
+ * the same named zone, and would render at the exact same spot. Runs are
+ * already known at render time (ShotDot.runs), so the boundary itself
+ * (drawn in FieldSVG at r = FIELD_RADIUS - 1, i.e. this same ~0.99
+ * fraction) is used to separate them instead: a 6 renders past it, a 4
+ * renders at it, everything else keeps the zone's own near/far radius.
+ */
+const BOUNDARY_RADIUS_FRACTION = (FIELD_RADIUS - 1) / FIELD_RADIUS;
+const FOUR_RADIUS_FRACTION = BOUNDARY_RADIUS_FRACTION - 0.02;
+// Capped well under 160/148 (~1.08) — the tightest room the 320x320 viewBox
+// allows for a square-of-the-wicket shot before the dot would be clipped.
+const SIX_RADIUS_FRACTION = BOUNDARY_RADIUS_FRACTION + 0.06;
+
 export function zoneToPolar(
   zone: string,
   isRHB: boolean,
@@ -141,14 +158,24 @@ export function zoneToPolar(
  * spoke — split out so the display component doesn't repeat this trig.
  * `batterStumpY` is the caller's own (battingFromTop-dependent) stump
  * position, since that's a property of the SVG layout, not of the zone.
+ *
+ * `runs`, when passed, overrides the zone's own near/far radius for exactly
+ * 4 and 6 (see BOUNDARY_RADIUS_FRACTION above) — the direction still comes
+ * from the zone, only how far out it renders changes. Omit it (or pass any
+ * other run value) to get the plain zone-only radius, unchanged.
  */
 export function zoneToPixel(
   zone: string,
   isRHB: boolean,
   battingFromTop: boolean,
   batterStumpY: number,
+  runs?: number,
 ): { px: number; py: number } {
-  const { angleDeg, radius } = zoneToPolar(zone, isRHB);
+  const { angleDeg, radius: zoneRadius } = zoneToPolar(zone, isRHB);
+  const radius =
+    runs === 6 ? SIX_RADIUS_FRACTION
+    : runs === 4 ? FOUR_RADIUS_FRACTION
+    : zoneRadius;
   const angleRad = (angleDeg * Math.PI) / 180;
   const fxRaw = Math.sin(angleRad) * radius * FIELD_RADIUS;
   const fyRaw = Math.cos(angleRad) * radius * FIELD_RADIUS;

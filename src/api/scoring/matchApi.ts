@@ -70,6 +70,13 @@ export const deleteMatch = (publicId: string, confirmDeletePerformances = false)
 export const patchMatchNotes = (publicId: string, notes: string) =>
   api.patch(`${BASE}/${publicId}/notes`, { notes }).then((r) => r.data);
 
+export const patchWagonWheelEnabled = (publicId: string, wagonWheelEnabled: boolean) =>
+  api
+    .patch<{ wagonWheelEnabled: boolean }>(`${BASE}/${publicId}/wagon-wheel-enabled`, {
+      wagonWheelEnabled,
+    })
+    .then((r) => r.data);
+
 export const patchKeyMoments = (publicId: string, keyMoments: KeyMoment[]) =>
   api.patch<KeyMoment[]>(`${BASE}/${publicId}/key-moments`, { keyMoments }).then((r) => r.data);
 

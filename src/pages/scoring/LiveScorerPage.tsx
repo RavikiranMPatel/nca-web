@@ -16,7 +16,7 @@ import {
   changeWicketkeeper,
   createAnnotation,
 } from "../../api/scoring/scoringApi";
-import { getMatch, getTeams, pauseMatch, resumeMatch, coinFlip } from "../../api/scoring/matchApi";
+import { getMatch, getTeams, pauseMatch, resumeMatch, coinFlip, patchWagonWheelEnabled } from "../../api/scoring/matchApi";
 import type {
   BallResponse,
   BatterStatDTO,
@@ -309,6 +309,25 @@ const needsWagonWheel = (runs: number, extra?: string): boolean => {
   return runs > 0;
 };
 
+// Names only what's actually missing — "Set striker, non-striker and bowler
+// first" used to fire unconditionally whenever any one of the three was
+// unset, including the common case (openers already selected, bowler not
+// yet chosen) where it reads as if the already-visible batters weren't
+// registered at all.
+const missingSetupMessage = (
+  striker: ScoringPlayer | null,
+  nonStriker: ScoringPlayer | null,
+  bowler: ScoringPlayer | null,
+): string => {
+  const missing: string[] = [];
+  if (!striker) missing.push("striker");
+  if (!nonStriker) missing.push("non-striker");
+  if (!bowler) missing.push("bowler");
+  if (missing.length === 0) return "";
+  if (missing.length === 1) return `Select ${missing[0]}`;
+  return `Select ${missing.slice(0, -1).join(", ")} and ${missing[missing.length - 1]}`;
+};
+
 export default function LiveScorerPage() {
   const { matchId } = useParams<{ matchId: string }>();
   const navigate = useNavigate();
@@ -515,6 +534,26 @@ export default function LiveScorerPage() {
       showToast(msg || "Failed to change wicketkeeper");
     } finally {
       setWkPosting(false);
+    }
+  };
+
+  // Match-scoped (V108) — flips it for every scorer's session, not just this
+  // browser. Existing captured shots and the public scorecard display are
+  // untouched; this only gates whether WagonWheelModal prompts after a
+  // future scoring shot (needsWagonWheel gate in score(), above).
+  const toggleWagonWheel = async () => {
+    if (!matchId) return;
+    const next = !wagonWheelEnabled;
+    try {
+      await patchWagonWheelEnabled(matchId, next);
+      setMatch((prev) => (prev ? { ...prev, wagonWheelEnabled: next } : prev));
+    } catch (e: unknown) {
+      const msg =
+        e instanceof Error
+          ? e.message
+          : ((e as { response?: { data?: { message?: string } } })?.response
+              ?.data?.message ?? "Failed to update wagon wheel setting");
+      setError(msg);
     }
   };
 
@@ -778,7 +817,7 @@ export default function LiveScorerPage() {
       setError(
         overJustEnded
           ? "Over complete — select a new bowler before continuing"
-          : "Set striker, non-striker and bowler first",
+          : missingSetupMessage(striker, nonStriker, bowler),
       );
       return;
     }
@@ -880,7 +919,7 @@ export default function LiveScorerPage() {
       setError(
         overJustEnded
           ? "Over complete — select a new bowler before continuing"
-          : "Set striker, non-striker and bowler first",
+          : missingSetupMessage(striker, nonStriker, bowler),
       );
       return;
     }
@@ -1790,7 +1829,7 @@ export default function LiveScorerPage() {
                 setError(
                   overJustEnded
                     ? "Over complete — select a new bowler before continuing"
-                    : "Set striker, non-striker and bowler first",
+                    : missingSetupMessage(striker, nonStriker, bowler),
                 );
                 return;
               }
@@ -1808,7 +1847,7 @@ export default function LiveScorerPage() {
                 setError(
                   overJustEnded
                     ? "Over complete — select a new bowler before continuing"
-                    : "Set striker, non-striker and bowler first",
+                    : missingSetupMessage(striker, nonStriker, bowler),
                 );
                 return;
               }
@@ -1826,7 +1865,7 @@ export default function LiveScorerPage() {
                 setError(
                   overJustEnded
                     ? "Over complete — select a new bowler before continuing"
-                    : "Set striker, non-striker and bowler first",
+                    : missingSetupMessage(striker, nonStriker, bowler),
                 );
                 return;
               }
@@ -1844,7 +1883,7 @@ export default function LiveScorerPage() {
                 setError(
                   overJustEnded
                     ? "Over complete — select a new bowler before continuing"
-                    : "Set striker, non-striker and bowler first",
+                    : missingSetupMessage(striker, nonStriker, bowler),
                 );
                 return;
               }
@@ -1862,7 +1901,7 @@ export default function LiveScorerPage() {
                 setError(
                   overJustEnded
                     ? "Over complete — select a new bowler before continuing"
-                    : "Set striker, non-striker and bowler first",
+                    : missingSetupMessage(striker, nonStriker, bowler),
                 );
                 return;
               }
@@ -2853,6 +2892,25 @@ export default function LiveScorerPage() {
               {fmtOvers(totalBalls, match?.ballsPerOver)} overs
             </p>
             <div className="space-y-2">
+              <div className="flex items-center justify-between px-3 py-2 mb-1 bg-gray-800 border border-gray-700 rounded-xl">
+                <div>
+                  <div className="text-sm font-semibold text-gray-100">
+                    🎯 Wagon Wheel
+                  </div>
+                  <div className="text-xs text-gray-500 mt-0.5">
+                    Shot-placement prompt after scoring shots
+                  </div>
+                </div>
+                <button
+                  data-testid="btn-wagon-wheel-toggle"
+                  onClick={toggleWagonWheel}
+                  className={`w-12 h-6 rounded-full transition-all relative flex-shrink-0 ${wagonWheelEnabled ? "bg-blue-600" : "bg-gray-600"}`}
+                >
+                  <div
+                    className={`w-5 h-5 bg-white rounded-full absolute top-0.5 shadow transition-all ${wagonWheelEnabled ? "left-6" : "left-0.5"}`}
+                  />
+                </button>
+              </div>
               <button
                 onClick={handleCloseInnings}
                 disabled={posting}
