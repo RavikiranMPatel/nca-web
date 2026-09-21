@@ -407,7 +407,7 @@ function App() {
       <Route
         path="/admin/cricket/matches/:matchId/score"
         element={
-          <ProtectedRoute roles={["ROLE_ADMIN", "ROLE_SUPER_ADMIN"]}>
+          <ProtectedRoute roles={["ROLE_ADMIN", "ROLE_SUPER_ADMIN", "ROLE_COACH", "ROLE_SCORER"]}>
             {/* No AppLayout — Live scorer is full screen dark UI */}
             <LiveScorerPage />
           </ProtectedRoute>

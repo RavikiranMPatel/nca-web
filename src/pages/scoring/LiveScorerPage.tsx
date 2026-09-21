@@ -29,6 +29,13 @@ import type {
 import type { CricketMatch, CricketTeam } from "../../types/match";
 import api from "../../api/axios";
 import WagonWheelModal from "./WagonWheelModal";
+import { useAuth } from "../../auth/useAuth";
+
+// BUG-07/BUG-08. pauseMatch/resumeMatch stay ADMIN/SUPER_ADMIN-only at the
+// service layer (MatchService.validateAdminOrSuperAdmin) — deliberately
+// outside the narrower surface COACH/SCORER were given. The button must not
+// render for either, or clicking it is a guaranteed 403.
+const CAN_PAUSE_RESUME = ["ROLE_ADMIN", "ROLE_SUPER_ADMIN"];
 
 const fmtOvers = (balls: number, perOver = 6) =>
   `${Math.floor(balls / perOver)}.${balls % perOver}`;
@@ -305,6 +312,8 @@ const needsWagonWheel = (runs: number, extra?: string): boolean => {
 export default function LiveScorerPage() {
   const { matchId } = useParams<{ matchId: string }>();
   const navigate = useNavigate();
+  const { userRole } = useAuth();
+  const canPauseResume = !!userRole && CAN_PAUSE_RESUME.includes(userRole);
 
   const [match, setMatch] = useState<CricketMatch | null>(null);
   const [teams, setTeams] = useState<CricketTeam[]>([]);
@@ -1513,14 +1522,16 @@ export default function LiveScorerPage() {
               <span data-testid="pause-banner">Match Paused — {matchPauseReason}</span>
             </span>
           </div>
-          <button
-            data-testid="btn-resume"
-            onClick={handleResumeMatch}
-            disabled={posting}
-            className="flex-shrink-0 text-xs px-3 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-500 active:scale-95 text-white font-semibold transition-all disabled:opacity-40"
-          >
-            ▶ Resume
-          </button>
+          {canPauseResume && (
+            <button
+              data-testid="btn-resume"
+              onClick={handleResumeMatch}
+              disabled={posting}
+              className="flex-shrink-0 text-xs px-3 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-500 active:scale-95 text-white font-semibold transition-all disabled:opacity-40"
+            >
+              ▶ Resume
+            </button>
+          )}
         </div>
       )}
 
@@ -1881,7 +1892,7 @@ export default function LiveScorerPage() {
         >
           <span>↩</span> Undo Last Ball
         </button>
-        {!matchPauseReason ? (
+        {!matchPauseReason && canPauseResume ? (
           <button
             disabled={posting}
             data-testid="btn-pause"

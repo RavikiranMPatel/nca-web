@@ -38,8 +38,8 @@ backend.
 | BUG-04 | `extras_penalty` missing from `InningsStateDTO` | medium | **FIXED** — `8549c47` |
 | BUG-05 | Free hit cleared by a wide | high | **FIXED** — `6e2ced0` |
 | BUG-06 | `ScoringService.findMTP()` unscoped by academy | critical | **FIXED** — `e849f60`, proven by stashing the fix |
-| BUG-07 | `ROLE_SCORER` cannot reach any scoring endpoint | medium | open — not fixed by instruction |
-| BUG-08 | `ROLE_COACH` cannot load the live scorer page | medium | open — not fixed by instruction |
+| BUG-07 | `ROLE_SCORER` cannot reach any scoring endpoint | medium | **FIXED** — backend `b758682`, frontend `[PENDING]` |
+| BUG-08 | `ROLE_COACH` cannot load the live scorer page | medium | **FIXED** — backend `b758682`, frontend `[PENDING]` |
 | BUG-09 | `docker-compose.yml` DB does not match reality | low | open — docs/infra |
 | BUG-10 | A started match can never be deleted (FK violation) | high | **FIXED** — `b9a58a5` |
 | BUG-11 | Match public id collides under concurrent creation | medium | **FIXED** — backend `9f6d2d4`, spec `049426e` |
@@ -600,8 +600,7 @@ individually. Findings:
 
 ## BUG-07 — `ROLE_SCORER` cannot reach any scoring endpoint
 
-**Severity:** medium · **Status:** open — not fixed, explicitly out of scope by
-instruction.
+**Severity:** medium · **Status: FIXED**, 2026-09-20.
 
 The service layer accepts the role —
 `ScoringService.java:1352`:
@@ -627,16 +626,44 @@ A `ROLE_SCORER` token gets 403 before reaching the service check. This is the
 same pattern `.claude/rules/roles.md` documents for `ROLE_COACH`, which was
 fixed by adding the L113 rule — `ROLE_SCORER` was not included.
 
-`ROLE_SCORER` appears exactly once in the whole backend (that L1355 line), so it
-may be dead intent rather than a live role. Worth a product decision before
-anyone adds it to `SecurityConfig`.
+**Fixed.** Ruling: `ROLE_SCORER` is real, narrow — the scoring endpoints
+`validateScorerOrAdmin` already accepted, plus match read, plus the scorer
+page. Nothing else. `SecurityConfig`'s `/api/admin/cricket/matches/*/scoring/**`
+rule now admits `ROLE_SCORER` alongside the existing `ROLE_COACH` grant, placed
+(unchanged) before the `/api/admin/**` catch-all — a `ROLE_SCORER` token is
+denied everywhere else by construction, since the catch-all requires
+`ROLE_ADMIN`/`ROLE_SUPER_ADMIN`. `annotations` lives under that same path but
+`MatchService.createAnnotation` narrows further to admin/coach only
+(`validateAdminSuperAdminOrCoach`) — a `SCORER` token reaches that check and is
+correctly 403'd there, not at the filter chain.
+
+Investigating this alongside BUG-08 turned up that "match read" needed to be
+wider than one endpoint — see that entry for `getMatch`/`getTeams`/
+`getPlayingXI`/`closeInnings`/`recordResult`, all of which a `SCORER` (and
+`COACH`) now also passes.
+
+`createAdmin` needed no change: `role` was already a free-form
+`ROLE_`-prefixed string with no allow-list, and BUG-25's branch-required-unless-
+`SUPER_ADMIN` check already generalizes to any other role, `SCORER` included —
+verified live by creating a real `ROLE_SCORER` (`POST /api/admin/users`, as
+`SUPER_ADMIN`) with a branch (succeeds) and without one (400 "Branch is
+required").
+
+Verified with real tokens (`e2e/specs/bug-07-08-scorer-role.spec.ts`, `kit-
+roles.spec.ts` style): every `ScoringController` endpoint 200, match read 200,
+`annotations`/pause/resume/create-match/delete-match/fees/kit/players/user-
+management all 403, a cross-academy `SCORER` token 404 on every scoring
+endpoint against a match it cannot see, and the scorer page renders with the
+pause/resume buttons entirely absent from the DOM (not just disabled) — those
+two stay `ADMIN`/`SUPER_ADMIN`-only and had no role gate in the component at
+all before this fix, so they would otherwise have rendered for a `SCORER` and
+guaranteed a 403 on click.
 
 ---
 
 ## BUG-08 — `ROLE_COACH` cannot load the live scorer page
 
-**Severity:** medium · **Status:** open — not fixed, explicitly out of scope by
-instruction.
+**Severity:** medium · **Status: FIXED**, 2026-09-20.
 
 `SecurityConfig.java:113` deliberately grants `ROLE_COACH` access to
 `/scoring/**`, with a comment saying so. But the scorer page cannot start
@@ -663,6 +690,38 @@ route agrees with the generic rule and excludes coaches outright —
 Either the L113 coach grant is dead code, or `getMatch`/`getTeams` and the route
 guard need to admit coaches. Consequence for this suite: **all Playwright tests
 run as ADMIN.**
+
+**Fixed.** The frontend route guard (`App.tsx`, `/admin/cricket/matches/
+:matchId/score`) now admits `ROLE_COACH` and `ROLE_SCORER`. But the guard alone
+would not have made the page work: `getMatch`, `getTeams`, and a third call the
+page also makes directly — playing XI (`GET .../teams/{team}/players`) — all
+live in `MatchController`, not `ScoringController`, gated by a *different*,
+narrower service check (`validateAdminOrSuperAdmin` — not even `ROLE_COACH`).
+So did `closeInnings` and `recordResult`, both also called by the page to
+finish an over/innings/match. Fixing only the frontend route would have landed
+a coach on a page that immediately 403'd loading the match.
+
+All five now go through a new `validateAdminSuperAdminCoachOrScorer` (added
+alongside the existing `validateAdminOrSuperAdmin`/
+`validateAdminSuperAdminOrCoach` in `MatchService`, same file, same pattern),
+with matching `SecurityConfig` rules before the `/api/admin/**` catch-all.
+Deliberately still narrow: `setTeams` (match setup), pause/resume, coin-flip,
+and delete stay `ADMIN`/`SUPER_ADMIN`-only, for `COACH` and `SCORER` alike —
+outside what the ruling scoped in, and outside what these two roles ever had
+before.
+
+The page itself had no role-conditional rendering at all before this fix — the
+pause/resume buttons (backed by the still-admin-only endpoints above) would
+have rendered for a coach or scorer and 403'd on click. Both are now hidden
+unless the role is `ADMIN`/`SUPER_ADMIN` (`LiveScorerPage.tsx`).
+
+Verified live in `e2e/specs/bug-07-08-scorer-role.spec.ts`: a seeded `ROLE_COACH`
+loads the scorer page (striker/bowler render, proving `getMatch`/`getTeams`/
+`getPlayingXI` all succeeded) and scores one full over — six legal balls,
+`state.inningsState.totalBalls === 6` — via the real API, plus confirms
+`getMatch` (BUG-07's exact repro shape) now succeeds for `COACH` too. Full
+Playwright suite (all three projects) and smoke green; full `mvn test`
+190/190.
 
 ---
 
