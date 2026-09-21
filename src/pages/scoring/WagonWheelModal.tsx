@@ -499,6 +499,7 @@ export default function WagonWheelModal({
         {/* Buttons */}
         <div className="flex-shrink-0 flex gap-3 px-4 pb-10 pt-1">
           <button
+            data-testid="wagon-wheel-skip"
             onClick={onSkip}
             className="flex-1 py-4 rounded-2xl bg-white/[0.05] border border-white/10 text-gray-400 text-sm font-semibold active:scale-95 transition-all"
           >

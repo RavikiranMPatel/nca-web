@@ -1,8 +1,9 @@
 import { test, expect } from "@playwright/test";
 import { execFileSync } from "node:child_process";
 import { Api } from "../fixtures/api";
-import { config, type Tenant } from "../fixtures/env";
+import { config } from "../fixtures/env";
 import { createScoringMatch, destroyScoringMatch } from "../fixtures/scoringMatch";
+import { createScorer, destroyScorer } from "../fixtures/scorerRole";
 
 /** Single-value read straight from the database, as kit-roles.spec.ts does. */
 function dbOne(sql: string): string {
@@ -12,41 +13,6 @@ function dbOne(sql: string): string {
 }
 
 const SCORING_BASE = (m: string) => `/api/admin/cricket/matches/${m}/scoring`;
-
-/**
- * BUG-07/BUG-08 need a real ROLE_SCORER token, and unlike COACH/SUPER_ADMIN
- * (seeded directly, once, because no app path could create them at the time —
- * see SESSION-HANDOFF.md) createAdmin could ALWAYS create this role. So this
- * provisions and tears down its own scorer per test, through the real API,
- * rather than adding a third permanent seeded row: every other spec in this
- * suite asserts an exact user count against a fixed baseline (7), and a
- * permanent addition here would mean hunting down and updating every one of
- * them instead of just this file.
- */
-async function createScorer(tenant: Tenant, superAdmin: Tenant) {
-  const admin = await Api.login(superAdmin);
-  const branches = await admin.raw("get", "/api/admin/branches");
-  const branchId = (branches.body as Array<{ id: string }>)[0]?.id;
-  if (!branchId) throw new Error(`No branch found for ${superAdmin.slug} to assign the scorer to`);
-
-  const email = `e2e-scorer-${Date.now()}-${Math.random().toString(36).slice(2, 8)}@example.com`;
-  const password = "Tt1!ScorerPass9";
-  const created = await admin.raw("post", "/api/admin/users", {
-    name: "E2E Scorer", email, password, role: "ROLE_SCORER", branchId,
-  });
-  if (created.status !== 200) {
-    await admin.dispose();
-    throw new Error(`Failed to create scorer: ${created.status} ${JSON.stringify(created.body)}`);
-  }
-  const publicId = (created.body as { publicId: string }).publicId;
-  const scorer = await Api.login({ ...tenant, email, password });
-  return { scorer, adminApi: admin, publicId };
-}
-
-async function destroyScorer(fx: { adminApi: Api; publicId: string }) {
-  await fx.adminApi.raw("delete", `/api/admin/users/${fx.publicId}`);
-  await fx.adminApi.dispose();
-}
 
 /**
  * BUG-07: ROLE_SCORER could never reach any scoring endpoint —
@@ -117,7 +83,30 @@ test.describe("BUG-07 — ROLE_SCORER: the scoring surface and nothing else", ()
         noteText: "should not be allowed",
       })).status, "annotations stay admin/coach only even for a SCORER token").toBe(403);
 
+      // ── the wagon-wheel-enabled toggle (mid-match settings menu) — new since
+      // the wagon-wheel consolidation, sits outside /scoring/** as its own
+      // SecurityConfig rule, added specifically so a SCORER token could flip it
+      // from the live scorer page. Prove it actually 200s AND actually lands,
+      // not just that the rule looks right in SecurityConfig.
+      const wwRes = await scorer.raw("patch",
+        `/api/admin/cricket/matches/${m.matchPublicId}/wagon-wheel-enabled`,
+        { wagonWheelEnabled: false });
+      expect(wwRes.status, "SCORER can flip the wagon-wheel toggle").toBe(200);
+      expect(dbOne(
+        `SELECT wagon_wheel_enabled FROM cricket_matches WHERE public_id = '${m.matchPublicId}'`),
+        "the SCORER's toggle actually landed").toBe("f");
+      // restore it — the fixture's own default assumption elsewhere
+      await scorer.raw("patch", `/api/admin/cricket/matches/${m.matchPublicId}/wagon-wheel-enabled`,
+        { wagonWheelEnabled: true });
+
       // ── deliberately outside the ruling's scope — still ADMIN/SUPER_ADMIN only ──
+      // setTeams sits right next to the wagon-wheel-enabled rule in
+      // SecurityConfig — proving it is still refused is exactly how "nothing
+      // widened by accident" gets checked, not just asserted.
+      expect((await scorer.raw("post", `/api/admin/cricket/matches/${m.matchPublicId}/teams`, {
+        teamAName: "should not be settable", teamBName: "should not be settable",
+        teamAPlayers: [], teamBPlayers: [],
+      })).status, "setTeams stays ADMIN/SUPER_ADMIN only").toBe(403);
       expect((await scorer.raw("post", `/api/admin/cricket/matches/${m.matchPublicId}/pause`,
         { reason: "RAIN" })).status, "pause").toBe(403);
       expect((await scorer.raw("post", `/api/admin/cricket/matches/${m.matchPublicId}/resume`)).status,
@@ -170,6 +159,9 @@ test.describe("BUG-07 — ROLE_SCORER: the scoring surface and nothing else", ()
           nonStrikerPublicId: m.nonStriker.mtpPublicId, runsBatsman: 1,
           deliveryClientId: crypto.randomUUID(),
         })],
+        ["wagon-wheel-enabled toggle", () => scorerB.raw("patch",
+          `/api/admin/cricket/matches/${m.matchPublicId}/wagon-wheel-enabled`,
+          { wagonWheelEnabled: false })],
       ];
 
       for (const [label, call] of targets) {

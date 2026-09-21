@@ -1745,6 +1745,7 @@ export default function LiveScorerPage() {
 
       {error && (
         <div
+          data-testid="scoring-error-banner"
           className="mx-4 mt-3 px-3 py-2 bg-red-900/30 border border-red-800 rounded-xl text-xs text-red-400"
           onClick={innings === null ? loadAll : undefined}
           style={innings === null ? { cursor: "pointer" } : undefined}
@@ -1944,6 +1945,7 @@ export default function LiveScorerPage() {
           </button>
         ) : null}
         <button
+          data-testid="btn-match-controls"
           onClick={() => setShowCloseInnings(true)}
           className="w-11 h-11 rounded-xl bg-gray-900 border border-gray-700 text-gray-500 flex items-center justify-center text-lg active:scale-95"
         >
@@ -2946,6 +2948,7 @@ export default function LiveScorerPage() {
                 Edit Past Ball
               </button>
               <button
+                data-testid="btn-match-controls-cancel"
                 onClick={() => setShowCloseInnings(false)}
                 className="w-full py-2 text-gray-500 text-sm"
               >
