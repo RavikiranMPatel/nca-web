@@ -1,7 +1,8 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { getPublicScorecard } from "../../api/scoring/publicApi";
 import publicApi from "../../api/publicApi";
-import { FieldSVG, ZONES } from "./WagonWheelModal";
+import { WagonWheel } from "../../components/cricket/WagonWheel/WagonWheel";
+import type { ShotDot, WagonWheelBatter } from "../../components/cricket/WagonWheel/WagonWheel.types";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "../../auth/useAuth";
 
@@ -137,11 +138,6 @@ interface Scorecard {
   officials: { role: string; name: string; kscaId?: string }[];
   innings: InningsScorecard[];
   playingXI: PlayingXITeam[];
-}
-
-interface Shot {
-  zone: string;
-  runs: number;
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -310,47 +306,60 @@ const PlayingXITab = ({ playingXI }: { playingXI: PlayingXITeam[] }) => {
 };
 
 // ── Wagon Wheel Modal ─────────────────────────────────────────────────────────
+// Chrome (bottom sheet, header, close button) stays page-specific; the field
+// render + batter filter + zone table are the shared WagonWheel component
+// (src/components/cricket/WagonWheel) also used nowhere else yet, but now
+// there is exactly one such renderer instead of this page's own copy plus
+// the separate, dead WagonWheelDisplay.tsx.
 const WagonWheelModal = ({
   batter,
+  battingCard,
   matchId,
   inningsNumber,
   onClose,
   primaryColor,
 }: {
   batter: BattingLine;
+  battingCard: BattingLine[];
   matchId: string;
   inningsNumber: number;
   onClose: () => void;
   primaryColor: string;
 }) => {
-  const [shots, setShots] = useState<Shot[]>([]);
-  const [loading, setLoading] = useState(true);
-  const isLHB = batter.battingStyle?.toLowerCase().includes("left") ?? false;
-  const [isLHBView, setIsLHBView] = useState(isLHB);
+  // Keyed on content, not the battingCard array's own identity: the page
+  // polls the scorecard every 15s while live, which produces a brand-new
+  // battingCard array each time even when nothing about these players
+  // changed. Without a content key, WagonWheel's fetch effect (which reads
+  // this array by reference) would re-fetch shots every 15s while the modal
+  // sits open — the old single-batter modal never did that, since its own
+  // effect depended only on matchId/playerPublicId/inningsNumber.
+  const battersKey = battingCard
+    .map((b) => `${b.playerPublicId}:${b.playerName}:${b.battingStyle ?? ""}`)
+    .join("|");
+  const batters: WagonWheelBatter[] = useMemo(
+    () =>
+      battingCard.map((b) => ({
+        publicId: b.playerPublicId,
+        name: b.playerName,
+        battingStyle: b.battingStyle,
+      })),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [battersKey],
+  );
 
-  useEffect(() => {
-    const fetch = async () => {
-      try {
-        const res = await publicApi.get(
-          `/public/scorecard/${matchId}/shots/${batter.playerPublicId}?innings=${inningsNumber}`,
-        );
-        setShots(res.data ?? []);
-      } catch {
-        setShots([]);
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetch();
-  }, [matchId, batter.playerPublicId, inningsNumber]);
-
-  const fours = shots.filter((s) => s.runs === 4).length;
-  const sixes = shots.filter((s) => s.runs === 6).length;
-  const singles = shots.filter((s) => s.runs === 1 || s.runs === 3).length;
-  const twos = shots.filter((s) => s.runs === 2).length;
+  const fetchShots = useCallback(
+    async (batterPublicId: string): Promise<ShotDot[]> => {
+      const res = await publicApi.get(
+        `/public/scorecard/${matchId}/shots/${batterPublicId}?innings=${inningsNumber}`,
+      );
+      return res.data ?? [];
+    },
+    [matchId, inningsNumber],
+  );
 
   return (
     <div
+      data-testid="public-wagon-wheel-modal"
       className="fixed inset-0 z-[60] bg-black/80 flex items-end md:items-center justify-center"
       onClick={onClose}
     >
@@ -377,88 +386,14 @@ const WagonWheelModal = ({
               ✕
             </button>
           </div>
-          <div className="flex items-center gap-2 mt-2">
-            <span className="text-xs text-gray-500">View as:</span>
-            <div className="flex bg-gray-800 rounded-lg p-0.5 gap-0.5">
-              <button
-                onClick={() => setIsLHBView(false)}
-                className="px-2.5 py-1 text-xs font-semibold rounded-md transition-all"
-                style={!isLHBView ? { backgroundColor: primaryColor, color: "#fff" } : { color: "#9ca3af" }}
-              >
-                RHB
-              </button>
-              <button
-                onClick={() => setIsLHBView(true)}
-                className="px-2.5 py-1 text-xs font-semibold rounded-md transition-all"
-                style={isLHBView ? { backgroundColor: primaryColor, color: "#fff" } : { color: "#9ca3af" }}
-              >
-                LHB
-              </button>
-            </div>
-          </div>
         </div>
         <div className="px-4 py-3 bg-gray-900">
-          {loading ? (
-            <div className="flex items-center justify-center h-48">
-              <div className="w-6 h-6 border-2 border-t-transparent rounded-full animate-spin" style={{ borderColor: `${primaryColor}60`, borderTopColor: "transparent" }} />
-            </div>
-          ) : shots.length === 0 ? (
-            <div className="flex flex-col items-center justify-center h-48 text-gray-500">
-              <p className="text-2xl mb-2">🏏</p>
-              <p className="text-sm">No shot zones recorded yet</p>
-            </div>
-          ) : (
-            <>
-              <FieldSVG isLHB={isLHBView} interactive={false} shots={shots} />
-              <div className="flex gap-3 mt-2 justify-center flex-wrap">
-                {[
-                  { color: "bg-white", label: `1s/3s (${singles})` },
-                  { color: "bg-blue-500", label: `2s (${twos})` },
-                  { color: "bg-green-500", label: `4s (${fours})` },
-                  { color: "bg-purple-500", label: `6s (${sixes})` },
-                ].map(({ color, label }) => (
-                  <div key={label} className="flex items-center gap-1">
-                    <div className={`w-3 h-0.5 ${color} rounded-full`} />
-                    <span className="text-xs text-gray-400">{label}</span>
-                  </div>
-                ))}
-              </div>
-              {shots.length > 0 && (
-                <div className="mt-3 bg-gray-800 rounded-xl overflow-hidden">
-                  <div className="px-3 py-2 border-b border-gray-700">
-                    <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">
-                      Shot zones
-                    </p>
-                  </div>
-                  <div className="divide-y divide-gray-700/50 max-h-40 overflow-y-auto">
-                    {Object.entries(
-                      shots.reduce(
-                        (acc, s) => {
-                          acc[s.zone] = (acc[s.zone] ?? 0) + s.runs;
-                          return acc;
-                        },
-                        {} as Record<string, number>,
-                      ),
-                    )
-                      .sort((a, b) => b[1] - a[1])
-                      .map(([zone, runs]) => (
-                        <div
-                          key={zone}
-                          className="flex justify-between items-center px-3 py-1.5"
-                        >
-                          <span className="text-xs text-gray-300">
-                            {ZONES.find((z) => z.id === zone)?.label ?? zone}
-                          </span>
-                          <span className="text-xs font-bold text-white">
-                            {runs} runs
-                          </span>
-                        </div>
-                      ))}
-                  </div>
-                </div>
-              )}
-            </>
-          )}
+          <WagonWheel
+            batters={batters}
+            initialBatterId={batter.playerPublicId}
+            fetchShots={fetchShots}
+            primaryColor={primaryColor}
+          />
         </div>
         <div
           className="px-4 pb-5 pt-1"
@@ -683,6 +618,7 @@ const InningsCard = ({
           {inn.battingCard.map((b) => (
             <tr
               key={b.playerPublicId}
+              data-testid={`batter-row-${b.playerPublicId}`}
               onClick={() => onBatterClick(b)}
               className="border-b border-gray-50 dark:border-gray-800/50 hover:bg-gray-50 dark:hover:bg-gray-800/50 cursor-pointer active:bg-gray-100 transition-colors"
             >
@@ -1348,6 +1284,9 @@ export default function PublicScorecardPage() {
       {selectedBatter && matchId && (
         <WagonWheelModal
           batter={selectedBatter}
+          battingCard={
+            scorecard?.innings[selectedBatterInnings - 1]?.battingCard ?? [selectedBatter]
+          }
           matchId={matchId}
           inningsNumber={selectedBatterInnings}
           onClose={() => setSelectedBatter(null)}

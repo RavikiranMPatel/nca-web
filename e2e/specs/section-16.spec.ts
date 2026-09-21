@@ -171,7 +171,6 @@ test.describe("§16 Edge-Case Matrix", () => {
     const ctx = await browser.newContext();
     await ctx.addInitScript((seed) => {
       for (const [k, v] of Object.entries(seed)) window.localStorage.setItem(k, v as string);
-      window.localStorage.setItem("nca_ww_enabled", "false");
     }, m.api.storageSeed());
     const page = await ctx.newPage();
     try {

@@ -62,7 +62,7 @@ const xi = (names: string[], keeper: number) =>
  * `players` table.
  */
 export async function createScoringMatch(
-  opts: { totalOvers?: number; tenant?: Tenant } = {},
+  opts: { totalOvers?: number; tenant?: Tenant; wagonWheelEnabled?: boolean } = {},
 ): Promise<ScoringMatch> {
   const env = config();
   const api = await Api.login(opts.tenant ?? env.a);
@@ -77,6 +77,14 @@ export async function createScoringMatch(
     matchType: "INTERNAL",
     totalOvers: opts.totalOvers ?? 20,
     venue: "E2E Test Ground",
+    // Off by default for this fixture: most of the workbook is not about
+    // shot tagging, and the capture modal is a full-screen
+    // `fixed inset-0 z-[60]` overlay that pops after any delivery with
+    // runs > 0 (needsWagonWheel) and would block the next tap. Scenarios
+    // that ARE about shot zones opt back in explicitly via this option.
+    // Match-scoped now (wagon-wheel consolidation), not a per-browser
+    // localStorage flag — so this is one setting, not one per test context.
+    wagonWheelEnabled: opts.wagonWheelEnabled ?? false,
   });
   const matchPublicId: string = match.publicId;
 
@@ -122,17 +130,13 @@ export async function createScoringMatch(
       // to the match. AuthContext reads these keys once, on boot, and
       // ProtectedRoute rejects on a missing userRole — the token alone is not
       // enough (src/auth/ProtectedRoute.tsx:21-30).
+      // The wagon-wheel shot-zone prompt is match-scoped now (set at creation
+      // above via wagonWheelEnabled), not a per-browser localStorage flag —
+      // so there is nothing to seed here for it any more.
       await page.addInitScript((seed) => {
         for (const [k, v] of Object.entries(seed)) {
           window.localStorage.setItem(k, v as string);
         }
-        // Turn off the shot-zone (wagon wheel) prompt. It is a real user
-        // preference the app already reads (LiveScorerPage.tsx:343), and it opens
-        // a full-screen `fixed inset-0 z-[60]` modal after ANY delivery with runs
-        // > 0 (needsWagonWheel, L298-302), which covers the scoring pad and blocks
-        // the next tap. Scenarios that are about shot zones (T20-387) re-enable it
-        // explicitly; nothing else in the workbook involves shot tagging.
-        window.localStorage.setItem("nca_ww_enabled", "false");
       }, api.storageSeed());
       await page.goto(`/admin/cricket/matches/${matchPublicId}/score`);
     },

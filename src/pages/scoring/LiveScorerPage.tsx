@@ -349,8 +349,9 @@ export default function LiveScorerPage() {
     | null
   >(null);
 
-  // ── Wagon wheel — read from localStorage (set during match setup) ──────────
-  const wagonWheelEnabled = localStorage.getItem("nca_ww_enabled") !== "false";
+  // ── Wagon wheel — match-scoped (set during match setup, stored on the
+  // match itself so every scorer's session agrees), not a per-device flag ──
+  const wagonWheelEnabled = match?.wagonWheelEnabled ?? true;
   const [showWagonWheel, setShowWagonWheel] = useState(false);
   const [lastDeliveryPublicId, setLastDeliveryPublicId] = useState<
     string | null

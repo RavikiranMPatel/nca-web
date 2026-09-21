@@ -18,7 +18,6 @@ async function openFreshContext(browser: Browser, m: any): Promise<[BrowserConte
   const ctx = await browser.newContext();
   await ctx.addInitScript((seed) => {
     for (const [k, v] of Object.entries(seed)) window.localStorage.setItem(k, v as string);
-    window.localStorage.setItem("nca_ww_enabled", "false");
   }, m.api.storageSeed());
   const page = await ctx.newPage();
   await page.goto(`${config().webBase}/admin/cricket/matches/${m.matchPublicId}/score`);
@@ -124,7 +123,6 @@ test.describe("§14 Crash / Logout / Refresh / Sync", () => {
       // then navigate again.
       await page.evaluate((seed) => {
         for (const [k, v] of Object.entries(seed)) window.localStorage.setItem(k, v as string);
-        window.localStorage.setItem("nca_ww_enabled", "false");
       }, m.api.storageSeed());
       await page.goto(`${config().webBase}/admin/cricket/matches/${m.matchPublicId}/score`);
 

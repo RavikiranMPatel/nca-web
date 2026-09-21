@@ -90,6 +90,8 @@ export interface CricketMatch {
   pausedAt?: string;
   // Item 4: Standard (11), or 12/13 for practice/training matches.
   playingXiSize?: number;
+  // Match-scoped (not per-device) wagon-wheel shot-capture toggle.
+  wagonWheelEnabled?: boolean;
   // Match clock (V86) — all optional; no clock display when scheduledStartTime is absent
   scheduledStartTime?: string;       // "HH:MM:SS" from DB TIME column
   inningsIntervalMinutes?: number;   // per-match override; null = use overs-derived default
@@ -162,6 +164,9 @@ export interface CreateMatchRequest {
   notes?: string;
   // Item 4: Standard (11), or 12/13 for practice/training matches.
   playingXiSize?: number;
+  // Match-scoped (not per-device) wagon-wheel shot-capture toggle. Defaults
+  // true server-side when omitted, matching the old client-side default.
+  wagonWheelEnabled?: boolean;
   // Match clock — both optional
   scheduledStartTime?: string;     // "HH:MM" sent to backend
   inningsIntervalMinutes?: number;

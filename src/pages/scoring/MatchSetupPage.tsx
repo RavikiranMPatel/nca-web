@@ -98,9 +98,11 @@ export default function MatchSetupPage() {
   const [allPlayers, setAllPlayers] = useState<PlayerOption[]>([]);
   const creatingRef = useRef(false);
 
-  const [wagonWheelEnabled, setWagonWheelEnabled] = useState(
-    () => localStorage.getItem("nca_ww_enabled") !== "false",
-  );
+  // Match-scoped setting from here on (sent in createMatch below, read from
+  // the match entity by every scorer's session) — not a per-device
+  // localStorage flag, which meant a second scorer's browser could miss
+  // shot prompts even though the first scorer's browser had it "on".
+  const [wagonWheelEnabled, setWagonWheelEnabled] = useState(true);
 
   const [teamAExternalName, setTeamAExternalName] = useState("");
   const [addingExternalA, setAddingExternalA] = useState(false);
@@ -477,6 +479,7 @@ export default function MatchSetupPage() {
         ...matchDetails,
         tournamentPublicId: tournamentId ?? undefined,
         playingXiSize,
+        wagonWheelEnabled,
         scheduledStartTime: matchDetails.scheduledStartTime || undefined,
         inningsIntervalMinutes: matchDetails.inningsIntervalMinutes !== "" ? Number(matchDetails.inningsIntervalMinutes) : undefined,
       });
@@ -622,7 +625,6 @@ export default function MatchSetupPage() {
           );
         }
       }
-      localStorage.setItem("nca_ww_enabled", String(wagonWheelEnabled));
       await startMatch(createdMatch.publicId);
       navigate(`/admin/cricket/matches/${createdMatch.publicId}/score`);
     } catch (e: any) {
@@ -887,11 +889,7 @@ export default function MatchSetupPage() {
                   </div>
                 </div>
                 <button
-                  onClick={() => {
-                    const next = !wagonWheelEnabled;
-                    setWagonWheelEnabled(next);
-                    localStorage.setItem("nca_ww_enabled", String(next));
-                  }}
+                  onClick={() => setWagonWheelEnabled((prev) => !prev)}
                   className={`w-12 h-6 rounded-full transition-all relative flex-shrink-0 ${wagonWheelEnabled ? "bg-blue-600" : "bg-gray-300 dark:bg-gray-600"}`}
                 >
                   <div
