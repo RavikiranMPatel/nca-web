@@ -44,7 +44,6 @@ import PlayerFeesTab from "./pages/player/PlayerFeesTab";
 import PlayerMediaPage from "./pages/player/PlayerMediaPage";
 import { useTenant } from "./context/TenantContext";
 import TeamMembersAdmin from "./pages/admin/TeamMembersAdmin";
-import ManageUsersPage from "./pages/ManageUsersPage";
 import ManageBranchesPage from "./pages/ManageBranchesPage";
 import UserProfilePage from "./pages/UserProfilePage";
 import AdminRevenueDashboard from "./pages/admin/AdminRevenueDashboard";
@@ -700,15 +699,6 @@ function App() {
           </ProtectedRoute>
         }
       />
-      <Route
-        path="/admin/users"
-        element={
-          <ProtectedRoute roles={["ROLE_SUPER_ADMIN"]}>
-            <ManageUsersPage />
-          </ProtectedRoute>
-        }
-      />
-
       {/* ================= ENQUIRIES ================= */}
       <Route
         path="/admin/enquiries"
