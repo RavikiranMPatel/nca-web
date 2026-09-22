@@ -46,7 +46,7 @@ export type SummerCampFeeRule = {
   publicId: string;
   batchCount: number; // Number of batches (1, 2, 3...)
   feeAmount: number; // Fee for that batch count
-  version: number;
+  feeRuleRevision: number;
   isCurrent: boolean;
   createdAt: string;
   updatedAt: string;
