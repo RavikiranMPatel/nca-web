@@ -86,7 +86,7 @@ backend.
 | BUG-52 | `addManualFixture` numbers the round by fixture count, so the final becomes round 3 | low | **FIXED** — backend `449f8c2`, spec `acecd3e` |
 | BUG-53 | `linkMatchToFixture` failure is swallowed in `MatchSetupPage` | low | **FIXED** — `7db2727` |
 | BUG-54 | `createScoredTournament` tags its rows with a clock that two workers can share | low | **FIXED** — `ae20cde` |
-| BUG-55 | `SummerCampFeeRule.version` is both a domain counter and Hibernate's optimistic-lock field | medium | open — filed, not fixed |
+| BUG-55 | `SummerCampFeeRule.version` is both a domain counter and Hibernate's optimistic-lock field | medium | **FIXED** — backend `16f23e3` (V109), frontend `f280a50` |
 | BUG-56 | 105 controller handlers return a JPA entity directly — BUG-38's exposure by a second route | medium | open — pinned by `ResponseDtoLeakTest`, cannot grow |
 | BUG-57 | Multi-tenant CORS allowlist trusted `ncamysuru.com`, the separate main-branch app's domain | high | **FIXED** — `36c6cd5` |
 | BUG-58 | `/api/auth/login` had no brute-force protection | medium | **FIXED** — `c6b07b6` |
@@ -2865,8 +2865,7 @@ that read like application bugs, and it has now cost two sessions time.
 
 **Found:** investigating BUG-37's root-cause fix, checking every entity for
 whether leaving `@Version` null-until-persist could break optimistic locking.
-**Status:** filed, not fixed — pre-existing, unrelated to BUG-37, and out of
-scope for that change ("do not touch anything else").
+**Status: FIXED** — backend `16f23e3` (migration **V109**), frontend `f280a50`.
 
 `SummerCampFeeRule` declares its own plain `private Integer version = 1;` — a
 genuine business field, the fee-rule revision number, part of the real unique
@@ -2903,10 +2902,47 @@ Two consequences, checked against the entity's actual usage
   only on an intentional fee-rule revision — which can desync the "revision
   number" from its intended meaning and collide with the unique constraint.
 
-Not fixed here: needs its own decision (rename the domain column, or give the
-entity an explicit `@Version` on a separate physical column) and its own
-regression pass, the same reasoning BUG-37 applied to leaving its own root
-cause for a dedicated slice.
+**How the collision actually manifested — confirmed empirically before fixing,
+not assumed.** Two tests (`SummerCampFeeRuleVersionCollisionTest`) against real
+Postgres: an UPDATE that only touches `isCurrent`/`effectiveUntil` (exactly
+what `SummerCampService.setFeeRules()` does to retire the old "current" rule)
+silently bumped the domain counter 1 → 2 with no application code asking for
+it; and the real `setFeeRules()` flow — retire the old rule, insert a
+replacement with an explicitly computed `version = oldVersion + 1` — threw
+`ConstraintViolationException` on `uq_fee_rule_camp_batch_version`, surfacing
+on the retiring row's UPDATE rather than the new row's INSERT (Hibernate
+flushes inserts before updates — more precise than the naive prediction, only
+found by actually running it). **This was not a rare concurrent-edit corner
+case: calling `setFeeRules()` a second time for any camp that already had a
+rule for a given batch count threw immediately, every time, single-user, no
+race required.** Checked production before fixing: 0 rows existed in
+`summer_camp_fee_rules`, so nothing had been corrupted — the feature simply
+hadn't been used yet.
+
+**Fix.** V109 renamed the shadowed column to `fee_rule_revision` and added a
+fresh `version` column (`NOT NULL DEFAULT 0`, the same shape
+`V17__version.sql` already used for ~29 other tables) for `BaseEntity`'s real
+`@Version` to resolve to independently. Entity field renamed to
+`feeRuleRevision`; `SummerCampService` and `SummerCampFeeRuleResponse` updated
+to match; frontend's unused `version` type field renamed alongside it
+(`f280a50`) — it was never actually read in any page component, so this is a
+type-safety sync with zero behavioral risk.
+
+**Verified fixed**, not just changed: the same two tests (assertions
+inverted, now proving the fix rather than the bug) confirm retiring a rule no
+longer touches `feeRuleRevision` at all — Hibernate's real `version` column
+moves instead — and the exact `setFeeRules()` retire-and-replace flow no
+longer throws. A third test
+(`OptimisticLockingRegressionTest.summerCampFeeRuleConcurrentUpdateIsDetected`,
+same two-genuinely-separate-`EntityManager`s shape as that file's existing
+`FeePayment`/`Tournament` cases) confirms `BaseEntity`'s real `@Version` now
+correctly detects an actual concurrent edit on this entity, unaided by the
+now-independent domain counter. Real HTTP round trip against local 8081 (temp
+admin + temp camp, deleted after): `PUT .../fee-rules` called **four times in
+a row** for the same camp/batch count — all `200`, `feeRuleRevision` advancing
+1→2→3→4 cleanly, zero constraint violations, confirmed by direct DB
+inspection of all 6 rows created. Full backend JUnit suite 200/200 passing;
+`npm run e2e:smoke` 45/45.
 
 ---
 
