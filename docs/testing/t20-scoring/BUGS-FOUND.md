@@ -88,6 +88,14 @@ backend.
 | BUG-54 | `createScoredTournament` tags its rows with a clock that two workers can share | low | **FIXED** — `ae20cde` |
 | BUG-55 | `SummerCampFeeRule.version` is both a domain counter and Hibernate's optimistic-lock field | medium | open — filed, not fixed |
 | BUG-56 | 105 controller handlers return a JPA entity directly — BUG-38's exposure by a second route | medium | open — pinned by `ResponseDtoLeakTest`, cannot grow |
+| BUG-57 | Multi-tenant CORS allowlist trusted `ncamysuru.com`, the separate main-branch app's domain | high | **FIXED** — `36c6cd5` |
+| BUG-58 | `/api/auth/login` had no brute-force protection | medium | **FIXED** — `c6b07b6` |
+| BUG-59 | A controller taking a JPA entity as `@RequestBody` could have its `academyId`/`branchId` set by the caller | medium | **FIXED** — `0fe1d79` |
+| BUG-60 | `application-prod.properties` tracked in git despite being gitignored | low | **FIXED** — `5078692` |
+| BUG-61 | `DeliveryRepository.findAllByInningsIdIn`'s intentional cross-academy exception was undocumented | low | **FIXED** — docs only, `.claude/rules/multi-tenancy.md` |
+| BUG-62 | Dead duplicate `/admin/users` route and `ManageUsersPage` component | low | **FIXED** — `cd2bcf0` |
+| BUG-63 | The two 403 handlers disagreed on message text | low | **FIXED** — `073e408` |
+| BUG-64 | `WebSocketConfig` trusted an unidentified IP and `ncamysuru.com` | medium | **FIXED** — `cf65b9d` |
 
 ---
 
@@ -2934,6 +2942,198 @@ times across modules with nothing to do with each other, which is exactly the
 reasoning BUG-38 itself gave for not fixing its 28 in one pass. `entityReturnDebtDoesNotGrow()`
 already prevents the list from growing; picking it up should be scoped per
 module, the same way BUG-47 scoped it to tournaments alone.
+
+---
+
+## BUG-57 — Multi-tenant CORS allowlist trusted the separate main-branch app's domain
+
+**Found:** the 2026-09-13/21/22 security sweep, Part 1 item 9 (CORS).
+**Severity:** high · **Status: FIXED** — backend `36c6cd5`.
+
+`SecurityConfig.corsConfigurationSource()` listed `https://ncamysuru.com` and
+`https://www.ncamysuru.com` in `allowedOriginPatterns`, alongside
+`allowCredentials(true)`. That domain is CLAUDE.md hard rule 1's separate,
+single-tenant `main`-branch app — not a tenant of this platform — so any page
+served from it could make credentialed cross-origin requests against the
+multi-tenant API. Traced via `git blame` to `f203927` (2026-03-05,
+"Updated SecurityConfig"), present on `main` too — carried over at the fork,
+never removed.
+
+Confirmed no legitimate caller depends on it: neither frontend repo calls
+`ncamysuru.com`/`www.ncamysuru.com` from this app (`UmpireAssistPage.tsx` calls
+a different, unrelated subdomain, `cricket-api.ncamysuru.com`, for the separate
+Umpire Assist project).
+
+Verified via curl preflight against local 8081: `Origin: https://ncamysuru.com`
+and `https://www.ncamysuru.com` now get 403 with no
+`Access-Control-Allow-Origin` header; `https://rbncc.rkmpcrease.com`,
+`https://gymkhana.rkmpcrease.com` and `http://localhost:5173` are unaffected.
+
+---
+
+## BUG-58 — `/api/auth/login` had no brute-force protection
+
+**Found:** the 2026-09-13/21/22 security sweep, Part 1 item 8 (rate limiting).
+**Severity:** medium · **Status: FIXED** — backend `c6b07b6`.
+
+Every other public auth-adjacent flow in this codebase already had an in-memory
+rate limiter (`ForgotPasswordRateLimiter`, `ClaimAttemptRateLimiter`) — login,
+the single most attractive brute-force target in the app, was the one path
+without one.
+
+`LoginRateLimiter` mirrors `ClaimAttemptRateLimiter`'s exact shape and
+threshold (5 failed attempts / 15-minute window, cleared on success), keyed by
+IP rather than by account/email so an attacker cannot lock a legitimate user
+out of their own account by submitting wrong passwords for that email.
+
+Verified against local 8081 / `nca_scoring_test` (temp signup user, deleted
+after): 5 wrong-password attempts from one IP → 401 each; a 6th attempt, same
+IP, correct password → 429; a 2-attempt typo-retry from a different IP does not
+trip the limiter, and a 3rd, correct attempt succeeds; a third, uninvolved IP is
+unaffected by the first IP's block. Backend unit test `LoginRateLimiterTest`,
+4/4 passing.
+
+---
+
+## BUG-59 — A raw-entity `@RequestBody` could have `academyId`/`branchId` set by the caller
+
+**Found:** the 2026-09-13/21/22 security sweep, Part 1 item 6 (input
+validation), expanding CLAUDE.md's own documented "CMS and expense" scope with
+a previously-undocumented `AdminCricketOfficialController` instance (8 sites
+total).
+**Severity:** medium · **Status: FIXED** — backend `0fe1d79`.
+
+`BaseEntity.@PrePersist`/`@PreUpdate` only fill `academyId`/`branchId` when they
+are null, so any controller taking a JPA entity directly as `@RequestBody`
+lets a caller's JSON value stick. Fixed as a single `@JsonIgnore` on
+`BaseEntity.academyId`/`branchId` rather than touching each of the 8 sites
+individually, closing it for these and any future controller that reuses the
+same anti-pattern.
+
+Investigated each of the 8 sites before choosing this fix: none was provably
+exploitable *today* — every create path already explicitly overwrites the
+tenant fields from `AcademyContext` after binding, and every update path only
+copies specific business fields onto the fetched, tenant-verified `existing`
+entity. The risk was structural/latent, not a live hole; `@JsonIgnore` removes
+the reliance on that discipline entirely. Also incidentally stops
+`academyId`/`branchId` serialising out on any of BUG-56's 105
+`KNOWN_ENTITY_RETURNS` handlers (does not close BUG-56 — `createdBy`,
+`updatedBy` and the raw entity shape still leak there).
+
+Verified against local 8081 / `nca_scoring_test` (temp admin, temp facility
+row, both deleted after): `POST /api/admin/cms/facilities` response no longer
+includes `academyId`/`branchId` at all; `PUT .../facilities/{id}` with a
+spoofed `academyId` pointing at the OTHER test academy → 200, title update
+applies normally, and the DB row's real `academy_id` is unchanged. Full backend
+JUnit suite: 197/197 passing.
+
+---
+
+## BUG-60 — `application-prod.properties` tracked in git despite being gitignored
+
+**Found:** the 2026-09-13/21/22 security sweep, Part 1 item 5 (secrets).
+**Severity:** low · **Status: FIXED** — backend `5078692`.
+
+The `.gitignore` rule pre-dates the file's addition to the repo, so it never
+took effect. Docs/hygiene only, not a secret rotation: content was already
+confirmed safe (every sensitive field uses `${ENV_VAR}` substitution, no actual
+credential present). Fixed with `git rm --cached` only — the local file is
+untouched on disk. `git check-ignore` confirms the rule now actually excludes
+it going forward.
+
+---
+
+## BUG-61 — `DeliveryRepository.findAllByInningsIdIn`'s cross-academy exception was undocumented
+
+**Found:** the 2026-09-13/21/22 security sweep, Part 1 item 1 (hard-rule-2
+audit).
+**Severity:** low · **Status: FIXED** — docs only, `.claude/rules/multi-tenancy.md`.
+
+The method is a genuine, intentional exception (its only caller,
+`TournamentStatsService`, builds the inningsIds list from a tournament that is
+itself already scoped, and merging cross-academy delivery data for a
+cross-academy tournament is correct product behaviour — already explained in
+the repository's own code comment) but `multi-tenancy.md`'s canonical
+exception list only named `ScorecardService.getPublicScorecard`,
+`ScorecardService.getBatterShots` and `TournamentService.linkMatchToFixture`.
+Added as a fourth entry so a future audit does not have to re-derive intent
+from scratch.
+
+---
+
+## BUG-62 — Dead duplicate `/admin/users` route and `ManageUsersPage` component
+
+**Found:** the 2026-09-13/21/22 security sweep, Part 1 item 4 (authorization
+surface / frontend route guards).
+**Severity:** low · **Status: FIXED** — frontend `cd2bcf0`.
+
+React Router only ever resolves the FIRST matching route: the live
+`/admin/users` definition (`ROLE_ADMIN`/`ROLE_SUPER_ADMIN`, `AdminUsers`,
+inside `AppLayout`) was declared earlier in `App.tsx`'s route list than a
+second one (`ROLE_SUPER_ADMIN`, bare `ManageUsersPage`, no layout), making the
+second definition and the component behind it unreachable dead code. Not a
+live security hole — the effective gate a real user hits already matches what
+the backend permits — just code hygiene.
+
+Verified: no remaining references to `ManageUsersPage` anywhere in `src/`;
+`tsc -p tsconfig.app.json --noEmit` shows the same pre-existing ~80 unrelated
+errors elsewhere in the app; `vite build` clean.
+
+---
+
+## BUG-63 — The two 403 handlers disagreed on message text
+
+**Found:** the 2026-09-13/21/22 security sweep, Part 1 item 7 (401-vs-403,
+re-confirming BUG-24's fix).
+**Severity:** low · **Status: FIXED** — backend `073e408`.
+
+BUG-24's fix holds on both paths a 403 can come from — both correctly return
+403 — but `SecurityConfig`'s filter-chain `accessDeniedHandler` said "Access
+denied. You do not have permission to perform this action." while
+`GlobalExceptionHandler`'s `@PreAuthorize`-triggered handler said only "Access
+denied". Cosmetic, but the frontend reads this exact string for its toast, so
+which text a user saw depended on which layer rejected them. Aligned
+`GlobalExceptionHandler`'s text to match.
+
+Verified against local 8081 / `nca_scoring_test` (two temp users, deleted
+after): a ROLE_USER token hitting the SUPER_ADMIN-only path rule
+`POST /api/admin/users` (filter-chain path) and a ROLE_ADMIN token hitting
+`DELETE /api/admin/players/{id}` (`@PreAuthorize("hasRole('ROLE_SUPER_ADMIN')")`,
+method-security path) now return identical message text. Full backend JUnit
+suite: 197/197 passing.
+
+---
+
+## BUG-64 — `WebSocketConfig` trusted an unidentified IP and the main-branch app's domain
+
+**Found:** the 2026-09-13/21/22 security sweep, Part 1 item 9 (CORS), L4.
+**Severity:** medium · **Status: FIXED** — backend `cf65b9d`.
+
+`WebSocketConfig`'s `/ws/presence` handler allowed `http://159.65.148.114`
+alongside `https://ncamysuru.com`/`https://www.ncamysuru.com` — the same
+main-branch-app domain removed from the HTTP CORS allowlist in BUG-57, plus a
+raw IP with no explanation anywhere. Investigated via `git blame` (introduced
+whole-cloth in this file's only commit, `5e42360`, no explanation), grepped
+every doc in both repos and CLAUDE.md (no reference), and confirmed by `whois`
+it's a DigitalOcean IP but NOT the current documented production host
+(`168.144.79.220`, CLAUDE.md hard rule 3) — no PTR record, no corroborating
+evidence. Unidentifiable and unused; removed.
+
+A bug was found while fixing this one: the first replacement used
+`setAllowedOrigins("https://*.rkmpcrease.com")`, which does EXACT string
+matching only and would have silently rejected every real tenant subdomain's
+WebSocket handshake in production — only `setAllowedOriginPatterns` supports
+the glob (confirmed via `javap` against the actual `spring-websocket-6.1.6`
+classes on the build classpath). Caught before committing by attempting a real
+WebSocket handshake against a tenant subdomain locally, not by code review.
+
+Verified via a real WebSocket handshake attempt (Origin header +
+`Connection: Upgrade`) against local 8081: `https://ncamysuru.com` and
+`http://159.65.148.114` → 403 (previously allowed); `https://rbncc.rkmpcrease.com`,
+`https://gymkhana.rkmpcrease.com` and `http://localhost:5173` → 101 Switching
+Protocols (unaffected — and the tenant-subdomain case proves the
+`*.rkmpcrease.com` pattern actually matches). Full backend JUnit suite:
+197/197 passing.
 
 ---
 
