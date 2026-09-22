@@ -96,6 +96,7 @@ backend.
 | BUG-62 | Dead duplicate `/admin/users` route and `ManageUsersPage` component | low | **FIXED** — `cd2bcf0` |
 | BUG-63 | The two 403 handlers disagreed on message text | low | **FIXED** — `073e408` |
 | BUG-64 | `WebSocketConfig` trusted an unidentified IP and `ncamysuru.com` | medium | **FIXED** — `cf65b9d` |
+| BUG-65 | `replay-all` mints `now()` for `creaseExitedAt` when backfilling a value that never existed | low | open — filed, not fixed |
 
 ---
 
@@ -3134,6 +3135,49 @@ Verified via a real WebSocket handshake attempt (Origin header +
 Protocols (unaffected — and the tenant-subdomain case proves the
 `*.rkmpcrease.com` pattern actually matches). Full backend JUnit suite:
 197/197 passing.
+
+---
+
+## BUG-65 — `replay-all` mints `now()` for `creaseExitedAt` when backfilling a value that never existed
+
+**Found:** 2026-09-22, analysing production's first `replay-all?dryRun=true` result
+(deploy prerequisite 2) before approving the apply.
+**Severity:** low · **Status:** reported, **not fixed**.
+
+`ScoringService.applyBall()` sets `crease_exited_at` via `OffsetDateTime.now()`
+(line ~1228) whenever it processes a wicket/retirement delivery for a batter who
+doesn't already have one — correct when called live, at the actual moment of the
+event. `replayInnings()`'s snapshot/restore mechanism (BUG-16's fix) only
+protects a value that was *already captured*: it restores the original
+`crease_exited_at` if one was saved before the wipe and the fresh replay still
+produces one, but for a batter whose `crease_exited_at` was already `NULL`
+before the replay (nothing to restore), the freshly-minted `now()` value stands
+uncorrected.
+
+Confirmed on production's first replay-all dry-run: three RETIRED_HURT batters
+across three different matches — `Kiran m patel` (`MCH-NCA-1786121662968`,
+2026-08-07), `Chinmini chintamani` (`MCH-NCA-1786363436618`, 2026-08-10),
+`Sachin S` (`MCH-NCA-1786448325182`, 2026-08-11) — had `crease_exited_at =
+NULL` in production despite a real `RETIRED_HURT` delivery on record, so
+replaying them stamps today's date (2026-09-22) into a column describing an
+August event.
+
+**Not blocking, applied anyway 2026-09-22.** Grepped every consumer of
+`creaseExitedAt` in the codebase: it is written and read only inside
+`ScoringService`, exclusively to determine who is *currently* at the crease for
+an in-progress innings. No annotation, report, or scorecard reads it. All three
+affected matches are `COMPLETED`, so the wrong value is inert — it cannot
+surface anywhere a user would see it. `PlatformScoringReplayService` already
+refuses to touch `IN_PROGRESS`/`SUPER_OVER` matches, which structurally
+prevents this from ever mattering on a live innings; the field could only be
+non-inert if that safeguard were ever removed.
+
+**Not fixed here:** the tool should either leave a first-time backfill `NULL`
+(matching "we don't know when this happened") or derive it from the triggering
+delivery's own sequence position / the match's `created_at` rather than the
+replay's own wall-clock time. Either is a small, self-contained change to
+`replayInnings()`'s restore block, independent of anything else in deploy
+prerequisite 2.
 
 ---
 
