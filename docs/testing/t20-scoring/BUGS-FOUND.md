@@ -2974,11 +2974,18 @@ stops those two fields serialising out for every entry on this list — but
 `createdBy`, `updatedBy` and the raw entity shape itself are unaffected and
 still leak).
 
-Not fixed here: the fix is "return a DTO instead of the entity", repeated 105
-times across modules with nothing to do with each other, which is exactly the
-reasoning BUG-38 itself gave for not fixing its 28 in one pass. `entityReturnDebtDoesNotGrow()`
-already prevents the list from growing; picking it up should be scoped per
-module, the same way BUG-47 scoped it to tournaments alone.
+Not fixed in one pass: the fix is "return a DTO instead of the entity",
+repeated 105 times across modules with nothing to do with each other, which
+is exactly the reasoning BUG-38 itself gave for not fixing its 28 in one
+pass. `entityReturnDebtDoesNotGrow()` prevents the list from growing.
+Scoped into 8 slices, plan and severity tiering (verified per entity's actual
+associations, not assumed from module name) in `docs/security/bug-38-plan.md`.
+
+**In progress, 2026-09-22 — slice 1 (Enquiries, 3 sites) FIXED**, backend
+`1c5195a`: `createEnquiry`/`updateEnquiry`/`updateStatus` now return the
+existing `EnquiryDetailsDTO` instead of the raw `Enquiry` entity. Cross-tenant
+tested, full suite + smoke green. 102 sites remain across 7 slices — see the
+plan doc's progress table for current status.
 
 ---
 
