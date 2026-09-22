@@ -87,6 +87,7 @@ backend.
 | BUG-53 | `linkMatchToFixture` failure is swallowed in `MatchSetupPage` | low | **FIXED** — `7db2727` |
 | BUG-54 | `createScoredTournament` tags its rows with a clock that two workers can share | low | **FIXED** — `ae20cde` |
 | BUG-55 | `SummerCampFeeRule.version` is both a domain counter and Hibernate's optimistic-lock field | medium | open — filed, not fixed |
+| BUG-56 | 105 controller handlers return a JPA entity directly — BUG-38's exposure by a second route | medium | open — pinned by `ResponseDtoLeakTest`, cannot grow |
 
 ---
 
@@ -2897,6 +2898,42 @@ Not fixed here: needs its own decision (rename the domain column, or give the
 entity an explicit `@Version` on a separate physical column) and its own
 regression pass, the same reasoning BUG-37 applied to leaving its own root
 cause for a dedicated slice.
+
+---
+
+## BUG-56 — 105 controller handlers return a JPA entity directly
+
+**Found:** the 2026-09-13/21/22 security sweep, re-running `ResponseDtoLeakTest`
+to confirm BUG-38's stated count was still accurate.
+**Severity:** medium · **Status:** reported, **not fixed**. Pinned so it cannot
+grow, same mechanism as BUG-38.
+
+`ResponseDtoLeakTest` carries a second Set alongside `KNOWN_PRE_EXISTING` —
+`KNOWN_ENTITY_RETURNS`, 105 entries, one per controller method whose return type
+is a JPA entity (or `ResponseEntity<SomeEntity>`) rather than a DTO. The test's
+own comment ties it to BUG-38 directly: this is "BUG-38's exposure by a second
+route" — a handler serialising a raw `BaseEntity` subclass carries `academyId`,
+`branchId`, `createdBy` and `updatedBy` out with every response, the same leak
+BUG-38 catalogued for DTOs that copy the fields by hand, just reached through
+returning the entity itself instead.
+
+BUG-47 already fixed the four tournament endpoints (`get`, `listTeams`,
+`listStages`, `updateSettings`) and their three same-return-type siblings
+(`addTeam`, `getSquad`, `addToSquad`) this way — those seven are gone from
+`KNOWN_ENTITY_RETURNS` because they now return DTOs, and the guard is what keeps
+them that way. The 105 remaining are everywhere else: CMS, expenses, kit,
+player, fee and admin controllers among them (the M2 fix in this same sweep
+closed the mass-assignment half of the CMS/expense/officials instances by
+`@JsonIgnore`-ing `BaseEntity.academyId`/`branchId`, which as a side effect also
+stops those two fields serialising out for every entry on this list — but
+`createdBy`, `updatedBy` and the raw entity shape itself are unaffected and
+still leak).
+
+Not fixed here: the fix is "return a DTO instead of the entity", repeated 105
+times across modules with nothing to do with each other, which is exactly the
+reasoning BUG-38 itself gave for not fixing its 28 in one pass. `entityReturnDebtDoesNotGrow()`
+already prevents the list from growing; picking it up should be scoped per
+module, the same way BUG-47 scoped it to tournaments alone.
 
 ---
 
