@@ -100,6 +100,7 @@ backend.
 | BUG-66 | Local test academies have no `ENQUIRY_ID_PREFIX` seeded, so enquiry public ids read `-1`, `-2`... | low | open — filed, not fixed |
 | BUG-67 | `assignBatchesToPlayer`/`getPlayerBatches` unscoped by academy — cross-tenant write and read | critical | **FIXED** — `f7483ef` |
 | BUG-68 | `registerPlayer` embeds a raw `Player` (with nested `batches`) inside a `Map` response — invisible to `KNOWN_ENTITY_RETURNS`'s reflection check | medium | open — filed, not fixed |
+| BUG-69 | `BatchService.findById` unscoped by academy — cross-tenant read/write/delete on batches | critical | **FIXED** — `5d6a41e` |
 
 ---
 
@@ -3368,6 +3369,65 @@ of them), and fixing the detection gap itself (extending
 `entityReturningHandlers()` to inspect `Map`/collection *values* at runtime,
 not just declared method return types) is a test-infrastructure change of its
 own, separate from converting any one endpoint.
+
+---
+
+## BUG-69 — `BatchService.findById` unscoped by academy
+
+**Found:** 2026-09-23, the mandatory read-only pass and sibling grep for the
+`BatchController`/`BatchService` half of BUG-38 slice 3 — the exact same
+methodology that found BUG-67 in `AdminPlayerController` moments earlier in
+the same slice.
+**Severity:** critical (cross-tenant read, write, soft-delete, and hard-delete)
+· **Status: FIXED** — `5d6a41e`.
+
+`BatchService.findById(UUID id)` called `batchRepository.findById(id)` with
+no `academyId` filter, despite `BatchRepository.findByIdAndAcademyId(UUID,
+UUID)` already existing as this service's own established pattern (used by
+`findByPublicId`). This one unscoped method was then relied on, unguarded, by:
+
+- `update(UUID, BatchUpdateRequest)` — cross-tenant **write** via
+  `PUT /api/admin/batches/{id}`
+- `delete(UUID)` — cross-tenant soft-delete via `DELETE /api/admin/batches/{id}`
+- `hardDelete(UUID)` — cross-tenant permanent delete (see dead-code note below)
+- `getPlayersInBatch(UUID)` — cross-tenant **read** of another academy's
+  player roster via `GET /api/admin/batches/{id}/players`
+- `countPlayersInBatch(UUID)` — same leak via the `/players/count` variant
+
+`getPlayersInBatch`/`countPlayersInBatch` additionally called
+`PlayerRepository.findPlayersByBatchId(UUID)` and
+`BatchRepository.countPlayersByBatchId(UUID)` directly — neither took an
+`academyId` parameter either, so scoping `findById` alone would not have
+closed the leak on those two methods.
+
+**Fix:** threaded `AcademyContext.getAcademyId()` through `findById` (now
+uses `findByIdAndAcademyId`) and added
+`PlayerRepository.findPlayersByBatchIdAndAcademyId` /
+`BatchRepository.countPlayersByBatchIdAndAcademyId`, matching this service's
+own convention already used by `findAll()`/`findActive()`/`create()`.
+`hardDelete()` was confirmed to have **zero controller callers** anywhere in
+the backend (dead code, unrelated to `SuperAdminPlayerService.hardDeletePlayer`,
+a different method on a different entity) but was fixed anyway rather than
+left as a dormant unscoped landmine for a future caller.
+
+**Sibling check, per hard rule 2 (same package, `com.nca.cricket.service`).**
+`PlayerKitService.exportPurchaseOrder()` also called the unscoped
+`findPlayersByBatchId`, but was safe — its `batchId` came from a `batch`
+already resolved via `findByPublicIdAndAcademyId`. Switched it to the new
+scoped method anyway so the unscoped one had zero remaining callers, then
+deleted `PlayerRepository.findPlayersByBatchId` entirely. Also found and
+deleted `BatchRepository.findByPublicId(String)` — a second unscoped method
+in the same repository file, confirmed to have zero callers anywhere in the
+backend (dead code, distinct from the correctly-scoped
+`findByPublicIdAndAcademyId`).
+
+Verified via a real cross-tenant test against local 8081 / `nca_scoring_test`
+(admin-a/admin-b, one batch created and deleted after, baseline restored to
+0 batches/0 players): admin-b targeting admin-a's real batch UUID got `404`
+on `GET`/`PUT`/`DELETE /api/admin/batches/{id}` and on both
+`/players`/`/players/count` sub-routes; admin-a's own access to all four
+endpoints remained `200`, including a real rename that persisted. Full
+backend JUnit suite: 200/200 passing after the fix.
 
 ---
 
