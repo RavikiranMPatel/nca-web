@@ -97,6 +97,7 @@ backend.
 | BUG-63 | The two 403 handlers disagreed on message text | low | **FIXED** — `073e408` |
 | BUG-64 | `WebSocketConfig` trusted an unidentified IP and `ncamysuru.com` | medium | **FIXED** — `cf65b9d` |
 | BUG-65 | `replay-all` mints `now()` for `creaseExitedAt` when backfilling a value that never existed | low | open — filed, not fixed |
+| BUG-66 | Local test academies have no `ENQUIRY_ID_PREFIX` seeded, so enquiry public ids read `-1`, `-2`... | low | open — filed, not fixed |
 
 ---
 
@@ -3221,6 +3222,38 @@ delivery's own sequence position / the match's `created_at` rather than the
 replay's own wall-clock time. Either is a small, self-contained change to
 `replayInnings()`'s restore block, independent of anything else in deploy
 prerequisite 2.
+
+---
+
+## BUG-66 — Local test academies have no `ENQUIRY_ID_PREFIX` seeded
+
+**Found:** 2026-09-22, verifying BUG-38 slice 1 (Enquiries) end to end against
+`nca_scoring_test` — the first `createEnquiry` call on each of `testacad-a` and
+`testacad-b` returned `publicId: "-1"`.
+**Severity:** low · **Status:** filed, not fixed — captured so it isn't lost,
+not prioritised.
+
+**Not a code defect** — checked `AcademySettingsService.generateNextEnquiryId()`
+directly: `String.format("%s-%d", prefix, counter)` with `prefix =
+getSetting("ENQUIRY_ID_PREFIX", "")` defaulting to empty and `counter` the
+atomic per-academy value from `nextCounter("ENQUIRY_ID_COUNTER")` (BUG-33's
+fix, confirmed still correct — `generateNextEnquiryId` shares that same safe
+helper). The counter itself was fine, starting at 1 as expected for a
+first-ever call; an empty prefix plus counter `1` is exactly `"-1"`. The
+generator did precisely what it was asked to do.
+
+The actual gap: unlike `PLY-TESTACAD_A`/`PLY-TESTACAD_B` (seeded for the
+player-id generator, per `docs/SESSION-HANDOFF.md`'s "Seeded data that must
+not be cleaned up"), no equivalent `ENQUIRY_ID_PREFIX` was ever seeded for
+either local test academy. A second `createEnquiry` call on the same academy
+would also collide on `enquiries.public_id`'s global unique constraint, since
+both attempts produce the same `"-1"`.
+
+**Not fixed here:** seed `ENQUIRY_ID_PREFIX` for `testacad-a`/`testacad-b` the
+same way the player-id prefixes were seeded (`PUT` through the app's own
+settings API), or confirm this is purely a local-fixture gap that real
+academy onboarding already covers. Whichever it is, it's a data/seeding
+question, not an application bug.
 
 ---
 
