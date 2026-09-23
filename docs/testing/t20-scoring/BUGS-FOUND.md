@@ -2982,11 +2982,24 @@ pass. `entityReturnDebtDoesNotGrow()` prevents the list from growing.
 Scoped into 8 slices, plan and severity tiering (verified per entity's actual
 associations, not assumed from module name) in `docs/security/bug-38-plan.md`.
 
-**In progress, 2026-09-22 — slice 1 (Enquiries, 3 sites) FIXED**, backend
+**In progress.** Slice 1 (Enquiries, 3 sites) **FIXED** 2026-09-22, backend
 `1c5195a`: `createEnquiry`/`updateEnquiry`/`updateStatus` now return the
-existing `EnquiryDetailsDTO` instead of the raw `Enquiry` entity. Cross-tenant
-tested, full suite + smoke green. 102 sites remain across 7 slices — see the
-plan doc's progress table for current status.
+existing `EnquiryDetailsDTO` instead of the raw `Enquiry` entity.
+
+Slice 2 (Summer Camp, 9 sites) **FIXED** 2026-09-23, backend `69cf890`: new
+`SummerCampResponse` (7 sites) and `SummerCampConversionResponse` (1 site),
+reused the existing `SummerCampEnrollmentResponse` (1 site). Surfaced two
+pre-existing bugs while converting, both fixed alongside it: BaseEntity's M2
+`@JsonIgnore` (BUG-59) turned out to be too broad and had silently broken six
+summer-camp pages' branch-name display since that fix's deploy — see BUG-59's
+own entry for the correction (`ffc46b6`); and `enrollPlayer`'s response came
+back with `batchNames: []` because the entity being mapped had never had its
+lazy `batchAssignments` collection populated, fixed by setting it explicitly
+from the already-validated batch list in scope.
+
+Both slices cross-tenant tested on every parameterised endpoint, full suite +
+smoke green each time. 93 sites remain across 6 slices — see
+`docs/security/bug-38-plan.md`'s progress table for current status.
 
 ---
 
