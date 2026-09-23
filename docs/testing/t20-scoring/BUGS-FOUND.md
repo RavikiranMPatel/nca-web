@@ -98,6 +98,8 @@ backend.
 | BUG-64 | `WebSocketConfig` trusted an unidentified IP and `ncamysuru.com` | medium | **FIXED** — `cf65b9d` |
 | BUG-65 | `replay-all` mints `now()` for `creaseExitedAt` when backfilling a value that never existed | low | open — filed, not fixed |
 | BUG-66 | Local test academies have no `ENQUIRY_ID_PREFIX` seeded, so enquiry public ids read `-1`, `-2`... | low | open — filed, not fixed |
+| BUG-67 | `assignBatchesToPlayer`/`getPlayerBatches` unscoped by academy — cross-tenant write and read | critical | **FIXED** — `f7483ef` |
+| BUG-68 | `registerPlayer` embeds a raw `Player` (with nested `batches`) inside a `Map` response — invisible to `KNOWN_ENTITY_RETURNS`'s reflection check | medium | open — filed, not fixed |
 
 ---
 
@@ -3286,6 +3288,86 @@ same way the player-id prefixes were seeded (`PUT` through the app's own
 settings API), or confirm this is purely a local-fixture gap that real
 academy onboarding already covers. Whichever it is, it's a data/seeding
 question, not an application bug.
+
+---
+
+## BUG-67 — `assignBatchesToPlayer`/`getPlayerBatches` unscoped by academy
+
+**Found:** 2026-09-23, the mandatory read-only pass and sibling grep before
+starting BUG-38 slice 3 (Players & Batches) — every `playerRepository` call in
+`AdminPlayerController` was checked per hard rule 2.
+**Severity:** critical (cross-tenant write, not just a read leak) · **Status:
+FIXED** — `f7483ef`.
+
+`PUT /api/admin/players/{playerId}/batches` (`assignBatchesToPlayer`) and
+`GET /api/admin/players/{playerId}/batches` (`getPlayerBatches`, one of the
+actual 10 BUG-38 sites) both used bare `playerRepository.findById(playerId)`
+— the raw internal UUID, not the `publicId` every other lookup in this
+controller uses, and no compensating `academyId` check anywhere after. A
+caller who knew (or enumerated) another academy's player UUID could read
+that player's batch assignments, or — worse — **overwrite** them, a
+cross-tenant write.
+
+Every other `playerRepository` call in this file already used
+`findByPublicIdAndAcademyId` or an academy-scoped bulk method; these two
+were the only ones taking a raw UUID path variable at all, which is likely
+how they escaped the established pattern.
+`PlayerRepository.findByIdAndAcademyId` already existed — one-line fix at
+each site.
+
+**Sibling check, per hard rule 2.** Grepped every `playerRepo(sitory).findById(`
+call across the whole backend. Three in `ClubService` and one in
+`PlayerClaimService` were checked and confirmed safe: `PlayerClaimService`
+has a compensating `academyId` filter immediately after the lookup;
+`ClubService`'s three all read `member.getPlayerId()`, which can only ever
+be a same-academy player because `ClubService.addMember()` sets it from
+`playerRepo.findByPublicIdAndAcademyId(...)` at creation time — safe by
+construction, not by inspection alone. **Not individually verified**: roughly
+ten more bare `playerRepo.findById(...)` calls in `AttendanceService`,
+`EnquiryService`, `InventoryService`, `ClubSeasonService`,
+`PlayerRepresentativeHonorService`, and `PublicScoringService` — outside the
+file/package this fix touched, flagged here for a dedicated audit rather than
+expanded into this fix unboundedly.
+
+Verified via a real cross-tenant test against local 8081 / `nca_scoring_test`
+(two temp admins, one player, two batches, all deleted after; baseline
+restored): admin-b targeting admin-a's player's real UUID on both endpoints
+→ `404`; admin-a on their own player → `200`, unaffected. Full backend JUnit
+suite: 200/200 passing.
+
+---
+
+## BUG-68 — `registerPlayer` embeds a raw entity inside a `Map` response
+
+**Found:** 2026-09-23, verifying BUG-38 slice 3's cross-tenant fix end to end
+— registering a test player to get a real UUID surfaced the full response
+shape.
+**Severity:** medium · **Status:** filed, not fixed.
+
+`AdminPlayerController.registerPlayer` (`POST /api/admin/players`) returns
+`ResponseEntity<Map<String, Object>>` with `{communicationSent, message,
+player: <the raw Player entity>}`. The embedded `player` value carries the
+full entity — `academyId`, `branchId`, `createdBy`, `updatedBy` — and its
+`batches` collection is *not* `@JsonIgnore`d the way `SummerCamp.feeRules`/
+`enrollments` are, so each nested `Batch` serialises with its own
+`academyId`/`branchId`/`createdBy`/`updatedBy` too.
+
+**Why BUG-56's count (105) doesn't include this one.** `ResponseDtoLeakTest`'s
+`entityReturningHandlers()` inspects each handler method's *declared return
+type* via reflection (`Method.getGenericReturnType()`), looking for a type
+that carries a JPA entity. `registerPlayer`'s declared return type is
+`ResponseEntity<Map<String, Object>>` — a `Map` is not an entity type by that
+check, so a handler can embed one at runtime inside a generic container and
+the reflection-based guard never sees it. This is a gap in the audit
+methodology itself, not just one more site: any other handler returning a
+`Map`/`List<Map>` with an entity value stuffed in at runtime would have the
+same blind spot, and none have been checked for it yet.
+
+**Not fixed here:** out of BUG-38 slice 3's planned 10 sites (this isn't one
+of them), and fixing the detection gap itself (extending
+`entityReturningHandlers()` to inspect `Map`/collection *values* at runtime,
+not just declared method return types) is a test-infrastructure change of its
+own, separate from converting any one endpoint.
 
 ---
 
