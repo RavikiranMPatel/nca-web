@@ -90,7 +90,7 @@ backend.
 | BUG-56 | 105 controller handlers return a JPA entity directly — BUG-38's exposure by a second route | medium | open — pinned by `ResponseDtoLeakTest`, cannot grow |
 | BUG-57 | Multi-tenant CORS allowlist trusted `ncamysuru.com`, the separate main-branch app's domain | high | **FIXED** — `36c6cd5` |
 | BUG-58 | `/api/auth/login` had no brute-force protection | medium | **FIXED** — `c6b07b6` |
-| BUG-59 | A controller taking a JPA entity as `@RequestBody` could have its `academyId`/`branchId` set by the caller | medium | **FIXED** — `0fe1d79` |
+| BUG-59 | A controller taking a JPA entity as `@RequestBody` could have its `academyId`/`branchId` set by the caller | medium | **FIXED** — `0fe1d79`, corrected `ffc46b6` |
 | BUG-60 | `application-prod.properties` tracked in git despite being gitignored | low | **FIXED** — `5078692` |
 | BUG-61 | `DeliveryRepository.findAllByInningsIdIn`'s intentional cross-academy exception was undocumented | low | **FIXED** — docs only, `.claude/rules/multi-tenancy.md` |
 | BUG-62 | Dead duplicate `/admin/users` route and `ManageUsersPage` component | low | **FIXED** — `cd2bcf0` |
@@ -3071,6 +3071,25 @@ includes `academyId`/`branchId` at all; `PUT .../facilities/{id}` with a
 spoofed `academyId` pointing at the OTHER test academy → 200, title update
 applies normally, and the DB row's real `academy_id` is unchanged. Full backend
 JUnit suite: 197/197 passing.
+
+**Corrected 2026-09-23** — backend `ffc46b6`. `@JsonIgnore` was too broad: it
+blocks serialisation in *both* directions, and the frontend-dependency check
+above only covered the 8 known `@RequestBody`-entity controllers. It missed
+`SummerCampController`, which takes DTOs on the way in (so was never one of
+the 8) but still returns the raw `SummerCamp` entity on the way out — found
+while starting BUG-38 slice 2, when six summer-camp frontend pages turned out
+to read `.branchId` off that response to resolve/display/filter by branch
+name. That dependency had been silently broken (branchId absent from every
+response) since this fix's original deploy. GYMKHANA is genuinely
+multi-branch in production but had 0 summer camps yet, so the breakage was
+real but not yet visibly hit.
+
+Switched to `@JsonProperty(access = READ_ONLY)`: Jackson still serialises the
+field OUT (every frontend read keeps working) but still refuses to bind it
+FROM incoming JSON, so the actual mass-assignment protection is unaffected.
+Re-verified both directions against local 8081: `academyId`/`branchId` are
+back in every response, and a spoofed `academyId`/`branchId` in a request body
+still has no effect on the persisted row. Full suite 200/200, smoke 45/45.
 
 ---
 
