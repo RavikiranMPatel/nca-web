@@ -3000,8 +3000,20 @@ back with `batchNames: []` because the entity being mapped had never had its
 lazy `batchAssignments` collection populated, fixed by setting it explicitly
 from the already-validated batch list in scope.
 
-Both slices cross-tenant tested on every parameterised endpoint, full suite +
-smoke green each time. 93 sites remain across 6 slices — see
+Slice 3 (Players & Batches, 10 sites) **FIXED** 2026-09-23, backend `1d1f0be`:
+new `BatchResponse` (6 sites) and `PlayerResponse` (2 sites), reused the
+existing `PlayerListItemDTO.BatchRef` (`getPlayerBatches`) and the existing
+`PlayerSummaryDTO` (`getPlayersInBatch`, reclassified Tier 1 — it returned
+`List<Player>`, a bigger leak than the Tier 3 the plan doc first assumed).
+The mandatory read-only/sibling pass surfaced two prerequisite critical
+tenant-scoping bugs before any DTO work — `AdminPlayerController`'s
+`assignBatchesToPlayer`/`getPlayerBatches` (BUG-67) and `BatchService.findById`
+plus five dependent methods (BUG-69) — both fixed and cross-tenant-verified
+first, per hard rule 2's precedence over "one concern per prompt."
+
+All three slices cross-tenant tested on every parameterised endpoint, full
+suite + smoke green each time (slice 3 also got a frontend `tsc --noEmit`
+pass, clean). 83 sites remain across 5 slices — see
 `docs/security/bug-38-plan.md`'s progress table for current status.
 
 ---
