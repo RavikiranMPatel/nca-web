@@ -101,6 +101,10 @@ backend.
 | BUG-67 | `assignBatchesToPlayer`/`getPlayerBatches` unscoped by academy — cross-tenant write and read | critical | **FIXED** — `f7483ef` |
 | BUG-68 | `registerPlayer` embeds a raw `Player` (with nested `batches`) inside a `Map` response — invisible to `KNOWN_ENTITY_RETURNS`'s reflection check | medium | open — filed, not fixed |
 | BUG-69 | `BatchService.findById` unscoped by academy — cross-tenant read/write/delete on batches | critical | **FIXED** — `5d6a41e` |
+| BUG-70 | `@AuthenticationPrincipal User` never binds anywhere in this app — two endpoints NPE'd on every request | high | **FIXED** — `d30135a` |
+| BUG-71 | Audit search inferred platform-wide scope from a null academyId instead of an explicit role check | critical | **FIXED** — `d30135a` |
+| BUG-72 | `PlatformAdminController`/`BillingController.findByPublicId` threw bare `RuntimeException` — 500 instead of 404 | medium | **FIXED** — `d30135a` |
+| BUG-73 | `PLAYER_ID_PREFIX` uniqueness not re-validated when changed after onboarding via generic settings update | medium | open — filed, not fixed |
 
 ---
 
@@ -3011,9 +3015,26 @@ tenant-scoping bugs before any DTO work — `AdminPlayerController`'s
 plus five dependent methods (BUG-69) — both fixed and cross-tenant-verified
 first, per hard rule 2's precedence over "one concern per prompt."
 
-All three slices cross-tenant tested on every parameterised endpoint, full
-suite + smoke green each time (slice 3 also got a frontend `tsc --noEmit`
-pass, clean). 83 sites remain across 5 slices — see
+Slice 4 (Platform/branches/billing/audit/settings/notifications, 14 sites)
+**FIXED** 2026-09-24, backend `d30135a`: six new DTOs
+(`AcademySettingResponse`, `AcademyPaymentRecordResponse`, `BranchResponse`,
+`NotificationRecipientResponse`, `AcademyResponse`,
+`PlatformAuditLogResponse`), reused the existing `AuditLogDTO` for
+`AuditDashboardController.search`. The mandatory read-only/sibling pass
+surfaced three real bugs, all fixed alongside the DTO work: BUG-70
+(`@AuthenticationPrincipal User` never binds anywhere in this app — two
+endpoints NPE'd unconditionally), BUG-71 (audit search inferred
+platform-wide scope from a null academyId instead of an explicit role
+check — the exact anti-pattern `roles.md` names by history), and BUG-72
+(`PlatformAdminController`/`BillingController` returned 500 instead of 404
+for a missing academy). A fourth finding, BUG-73 (`PLAYER_ID_PREFIX`
+uniqueness not re-validated after onboarding), was filed but not fixed —
+a data-integrity gap, not a tenant-scoping leak, out of hard rule 2's
+mandatory-fix scope.
+
+All four slices cross-tenant tested on every parameterised endpoint, full
+suite + smoke green each time (slices 3 and 4 also got a frontend
+`tsc --noEmit` pass, clean). 69 sites remain across 4 slices — see
 `docs/security/bug-38-plan.md`'s progress table for current status.
 
 ---
@@ -3440,6 +3461,145 @@ on `GET`/`PUT`/`DELETE /api/admin/batches/{id}` and on both
 `/players`/`/players/count` sub-routes; admin-a's own access to all four
 endpoints remained `200`, including a real rename that persisted. Full
 backend JUnit suite: 200/200 passing after the fix.
+
+---
+
+## BUG-70 — `@AuthenticationPrincipal User` never binds anywhere in this app
+
+**Found:** 2026-09-24, cross-tenant-testing `AuditDashboardController.search`
+after its BUG-38 slice 4 DTO conversion — the endpoint returned `500` for
+every caller, super-admin or not.
+**Severity:** high (two endpoints completely non-functional, not insecurely
+open) · **Status: FIXED** — `d30135a`.
+
+`JwtAuthFilter` builds the request's `Authentication` as
+`new UsernamePasswordAuthenticationToken(email, null, authorities)` — the
+principal is the caller's **email string**, never a `com.nca.cricket.entity
+.User`. Spring's `AuthenticationPrincipalArgumentResolver` silently returns
+`null` when the declared parameter type doesn't match the actual principal's
+type, so `@AuthenticationPrincipal User actor` binds to `null` on every real
+request, and the first `actor.getRole()`/`actor` field access throws an NPE
+that falls through to the generic 500 handler.
+
+Grepped the whole backend for `@AuthenticationPrincipal` to find every
+affected site rather than just the one under test: exactly two matches.
+`AuditDashboardController.search` (this slice's BUG-38 target,
+`/api/super-admin/audit`) and `AdminDashboardExportController.exportExcel`
+(`/api/admin/dashboard/export/excel`, unrelated to this slice but the same
+bug) — both NPE'd unconditionally, meaning neither has ever worked via a
+real JWT login.
+
+**Fix:** replaced `@AuthenticationPrincipal User actor` with
+`Authentication authentication` + `userService.getByEmail(authentication
+.getName())` in both — the exact pattern every other controller in this
+codebase already uses successfully.
+
+Verified against local 8081: `superadmin-a`'s `GET /api/super-admin/audit`
+now returns `200` with real data instead of `500`. `exportExcel` was fixed
+alongside it (same bug, same file half of the same package) but not
+independently smoke-tested beyond confirming a clean compile and the full
+suite — it's outside BUG-38 slice 4's own scope.
+
+---
+
+## BUG-71 — Audit search inferred platform-wide scope from a null academyId
+
+**Found:** 2026-09-24, immediately after fixing BUG-70 and re-testing
+`AuditDashboardController.search` for real — confirming the newly-working
+endpoint was also correctly scoped before calling the slice done.
+**Severity:** critical (the exact null-academyId-as-platform-bypass anti-pattern
+`roles.md` names as previously exploited) · **Status: FIXED** — `d30135a`.
+
+`AuditLogSpec.filtered(academyId, ...)` treats a `null` academyId as "search
+every academy" — correct for its genuinely platform-wide caller
+(`PlatformAdminController.getDetailedEvents`), which is exactly why that
+branch exists. `AuditDashboardService.search` and the sibling
+`AdminAuditController.getAuditLog` (found via the mandatory same-package
+grep, `com.nca.cricket.controller.admin`) both pass
+`AcademyContext.getAcademyId()` straight into that same Spec, gated only by
+`ROLE_SUPER_ADMIN` — never an explicit check that the actor's own academyId
+is non-null. `roles.md` names this precise shape as a reopened hole: "never
+infer platform-level access from a null academyId... this exact issue was
+found and fixed once already." A `SUPER_ADMIN` role check is not proof of a
+non-null academyId; only checking the value itself is.
+
+No `SUPER_ADMIN` row in the current test DB actually has a null `academyId`,
+so this was structural/latent rather than a live hole today (same
+classification as BUG-59's original finding) — but it is the identical
+defect class, in the identical file this slice was already auditing.
+
+**Fix:** both call sites now throw `403` explicitly when
+`AcademyContext.getAcademyId()` is `null`, rather than silently passing it
+through to the Specification.
+
+Verified with real, distinct data against local 8081: `superadmin-a`'s
+search now returns only rows with `academyId f49460fa-...` (`TESTACAD_A`);
+`superadmin-b`'s returns only `academyId cfa8b6a4-...` (`TESTACAD_B`);
+`admin-a` (not a super admin) still gets `403 "SUPER_ADMIN access
+required"`.
+
+---
+
+## BUG-72 — Platform academy lookups returned 500 instead of 404
+
+**Found:** 2026-09-24, verifying the new `BusinessException`-based 404 path
+while cross-tenant-testing `PlatformAdminController`'s BUG-38 slice 4 sites.
+**Severity:** medium (wrong status code, not a data leak) · **Status: FIXED**
+— `d30135a`.
+
+`PlatformAdminController.findByPublicId` and `BillingController
+.findByPublicId` — an identical private helper duplicated in both files
+(same package, `com.nca.cricket.controller.platform`) — both threw a bare
+`new RuntimeException("Academy not found: " + publicId)`. No
+`@ExceptionHandler` in `GlobalExceptionHandler` matches `RuntimeException`
+specifically, so it fell through to the generic `@ExceptionHandler
+(Exception.class)` catch-all and returned `500 "Something went wrong"` for
+a routine "this academy doesn't exist" case — the exact error-path gotcha
+`gotchas.md`/`multi-tenancy.md` already document (this previously broke
+"not found" responses across the entire expense module the same way).
+
+**Fix:** both now throw `BusinessException(..., HttpStatus.NOT_FOUND)`,
+matching every other lookup helper in this codebase.
+
+Verified against local 8081 as `platform-admin`: `GET
+/api/platform/academies/ACAD_NOPE/billing/history` now returns `404
+"Academy not found: ACAD_NOPE"` instead of `500`.
+
+---
+
+## BUG-73 — `PLAYER_ID_PREFIX` uniqueness not re-validated after onboarding
+
+**Found:** 2026-09-24, the mandatory sibling grep for
+`AdminSettingsController`/`AcademySettingRepository` during BUG-38 slice 4 —
+`AcademySettingRepository.existsByKeyAndValueInAnotherAcademy` had a
+detailed doc comment describing it as "the check" for BUG-22, but a
+whole-backend grep found it has **zero callers anywhere**.
+**Severity:** medium (a real, confirmed platform-scoped constraint gap; not
+tenant-scoping in the read/write-leak sense, so out of hard rule 2's
+mandatory-fix scope) · **Status:** open, not fixed.
+
+BUG-22 established that `players.public_id` is globally unique while
+`PLAYER_ID_PREFIX` is per-academy, so two academies sharing a prefix collide
+on their very first player (`Key (public_id)=(-1) already exists`).
+`PlatformAcademyService.createAcademy` correctly guards **new** academies
+against this by calling the global `existsByKeyAndValue(key, value)` before
+provisioning. But nothing guards an **existing** academy changing its own
+`PLAYER_ID_PREFIX` afterward: `AdminSettingsController.updateSetting`/
+`updateSettings` is a fully generic key-value upsert
+(`AcademySettingsService.updateSetting`) with no special-casing for this
+key at all — any `ADMIN`/`SUPER_ADMIN` can `PUT
+/api/admin/settings/PLAYER_ID_PREFIX` to any value, including one already
+claimed by another academy, and nothing calls
+`existsByKeyAndValueInAnotherAcademy` to stop them. The dead method reads
+like a fix that was written and never wired in.
+
+**Not fixed here:** this is a data-integrity/business-rule gap (a missing
+uniqueness re-check), not a tenant-scoping read/write leak — it doesn't fall
+under hard rule 2's "fix immediately" mandate, and wiring it in means
+deciding where the check belongs (a `PLAYER_ID_PREFIX`-specific branch in
+`updateSetting`, a dedicated endpoint, or something else) rather than a
+one-line scoping fix. Flagged here so it isn't lost, per the same
+"unfixed, unprioritized, just captured" standard as BUG-66.
 
 ---
 
