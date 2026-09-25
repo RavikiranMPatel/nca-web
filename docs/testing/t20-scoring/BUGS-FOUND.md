@@ -108,6 +108,8 @@ backend.
 | BUG-74 | `CricketMatch.pausedBy` (and 5 sibling `User` associations) leaked `passwordHash`/`tokenVersion` when embedded raw | critical | **FIXED** — `a88da62` |
 | BUG-75 | `AdminCricketOfficialController.create` let one academy overwrite and reassign another academy's official via a supplied id+version | critical | **FIXED** — `6f0d9a1` |
 | BUG-76 | `BallResponseDTO$BallDTO.isWicket`/`isLegalBall` serialised without their `is` prefix — BUG-34 recurrence | medium | **FIXED** — `a757462` |
+| BUG-77 | `AdminPlayerController.registerPlayer` embedded a raw, fully unshielded `Player` in its response `Map` | critical | **FIXED** — `3d685b9` |
+| BUG-78 | `AdminFeeController.getPayments` embedded raw, fully unshielded `Player`+`FeePlan` in every response `Map` row | critical | **FIXED** — `3d685b9` |
 
 ---
 
@@ -3789,6 +3791,77 @@ is distinguishable from a false-negative default) against
 `"isWicket": true`/`"isLegalBall": true`, not `"wicket"`/`"legalBall"`.
 `BooleanJsonKeyTest` and `ResponseDtoLeakTest` both green after the change
 (10/10, was 2 failures before).
+
+---
+
+## BUG-77 — `AdminPlayerController.registerPlayer` embedded a raw, fully unshielded `Player`
+
+**Found:** 2026-09-25, incidentally, while creating test players for the
+Slice 7 (Fees) read-only pass's live cross-tenant testing.
+**Severity:** critical (full player PII, not a tenant-id leak) ·
+**Status: FIXED** — `3d685b9`.
+
+`POST /api/admin/players` built a hand-mapped `Map<String,Object>` response
+(`{"player": ..., "communicationSent": ..., "message": ...}`) but the
+`"player"` value was the raw, just-saved `Player` entity itself — not
+wrapped in any DTO. A `Map` value gets no benefit from whatever
+`@JsonIgnoreProperties` an entity carries elsewhere; Jackson serialises it
+in full. Confirmed live: DOB, address, `aadharNumber`, father/mother name,
+parents' phone, and guardian email all appeared on the wire (with real,
+non-null test values, not just present-but-null keys).
+
+**Why this wasn't caught by Slice 3** ("Players & batches", marked DONE,
+3 Tier-1 sites converted): `ResponseDtoLeakTest`'s `KNOWN_ENTITY_RETURNS`
+tracking works by reflecting on controller method **return types**.
+`registerPlayer`'s return type is `ResponseEntity<Map<String,Object>>` — a
+`Map`, not `Player` — so it was structurally invisible to that scan and was
+never one of the 105 tracked sites. This is a gap in the tracking
+mechanism itself, not a miss specific to Slice 3; see BUG-78 below for the
+second, independently-found instance, and `docs/security/slice-7-findings.md`
+in `nextgen-cricket-academy` for the fuller writeup.
+
+**Fix:** new `PlayerRefResponse(publicId, displayName)` — deliberately
+narrower than the existing `PlayerResponse` (Slice 3's full-profile DTO,
+which still carries all of the PII above — correct for an admin actually
+viewing/editing a player, wrong here). Confirmed sufficient against real
+frontend usage first: `RegisterPlayer.tsx` reads only
+`result.player.publicId`, to chain an optional fee-plan assignment.
+
+**Re-verified after the fix:** registered a player with real DOB/address/
+Aadhar/parent-contact values, confirmed all of it present in the database
+row, confirmed the API response's `player` object contained only
+`publicId`/`displayName`.
+
+## BUG-78 — `AdminFeeController.getPayments` embedded raw, unshielded `Player`+`FeePlan` in every row
+
+**Found:** 2026-09-25, the Slice 7 (Fees) read-only pass.
+**Severity:** critical (worse than the already-tracked Tier 1 leak on the
+19 official Fees sites — see below) · **Status: FIXED** — `3d685b9`.
+
+Same shape as BUG-77: `GET /api/admin/fees/payments` builds a per-row
+`Map<String,Object>`, and two of its values were the raw entities —
+`map.put("feePlan", p.getFeePlan())` / `map.put("player", p.getPlayer())`.
+Worse than the 19 already-tracked raw-`FeeAccount`/`FeePayment`-return
+sites: those at least exclude `batches`/`sourceSummerCamp`/`notes` via
+`@JsonIgnoreProperties` on the entity's `player` field. A raw entity
+dropped straight into a `Map` value gets none of that — this leaked
+`notes` and the full `batches` collection too, on top of DOB, address,
+`aadharNumber`, parent/guardian contact. Same reason it evaded
+`ResponseDtoLeakTest` as BUG-77 — the method returns `List<Map<String,
+Object>>`, not an entity type.
+
+**Fix:** reused `PlayerRefResponse` (BUG-77) for `player`; new
+`FeePlanResponse(publicId, name, amount)` for `feePlan` — `FeePlan` itself
+carries no PII, so this only trims the `BaseEntity` baseline and the
+plan-management fields (`discountAmount`, `durationDays`, `campType`,
+etc.) a payments list has no use for.
+
+**Re-verified after the fix:** created a fee plan, account, and payment
+with a real-PII player record, confirmed the `getPayments` response's
+`player`/`feePlan` objects were trimmed to exactly `{publicId,
+displayName}`/`{publicId, name, amount}`, and that `TESTACAD_B`'s own
+`/fees/payments` list still correctly excluded `TESTACAD_A`'s row
+(scoping unaffected by the fix).
 
 ---
 
