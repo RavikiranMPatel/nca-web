@@ -3032,9 +3032,21 @@ uniqueness not re-validated after onboarding), was filed but not fixed —
 a data-integrity gap, not a tenant-scoping leak, out of hard rule 2's
 mandatory-fix scope.
 
-All four slices cross-tenant tested on every parameterised endpoint, full
-suite + smoke green each time (slices 3 and 4 also got a frontend
-`tsc --noEmit` pass, clean). 69 sites remain across 4 slices — see
+Slice 5 (Expenses, 12 sites) **FIXED** 2026-09-25, backend `d0d8c8e`: new
+`ExpensePartnerResponse`, `RecurringItemResponse`,
+`MonthlyExpensePaymentResponse` (nests `RecurringItemResponse`, matching
+the frontend's already-nested `MonthlyPayment.item` shape, including a
+nullable `publicId` for the transient PENDING "stub" payments
+`getMonthlyPayments()` synthesizes for unpaid items), and
+`OtherExpenseResponse`. No new scoping bugs this slice —
+`MonthlyExpenseService`/`OtherExpenseService` were already fully scoped on
+every lookup. Deleted four more dead unscoped `findByPublicId` methods, the
+same recurring pattern as `BatchRepository`/`BranchRepository`/
+`AcademySettingRepository` in earlier slices.
+
+All five slices cross-tenant tested on every parameterised endpoint, full
+suite + smoke green each time (slices 3, 4, and 5 also got a frontend
+`tsc --noEmit` pass, clean). 57 sites remain across 3 slices — see
 `docs/security/bug-38-plan.md`'s progress table for current status.
 
 ---
