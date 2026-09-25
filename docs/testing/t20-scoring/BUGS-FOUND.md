@@ -110,6 +110,7 @@ backend.
 | BUG-76 | `BallResponseDTO$BallDTO.isWicket`/`isLegalBall` serialised without their `is` prefix — BUG-34 recurrence | medium | **FIXED** — `a757462` |
 | BUG-77 | `AdminPlayerController.registerPlayer` embedded a raw, fully unshielded `Player` in its response `Map` | critical | **FIXED** — `3d685b9` |
 | BUG-78 | `AdminFeeController.getPayments` embedded raw, fully unshielded `Player`+`FeePlan` in every response `Map` row | critical | **FIXED** — `3d685b9` |
+| BUG-79 | `AdminPlayerController.registerPlayer`'s batch assignment uses an unscoped `batchRepository.findAllById(...)` — no academy check on caller-supplied batch IDs | high | open — filed, not fixed |
 
 ---
 
@@ -3862,6 +3863,53 @@ with a real-PII player record, confirmed the `getPayments` response's
 displayName}`/`{publicId, name, amount}`, and that `TESTACAD_B`'s own
 `/fees/payments` list still correctly excluded `TESTACAD_A`'s row
 (scoping unaffected by the fix).
+
+*(`PlayerRefResponse`/`FeePlanResponse`'s exact field lists changed again
+during the Slice 7 full DTO conversion — see `bug-38-plan.md`'s Slice 7
+row and the `BUG-38 Slice 7` commit for the current shape. This entry
+records what was true at the time BUG-78 was fixed, not the DTOs' current
+contents.)*
+
+---
+
+## BUG-79 — `AdminPlayerController` batch assignment uses an unscoped `batchRepository.findAllById(...)`
+
+**Found:** 2026-09-25, noticed while fixing BUG-77 in the same file
+(`registerPlayer`), and confirmed as a duplicate in `updatePlayer` while
+filing this entry. **Severity:** high (a caller-supplied ID accepted with
+no ownership check, not yet confirmed to leak cross-tenant data — see
+below) · **Status:** open, not fixed — out of scope for the BUG-77/Slice 7
+work that surfaced it.
+
+Both `registerPlayer` (`AdminPlayerController.java:369`) and
+`updatePlayer` (`AdminPlayerController.java:495`) resolve the caller-supplied
+`playerDTO.getBatchIds()` via:
+
+```java
+Set<Batch> batches = batchRepository.findAllById(playerDTO.getBatchIds())
+        .stream()
+        .collect(Collectors.toSet());
+```
+
+`findAllById` is Spring Data's generic, unscoped lookup-by-primary-key — no
+`academyId` check that the resolved `Batch` rows actually belong to the
+actor's own academy. The only validation applied afterward is a **count**
+check (`batches.size() != playerDTO.getBatchIds().size()`, "One or more
+batch IDs are invalid") and an active-batch check — neither confirms
+tenant ownership. If a caller already knows another academy's batch UUID
+(not confirmed how one would be discovered — batch IDs aren't otherwise
+exposed cross-tenant that this session found), this would let them attach
+a foreign academy's batch to their own player, or update an existing
+player to reference one.
+
+**Not fixed here:** found as a side effect of the BUG-77/Slice 7 work,
+which was scoped to the Map-wrapped entity leaks and the Fees DTO
+conversion respectively — not this. Flagging per the same
+"never fully out of scope to report" standard as BUG-73, for the next
+sweep to pick up with a proper `findAllByIdAndAcademyId`-style fix and a
+cross-tenant test (attempt registering/updating a player with another
+academy's batch ID, confirm rejection) rather than a rushed one-line
+patch here.
 
 ---
 
