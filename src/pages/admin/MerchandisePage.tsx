@@ -852,7 +852,7 @@ type RecipientGroup = {
   gender?: string | null;
   issues: MerchandiseIssue[];
   /** Live (non-voided) quantity per item+size, in stable item order. */
-  items: { itemType: ItemType; size: string; quantity: number }[];
+  items: { itemType: ItemType; size: string; sizeRank: number; quantity: number }[];
   totalLive: number;
   voidedCount: number;
   lastIssuedDate: string;
@@ -903,15 +903,18 @@ const groupIssues = (issues: MerchandiseIssue[]): RecipientGroup[] => {
       g.items.push({
         itemType: i.itemType,
         size: i.size,
+        sizeRank: i.sizeRank,
         quantity: i.quantity,
       });
   }
 
   for (const g of groups.values()) {
-    // Caps before t-shirts, then by size, so a row reads the same way every time.
+    // Caps before t-shirts, then by size RANK — not size, which sorts the string
+    // and gives L, M, S, XL, XS, XXL. sizeRank comes from the backend's SIZE_ORDER
+    // so this can't drift from how the Stock tab orders the same sizes.
     g.items.sort(
       (a, b) =>
-        a.itemType.localeCompare(b.itemType) || a.size.localeCompare(b.size),
+        a.itemType.localeCompare(b.itemType) || a.sizeRank - b.sizeRank,
     );
     g.issues.sort((a, b) => b.issuedDate.localeCompare(a.issuedDate));
   }

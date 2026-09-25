@@ -18,6 +18,9 @@ export interface MerchandiseItem {
   publicId: string;
   itemType: ItemType;
   size: string;
+  /** Backend's SIZE_ORDER position — sort by this, not size (a string sort
+   * gives L, M, S, XL, XS, XXL). */
+  sizeRank: number;
   label?: string | null;
   active: boolean;
 }
@@ -27,6 +30,7 @@ export interface MerchandiseStock {
   publicId: string;
   itemType: ItemType;
   size: string;
+  sizeRank: number;
   label?: string | null;
   purchased: number;
   issued: number;
@@ -38,6 +42,7 @@ export interface MerchandisePurchase {
   itemPublicId: string;
   itemType: ItemType;
   size: string;
+  sizeRank: number;
   label?: string | null;
   quantity: number;
   purchaseDate: string;
@@ -53,6 +58,7 @@ export interface MerchandiseIssue {
   itemPublicId: string;
   itemType: ItemType;
   size: string;
+  sizeRank: number;
   label?: string | null;
 
   recipientType: "PLAYER" | "OTHER";
