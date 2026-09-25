@@ -28,8 +28,6 @@ import {
 
 type Tab = "stock" | "issue" | "history";
 
-const TSHIRT_SIZES = ["XS", "S", "M", "L", "XL", "XXL"];
-
 const today = () => new Date().toISOString().slice(0, 10);
 
 const apiMessage = (err: any, fallback: string): string =>
@@ -362,8 +360,13 @@ function AddItemModal({
 }) {
   const [itemType, setItemType] = useState<ItemType>("TSHIRT");
   const [size, setSize] = useState("M");
+  const [sizes, setSizes] = useState<string[]>([]);
   const [label, setLabel] = useState("");
   const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    merchandiseService.getSizes().then(setSizes).catch(() => setSizes([]));
+  }, []);
 
   const save = async () => {
     setSaving(true);
@@ -413,7 +416,7 @@ function AddItemModal({
             onChange={(e) => setSize(e.target.value)}
             className={fieldInput}
           >
-            {TSHIRT_SIZES.map((s) => (
+            {sizes.map((s) => (
               <option key={s} value={s}>
                 {s}
               </option>

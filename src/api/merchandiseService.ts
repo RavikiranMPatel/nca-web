@@ -128,6 +128,15 @@ export const itemLabel = (
 // ==================== SERVICE ====================
 
 export const merchandiseService = {
+  /**
+   * The size vocabulary itself, in display order — not branch-scoped, same list
+   * everywhere. Read this rather than keeping a local copy: a hardcoded
+   * TSHIRT_SIZES here is exactly the second copy that drifted for age groups
+   * before AgeGroupController gave the frontend a single source to read.
+   */
+  getSizes: async (): Promise<string[]> =>
+    (await api.get("/admin/merchandise/sizes")).data,
+
   getItems: async (): Promise<MerchandiseItem[]> =>
     (await api.get("/admin/merchandise/items")).data,
 
