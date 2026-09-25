@@ -105,6 +105,9 @@ backend.
 | BUG-71 | Audit search inferred platform-wide scope from a null academyId instead of an explicit role check | critical | **FIXED** — `d30135a` |
 | BUG-72 | `PlatformAdminController`/`BillingController.findByPublicId` threw bare `RuntimeException` — 500 instead of 404 | medium | **FIXED** — `d30135a` |
 | BUG-73 | `PLAYER_ID_PREFIX` uniqueness not re-validated when changed after onboarding via generic settings update | medium | open — filed, not fixed |
+| BUG-74 | `CricketMatch.pausedBy` (and 5 sibling `User` associations) leaked `passwordHash`/`tokenVersion` when embedded raw | critical | **FIXED** — `a88da62` |
+| BUG-75 | `AdminCricketOfficialController.create` let one academy overwrite and reassign another academy's official via a supplied id+version | critical | **FIXED** — `6f0d9a1` |
+| BUG-76 | `BallResponseDTO$BallDTO.isWicket`/`isLegalBall` serialised without their `is` prefix — BUG-34 recurrence | medium | **FIXED** — `a757462` |
 
 ---
 
@@ -3612,6 +3615,180 @@ deciding where the check belongs (a `PLAYER_ID_PREFIX`-specific branch in
 `updateSetting`, a dedicated endpoint, or something else) rather than a
 one-line scoping fix. Flagged here so it isn't lost, per the same
 "unfixed, unprioritized, just captured" standard as BUG-66.
+
+---
+
+## BUG-74 — `CricketMatch.pausedBy` (and 5 sibling `User` associations) leaked `passwordHash`/`tokenVersion`
+
+**Found:** 2026-09-25, the read-only Slice 8 (live scoring & matches) scoping
+pass, live-cross-tenant-tested against `nca_scoring_test` the same day.
+**Severity:** critical (a real bcrypt password hash and session-invalidation
+token on the wire, not a tenant-id leak) · **Status: FIXED** — `a88da62`.
+
+`CricketMatch.pausedBy` is a `@ManyToOne User`, shielded only by
+`@JsonIgnoreProperties({"hibernateLazyInitializer","handler"})` — which
+excludes those two Hibernate-proxy properties and nothing else. Every other
+`User` field, including `passwordHash` and `tokenVersion`, still serialised.
+`pausedBy` is set via `match.setPausedBy(actor)` where `actor` is a
+fully-hydrated entity (not a lazy proxy), so the app's global
+`Hibernate6Module` protection (`FORCE_LAZY_LOADING=false`,
+`SERIALIZE_IDENTIFIER_FOR_LAZY_NOT_LOADED_OBJECTS=true` in
+`JacksonConfig`) — which does protect genuinely-untouched lazy proxies
+elsewhere — never applies here.
+
+**Confirmed live:** paused a real match as `superadmin-a` against
+`nca_scoring_test`; both the pause response and a subsequent plain
+`GET /matches/{id}` returned a `pausedBy` object carrying a real
+`$2y$10$...` bcrypt hash and a `tokenVersion` UUID, readable by any
+authenticated same-academy `ADMIN`/`SUPER_ADMIN`/`COACH`/`SCORER`.
+
+A codebase-wide grep for `private User` entity fields found five more with
+the identical shielding gap, none currently reachable via any raw-entity
+API response today (each entity is either never returned raw, or already
+goes through a DTO that doesn't touch this field):
+
+- `PriceAuditLog.changedBy` — `@ManyToOne` with no `fetch` specified
+  (defaults to EAGER, so even a *fresh* fetch loads the full `User` — worse
+  than the other four, which are at least `LAZY`). `PriceAuditLogRepository`
+  has exactly one caller (`PriceAuditService`, write-only, never read back by
+  any controller).
+- `PracticeSlot.coachUser` — `LAZY`. `PracticeSlot`/`PracticeDay` are never
+  returned raw; `DrillAssignment` (which references `PracticeSlot`) only
+  ever returns via `DrillAssignmentResponse`.
+- `PlayerKitDetails.deliveredBy` — `LAZY`. Already goes through
+  `PlayerKitDetailsDTO`, which exposes only a flat `deliveredByName` string.
+- `SummerCampEnrollment.convertedBy` — `LAZY`. The two sites that used to
+  return this entity raw were already converted to DTOs in BUG-38 Slice 2.
+- `TournamentAward.awardedBy` — `LAZY`. `TournamentAward` is never returned
+  raw and nothing else references it.
+
+**Fix:** `@JsonIgnore` directly on `User.passwordHash` and
+`User.tokenVersion`, rather than a DTO per site. This codebase's own
+established pattern for exposing "who did this" is already a flat
+id/name/email string — `BaseEntity.createdBy`/`updatedBy`,
+`AuditLog.actorUserId`/`actorPublicId`/`actorRole`,
+`MatchLiveAnnotation.createdByName`, `PlayerKitDetailsDTO.deliveredByName`
+— the `User` entity itself is never meant to reach a response body at all,
+so protecting it at the source closes the live leak and all five landmines
+in one change, without pre-empting BUG-38 Slice 8's planned DTO conversion
+of `CricketMatch` and friends. Confirmed both fields are only ever set via
+direct `setPasswordHash(encoder.encode(...))`/`setTokenVersion(...)` calls
+in Java, never via `@RequestBody` JSON binding onto a `User` — no
+controller takes `User` as a request body anywhere — so `@JsonIgnore`
+(blocking both directions) breaks nothing.
+
+**Re-verified after the fix:** same pause-then-GET sequence; `pausedBy` now
+has every other field (`email`, `name`, `role`, `academyId`, etc.) but no
+`passwordHash`/`tokenVersion`.
+
+---
+
+## BUG-75 — `AdminCricketOfficialController.create` let one academy overwrite and reassign another academy's official
+
+**Found:** 2026-09-25, same Slice 8 pass; live-reproduced end to end the
+same day. **Severity:** critical (full cross-tenant record hijack, not just
+a read leak) · **Status: FIXED** — `6f0d9a1`.
+
+`POST /api/admin/cricket/officials` took the `CricketOfficial` JPA entity
+itself as `@RequestBody`. `academyId`/`branchId`/`createdBy` were
+overwritten unconditionally after binding, closing ordinary
+tenant-mass-assignment — but the entity's `id` (a `@GeneratedValue` UUID)
+and inherited `version` were left bindable. Spring Data's `save()` decides
+`persist()` vs `merge()` from whether the entity's `@Version` is null; a
+caller supplying a non-null `version` makes it `merge()`, which loads the
+**existing** row by that `id` from the database and overwrites it with the
+caller's fields — including the `academyId` this controller had just set to
+the *caller's own* academy.
+
+**Confirmed live, full attack chain, against `nca_scoring_test`:** created
+an official as `TESTACAD_A` (`POST /officials`, got back its internal
+`id` and `version: 0`). POSTed as `TESTACAD_B` with that same `id` and
+`version: 0` and different `name`/`phone`/`email`. Result: `200`, and the
+row was fully overwritten — `academy_id` reassigned to `TESTACAD_B`,
+`name`/`phone`/`email` replaced, `publicId` silently regenerated as a side
+effect of `BaseEntity.onUpdate()` re-filling a null `publicId` the attacker's
+JSON hadn't supplied. `TESTACAD_A`'s official list went from 1 row to 0;
+`TESTACAD_B`'s went from 0 to 1, holding what used to be `TESTACAD_A`'s
+record. Without a supplied `version`, Hibernate does refuse with `400`
+("uninitialized version value") — but `version` starts at `0` and
+increments by small integers, so it is guessable/brute-forceable, not a
+real barrier. The only real barrier was the attacker already knowing the
+target's `id` — nothing in this module exposes another academy's official
+`id` today, but nothing stopped it either if that `id` ever leaked by any
+other route.
+
+**Fix:**
+- New `CricketOfficialRequest` DTO for both create and update — no `id`,
+  `version`, `academyId`, or `branchId` field, so none of them can be
+  supplied. A create is therefore always a fresh entity; `save()` always
+  inserts.
+- New `PUT /{publicId}` update endpoint using this app's standard
+  scoped-lookup-then-save pattern (`multi-tenancy.md` / CLAUDE.md hard rule
+  2): `officialRepo.findByPublicIdAndAcademyId(...).orElseThrow(404)`,
+  mutate the managed entity, save. JPA's existing `@Version` on
+  `BaseEntity` protects against a genuinely concurrent update the normal
+  way, via the persistence context — there is nothing version-related for
+  the client to carry at all.
+- Deleted `CricketOfficialRepository.findByPublicId(String)` — unscoped,
+  confirmed zero callers before and after this change — per hard rule 2's
+  "delete unscoped repository methods once their callers are fixed."
+- `update` returns a new `CricketOfficialResponse` DTO rather than the raw
+  entity: `ResponseDtoLeakTest.entityReturnDebtDoesNotGrow` enforces that
+  new handlers don't add to BUG-38's tracked raw-entity-return debt. The
+  pre-existing `create`/`search` raw returns are untouched — converting
+  those is BUG-38 Slice 8's job, not this fix's.
+
+**Re-verified after the fix, same attack shape, against `nca_scoring_test`:**
+the identical `id`+`version:0` payload via the now-DTO-typed `create` is
+silently ignored (unknown JSON properties dropped) and a genuinely new
+official is created for the caller's own academy — `TESTACAD_A`'s original
+official is untouched, confirmed via both academies' officials-list
+endpoints and a direct DB read. `PUT` as `TESTACAD_B` against `TESTACAD_A`'s
+official `publicId` → `404`. `PUT` as `TESTACAD_A` against its own official
+→ `200`, fields updated, response carries no `academyId`/`branchId`/`id`/
+`version`.
+
+---
+
+## BUG-76 — `BallResponseDTO$BallDTO.isWicket`/`isLegalBall` serialised without their `is` prefix — a BUG-34 recurrence
+
+**Found:** 2026-09-25, same Slice 8 pass; live-reproduced against
+`nca_scoring_test` the same day. **Severity:** medium (wrong/missing JSON
+key, not a data leak — dead on arrival today, see below) · **Status:
+FIXED** — `a757462`.
+
+Same Lombok/Jackson collision as BUG-34: a primitive `boolean isWicket`
+field already starts with `is`, so Lombok's generated getter is
+`isWicket()` rather than `isIsWicket()`, and Jackson's bean-naming strips
+that prefix again — so the wire key comes out as `"wicket"`, not
+`"isWicket"` (same for `isLegalBall`/`"legalBall"`). `DeliveryHistoryDTO`,
+in the same package, already carries `@JsonProperty("isWicket")` etc. with
+a comment naming BUG-34 explicitly; `BallResponseDTO$BallDTO` never got the
+matching fix.
+
+Not a live-UI bug today: `nca-web/src/types/scoring.ts`'s `BallDTO`
+interface expects `isWicket`/`isLegalBall`, but the field that carries this
+type (`BallResponseDTO.lastBall`) is declared and never actually read
+anywhere in the frontend — the over strip is fed by `/scoring/this-over`
+instead. `BooleanJsonKeyTest`'s `KNOWN_UNPINNED` allowlist had already
+carried these two fields forward with exactly that reasoning. Confirmed via
+an independent Slice 8 audit before this was raised as something to fix —
+true today, and a live regression of BUG-34 waiting for the next feature
+that reads `lastBall.isWicket` (an animation/sound cue, say) to reopen it
+silently.
+
+**Fix:** `@JsonProperty("isWicket")` / `@JsonProperty("isLegalBall")` on
+`BallResponseDTO$BallDTO`, matching `DeliveryHistoryDTO`'s existing
+pattern. Removed the two entries from `BooleanJsonKeyTest.KNOWN_UNPINNED`
+so the guard test actually verifies the field going forward instead of
+carrying the exception.
+
+**Re-verified after the fix:** posted a real ball (a wicket, so the value
+is distinguishable from a false-negative default) against
+`nca_scoring_test` — the response's `lastBall` now has
+`"isWicket": true`/`"isLegalBall": true`, not `"wicket"`/`"legalBall"`.
+`BooleanJsonKeyTest` and `ResponseDtoLeakTest` both green after the change
+(10/10, was 2 failures before).
 
 ---
 
