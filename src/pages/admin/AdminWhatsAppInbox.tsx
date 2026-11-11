@@ -507,7 +507,7 @@ export default function AdminWhatsAppInbox() {
                     <AvatarStack players={t.players} size={32} />
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center justify-between gap-2">
-                        <span className="text-sm text-gray-900 truncate">
+                        <span className="text-sm text-gray-900 truncate min-w-0">
                           {named
                             ? t.players.map((p) => p.name).join(" & ")
                             : t.profileName?.trim() || `+91 ${t.tenDigit}`}

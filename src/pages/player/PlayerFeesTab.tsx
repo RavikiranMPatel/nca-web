@@ -2181,6 +2181,7 @@ function InstallmentSection({ playerPublicId, playerSlug }: { playerPublicId: st
   const [planForm, setPlanForm] = useState({
     totalAmount: "",
     description: "",
+    coversFullFee: false,
   });
   const [savingPlan, setSavingPlan] = useState(false);
   const [showAddInstallment, setShowAddInstallment] = useState<string | null>(
@@ -2239,10 +2240,11 @@ function InstallmentSection({ playerPublicId, playerSlug }: { playerPublicId: st
         playerPublicId,
         totalAmount: parseFloat(planForm.totalAmount),
         description: planForm.description || null,
+        coversFullFee: planForm.coversFullFee,
       });
       toast.success("Installment plan created!");
       setShowCreatePlan(false);
-      setPlanForm({ totalAmount: "", description: "" });
+      setPlanForm({ totalAmount: "", description: "", coversFullFee: false });
       loadPlans();
     } catch (err: any) {
       toast.error(err.response?.data?.message || "Failed to create plan");
@@ -2722,6 +2724,24 @@ function InstallmentSection({ playerPublicId, playerSlug }: { playerPublicId: st
                   className="w-full px-4 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
               </div>
+              <label className="flex items-start gap-2 text-xs text-slate-600">
+                <input
+                  type="checkbox"
+                  checked={planForm.coversFullFee}
+                  onChange={(e) =>
+                    setPlanForm((f) => ({ ...f, coversFullFee: e.target.checked }))
+                  }
+                  className="mt-0.5"
+                />
+                <span>
+                  <strong>This plan covers the player's full fee for this cycle.</strong>{" "}
+                  Leave unchecked for a partial or side arrangement — unchecked is the
+                  safer default. Only check this if you're certain: checking it means the
+                  fee account gets marked Paid automatically once this plan is fully
+                  collected, even if the academy's listed price for this fee plan has
+                  since gone up.
+                </span>
+              </label>
               <div className="flex gap-2 pt-1">
                 <button
                   onClick={() => setShowCreatePlan(false)}

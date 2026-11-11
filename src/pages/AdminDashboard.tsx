@@ -39,9 +39,12 @@ type DashboardSummary = {
   malePlayers: number;
   femalePlayers: number;
   otherGenderPlayers: number;
-  morningBatch: number;
-  eveningBatch: number;
-  bothBatch: number;
+  batchEnrollment: {
+    batchId: string;
+    batchName: string;
+    startTime: string;
+    playerCount: number;
+  }[];
   todayPresent: number;
   todayAbsent: number;
   feesDueToday: number;
@@ -284,25 +287,22 @@ function AdminDashboard() {
             icon={Users}
             onClick={() => navigate("/admin/players?gender=FEMALE")}
           />
-          <StatCard
-            label="Morning Batch"
-            value={summary.morningBatch}
-            icon={Sun}
-            color="orange"
-            onClick={() => navigate("/admin/players?batch=morning")}
-          />
-          <StatCard
-            label="Evening Batch"
-            value={summary.eveningBatch}
-            icon={Moon}
-            onClick={() => navigate("/admin/players?batch=evening")}
-          />
-          <StatCard
-            label="Both Batches"
-            value={summary.bothBatch}
-            icon={Users}
-            onClick={() => navigate("/admin/players?batch=both")}
-          />
+          {/* One card per active REGULAR batch (actual headcount), not the old
+              Morning/Evening/Both split — that bucketed every batch into two AM/PM
+              groups, which stopped meaning anything once this academy ran more than
+              one batch per half of the day. */}
+          {summary.batchEnrollment.map((b) => (
+            <StatCard
+              key={b.batchId}
+              label={b.batchName}
+              value={b.playerCount}
+              icon={parseInt(b.startTime.split(":")[0], 10) < 12 ? Sun : Moon}
+              color={parseInt(b.startTime.split(":")[0], 10) < 12 ? "orange" : "blue"}
+              onClick={() =>
+                navigate(`/admin/players?batch=${encodeURIComponent(b.batchName.toLowerCase())}`)
+              }
+            />
+          ))}
           <StatCard
             label="Present Today"
             value={summary.todayPresent}

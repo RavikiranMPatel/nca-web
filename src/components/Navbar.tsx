@@ -11,7 +11,6 @@ import {
   ChevronDown,
   CheckCircle,
   Home,
-  CalendarDays,
   BookOpen,
   Gavel,
   ChevronRight,
@@ -351,9 +350,6 @@ function Navbar() {
 
               {!isAdmin && (
                 <>
-                  <NavLink to="/book-slot" className={linkClass}>
-                    Book Slot
-                  </NavLink>
                   {isAuthenticated ? (
                     <NavLink to="/my-bookings" className={linkClass}>
                       My Bookings
@@ -586,19 +582,6 @@ function Navbar() {
             iconBg="#eff6ff"
             iconColor="#2563eb"
           />
-          {!isAdmin && (
-            <DrawerItem
-              icon={CalendarDays}
-              label="Book a Slot"
-              active={location.pathname === "/book-slot"}
-              onClick={() => {
-                navigate("/book-slot");
-                setMobileOpen(false);
-              }}
-              iconBg="#f0fdf4"
-              iconColor="#16a34a"
-            />
-          )}
           {!isAdmin && (
             <DrawerItem
               icon={BookOpen}
