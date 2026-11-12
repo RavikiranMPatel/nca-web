@@ -66,6 +66,7 @@ interface InningsScorecard {
   extrasNoBall: number;
   extrasBye: number;
   extrasLegBye: number;
+  extrasPenalty: number;
   runRate: number;
   battingCard: BattingLine[];
   didNotBat: string[];
@@ -735,7 +736,8 @@ const InningsCard = ({
               Extras &nbsp;
               <span className="text-gray-400">
                 (lb {inn.extrasLegBye}, w {inn.extrasWide}, nb{" "}
-                {inn.extrasNoBall}, b {inn.extrasBye})
+                {inn.extrasNoBall}, b {inn.extrasBye}
+                {inn.extrasPenalty > 0 ? `, p ${inn.extrasPenalty}` : ""})
               </span>
             </td>
             <td

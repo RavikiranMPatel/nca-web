@@ -25,10 +25,19 @@ export interface InningsState {
   extrasNoBall: number;
   extrasBye: number;
   extrasLegBye: number;
+  extrasPenalty: number;
   currentRunRate: number;
   target?: number;
   requiredRuns?: number;
   inningsNumber?: number;
+}
+
+export interface PenaltyDTO {
+  publicId: string;
+  runs: number;
+  overNumber: number;
+  ballNumber: number;
+  reason?: string | null;
 }
 
 export interface BallDTO {
@@ -81,6 +90,9 @@ export interface BallResponse {
   batterStats?: Record<string, BatterStatDTO>;
   bowlerStats?: Record<string, BowlerStatDTO>;
   dismissedMtpPublicIds?: string[];
+  // Every penalty currently standing in this innings — returned on every scoring
+  // write, so the More sheet's list is never a separate fetch to go stale against.
+  penalties?: PenaltyDTO[];
   runnerPublicId?: string | null;
   runnerName?: string | null;
   runnerForPublicId?: string | null;

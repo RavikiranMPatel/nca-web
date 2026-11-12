@@ -8,6 +8,7 @@ import {
   getThisOver,
   recordResult,
   awardPenalty,
+  deletePenalty,
   selectBatter,
 } from "../../api/scoring/scoringApi";
 import {
@@ -27,6 +28,7 @@ import type {
   BallDTO,
   ScoringPlayer,
   BowlerStatDTO,
+  PenaltyDTO,
 } from "../../types/scoring";
 import type { CricketMatch, CricketTeam } from "../../types/match";
 import api from "../../api/axios";
@@ -261,6 +263,7 @@ export default function LiveScorerPage() {
   const [match, setMatch] = useState<CricketMatch | null>(null);
   const [teams, setTeams] = useState<CricketTeam[]>([]);
   const [innings, setInnings] = useState<InningsState | null>(null);
+  const [penalties, setPenalties] = useState<PenaltyDTO[]>([]);
   const [thisOver, setThisOver] = useState<BallDTO[]>([]);
   const [loading, setLoading] = useState(true);
   const [posting, setPosting] = useState(false);
@@ -406,6 +409,7 @@ export default function LiveScorerPage() {
     | "runner-pick-runner"
     | "keeper-pick"
     | "sub-pick"
+    | "penalty-list"
     | "super-over-confirm"
     | null
   >(null);
@@ -426,6 +430,10 @@ export default function LiveScorerPage() {
    * carries the same id, and cleared once the server has acknowledged.
    */
   const pendingBallIdRef = useRef<string | null>(null);
+  // Same purpose as pendingBallIdRef, for the penalty modal — held across a retry so a
+  // lost response doesn't award a second five runs. Not persisted across a refresh like
+  // the ball key: the modal itself doesn't survive one, so a fresh open is a fresh attempt.
+  const pendingPenaltyIdRef = useRef<string | null>(null);
   // True when the batter picker is opened by the post-wicket flow, not initial setup.
   const postWicketSelectRef = useRef(false);
 
@@ -589,6 +597,10 @@ export default function LiveScorerPage() {
 
     // Dismissed players (same key space: player PLY-NCA-x publicId)
     setDismissedPlayerIds(new Set(state.dismissedMtpPublicIds ?? []));
+
+    // Every scoring write returns the current penalty list, same as everything else
+    // here — an award or a delete IS one of those writes.
+    setPenalties(state.penalties ?? []);
 
     // Batter stats map
     const statsMap: Record<string, BatterStats> = {};
@@ -1358,6 +1370,26 @@ export default function LiveScorerPage() {
         (e as { response?: { data?: { message?: string } } })?.response?.data
           ?.message ?? "Failed to add substitute";
       setMoreError(status === 409 ? `Already exists: ${msg}` : msg);
+    } finally {
+      setMorePicking(false);
+    }
+  };
+
+  // Stays on the penalty-list screen rather than closing the sheet — there may be
+  // more than one to remove, and the list is what shows there's nothing left to do.
+  const handleDeletePenalty = async (penaltyPublicId: string) => {
+    if (!matchId) return;
+    setMorePicking(true);
+    setMoreError("");
+    try {
+      const state = await deletePenalty(matchId, penaltyPublicId);
+      applyState(state);
+      showToast("✓ Penalty removed");
+    } catch (e: unknown) {
+      setMoreError(
+        (e as { response?: { data?: { message?: string } } })?.response?.data
+          ?.message ?? "Failed to remove penalty",
+      );
     } finally {
       setMorePicking(false);
     }
@@ -2541,13 +2573,19 @@ export default function LiveScorerPage() {
                 onClick={async () => {
                   if (!matchId) return;
                   setPosting(true);
+                  const key = pendingPenaltyIdRef.current ?? newBallId();
+                  pendingPenaltyIdRef.current = key;
                   try {
-                    const state = await awardPenalty(matchId, "FIELDING");
-                    setInnings(state.inningsState);
+                    const state = await awardPenalty(matchId, "FIELDING", key);
+                    pendingPenaltyIdRef.current = null;
+                    applyState(state);
                     showToast("✓ 5 penalty runs awarded");
                     setShowPenalty(false);
-                  } catch {
-                    showError("Failed to award penalty");
+                  } catch (e: unknown) {
+                    const msg =
+                      (e as { response?: { data?: { message?: string } } })
+                        ?.response?.data?.message ?? "Failed to award penalty";
+                    showError(msg);
                   } finally {
                     setPosting(false);
                   }
@@ -2564,27 +2602,38 @@ export default function LiveScorerPage() {
                 onClick={async () => {
                   if (!matchId) return;
                   setPosting(true);
+                  const key = pendingPenaltyIdRef.current ?? newBallId();
+                  pendingPenaltyIdRef.current = key;
                   try {
-                    const state = await awardPenalty(matchId, "BATTING");
-                    setInnings(state.inningsState);
+                    const state = await awardPenalty(matchId, "BATTING", key);
+                    pendingPenaltyIdRef.current = null;
+                    applyState(state);
                     showToast("✓ 5 penalty runs awarded");
                     setShowPenalty(false);
-                  } catch {
-                    showError("Failed to award penalty");
+                  } catch (e: unknown) {
+                    const msg =
+                      (e as { response?: { data?: { message?: string } } })
+                        ?.response?.data?.message ?? "Failed to award penalty";
+                    showError(msg);
                   } finally {
                     setPosting(false);
                   }
                 }}
                 className="w-full py-3.5 bg-gray-50 border border-gray-200 text-gray-800 rounded-xl text-sm font-semibold active:scale-95 disabled:opacity-40"
               >
-                🏏 Batting side gets 5 runs
+                🏏 Fielding side gets 5 runs
                 <div className="text-xs text-gray-400 font-normal mt-0.5">
                   Batting side committed the offence
                 </div>
               </button>
             </div>
             <button
-              onClick={() => setShowPenalty(false)}
+              onClick={() => {
+                // A deliberate cancel, not a lost response — the next open is a new
+                // attempt, not a retry of this one, so the key must not carry over.
+                pendingPenaltyIdRef.current = null;
+                setShowPenalty(false);
+              }}
               className="w-full py-2 text-gray-400 text-sm"
             >
               Cancel
@@ -3006,7 +3055,9 @@ export default function LiveScorerPage() {
                               ? "Change Wicketkeeper"
                               : moreSubAction === "sub-pick"
                                 ? "Fielding Substitute"
-                                : "Start Super Over"}
+                                : moreSubAction === "penalty-list"
+                                  ? "Penalties"
+                                  : "Start Super Over"}
               </h3>
             </div>
             {/* Error */}
@@ -3153,6 +3204,22 @@ export default function LiveScorerPage() {
                     </div>
                     <div className="text-xs text-gray-400">
                       Add a substitute for {bowlingTeamName}
+                    </div>
+                  </div>
+                </button>
+                <button
+                  onClick={() => setMoreSubAction("penalty-list")}
+                  className="w-full flex items-center gap-3 px-4 py-3.5 bg-gray-50 rounded-xl text-left active:scale-95 transition-all"
+                >
+                  <span className="text-lg w-8 text-center">⚠️</span>
+                  <div>
+                    <div className="text-sm font-medium text-gray-900">
+                      Penalties
+                    </div>
+                    <div className="text-xs text-gray-400">
+                      {penalties.length === 0
+                        ? "None awarded this innings"
+                        : `${penalties.length} awarded — ${penalties.reduce((s, p) => s + p.runs, 0)} runs`}
                     </div>
                   </div>
                 </button>
@@ -3443,6 +3510,41 @@ export default function LiveScorerPage() {
                     </button>
                   ))}
                 </div>
+              </div>
+            )}
+            {moreSubAction === "penalty-list" && (
+              <div className="flex-1 min-h-0 overflow-y-auto p-3 space-y-2">
+                {penalties.length === 0 ? (
+                  <div className="text-center text-sm text-gray-400 py-8">
+                    No penalties awarded this innings.
+                  </div>
+                ) : (
+                  penalties.map((p) => (
+                    <div
+                      key={p.publicId}
+                      className="w-full flex items-center gap-3 px-4 py-3 bg-gray-50 rounded-xl"
+                    >
+                      <div className="w-8 h-8 bg-amber-100 text-amber-700 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0">
+                        +{p.runs}
+                      </div>
+                      <div className="flex-1">
+                        <div className="text-sm font-medium text-gray-900">
+                          {p.runs} penalty run{p.runs === 1 ? "" : "s"}
+                        </div>
+                        <div className="text-xs text-gray-400">
+                          Over {p.overNumber + 1}.{p.ballNumber}
+                        </div>
+                      </div>
+                      <button
+                        disabled={morePicking}
+                        onClick={() => handleDeletePenalty(p.publicId)}
+                        className="px-3 py-1.5 text-xs font-medium text-red-600 bg-red-50 border border-red-200 rounded-lg active:scale-95 disabled:opacity-40 flex-shrink-0"
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  ))
+                )}
               </div>
             )}
             {/* Super over confirm */}

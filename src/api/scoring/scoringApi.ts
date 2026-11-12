@@ -85,10 +85,26 @@ export const selectBatter = (
 export const awardPenalty = async (
   matchId: string,
   awardedTo: "BATTING" | "FIELDING",
+  clientPenaltyId: string,
 ): Promise<BallResponse> => {
   const res = await api.post(
     `/admin/cricket/matches/${matchId}/scoring/penalty`,
-    { awardedTo },
+    { awardedTo, clientPenaltyId },
+  );
+  return res.data;
+};
+
+/**
+ * Addressed by id, not keyed — the V74 split. A second delete of a penalty already
+ * removed is a 200 with current state from the server, not a 404, so a retry after a
+ * lost response is safe without a client-generated key.
+ */
+export const deletePenalty = async (
+  matchId: string,
+  penaltyPublicId: string,
+): Promise<BallResponse> => {
+  const res = await api.delete(
+    `/admin/cricket/matches/${matchId}/scoring/penalty/${penaltyPublicId}`,
   );
   return res.data;
 };
