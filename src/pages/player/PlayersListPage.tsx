@@ -24,6 +24,7 @@ import {
   CalendarOff,
 } from "lucide-react";
 import { getImageUrl } from "../../utils/imageUrl";
+import { formatDate } from "../../utils/date";
 import { toast } from "react-hot-toast";
 import api from "../../api/axios";
 import { useAuth } from "../../auth/useAuth";
@@ -1116,7 +1117,7 @@ function PlayersListPage() {
                       </p>
                       {ageGroup && ageGroup !== "Senior" && (
                         <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-blue-50 text-blue-700">
-                          {ageGroup}
+                          Eligible for {ageGroup} KSCA
                         </span>
                       )}
                       {p.excludeFromAttendance && (
@@ -1328,7 +1329,7 @@ function PlayersListPage() {
                       <td className="px-6 py-4">
                         {ageGroup && ageGroup !== "Senior" ? (
                           <span className="inline-flex px-2.5 py-1 rounded-md text-xs font-semibold bg-blue-50 text-blue-700 border border-blue-100">
-                            {ageGroup}
+                            Eligible for {ageGroup} KSCA
                           </span>
                         ) : ageGroup === "Senior" ? (
                           <span className="text-xs text-slate-500">Senior</span>
@@ -1387,11 +1388,7 @@ function PlayersListPage() {
                       </td>
                       <td className="px-6 py-4">
                         <span className="text-sm text-slate-600">
-                          {p.joiningDate
-                            ? new Date(p.joiningDate).toLocaleDateString(
-                                "en-GB",
-                              )
-                            : "-"}
+                          {p.joiningDate ? formatDate(p.joiningDate) : "-"}
                         </span>
                       </td>
                       <td className="px-6 py-4">

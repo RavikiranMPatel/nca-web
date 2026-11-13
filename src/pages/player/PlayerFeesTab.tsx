@@ -20,6 +20,7 @@ import {
 import api from "../../api/axios";
 import { toast } from "react-hot-toast";
 import { BottomSheet } from "../../components/BottomSheet";
+import { formatDateOrDash as formatDate } from "../../utils/date";
 
 type FeePlan = {
   id: string;
@@ -619,15 +620,6 @@ function PlayerFeesTab() {
           label: "Due",
         };
     }
-  };
-
-  const formatDate = (d: string | null) => {
-    if (!d) return "—";
-    return new Date(d).toLocaleDateString("en-IN", {
-      day: "2-digit",
-      month: "short",
-      year: "numeric",
-    });
   };
 
   const getDaysUntilDue = (dueDate: string) => {

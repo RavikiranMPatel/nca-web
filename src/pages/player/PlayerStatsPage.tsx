@@ -14,6 +14,7 @@ import {
 import api from "../../api/axios";
 import publicApi from "../../api/publicApi";
 import { getImageUrl } from "../../utils/imageUrl";
+import { formatDate } from "../../utils/date";
 import { toast } from "react-hot-toast";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -127,11 +128,7 @@ function formatMonthYear(monthYear: string) {
 
 function formatDOB(dob?: string) {
   if (!dob) return null;
-  return new Date(dob).toLocaleDateString("en-IN", {
-    day: "numeric",
-    month: "long",
-    year: "numeric",
-  });
+  return formatDate(dob);
 }
 
 function getAge(dob?: string) {
@@ -991,11 +988,7 @@ function MatchStatCard({ stat }: { stat: PlayerStat }) {
                 </span>
               )}
               <span className="text-blue-300 text-xs">
-                {new Date(stat.matchDate).toLocaleDateString("en-IN", {
-                  day: "numeric",
-                  month: "short",
-                  year: "numeric",
-                })}
+                {formatDate(stat.matchDate)}
               </span>
             </div>
           </div>

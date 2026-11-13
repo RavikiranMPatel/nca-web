@@ -6,6 +6,7 @@ import api from "../../api/axios";
 import { togglePlayerStatus } from "../../api/playerService/playerService";
 import PlayerStatusToggleModal from "../../components/player/PlayerStatusToggleModal";
 import { getImageUrl } from "../../utils/imageUrl";
+import { formatDateOrDash } from "../../utils/date";
 
 type PlayerInfo = {
   displayName: string;
@@ -422,7 +423,7 @@ function PlayerInfoPage() {
       <Section title="Personal Information">
         <Field label="Full Name" value={player.displayName} />
         <Field label="Aadhar" value={player.aadharNumber} />
-        <Field label="DOB" value={player.dob} />
+        <Field label="DOB" value={formatDateOrDash(player.dob)} />
         <Field label="Gender" value={player.gender} />
         <Field label="Father Name" value={player.fatherName} />
         <Field label="Mother Name" value={player.motherName} />
@@ -437,7 +438,7 @@ function PlayerInfoPage() {
         <Field label="Profession" value={player.profession} />
         <Field label="Batch" value={player.batch} />
         <Field label="School / College" value={player.schoolOrCollege} />
-        <Field label="Joining Date" value={player.joiningDate} />
+        <Field label="Joining Date" value={formatDateOrDash(player.joiningDate)} />
       </Section>
 
       {/* CRICKET INFO */}

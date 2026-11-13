@@ -32,6 +32,7 @@ export type AuditFilterOptions = {
   actions: string[];
   entityTypes: string[];
   actors: { actorPublicId: string; label: string }[];
+  attendanceBatchNames: string[];
 };
 
 export type AuditSearchParams = {
@@ -42,6 +43,8 @@ export type AuditSearchParams = {
   from?: string; // yyyy-MM-dd
   to?: string; // yyyy-MM-dd
   includeAttendance?: boolean;
+  attendanceDate?: string; // yyyy-MM-dd — which day's attendance this concerns, not when it was recorded
+  batchName?: string;
   page?: number;
   size?: number;
 };
@@ -55,5 +58,54 @@ export const searchAuditLog = async (
 
 export const getAuditFilterOptions = async (): Promise<AuditFilterOptions> => {
   const res = await api.get<AuditFilterOptions>("/admin/audits/filter-options");
+  return res.data;
+};
+
+// ── Login events ─────────────────────────────────────────────────────────────
+// Deliberately a separate table/endpoint, not audit_logs — the shape doesn't
+// overlap enough (IP/UA/success-failure vs action/entityType/details) to share one.
+
+export type LoginEventEntry = {
+  id: string;
+  createdAt: string;
+  emailAttempted: string;
+  userId: string | null;
+  userPublicId: string | null;
+  success: boolean;
+  failureReason: string | null;
+  ipAddress: string | null;
+  userAgent: string | null;
+};
+
+export type LoginEventPage = {
+  content: LoginEventEntry[];
+  totalElements: number;
+  totalPages: number;
+  number: number;
+  size: number;
+};
+
+export type LoginEventFilterOptions = {
+  users: { userPublicId: string; label: string }[];
+};
+
+export type LoginEventSearchParams = {
+  userPublicId?: string;
+  success?: boolean;
+  from?: string; // yyyy-MM-dd
+  to?: string; // yyyy-MM-dd
+  page?: number;
+  size?: number;
+};
+
+export const searchLoginEvents = async (
+  params: LoginEventSearchParams,
+): Promise<LoginEventPage> => {
+  const res = await api.get<LoginEventPage>("/admin/login-events", { params });
+  return res.data;
+};
+
+export const getLoginEventFilterOptions = async (): Promise<LoginEventFilterOptions> => {
+  const res = await api.get<LoginEventFilterOptions>("/admin/login-events/filter-options");
   return res.data;
 };
