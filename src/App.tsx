@@ -60,6 +60,7 @@ import TeamMembersAdmin from "./pages/admin/TeamMembersAdmin";
 import GenerateSlots from "./pages/slot-templates/GenerateSlots";
 import ManageUsersPage from "./pages/ManageUsersPage";
 import ManageBranchesPage from "./pages/ManageBranchesPage";
+import AdminAuditPage from "./pages/admin/AdminAuditPage";
 import AdminManualBooking from "./pages/book-slot/AdminManualBooking";
 import AdminMembersPage from "./pages/admin/AdminMembersPage";
 import AdminWhatsAppInbox from "./pages/admin/AdminWhatsAppInbox";
@@ -731,6 +732,14 @@ function App() {
         element={
           <ProtectedRoute roles={["ROLE_SUPER_ADMIN"]}>
             <ManageUsersPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/audit-log"
+        element={
+          <ProtectedRoute roles={["ROLE_ADMIN", "ROLE_SUPER_ADMIN"]}>
+            <AdminAuditPage />
           </ProtectedRoute>
         }
       />

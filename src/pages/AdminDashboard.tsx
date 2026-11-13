@@ -27,6 +27,7 @@ import {
   BarChart,
   MessageCircle,
   Shirt,
+  History,
 } from "lucide-react";
 import StatCard from "../components/StatCard";
 import BroadcastModal from "../components/BroadcastModal";
@@ -528,6 +529,13 @@ function AdminDashboard() {
               iconColor="text-blue-600"
             />
           )}
+          <PlainCard
+            icon={History}
+            title="Audit Log"
+            description="Who did what — payments, fees, player and admin changes"
+            onClick={() => navigate("/admin/audit-log")}
+            iconColor="text-slate-600"
+          />
           <PlainCard
             icon={CheckCircle}
             title="Attendance"
