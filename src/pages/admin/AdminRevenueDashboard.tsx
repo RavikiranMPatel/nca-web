@@ -457,6 +457,8 @@ export default function AdminRevenueDashboard() {
   const [bookingStatusFilter, setBookingStatusFilter] = useState<
     "PAID" | "PENDING"
   >("PAID");
+  const [bookingsCardExpanded, setBookingsCardExpanded] = useState(false);
+  const [showMoreCards, setShowMoreCards] = useState(false);
   const [expenseSearch, setExpenseSearch] = useState("");
   const [expenseFilterBudgetHead, setExpenseFilterBudgetHead] = useState("");
   const [expenseFilterPaidBy, setExpenseFilterPaidBy] = useState("");
@@ -937,6 +939,9 @@ export default function AdminRevenueDashboard() {
   const tennisCount = filteredBookings.filter(
     (b) => b.resourceType === "TENNIS_BALL",
   ).length;
+  const turfCount = filteredBookings.filter(
+    (b) => b.resourceType === "TURF",
+  ).length;
 
   const membershipBookingsTotal = filteredBookings
     .filter((b) => b.resourceType === "BOWLING_MACHINE_MEMBERSHIP")
@@ -950,20 +955,38 @@ export default function AdminRevenueDashboard() {
     .filter((b) => b.resourceType === "TENNIS_BALL")
     .reduce((s, b) => s + (b.amount || 0), 0);
 
+  const turfTotal = filteredBookings
+    .filter((b) => b.resourceType === "TURF")
+    .reduce((s, b) => s + (b.amount || 0), 0);
+
   const bowlingMachineTotal = filteredBookings
     .filter((b) => b.resourceType === "BOWLING_MACHINE")
     .reduce((s, b) => s + (b.amount || 0), 0);
 
   const regularBookingsTotal = bookingsTotal - membershipBookingsTotal;
 
+  // The Bookings card's own "paid sessions" count and the Bookings tab's nav count
+  // must describe the same money (regularBookingsTotal), so both exclude membership
+  // rows the same way -- without this they drift, same bug shape as 403 vs 415.
+  const bookingsExclMembership = useMemo(
+    () =>
+      filteredBookings.filter(
+        (b) => b.resourceType !== "BOWLING_MACHINE_MEMBERSHIP",
+      ),
+    [filteredBookings],
+  );
+  const bookingsPaidSessionsCount = bmCount + astroCount + tennisCount + turfCount;
+
   const filteredBookingsTotal = useMemo(() => {
     if (bookingResourceFilter === "ALL") {
-      return filteredBookings.reduce((s, b) => s + (b.amount || 0), 0);
+      // Excludes memberships by default, same as the Bookings card total --
+      // membership money is still reachable via its own explicit pill.
+      return bookingsExclMembership.reduce((s, b) => s + (b.amount || 0), 0);
     }
     return filteredBookings
       .filter((b) => b.resourceType === bookingResourceFilter)
       .reduce((s, b) => s + (b.amount || 0), 0);
-  }, [filteredBookings, bookingResourceFilter]);
+  }, [filteredBookings, bookingsExclMembership, bookingResourceFilter]);
 
   const filteredSubRevenue = useMemo(
     () =>
@@ -2307,17 +2330,24 @@ export default function AdminRevenueDashboard() {
         </div>
       )}
 
-      {/* ── Header ── */}
-      <div className="flex items-center justify-between gap-2 bg-white rounded-xl border border-slate-200 shadow-sm px-3 sm:px-4 py-3">
-        <div className="flex items-center gap-2 min-w-0">
+      {/* ── Header ──
+          Stacked on mobile (title row, then the action-button row below it) rather
+          than squeezed into one horizontal row -- the 6-button mobile toolbar
+          (filter, refresh, CSV, import, +Exp, +Inc for a super admin) doesn't fit
+          beside the title at 390-430px, and a single-row flex layout was shrinking
+          the title's container below its own content's width, spilling "Revenue"
+          under the toolbar's opaque background instead of wrapping or truncating
+          visibly. Stacking removes the squeeze entirely rather than papering over it. */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 bg-white rounded-xl border border-slate-200 shadow-sm px-3 sm:px-4 py-3">
+        <div className="flex items-center gap-2">
           <button
             onClick={() => navigate("/admin")}
             className="p-2 hover:bg-slate-100 rounded-lg flex-shrink-0 text-slate-600 transition"
           >
             <ArrowLeft size={20} />
           </button>
-          <div className="min-w-0">
-            <h1 className="text-base sm:text-lg font-bold text-slate-900 leading-tight">
+          <div className="flex-shrink-0">
+            <h1 className="text-base sm:text-lg font-bold text-slate-900 leading-tight whitespace-nowrap">
               Revenue
             </h1>
             <p className="text-xs text-slate-500 hidden sm:block">
@@ -2466,10 +2496,8 @@ export default function AdminRevenueDashboard() {
         </div>
       </div>
 
-      {/* ── Summary Cards ── */}
-      <div
-        className={`grid gap-2 sm:gap-3 ${isSuperAdmin ? "grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6" : "grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5"}`}
-      >
+      {/* ── Summary Cards: primary, always visible ── */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2 sm:gap-3">
         {isSuperAdmin && (
           <SummaryCard
             label="Net Revenue"
@@ -2502,142 +2530,218 @@ export default function AdminRevenueDashboard() {
           border="border-blue-200"
           valueClass="text-blue-700"
         />
-        <SummaryCard
-          label="Camp Fees"
-          onClick={() => setActiveTab("campfees")}
-          value={fmt(campFeesTotal)}
-          sub={`${filteredCampFees.length} paid`}
-          icon={<Users size={15} className="text-teal-600" />}
-          bg="bg-gradient-to-br from-teal-50 to-cyan-50"
-          border="border-teal-200"
-          valueClass="text-teal-700"
-        />
-        <SummaryCard
-          label="Bookings"
-          value={fmt(regularBookingsTotal)}
-          onClick={() => setActiveTab("bookings")}
-          sub={`${bmCount + astroCount + tennisCount} paid sessions`}
-          icon={<BookOpen size={15} className="text-orange-500" />}
-          bg="bg-gradient-to-br from-orange-50 to-amber-50"
-          border="border-orange-200"
-          valueClass="text-orange-600"
-        />
 
-        <SummaryCard
-          label="Bowling Machine"
-          value={fmt(bowlingMachineTotal)}
-          onClick={() => {
-            setActiveTab("bookings");
-            setBookingResourceFilter("BOWLING_MACHINE");
-          }}
-          sub={`${bmCount} paid`}
-          icon={<BookOpen size={15} className="text-orange-500" />}
-          bg="bg-gradient-to-br from-orange-50 to-amber-50"
-          border="border-orange-200"
-          valueClass="text-orange-600"
-        />
-        <SummaryCard
-          label="Astro Turf"
-          value={fmt(astroTurfTotal)}
-          onClick={() => {
-            setActiveTab("bookings");
-            setBookingResourceFilter("ASTRO");
-          }}
-          sub={`${astroCount} paid`}
-          icon={<BookOpen size={15} className="text-green-600" />}
-          bg="bg-gradient-to-br from-green-50 to-emerald-50"
-          border="border-green-200"
-          valueClass="text-green-700"
-        />
-        <SummaryCard
-          label="Tennis Ball"
-          value={fmt(tennisBallTotal)}
-          sub={`${tennisCount} paid`}
-          onClick={() => {
-            setActiveTab("bookings");
-            setBookingResourceFilter("TENNIS_BALL");
-          }}
-          icon={<BookOpen size={15} className="text-yellow-600" />}
-          bg="bg-gradient-to-br from-yellow-50 to-lime-50"
-          border="border-yellow-200"
-          valueClass="text-yellow-700"
-        />
-        {/* ── NEW: Reg Fees summary card ── */}
-        <SummaryCard
-          label="Reg Fees"
-          value={fmt(regFeesTotal)}
-          sub={`${regFeesPaidCount} of ${regFees.length} paid`}
-          onClick={() => setActiveTab("regfees")}
-          icon={<CreditCard size={15} className="text-purple-600" />}
-          bg="bg-gradient-to-br from-purple-50 to-fuchsia-50"
-          border="border-purple-200"
-          valueClass="text-purple-700"
-        />
-        <SummaryCard
-          label="Bowling Machine Memberships"
-          value={fmt(subRevenueTotal + membershipBookingsTotal)}
-          onClick={() => setActiveTab("subscriptions")}
-          sub={`${subRevenueInRangeCount} activated · ${fmt(membershipBookingsTotal)} historical`}
-          icon={<CreditCard size={15} className="text-cyan-600" />}
-          bg="bg-gradient-to-br from-cyan-50 to-sky-50"
-          border="border-cyan-200"
-          valueClass="text-cyan-700"
-        />
-        <SummaryCard
-          label="Coach Commission"
-          value={fmt(commTotalDue)}
-          onClick={() => setActiveTab("commission")}
-          sub={`${commTotalSessions} session${commTotalSessions !== 1 ? "s" : ""} · ${effectiveRate}% rate · ${commissionMonth}${commissionMonthMismatch ? " — differs from range" : ""}`}
-          icon={<Award size={15} className="text-amber-600" />}
-          bg="bg-gradient-to-br from-amber-50 to-orange-50"
-          border="border-amber-200"
-          valueClass="text-amber-700"
-        />
-        {isSuperAdmin && (
+        {/* ── Bookings: one tap target toggles the breakdown panel below it ── */}
+        <div className="col-span-2">
+          <div
+            onClick={() => setBookingsCardExpanded((v) => !v)}
+            className="rounded-xl border p-3 sm:p-4 bg-gradient-to-br from-orange-50 to-amber-50 border-orange-200 shadow-sm cursor-pointer hover:shadow-md active:scale-95 transition-all"
+          >
+            <div className="flex items-center justify-between mb-1.5">
+              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">
+                Bookings
+              </p>
+              <div className="flex items-center gap-1">
+                <div className="w-6 h-6 rounded-lg bg-white/60 flex items-center justify-center flex-shrink-0">
+                  <BookOpen size={15} className="text-orange-500" />
+                </div>
+                <ChevronDown
+                  size={16}
+                  className={`text-orange-500 transition-transform flex-shrink-0 ${bookingsCardExpanded ? "rotate-180" : ""}`}
+                />
+              </div>
+            </div>
+            <p className="text-lg sm:text-2xl font-bold text-orange-600">
+              {fmt(regularBookingsTotal)}
+            </p>
+            <p className="text-xs text-slate-400 mt-0.5">
+              {bookingsPaidSessionsCount} paid sessions
+            </p>
+          </div>
+
+          {bookingsCardExpanded && (
+            <div className="mt-2 rounded-xl border border-orange-200 bg-white shadow-sm divide-y divide-slate-100 overflow-hidden">
+              {[
+                {
+                  key: "BOWLING_MACHINE",
+                  label: "Bowling Machine Sessions",
+                  amount: bowlingMachineTotal,
+                  count: bmCount,
+                },
+                {
+                  key: "ASTRO",
+                  label: "Astro Turf",
+                  amount: astroTurfTotal,
+                  count: astroCount,
+                },
+                {
+                  key: "TURF",
+                  label: "Turf",
+                  amount: turfTotal,
+                  count: turfCount,
+                },
+                {
+                  key: "TENNIS_BALL",
+                  label: "Tennis Ball",
+                  amount: tennisBallTotal,
+                  count: tennisCount,
+                },
+              ].map((row) => (
+                <div
+                  key={row.key}
+                  onClick={() => {
+                    setActiveTab("bookings");
+                    setBookingResourceFilter(row.key);
+                  }}
+                  className="flex items-center justify-between px-4 py-3 cursor-pointer hover:bg-slate-50 active:bg-slate-100 transition"
+                >
+                  <span className="text-sm font-medium text-slate-700">
+                    {row.label}
+                  </span>
+                  <span className="text-sm text-right flex-shrink-0 ml-2">
+                    <span className="font-bold text-slate-900">
+                      {fmt(row.amount)}
+                    </span>
+                    <span className="text-slate-400 ml-1.5">
+                      · {row.count}
+                    </span>
+                  </span>
+                </div>
+              ))}
+              <div
+                onClick={() => {
+                  setActiveTab("bookings");
+                  setBookingResourceFilter("ALL");
+                }}
+                className="flex items-center justify-center px-4 py-3 text-sm font-semibold text-orange-600 cursor-pointer hover:bg-orange-50 active:bg-orange-100 transition"
+              >
+                View all bookings →
+              </div>
+            </div>
+          )}
+        </div>
+
+        {isSuperAdmin ? (
+          <>
+            <SummaryCard
+              label="Expenses"
+              value={fmt(expensesTotal)}
+              sub={`${filteredExpenses.length} entries · ${monthlyPayments.filter((p) => p.status === "PAID").length} monthly${expenseMonthMismatch ? " ⚠ ≠ range" : ""}`}
+              icon={<TrendingDown size={15} className="text-red-500" />}
+              bg="bg-gradient-to-br from-red-50 to-rose-50"
+              onClick={() => setActiveTab("expenses")}
+              border="border-red-200"
+              valueClass="text-red-600"
+            />
+            <SummaryCard
+              label="Pending"
+              value={String(pendingBookings)}
+              sub="awaiting payment · all time"
+              icon={<Clock size={15} className="text-rose-500" />}
+              bg="bg-gradient-to-br from-rose-50 to-pink-50"
+              border="border-rose-200"
+              valueClass="text-rose-600"
+              onClick={() => {
+                setActiveTab("bookings");
+                setBookingStatusFilter("PENDING");
+                setBookingResourceFilter("ALL");
+              }}
+            />
+          </>
+        ) : (
           <SummaryCard
-            label="Other Income"
-            value={fmt(otherIncomeTotal)}
-            sub={`${filteredIncomes.length} entries`}
-            onClick={() => setActiveTab("income")}
-            icon={<TrendingUp size={15} className="text-violet-600" />}
-            bg="bg-gradient-to-br from-violet-50 to-purple-50"
-            border="border-violet-200"
-            valueClass="text-violet-700"
+            label="Pending"
+            value={String(pendingBookings)}
+            sub="awaiting payment · all time"
+            icon={<Clock size={15} className="text-rose-500" />}
+            bg="bg-gradient-to-br from-rose-50 to-pink-50"
+            border="border-rose-200"
+            valueClass="text-rose-600"
+            spanFull
+            onClick={() => {
+              setActiveTab("bookings");
+              setBookingStatusFilter("PENDING");
+              setBookingResourceFilter("ALL");
+            }}
           />
         )}
-        {isSuperAdmin && (
-          <SummaryCard
-            label="Expenses"
-            value={fmt(expensesTotal)}
-            sub={`${filteredExpenses.length} entries · ${monthlyPayments.filter((p) => p.status === "PAID").length} monthly paid (${monthYearIso})${expenseMonthMismatch ? " — differs from range" : ""}`}
-            icon={<TrendingDown size={15} className="text-red-500" />}
-            bg="bg-gradient-to-br from-red-50 to-rose-50"
-            onClick={() => setActiveTab("expenses")}
-            border="border-red-200"
-            valueClass="text-red-600"
-          />
-        )}
-        <SummaryCard
-          label="Pending"
-          value={String(pendingBookings)}
-          sub="awaiting payment"
-          icon={<Clock size={15} className="text-rose-500" />}
-          bg="bg-gradient-to-br from-rose-50 to-pink-50"
-          border="border-rose-200"
-          valueClass="text-rose-600"
-          onClick={() => {
-            setActiveTab("bookings");
-            setBookingStatusFilter("PENDING");
-            setBookingResourceFilter("ALL");
-          }}
-        />
       </div>
+
+      {/* ── "More" toggle: one tap target, no separate chevron action ── */}
+      <button
+        onClick={() => setShowMoreCards((v) => !v)}
+        className="w-full flex items-center justify-center gap-1.5 py-2.5 text-sm font-semibold text-slate-500 hover:text-slate-700 hover:bg-slate-100 rounded-xl transition"
+      >
+        {showMoreCards ? "Less" : "More"}
+        <ChevronDown
+          size={16}
+          className={`transition-transform ${showMoreCards ? "rotate-180" : ""}`}
+        />
+      </button>
+
+      {/* ── Summary Cards: secondary, behind "More", collapsed by default ── */}
+      {showMoreCards && (
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2 sm:gap-3">
+          <SummaryCard
+            label="Camp Fees"
+            onClick={() => setActiveTab("campfees")}
+            value={fmt(campFeesTotal)}
+            sub={`${filteredCampFees.length} paid`}
+            icon={<Users size={15} className="text-teal-600" />}
+            bg="bg-gradient-to-br from-teal-50 to-cyan-50"
+            border="border-teal-200"
+            valueClass="text-teal-700"
+          />
+          <SummaryCard
+            label="Reg Fees"
+            value={fmt(regFeesTotal)}
+            sub={`${regFeesPaidCount} of ${regFees.length} paid`}
+            onClick={() => setActiveTab("regfees")}
+            icon={<CreditCard size={15} className="text-purple-600" />}
+            bg="bg-gradient-to-br from-purple-50 to-fuchsia-50"
+            border="border-purple-200"
+            valueClass="text-purple-700"
+          />
+          <SummaryCard
+            label="Bowling Machine Subscriptions"
+            value={fmt(subRevenueTotal + membershipBookingsTotal)}
+            onClick={() => setActiveTab("subscriptions")}
+            sub={`${subRevenueInRangeCount} activated · ${fmt(membershipBookingsTotal)} legacy bookings`}
+            icon={<CreditCard size={15} className="text-cyan-600" />}
+            bg="bg-gradient-to-br from-cyan-50 to-sky-50"
+            border="border-cyan-200"
+            valueClass="text-cyan-700"
+          />
+          <SummaryCard
+            label="Coach Commission"
+            value={fmt(commTotalDue)}
+            onClick={() => setActiveTab("commission")}
+            sub={`${commTotalSessions} session${commTotalSessions !== 1 ? "s" : ""} · ${effectiveRate}% rate · ${commissionMonth}${commissionMonthMismatch ? " — differs from range" : ""}`}
+            icon={<Award size={15} className="text-amber-600" />}
+            bg="bg-gradient-to-br from-amber-50 to-orange-50"
+            border="border-amber-200"
+            valueClass="text-amber-700"
+          />
+          {isSuperAdmin && (
+            <SummaryCard
+              label="Other Income"
+              value={fmt(otherIncomeTotal)}
+              sub={`${filteredIncomes.length} entries`}
+              onClick={() => setActiveTab("income")}
+              icon={<TrendingUp size={15} className="text-violet-600" />}
+              bg="bg-gradient-to-br from-violet-50 to-purple-50"
+              border="border-violet-200"
+              valueClass="text-violet-700"
+            />
+          )}
+        </div>
+      )}
 
       {/* ── Main Tabs ── */}
       {(() => {
         const allTabs: [Tab, string, number][] = [
           ["fees", "Fees", filteredFees.length],
-          ["bookings", "Bookings", filteredBookings.length],
+          ["bookings", "Bookings", bookingsExclMembership.length],
           ["campfees", "Camp Fees", filteredCampFees.length],
           ["feesummary", "Fee Summary", feeSummary.length],
           ["regfees", "Reg Fees", regFees.length],
@@ -3034,7 +3138,7 @@ export default function AdminRevenueDashboard() {
                   : "text-slate-500 hover:text-slate-700 hover:bg-slate-100"
               }`}
             >
-              Paid ({filteredBookings.length})
+              Paid ({bookingsExclMembership.length})
             </button>
             <button
               onClick={() => setBookingStatusFilter("PENDING")}
@@ -3143,22 +3247,24 @@ export default function AdminRevenueDashboard() {
                   [
                     "ALL",
                     "BOWLING_MACHINE",
-                    "BOWLING_MACHINE_MEMBERSHIP",
-                    "TENNIS_BALL",
                     "ASTRO",
+                    "TURF",
+                    "TENNIS_BALL",
+                    "BOWLING_MACHINE_MEMBERSHIP",
                   ] as const
                 ).map((rt) => {
                   const count =
                     rt === "ALL"
-                      ? filteredBookings.length
+                      ? bookingsExclMembership.length
                       : filteredBookings.filter((b) => b.resourceType === rt)
                           .length;
                   const labels: Record<string, string> = {
                     ALL: "All",
-                    BOWLING_MACHINE: "Bowling Machine",
-                    BOWLING_MACHINE_MEMBERSHIP: "BM Memberships",
-                    TENNIS_BALL: "Tennis Ball",
+                    BOWLING_MACHINE: "Bowling Machine Sessions",
                     ASTRO: "Astro Turf",
+                    TURF: "Turf",
+                    TENNIS_BALL: "Tennis Ball",
+                    BOWLING_MACHINE_MEMBERSHIP: "BM Subscriptions",
                   };
                   return (
                     <button
@@ -3190,23 +3296,21 @@ export default function AdminRevenueDashboard() {
                           (b) => b.resourceType === bookingResourceFilter,
                         ),
                     )
-                    .map((group) => ({
-                      ...group,
-                      bookings:
+                    .map((group) => {
+                      // "ALL" excludes memberships here too, same as the pill's own
+                      // count above -- otherwise the list under "All" would show rows
+                      // the pill row says aren't included.
+                      const rowFilter = (b: Booking) =>
                         bookingResourceFilter === "ALL"
-                          ? group.bookings
-                          : group.bookings.filter(
-                              (b) => b.resourceType === bookingResourceFilter,
-                            ),
-                      total:
-                        bookingResourceFilter === "ALL"
-                          ? group.total
-                          : group.bookings
-                              .filter(
-                                (b) => b.resourceType === bookingResourceFilter,
-                              )
-                              .reduce((s, b) => s + (b.amount || 0), 0),
-                    }))
+                          ? b.resourceType !== "BOWLING_MACHINE_MEMBERSHIP"
+                          : b.resourceType === bookingResourceFilter;
+                      const bookings = group.bookings.filter(rowFilter);
+                      return {
+                        ...group,
+                        bookings,
+                        total: bookings.reduce((s, b) => s + (b.amount || 0), 0),
+                      };
+                    })
                     .filter((group) => group.bookings.length > 0)
                     .map((group) => (
                       <div key={group.key}>
@@ -3340,7 +3444,12 @@ export default function AdminRevenueDashboard() {
                     <span className="text-sm font-semibold text-slate-700">
                       Total ·{" "}
                       {bookingResourceFilter === "ALL"
-                        ? groupedBookings.length
+                        ? groupedBookings.filter((g) =>
+                            g.bookings.some(
+                              (b) =>
+                                b.resourceType !== "BOWLING_MACHINE_MEMBERSHIP",
+                            ),
+                          ).length
                         : groupedBookings.filter((g) =>
                             g.bookings.some(
                               (b) => b.resourceType === bookingResourceFilter,
@@ -5477,8 +5586,8 @@ function SummaryCard({
     ${spanFull ? "col-span-2 sm:col-span-1" : ""}
     ${onClick ? "cursor-pointer hover:shadow-md active:scale-95 transition-all" : "transition"}`}
     >
-      <div className="flex items-center justify-between mb-1.5">
-        <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide leading-tight truncate">
+      <div className="flex items-start justify-between mb-1.5 gap-1.5">
+        <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide leading-tight">
           {label}
         </p>
         <div className="w-6 h-6 rounded-lg bg-white/60 flex items-center justify-center flex-shrink-0">
@@ -5488,9 +5597,7 @@ function SummaryCard({
       <p className={`text-lg sm:text-2xl font-bold ${valueClass} truncate`}>
         {value}
       </p>
-      <p className="text-xs text-slate-400 mt-0.5 truncate" title={sub}>
-        {sub}
-      </p>
+      <p className="text-xs text-slate-400 mt-0.5 leading-snug">{sub}</p>
     </div>
   );
 }
