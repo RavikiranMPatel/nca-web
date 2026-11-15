@@ -25,7 +25,7 @@ type TemplateSlot = {
   displayOrder: number;
 };
 
-type ResourceCategory = "TURF_ASTRO" | "BOWLING_MACHINE";
+type ResourceCategory = "TURF" | "ASTRO" | "BOWLING_MACHINE";
 
 type TemplateFormData = {
   name: string;
@@ -49,7 +49,7 @@ function CreateEditTemplate() {
     name: "",
     description: "",
     templateType: "WEEKDAY",
-    resourceCategory: "TURF_ASTRO",
+    resourceCategory: "ASTRO",
     isDefaultWeekday: false,
     isDefaultWeekend: false,
     slots: [],
@@ -99,8 +99,15 @@ function CreateEditTemplate() {
         const response = await api.get(`/admin/slot-templates/${id}`);
         const data = response.data;
         console.log("Template data:", data); // ADD THIS
+        // TURF and ASTRO are now separate templates, each with their own resourceType
+        // string. Any template still tagged "TURF_ASTRO" would mean V79 hasn't run --
+        // fall back to ASTRO for that case rather than crash on an unrecognized value.
         const resourceCat: ResourceCategory =
-          data.resourceType === "BOWLING_MACHINE" ? "BOWLING_MACHINE" : "TURF_ASTRO";
+          data.resourceType === "BOWLING_MACHINE"
+            ? "BOWLING_MACHINE"
+            : data.resourceType === "TURF"
+              ? "TURF"
+              : "ASTRO";
         setFormData({
           name: data.name,
           description: data.description,
@@ -454,7 +461,11 @@ function CreateEditTemplate() {
                 <p
                   className={`font-semibold text-sm ${isBowling ? "text-blue-700" : "text-gray-800"}`}
                 >
-                  {formData.resourceCategory === "BOWLING_MACHINE" ? "🎯 Bowling Machine" : "🏏 Turf / Astro"}
+                  {formData.resourceCategory === "BOWLING_MACHINE"
+                    ? "🎯 Bowling Machine"
+                    : formData.resourceCategory === "TURF"
+                      ? "🌱 Turf"
+                      : "🟢 Astro Turf"}
                 </p>
                 <p className="text-xs text-gray-400 mt-0.5">
                   Resource type cannot be changed after creation
@@ -462,11 +473,16 @@ function CreateEditTemplate() {
               </div>
             ) : (
               // Selectable only on create
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                 {[
                   {
-                    id: "TURF_ASTRO",
-                    label: "🏏 Turf / Astro",
+                    id: "TURF",
+                    label: "🌱 Turf",
+                    desc: "Natural turf wicket — 1-hour slots, single price",
+                  },
+                  {
+                    id: "ASTRO",
+                    label: "🟢 Astro Turf",
                     desc: "1-hour slots, single price",
                   },
                   {

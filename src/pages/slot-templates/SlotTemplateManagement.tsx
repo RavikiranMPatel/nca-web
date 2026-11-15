@@ -18,6 +18,7 @@ type SlotTemplate = {
   name: string;
   description: string;
   templateType: "WEEKDAY" | "WEEKEND" | "HOLIDAY" | "CUSTOM";
+  resourceType: string;
   isDefaultWeekday: boolean;
   isDefaultWeekend: boolean;
   active: boolean;
@@ -26,13 +27,33 @@ type SlotTemplate = {
   lastSlot: string;
 };
 
+// Turf and Astro each need their own default weekday/weekend template now -- Bowling is
+// excluded because it never used the default flags (it falls back to "any active
+// template" instead), so tracking it here would always read as "missing" and mislead.
+const TRACKED_RESOURCE_TYPES = ["TURF", "ASTRO"] as const;
+const RESOURCE_TYPE_LABEL: Record<(typeof TRACKED_RESOURCE_TYPES)[number], string> = {
+  TURF: "Turf",
+  ASTRO: "Astro Turf",
+};
+type DefaultsByType = Record<
+  (typeof TRACKED_RESOURCE_TYPES)[number],
+  { weekday: boolean; weekend: boolean }
+>;
+const emptyDefaultsByType: DefaultsByType = {
+  TURF: { weekday: false, weekend: false },
+  ASTRO: { weekday: false, weekend: false },
+};
+
 function SlotTemplateManagement() {
   const navigate = useNavigate();
   const [templates, setTemplates] = useState<SlotTemplate[]>([]);
   const [loading, setLoading] = useState(true);
-  const [hasWeekdayDefault, setHasWeekdayDefault] = useState(false);
-  const [hasWeekendDefault, setHasWeekendDefault] = useState(false);
+  const [defaultsByType, setDefaultsByType] = useState<DefaultsByType>(emptyDefaultsByType);
   const [deleteError, setDeleteError] = useState("");
+
+  // Only unlocks once every tracked resource type has both defaults set.
+  const hasWeekdayDefault = TRACKED_RESOURCE_TYPES.every((t) => defaultsByType[t].weekday);
+  const hasWeekendDefault = TRACKED_RESOURCE_TYPES.every((t) => defaultsByType[t].weekend);
 
   useEffect(() => {
     loadTemplates();
@@ -47,16 +68,19 @@ function SlotTemplateManagement() {
         isDefaultWeekend: template.defaultWeekend || false,
       }));
       setTemplates(mappedTemplates);
-      setHasWeekdayDefault(
-        mappedTemplates.some(
-          (t: SlotTemplate) => t.isDefaultWeekday && t.active,
-        ),
-      );
-      setHasWeekendDefault(
-        mappedTemplates.some(
-          (t: SlotTemplate) => t.isDefaultWeekend && t.active,
-        ),
-      );
+
+      const next: DefaultsByType = {
+        TURF: { weekday: false, weekend: false },
+        ASTRO: { weekday: false, weekend: false },
+      };
+      for (const t of mappedTemplates as SlotTemplate[]) {
+        if (!t.active) continue;
+        if (t.resourceType !== "TURF" && t.resourceType !== "ASTRO") continue;
+        const key = t.resourceType as (typeof TRACKED_RESOURCE_TYPES)[number];
+        if (t.isDefaultWeekday) next[key].weekday = true;
+        if (t.isDefaultWeekend) next[key].weekend = true;
+      }
+      setDefaultsByType(next);
     } catch (error) {
       console.error("Failed to load templates:", error);
     } finally {
@@ -150,16 +174,25 @@ function SlotTemplateManagement() {
                   Set default templates before users can book slots:
                 </p>
                 <ul className="list-disc list-inside space-y-1 ml-1">
-                  {!hasWeekdayDefault && (
-                    <li>
-                      <strong>Weekday Template</strong> (Mon–Fri) — Not set
-                    </li>
-                  )}
-                  {!hasWeekendDefault && (
-                    <li>
-                      <strong>Weekend Template</strong> (Sat–Sun) — Not set
-                    </li>
-                  )}
+                  {TRACKED_RESOURCE_TYPES.flatMap((type) => {
+                    const label = RESOURCE_TYPE_LABEL[type];
+                    const items = [];
+                    if (!defaultsByType[type].weekday) {
+                      items.push(
+                        <li key={`${type}-weekday`}>
+                          <strong>{label} Weekday Template</strong> (Mon–Fri) — Not set
+                        </li>,
+                      );
+                    }
+                    if (!defaultsByType[type].weekend) {
+                      items.push(
+                        <li key={`${type}-weekend`}>
+                          <strong>{label} Weekend Template</strong> (Sat–Sun) — Not set
+                        </li>,
+                      );
+                    }
+                    return items;
+                  })}
                 </ul>
                 <p className="mt-2 text-amber-800 text-xs sm:text-sm">
                   📝 Create a template and check "Set as default weekday" or
