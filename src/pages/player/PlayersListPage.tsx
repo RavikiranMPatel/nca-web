@@ -38,6 +38,7 @@ type Player = {
   batch: string;
   profession: string;
   phone?: string;
+  parentsPhone?: string;
   joiningDate?: string;
   dob?: string;
   active: boolean;
@@ -102,6 +103,15 @@ function getPlayerAgeGroup(
     if (isEligibleForGroup(dob, g.value, groups)) return g.value;
   }
   return "Senior";
+}
+
+// Parent's number first — most players have no phone of their own, and a departed
+// player's own number is useless to call. Labeled so nobody dials a child's number
+// thinking it's the parent's. Same priority as BroadcastModal/FeeSummaryTable.
+function displayPhone(p: { phone?: string; parentsPhone?: string }): string {
+  if (p.parentsPhone) return `Parent: ${p.parentsPhone}`;
+  if (p.phone) return `Player: ${p.phone}`;
+  return "-";
 }
 
 // ─── SHARE MODAL ────────────────────────────────────────
@@ -1130,7 +1140,9 @@ function PlayersListPage() {
 
                     <div className="flex items-center gap-3 mt-1 text-xs text-slate-500 flex-wrap">
                       <span>{p.profession}</span>
-                      {p.phone && <span>{p.phone}</span>}
+                      {(p.phone || p.parentsPhone) && (
+                        <span>{displayPhone(p)}</span>
+                      )}
                       {isSuperAdmin && p.branchId && (
                         <span className="flex items-center gap-0.5">
                           <Building2 size={10} />
@@ -1383,7 +1395,7 @@ function PlayersListPage() {
                       </td>
                       <td className="px-6 py-4">
                         <span className="text-sm text-slate-600">
-                          {p.phone || "-"}
+                          {displayPhone(p)}
                         </span>
                       </td>
                       <td className="px-6 py-4">
